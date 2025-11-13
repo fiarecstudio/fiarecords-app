@@ -1,0 +1,9 @@
+# Dependencias
+/node_modules
+
+# Archivos de entorno - ¡MUY IMPORTANTE PARA LA SEGURIDAD!
+.env
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
