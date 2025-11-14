@@ -34,27 +34,50 @@
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); }
     #app-logo, #login-logo { max-width: 180px; max-height: 80px; object-fit: contain; }
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
-    .main-content { flex: 1; display: flex; flex-direction: column; }
-    .main-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; background-color: var(--card-background); border-bottom: 1px solid var(--border-color); }
-    main { padding: 1rem; }
+    .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
+    .main-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; background-color: var(--card-background); border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+    main { padding: 1rem; flex: 1; }
     @media (min-width: 768px) { main { padding: 2rem; } }
     section { display: none; }
     section.active { display: block; }
 
-    .sidebar { width: 260px; background-color: var(--card-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; }
-    .sidebar-header { text-align: center; margin-bottom: 2rem; }
+    /* --- CORRECCIÓN SIDEBAR PARA MÓVIL (Logout visible) --- */
+    .sidebar { 
+        width: 260px; 
+        background-color: var(--card-background); 
+        border-right: 1px solid var(--border-color); 
+        display: flex; 
+        flex-direction: column; 
+        padding: 1.5rem 1rem; 
+        height: 100vh; /* Altura completa de la pantalla */
+        height: 100dvh; /* Altura dinámica para móviles modernos */
+    }
+    .sidebar-header { text-align: center; margin-bottom: 1rem; flex-shrink: 0; }
     #app-logo { cursor: pointer; }
-    .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; }
-    /* CORRECCIÓN: Se añade Flexbox para organizar mejor el botón de cerrar sesión y el switch de tema. */
-    .sidebar-footer {
-        margin-top: auto;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border-color);
+    
+    /* Hacemos que la navegación sea la única parte que hace scroll si es muy larga */
+    .sidebar-nav { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 0.5rem; 
+        flex: 1; 
+        overflow-y: auto; 
+        padding-right: 5px; /* Espacio para scrollbar si aparece */
+    }
+    
+    /* El footer se queda fijo abajo */
+    .sidebar-footer { 
+        margin-top: auto; 
+        padding-top: 1rem; 
+        border-top: 1px solid var(--border-color); 
+        flex-shrink: 0; 
         display: flex;
         flex-direction: column;
         gap: 1rem;
+        background-color: var(--card-background);
     }
-    #btn-nuevo-proyecto-sidebar { background-color: var(--primary-color); color: white; text-align: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+    
+    #btn-nuevo-proyecto-sidebar { background-color: var(--primary-color); color: white; text-align: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; flex-shrink: 0; }
     #btn-nuevo-proyecto-sidebar:hover { background-color: var(--primary-hover); }
     .nav-group summary { list-style: none; padding: 0.75rem 1rem; font-weight: 700; color: var(--text-color-dark); cursor: pointer; position: relative; }
     .nav-group summary::before { content: '►'; position: absolute; left: 0; font-size: 0.6em; transition: transform 0.2s; }
@@ -72,12 +95,13 @@
       #app-wrapper { display: block; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
       .main-header { padding: 0.5rem 1rem; }
-      .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 999; transform: translateX(-100%); transition: transform 0.3s ease-in-out; border-right: 1px solid var(--border-color); }
+      /* Sidebar móvil fijo */
+      .sidebar { position: fixed; left: 0; top: 0; z-index: 999; transform: translateX(-100%); transition: transform 0.3s ease-in-out; width: 85%; max-width: 300px; }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
     }
     @media (min-width: 769px) {
-      #app-wrapper { display: flex; }
+      #app-wrapper { display: flex; height: 100vh; overflow: hidden; }
       #hamburger-menu { display: none; }
       #btn-enviar-datos-bancarios { display: block; }
     }
@@ -96,26 +120,101 @@
     .btn-restaurar { background-color: var(--success-color); color: white; }
     .btn-vaciar { padding: 0.4rem 0.8rem; font-size: 0.8em; }
     .btn-aprobar { background-color: var(--success-color); color: white; padding: 0.4rem 0.8rem; font-size: 0.9em; white-space: nowrap; }
+    #logout-button { width: 100%; }
     
-    /* CORRECCIÓN: Se añade regla para el botón de logout para mantener el código limpio. */
-    #logout-button {
-      width: 100%;
-    }
-
     .list-item-actions button, .table-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem; font-size: 1em; line-height: 1; width: 36px; height: 36px; margin-left: 0.5rem; }
     .table-actions .btn-aprobar { width: auto; height: auto; padding: 0.4rem 0.8rem; }
     .project-card-footer button { padding: 0.4rem 0.8rem; font-size: 0.85em; }
     .btn-quitar-servicio { width: 24px; height: 24px; font-size: 0.8em; line-height: 1; border-radius: 50%; padding: 0; }
     
     .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+    
+    /* --- TABLAS RESPONSIVAS TIPO TARJETA PARA MÓVIL --- */
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+
+    @media (max-width: 768px) {
+        /* Forzamos a que la tabla NO se comporte como tabla */
+        table, thead, tbody, th, td, tr { display: block; }
+        
+        /* Ocultamos los encabezados de la tabla */
+        thead tr { position: absolute; top: -9999px; left: -9999px; }
+        
+        /* Estilo de cada fila como una "Tarjeta" */
+        tr { 
+            margin-bottom: 1.5rem; 
+            border: 1px solid var(--border-color); 
+            border-radius: 12px; 
+            padding: 1rem; 
+            background-color: var(--card-background);
+            box-shadow: var(--shadow);
+        }
+        
+        td { 
+            border: none; 
+            border-bottom: 1px solid var(--border-color); 
+            position: relative; 
+            padding-left: 40% !important; /* Espacio para la etiqueta */
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            text-align: right;
+            white-space: normal; /* Permitir que el texto baje si es largo */
+        }
+        
+        td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
+        
+        /* Labels generados con CSS para simular los encabezados */
+        td:before { 
+            position: absolute; 
+            top: 0.5rem; 
+            left: 0.5rem; 
+            width: 35%; 
+            padding-right: 10px; 
+            white-space: nowrap; 
+            text-align: left; 
+            font-weight: 700; 
+            color: var(--text-color-light);
+        }
+
+        /* Etiquetas específicas para cada tabla usando nth-of-type */
+        
+        /* Cotizaciones */
+        #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
+        #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
+        #tablaCotizacionesBody td:nth-of-type(3):before { content: "Fecha:"; }
+        #tablaCotizacionesBody td:nth-of-type(4):before { content: ""; display: none; } /* Acciones no necesita label */
+
+        /* Pagos */
+        #tablaPagosBody td:nth-of-type(1):before { content: "Fecha:"; }
+        #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
+        #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
+        #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
+        #tablaPagosBody td:nth-of-type(5):before { content: ""; display: none; }
+
+        /* Historial */
+        #tablaHistorialBody td:nth-of-type(1):before { content: "Artista:"; }
+        #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
+        #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
+        #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
+        #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
+        
+        /* Vista Artista (Las tablas se generan dinámicamente, aplicamos estilo genérico) */
+        #vista-artista-contenido table td:nth-of-type(1):before { content: "Dato 1:"; } 
+        /* Como la vista de artista tiene 2 tablas diferentes, usamos selectores específicos si es posible, 
+           pero dado que se generan con JS, haremos un override visual simple */
+        #vista-artista-contenido table tr { display: flex; flex-direction: column; }
+        #vista-artista-contenido table td { padding-left: 0 !important; text-align: left; }
+        #vista-artista-contenido table td:before { display: none; } /* Simplificación para vista artista: lista simple */
+        
+        /* Ajustes específicos para la vista artista para que se vea bien sin labels forzados */
+        #vista-artista-contenido td:nth-child(1) { font-weight: bold; color: var(--primary-color); } /* Fecha o dato principal */
+    }
+
     .clickable-artist { cursor: pointer; text-decoration: underline; color: var(--text-color-dark); }
     body.dark-mode .clickable-artist { color: var(--text-color-dark); }
     #login-container { max-width: 400px; margin: 15vh auto; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--border-color); }
     .table-actions { display: flex; align-items: center; flex-wrap: nowrap; }
-    #tablaCotizacionesBody td:last-child { min-width: 280px; }
     .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; }
     .theme-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
     .theme-switch input { opacity: 0; width: 0; height: 0; }
@@ -217,6 +316,7 @@
       
       <a id="btn-nuevo-proyecto-sidebar" class="nav-link" data-seccion="registrar-proyecto"><span>+ Nuevo Proyecto</span></a>
       
+      <!-- Aquí está la magia: sidebar-nav ahora hace scroll si es necesario -->
       <div class="sidebar-nav">
         <details class="nav-group" open>
           <summary>PROYECTOS</summary>
@@ -249,6 +349,7 @@
         </details>
       </div>
       
+      <!-- Y esto se queda siempre visible abajo -->
       <div class="sidebar-footer">
         <div id="customization-container" style="display: none;">
           <p style="font-size: 0.8em; text-align: center; margin-bottom: 1rem;">Haz clic en el logo para cambiarlo.</p>
@@ -261,7 +362,6 @@
             <span class="slider"></span>
           </label>
         </div>
-        <!-- CORRECCIÓN: Se elimina el estilo en línea `width:100%` ya que ahora se maneja por CSS. -->
         <button id="logout-button" class="btn-eliminar">Cerrar Sesión</button>
       </div>
     </nav>
@@ -285,12 +385,12 @@
         <main>
             <section id="dashboard"><div class="grid-container"><div class="card kpi-card"><div class="kpi-value" id="kpi-ingresos-mes">$0.00</div><div class="kpi-label">Ingresos del Mes</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-activos">0</div><div class="kpi-label">Proyectos Activos</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-por-cobrar">0</div><div class="kpi-label">Proyectos por Cobrar</div></div></div></section>
             <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
-            <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div style="overflow-x:auto;"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
+            <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
             <section id="flujo-trabajo"><div class="card"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
-            <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
+            <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
             <section id="registrar-proyecto"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Nuevo Proyecto o Cotización</h2></div><form id="formProyecto" onsubmit="return false;"><label for="proyectoArtista">Artista/Cliente</label><div id="artista-selector-container"><select id="proyectoArtista"><option value="publico_general">Público General</option></select><button type="button" id="btnNuevoArtista" title="Registrar nuevo artista">+</button></div><div id="nuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><input type="text" id="nombreNuevoArtista" placeholder="Escribe el nombre y presiona Enter"></div><div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul><div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;"><div class="info-row"><label>Total:</label><span id="totalAPagar">$0.00</span></div><div class="form-row"><div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div><div class="form-actions"><button id="btnGenerarCotizacion" style="background-color: var(--primary-color); color: white;">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
             <section id="registro-manual"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Registro Manual de Proyecto</h2><p style="font-size: 0.9em; color: var(--text-color-light);">Usa este formulario para proyectos sin costo, antiguos o que no requieren cotización.</p></div><form id="formProyectoManual" onsubmit="return false;"><label for="manualProyectoArtista">Artista/Cliente</label><div id="manual-artista-selector-container"><select id="manualProyectoArtista" required></select><button type="button" id="manualBtnNuevoArtista" title="Registrar nuevo artista">+</button></div><div id="manualNuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><input type="text" id="manualNombreNuevoArtista" placeholder="Escribe el nombre y presiona Enter"></div><label for="manualNombreProyecto">Nombre del Proyecto</label><input type="text" id="manualNombreProyecto" required /><label for="manualFechaProyecto">Fecha de Inicio</label><input type="text" id="manualFechaProyecto" required /><label for="manualDescripcion">Descripción (Servicios realizados)</label><textarea id="manualDescripcion" rows="3"></textarea><button type="button" onclick="app.guardarProyectoManual()">Guardar Proyecto</button></form></div></section>
-            <section id="historial-proyectos"><div class="card"><div class="card-header"><h2>Historial de Proyectos Completados</h2></div><div style="overflow-x:auto;"><table><thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
+            <section id="historial-proyectos"><div class="card"><div class="card-header"><h2>Historial de Proyectos Completados</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
             <section id="vista-artista"><div class="card"><div class="card-header"><h2 id="vista-artista-nombre"></h2></div><div id="vista-artista-contenido"></div></div></section>
             <section id="gestion-servicios"><div class="card"><div class="card-header"><h2>Gestión de Servicios</h2></div><form id="formServicios"><input type="hidden" id="idServicio"><input type="text" id="nombreServicio" placeholder="Nombre" required /><input type="number" step="0.01" id="precioServicio" placeholder="Precio" required /><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormServicios" style="margin-left: 1rem;">Limpiar</button></form><h3 style="margin-top: 2rem;">Servicios Existentes</h3><ul id="listaServicios"></ul></div></section>
             <section id="gestion-artistas"><div class="card"><div class="card-header"><h2>Gestión de Artistas</h2></div><form id="formArtistas"><input type="hidden" id="idArtista"><div class="form-row"><div class="form-group"><label for="nombreArtista">Nombre Real</label><input type="text" id="nombreArtista" required /></div><div class="form-group"><label for="nombreArtisticoArtista">Nombre Artístico</label><input type="text" id="nombreArtisticoArtista" /></div></div><div class="form-row"><div class="form-group"><label for="telefonoArtista">Teléfono</label><input type="tel" id="telefonoArtista" /></div><div class="form-group"><label for="correoArtista">Correo Electrónico</label><input type="email" id="correoArtista" /></div></div><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormArtistas" style="margin-left: 1rem;">Limpiar</button></form><h3 style="margin-top: 2rem;">Artistas Registrados</h3><ul id="listaArtistas"></ul></div></section>
@@ -732,19 +832,14 @@
         try {
             const eventos = await fetchAPI('/api/proyectos/agenda');
             const isMobile = window.innerWidth < 768;
-
-            // --- INICIO DE LA CORRECCIÓN ---
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
-                // Se establece la vista de mes como inicial para todos los dispositivos.
                 initialView: 'dayGridMonth',
-                // Se ajusta la barra de herramientas para dar más opciones en móvil.
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
                     right: isMobile ? 'dayGridMonth,listWeek' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
-                // --- FIN DE LA CORRECCIÓN ---
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true,
                 editable: true,
@@ -820,11 +915,8 @@
               let html = `<div class="card"><p><strong>Nombre Real:</strong> ${artistaInfo.nombre}</p><p><strong>Nombre Artístico:</strong> ${artistaInfo.nombreArtistico || 'N/A'}</p><p><strong>Teléfono:</strong> ${artistaInfo.telefono || 'N/A'}</p><p><strong>Correo:</strong> ${artistaInfo.correo || 'N/A'}</p></div>`;
               
               html += '<h3>Proyectos del Artista</h3>'; 
-              if(proyectos.length) {
-                  // --- INICIO DE LA CORRECCIÓN ---
-                  // Se añade un div con overflow-x: auto para que la tabla sea deslizable en móviles.
-                  html += '<div style="overflow-x:auto;"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
-                  // --- FIN DE LA CORRECCIÓN ---
+              if(proyectos.length) { 
+                  html += '<div style="width:100%;"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                   proyectos.forEach(p => { 
                       const nombreProyecto = p.nombreProyecto || p.items.map(i=>i.nombre).join(', ');
                       html += `<tr>
@@ -840,16 +932,13 @@
                           </td>
                       </tr>`; 
                   }); 
-                  html += '</tbody></table></div>'; // Se cierra el div contenedor
+                  html += '</tbody></table></div>'; 
               } else { html += '<p>No hay proyectos para este artista.</p>'; } 
               
               html += '<h3>Pagos del Artista</h3>'; 
               const pagosArtista = todosPagos.filter(p => p.artista === nombre); 
               if (pagosArtista.length) { 
-                  // --- INICIO DE LA CORRECCIÓN ---
-                  // Se añade un div con overflow-x: auto para que la tabla sea deslizable en móviles.
-                  html += '<div style="overflow-x:auto;"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
-                  // --- FIN DE LA CORRECCIÓN ---
+                  html += '<div style="width:100%;"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
                   pagosArtista.forEach(p => { 
                       html += `<tr>
                           <td>${new Date(p.fecha).toLocaleDateString()}</td>
@@ -860,7 +949,7 @@
                           </td>
                       </tr>`; 
                   }); 
-                  html += '</tbody></table></div>'; // Se cierra el div contenedor
+                  html += '</tbody></table></div>'; 
               } else { html += '<p>No hay pagos registrados para este artista.</p>'; } 
               contenido.innerHTML = html; 
               mostrarSeccion('vista-artista'); 
