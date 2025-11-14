@@ -45,7 +45,15 @@
     .sidebar-header { text-align: center; margin-bottom: 2rem; }
     #app-logo { cursor: pointer; }
     .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; }
-    .sidebar-footer { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+    /* CORRECCIÓN: Se añade Flexbox para organizar mejor el botón de cerrar sesión y el switch de tema. */
+    .sidebar-footer {
+        margin-top: auto;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
     #btn-nuevo-proyecto-sidebar { background-color: var(--primary-color); color: white; text-align: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
     #btn-nuevo-proyecto-sidebar:hover { background-color: var(--primary-hover); }
     .nav-group summary { list-style: none; padding: 0.75rem 1rem; font-weight: 700; color: var(--text-color-dark); cursor: pointer; position: relative; }
@@ -89,6 +97,11 @@
     .btn-vaciar { padding: 0.4rem 0.8rem; font-size: 0.8em; }
     .btn-aprobar { background-color: var(--success-color); color: white; padding: 0.4rem 0.8rem; font-size: 0.9em; white-space: nowrap; }
     
+    /* CORRECCIÓN: Se añade regla para el botón de logout para mantener el código limpio. */
+    #logout-button {
+      width: 100%;
+    }
+
     .list-item-actions button, .table-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem; font-size: 1em; line-height: 1; width: 36px; height: 36px; margin-left: 0.5rem; }
     .table-actions .btn-aprobar { width: auto; height: auto; padding: 0.4rem 0.8rem; }
     .project-card-footer button { padding: 0.4rem 0.8rem; font-size: 0.85em; }
@@ -103,7 +116,7 @@
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--border-color); }
     .table-actions { display: flex; align-items: center; flex-wrap: nowrap; }
     #tablaCotizacionesBody td:last-child { min-width: 280px; }
-    .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; margin-bottom: 0.5rem; }
+    .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; }
     .theme-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
     .theme-switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 26px; }
@@ -236,7 +249,21 @@
         </details>
       </div>
       
-      <div class="sidebar-footer"><div id="customization-container" style="display: none;"><p style="font-size: 0.8em; text-align: center; margin-bottom: 1rem;">Haz clic en el logo para cambiarlo.</p><input type="file" id="logo-input" accept="image/*" style="display: none;"></div><div class="theme-toggle-container"><span>Modo Oscuro</span><label class="theme-switch"><input type="checkbox" id="theme-switch" /><span class="slider"></span></label></div><button id="logout-button" class="btn-eliminar" style="width:100%;">Cerrar Sesión</button></div>
+      <div class="sidebar-footer">
+        <div id="customization-container" style="display: none;">
+          <p style="font-size: 0.8em; text-align: center; margin-bottom: 1rem;">Haz clic en el logo para cambiarlo.</p>
+          <input type="file" id="logo-input" accept="image/*" style="display: none;">
+        </div>
+        <div class="theme-toggle-container">
+          <span>Modo Oscuro</span>
+          <label class="theme-switch">
+            <input type="checkbox" id="theme-switch" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <!-- CORRECCIÓN: Se elimina el estilo en línea `width:100%` ya que ahora se maneja por CSS. -->
+        <button id="logout-button" class="btn-eliminar">Cerrar Sesión</button>
+      </div>
     </nav>
 
     <div class="main-content">
@@ -697,7 +724,66 @@
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
       function goToArtistFromModal(artistId, artistName) { closeEventModal(); irAVistaArtista(artistId, artistName); }
-      async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: isMobile ? { left: 'prev,next', center: 'title', right: 'today' } : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, businessHours: { daysOfWeek: [ 1, 2, 3, 4, 5 ], startTime: '09:00', endTime: '19:00' }, events: eventos, dateClick: (info) => { if (info.view.type === 'dayGridMonth' || info.view.type === 'timeGridWeek') { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) { info.revert(); return; } try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Fecha actualizada.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { cargarFlujoDeTrabajo(); } } catch (error) { showToast(`Error al actualizar: ${error.message}`, 'error'); info.revert(); } }, eventContent: (arg) => { let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${arg.event.title}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p>Error al cargar agenda.</p>'; } }
+      async function cargarAgenda() {
+        const calendarEl = document.getElementById('calendario');
+        if (currentCalendar) {
+            currentCalendar.destroy();
+        }
+        try {
+            const eventos = await fetchAPI('/api/proyectos/agenda');
+            const isMobile = window.innerWidth < 768;
+
+            // --- INICIO DE LA CORRECCIÓN ---
+            currentCalendar = new FullCalendar.Calendar(calendarEl, {
+                locale: 'es',
+                // Se establece la vista de mes como inicial para todos los dispositivos.
+                initialView: 'dayGridMonth',
+                // Se ajusta la barra de herramientas para dar más opciones en móvil.
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: isMobile ? 'dayGridMonth,listWeek' : 'dayGridMonth,timeGridWeek,listWeek'
+                },
+                // --- FIN DE LA CORRECCIÓN ---
+                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
+                navLinks: true,
+                editable: true,
+                businessHours: { daysOfWeek: [ 1, 2, 3, 4, 5 ], startTime: '09:00', endTime: '19:00' },
+                events: eventos,
+                dateClick: (info) => {
+                    if (info.view.type === 'dayGridMonth' || info.view.type === 'timeGridWeek') {
+                        mostrarSeccion('registrar-proyecto');
+                        document.getElementById('fechaProyecto')._flatpickr.setDate(info.date);
+                        showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info');
+                    }
+                },
+                eventClick: openEventModal,
+                eventDrop: async (info) => {
+                    if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) {
+                        info.revert();
+                        return;
+                    }
+                    try {
+                        await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString());
+                        showToast('Fecha actualizada.', 'success');
+                        if (document.getElementById('flujo-trabajo').classList.contains('active')) {
+                            cargarFlujoDeTrabajo();
+                        }
+                    } catch (error) {
+                        showToast(`Error al actualizar: ${error.message}`, 'error');
+                        info.revert();
+                    }
+                },
+                eventContent: (arg) => {
+                    let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${arg.event.title}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`;
+                    return { html: innerHtml };
+                }
+            });
+            currentCalendar.render();
+        } catch (error) {
+            calendarEl.innerHTML = '<p>Error al cargar agenda.</p>';
+        }
+      }
       async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = proyectosCacheados.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function aprobarCotizacion(id) { if (!confirm('¿Aprobar esta cotización y moverla al Flujo de Trabajo?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch(error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } }
       async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Te enviamos un resumen de tu cotización de FiaRecords Studio.\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nPara confirmar o si tienes alguna duda, contáctanos. ¡Gracias!`; const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`; window.open(url, '_blank'); } catch (error) { showToast('No se pudo cargar la información para compartir.', 'error'); } }
@@ -734,8 +820,11 @@
               let html = `<div class="card"><p><strong>Nombre Real:</strong> ${artistaInfo.nombre}</p><p><strong>Nombre Artístico:</strong> ${artistaInfo.nombreArtistico || 'N/A'}</p><p><strong>Teléfono:</strong> ${artistaInfo.telefono || 'N/A'}</p><p><strong>Correo:</strong> ${artistaInfo.correo || 'N/A'}</p></div>`;
               
               html += '<h3>Proyectos del Artista</h3>'; 
-              if(proyectos.length) { 
-                  html += '<div style="overflow-x:auto;"><table style="margin-bottom: 2rem;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
+              if(proyectos.length) {
+                  // --- INICIO DE LA CORRECCIÓN ---
+                  // Se añade un div con overflow-x: auto para que la tabla sea deslizable en móviles.
+                  html += '<div style="overflow-x:auto;"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
+                  // --- FIN DE LA CORRECCIÓN ---
                   proyectos.forEach(p => { 
                       const nombreProyecto = p.nombreProyecto || p.items.map(i=>i.nombre).join(', ');
                       html += `<tr>
@@ -751,13 +840,16 @@
                           </td>
                       </tr>`; 
                   }); 
-                  html += '</tbody></table></div>'; 
+                  html += '</tbody></table></div>'; // Se cierra el div contenedor
               } else { html += '<p>No hay proyectos para este artista.</p>'; } 
               
               html += '<h3>Pagos del Artista</h3>'; 
               const pagosArtista = todosPagos.filter(p => p.artista === nombre); 
               if (pagosArtista.length) { 
-                  html += '<div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
+                  // --- INICIO DE LA CORRECCIÓN ---
+                  // Se añade un div con overflow-x: auto para que la tabla sea deslizable en móviles.
+                  html += '<div style="overflow-x:auto;"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
+                  // --- FIN DE LA CORRECCIÓN ---
                   pagosArtista.forEach(p => { 
                       html += `<tr>
                           <td>${new Date(p.fecha).toLocaleDateString()}</td>
@@ -768,7 +860,7 @@
                           </td>
                       </tr>`; 
                   }); 
-                  html += '</tbody></table></div>'; 
+                  html += '</tbody></table></div>'; // Se cierra el div contenedor
               } else { html += '<p>No hay pagos registrados para este artista.</p>'; } 
               contenido.innerHTML = html; 
               mostrarSeccion('vista-artista'); 
