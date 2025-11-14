@@ -184,18 +184,16 @@
     body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-dark); }
     body.dark-mode .fc th { background-color: transparent; }
 
-    /* --- CORRECCIÓN MODO OSCURO (VISTA LISTA) --- */
+    /* --- CORRECCIÓN FINAL MODO OSCURO (VISTA LISTA) --- */
+    body.dark-mode .fc-list-day-cushion { background-color: var(--card-background); }
     body.dark-mode .fc-list-day-text, 
+    body.dark-mode .fc-list-day-side-text,
     body.dark-mode .fc-list-event-title a {
-        color: var(--text-color-dark);
+        color: var(--text-color-dark) !important;
     }
-    body.dark-mode .fc-list-table td {
-        border-color: var(--border-color);
-    }
+    body.dark-mode .fc-list-table td { border-color: var(--border-color); }
     body.dark-mode .fc-list-event-time,
-    body.dark-mode .fc .fc-list-empty {
-        color: var(--text-color-light);
-    }
+    body.dark-mode .fc .fc-list-empty { color: var(--text-color-light); }
 
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
@@ -778,7 +776,12 @@
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
                 initialView: 'dayGridMonth',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek' },
+                // --- CORRECCIÓN FINAL: Añadida la vista de semana a móvil ---
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: isMobile ? 'dayGridMonth,timeGridWeek,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
+                },
                 height: isMobile ? 'auto' : 'auto',
                 aspectRatio: isMobile ? 1.2 : 1.8,
                 dayMaxEventRows: isMobile ? 2 : true,
