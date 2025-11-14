@@ -97,42 +97,30 @@
     
     .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
     
-    /* --- CORRECCIÓN DEFINITIVA TABLAS RESPONSIVAS --- */
-    /* La clave es aplicar los estilos solo a las tablas DENTRO de .table-responsive */
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
     
     @media (max-width: 768px) {
-        .table-responsive table, 
-        .table-responsive thead, 
-        .table-responsive tbody, 
-        .table-responsive th, 
-        .table-responsive td, 
-        .table-responsive tr { display: block; }
-        
+        .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive th, .table-responsive td, .table-responsive tr { display: block; }
         .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
         .table-responsive tr { margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background-color: var(--card-background); box-shadow: var(--shadow); }
         .table-responsive td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-top: 0.5rem; padding-bottom: 0.5rem; text-align: right; white-space: normal; }
         .table-responsive td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
         .table-responsive td:before { position: absolute; top: 0.5rem; left: 0.5rem; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); }
-
         #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaCotizacionesBody td:nth-of-type(3):before { content: "Fecha:"; }
         #tablaCotizacionesBody td:nth-of-type(4):before { content: ""; display: none; }
-
         #tablaPagosBody td:nth-of-type(1):before { content: "Fecha:"; }
         #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
         #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
         #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
         #tablaPagosBody td:nth-of-type(5):before { content: ""; display: none; }
-
         #tablaHistorialBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
         #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
         #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
-        
         #vista-artista-contenido .table-responsive tr { display: flex; flex-direction: column; }
         #vista-artista-contenido .table-responsive td { padding-left: 0 !important; text-align: left; }
         #vista-artista-contenido .table-responsive td:before { display: none; } 
@@ -191,6 +179,12 @@
     .fc .fc-button:hover { background-color: var(--fc-button-hover-bg-color, var(--secondary-button-hover-bg)); }
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--fc-button-active-bg-color, var(--primary-color)); }
     .fc .fc-day-today { background-color: var(--fc-today-bg-color, rgba(79, 70, 229, 0.05)); }
+    
+    /* --- CORRECCIÓN MODO OSCURO CALENDARIO --- */
+    .fc .fc-col-header-cell-cushion { text-decoration: none; color: var(--text-color-light); }
+    body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-dark); }
+    body.dark-mode .fc th { background-color: transparent; }
+
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
     
@@ -199,7 +193,6 @@
         .fc .fc-toolbar-title { font-size: 1.1em; order: -1; width: 100%; text-align: center; }
         .fc .fc-button { padding: 0.4rem 0.6rem; font-size: 0.8em; }
         .fc-view-harness { min-height: 400px; }
-        /* Mejora la vista de lista en móvil */
         .fc-list-event { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; padding: 0.5rem; }
         .fc-list-event-title { font-weight: 600; font-size: 0.9em; }
         .fc-list-event-time { font-size: 0.8em; color: var(--text-color-light); }
@@ -325,7 +318,6 @@
         <main>
             <section id="dashboard"><div class="grid-container"><div class="card kpi-card"><div class="kpi-value" id="kpi-ingresos-mes">$0.00</div><div class="kpi-label">Ingresos del Mes</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-activos">0</div><div class="kpi-label">Proyectos Activos</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-por-cobrar">0</div><div class="kpi-label">Proyectos por Cobrar</div></div></div></section>
             <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
-            <!-- CORRECCIÓN: Se añade el div wrapper a cada tabla -->
             <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
             <section id="flujo-trabajo"><div class="card"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
             <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
@@ -765,17 +757,12 @@
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
       function goToArtistFromModal(artistId, artistName) { closeEventModal(); irAVistaArtista(artistId, artistName); }
-      
-      // --- CORRECCIÓN DEFINITIVA CALENDARIO ---
       async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
-        if (currentCalendar) {
-            currentCalendar.destroy();
-        }
+        if (currentCalendar) { currentCalendar.destroy(); }
         try {
             const eventos = await fetchAPI('/api/proyectos/agenda');
             const isMobile = window.innerWidth < 768;
-            
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
                 initialView: 'dayGridMonth',
@@ -784,47 +771,24 @@
                     center: 'title',
                     right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
-                height: isMobile ? 'auto' : 'auto', // 'auto' es mejor para que se adapte al contenido
-                aspectRatio: isMobile ? 1.2 : 1.8,  // Mejor que una altura fija
-                dayMaxEventRows: isMobile ? 2 : true, // En móvil, muestra 2 eventos y luego "+más"
+                height: isMobile ? 'auto' : 'auto',
+                aspectRatio: isMobile ? 1.2 : 1.8,
+                dayMaxEventRows: isMobile ? 2 : true,
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true,
                 editable: true,
                 events: eventos,
-                dateClick: (info) => {
-                    if (info.view.type.includes('Grid')) { // Funciona para dayGrid y timeGrid
-                        mostrarSeccion('registrar-proyecto');
-                        document.getElementById('fechaProyecto')._flatpickr.setDate(info.date);
-                        showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info');
-                    }
-                },
+                dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } },
                 eventClick: openEventModal,
                 eventDrop: async (info) => {
-                    if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) {
-                        info.revert();
-                        return;
-                    }
-                    try {
-                        await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString());
-                        showToast('Fecha actualizada.', 'success');
-                        cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos');
-                    } catch (error) {
-                        showToast(`Error al actualizar: ${error.message}`, 'error');
-                        info.revert();
-                    }
+                    if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) { info.revert(); return; }
+                    try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Fecha actualizada.', 'success'); cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'); } catch (error) { showToast(`Error al actualizar: ${error.message}`, 'error'); info.revert(); }
                 },
-                eventContent: (arg) => {
-                    let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${arg.event.title}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`;
-                    return { html: innerHtml };
-                }
+                eventContent: (arg) => { let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${arg.event.title}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; }
             });
             currentCalendar.render();
-        } catch (error) {
-            calendarEl.innerHTML = '<p>Error al cargar agenda. Por favor, recarga la página.</p>';
-            console.error(error);
-        }
+        } catch (error) { calendarEl.innerHTML = '<p>Error al cargar agenda. Por favor, recarga la página.</p>'; console.error(error); }
       }
-
       async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = proyectosCacheados.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function aprobarCotizacion(id) { if (!confirm('¿Aprobar esta cotización y moverla al Flujo de Trabajo?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch(error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } }
       async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Te enviamos un resumen de tu cotización de FiaRecords Studio.\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nPara confirmar o si tienes alguna duda, contáctanos. ¡Gracias!`; const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`; window.open(url, '_blank'); } catch (error) { showToast('No se pudo cargar la información para compartir.', 'error'); } }
