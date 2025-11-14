@@ -184,16 +184,10 @@
     body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-dark); }
     body.dark-mode .fc th { background-color: transparent; }
 
-    /* --- CORRECCIÓN FINAL MODO OSCURO (VISTA LISTA) --- */
     body.dark-mode .fc-list-day-cushion { background-color: var(--card-background); }
-    body.dark-mode .fc-list-day-text, 
-    body.dark-mode .fc-list-day-side-text,
-    body.dark-mode .fc-list-event-title a {
-        color: var(--text-color-dark) !important;
-    }
+    body.dark-mode .fc-list-day-text, body.dark-mode .fc-list-day-side-text, body.dark-mode .fc-list-event-title a { color: var(--text-color-dark) !important; }
     body.dark-mode .fc-list-table td { border-color: var(--border-color); }
-    body.dark-mode .fc-list-event-time,
-    body.dark-mode .fc .fc-list-empty { color: var(--text-color-light); }
+    body.dark-mode .fc-list-event-time, body.dark-mode .fc .fc-list-empty { color: var(--text-color-light); }
 
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
@@ -776,7 +770,6 @@
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
                 initialView: 'dayGridMonth',
-                // --- CORRECCIÓN FINAL: Añadida la vista de semana a móvil ---
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
@@ -1069,9 +1062,10 @@
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); });
         document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
         document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
-        document.getElementById('nombreNuevoArtista').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario(''); } });
+        // --- CORRECCIÓN FINAL: Se cambia 'keypress' por 'keydown' ---
+        document.getElementById('nombreNuevoArtista').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario(''); } });
         document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; });
-        document.getElementById('manualNombreNuevoArtista').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario('manual'); } });
+        document.getElementById('manualNombreNuevoArtista').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario('manual'); } });
         document.getElementById('firma-input').addEventListener('change', subirFirma);
         document.getElementById('btn-enviar-datos-bancarios').addEventListener('click', enviarDatosBancarios);
         document.getElementById('toggle-password').addEventListener('click', (e) => {
