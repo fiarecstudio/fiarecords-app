@@ -41,39 +41,11 @@
     section { display: none; }
     section.active { display: block; }
 
-    .sidebar { 
-        width: 260px; 
-        background-color: var(--card-background); 
-        border-right: 1px solid var(--border-color); 
-        display: flex; 
-        flex-direction: column; 
-        padding: 1.5rem 1rem; 
-        height: 100vh; 
-        height: 100dvh; 
-    }
+    .sidebar { width: 260px; background-color: var(--card-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; height: 100dvh; }
     .sidebar-header { text-align: center; margin-bottom: 1rem; flex-shrink: 0; }
     #app-logo { cursor: pointer; }
-    
-    .sidebar-nav { 
-        display: flex; 
-        flex-direction: column; 
-        gap: 0.5rem; 
-        flex: 1; 
-        overflow-y: auto; 
-        padding-right: 5px; 
-    }
-    
-    .sidebar-footer { 
-        margin-top: auto; 
-        padding-top: 1rem; 
-        border-top: 1px solid var(--border-color); 
-        flex-shrink: 0; 
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        background-color: var(--card-background);
-    }
-    
+    .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto; padding-right: 5px; }
+    .sidebar-footer { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 1rem; background-color: var(--card-background); }
     #btn-nuevo-proyecto-sidebar { background-color: var(--primary-color); color: white; text-align: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; flex-shrink: 0; }
     #btn-nuevo-proyecto-sidebar:hover { background-color: var(--primary-hover); }
     .nav-group summary { list-style: none; padding: 0.75rem 1rem; font-weight: 700; color: var(--text-color-dark); cursor: pointer; position: relative; }
@@ -125,16 +97,24 @@
     
     .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
     
+    /* --- CORRECCIÓN DEFINITIVA TABLAS RESPONSIVAS --- */
+    /* La clave es aplicar los estilos solo a las tablas DENTRO de .table-responsive */
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
-
+    
     @media (max-width: 768px) {
-        table, thead, tbody, th, td, tr { display: block; }
-        thead tr { position: absolute; top: -9999px; left: -9999px; }
-        tr { margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background-color: var(--card-background); box-shadow: var(--shadow); }
-        td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-top: 0.5rem; padding-bottom: 0.5rem; text-align: right; white-space: normal; }
-        td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
-        td:before { position: absolute; top: 0.5rem; left: 0.5rem; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); }
+        .table-responsive table, 
+        .table-responsive thead, 
+        .table-responsive tbody, 
+        .table-responsive th, 
+        .table-responsive td, 
+        .table-responsive tr { display: block; }
+        
+        .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
+        .table-responsive tr { margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background-color: var(--card-background); box-shadow: var(--shadow); }
+        .table-responsive td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-top: 0.5rem; padding-bottom: 0.5rem; text-align: right; white-space: normal; }
+        .table-responsive td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
+        .table-responsive td:before { position: absolute; top: 0.5rem; left: 0.5rem; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); }
 
         #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
@@ -153,11 +133,10 @@
         #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
         #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
         
-        #vista-artista-contenido table td:nth-of-type(1):before { content: "Dato 1:"; } 
-        #vista-artista-contenido table tr { display: flex; flex-direction: column; }
-        #vista-artista-contenido table td { padding-left: 0 !important; text-align: left; }
-        #vista-artista-contenido table td:before { display: none; } 
-        #vista-artista-contenido td:nth-child(1) { font-weight: bold; color: var(--primary-color); }
+        #vista-artista-contenido .table-responsive tr { display: flex; flex-direction: column; }
+        #vista-artista-contenido .table-responsive td { padding-left: 0 !important; text-align: left; }
+        #vista-artista-contenido .table-responsive td:before { display: none; } 
+        #vista-artista-contenido .table-responsive td:nth-child(1) { font-weight: bold; color: var(--primary-color); }
     }
 
     .clickable-artist { cursor: pointer; text-decoration: underline; color: var(--text-color-dark); }
@@ -197,7 +176,8 @@
     #nuevoArtistaContainer, #manualNuevoArtistaContainer { display: none; }
     .status-tag { padding: 0.25rem 0.75rem; border-radius: 16px; font-size: 0.8em; font-weight: 600; color: white; text-align: center; display: inline-block; }
     td select { padding: 0.4rem; margin: 0; font-size: 0.9em; border-radius: 6px; }
-    #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; }
+    
+    #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; min-height: 550px; }
     .fc-event { cursor: pointer; padding: 4px; font-size: 0.85em; }
     .fc-daygrid-event-dot { display: none; }
     .fc-event-time { font-weight: bold; }
@@ -211,20 +191,21 @@
     .fc .fc-button:hover { background-color: var(--fc-button-hover-bg-color, var(--secondary-button-hover-bg)); }
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--fc-button-active-bg-color, var(--primary-color)); }
     .fc .fc-day-today { background-color: var(--fc-today-bg-color, rgba(79, 70, 229, 0.05)); }
-    
-    /* CORRECCIÓN CSS PARA CALENDARIO MÓVIL */
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
-    .fc { max-width: 100%; margin: 0 auto; }
     
     @media (max-width: 768px) {
-        .fc .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
-        .fc .fc-toolbar-title { font-size: 1.1em; }
-        .fc .fc-button { padding: 0.3rem 0.6rem; font-size: 0.85em; }
-        /* Asegura que el calendario no se colapse en altura */
-        .fc-view-harness { min-height: 500px; }
+        .fc .fc-toolbar { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+        .fc .fc-toolbar-title { font-size: 1.1em; order: -1; width: 100%; text-align: center; }
+        .fc .fc-button { padding: 0.4rem 0.6rem; font-size: 0.8em; }
+        .fc-view-harness { min-height: 400px; }
+        /* Mejora la vista de lista en móvil */
+        .fc-list-event { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; padding: 0.5rem; }
+        .fc-list-event-title { font-weight: 600; font-size: 0.9em; }
+        .fc-list-event-time { font-size: 0.8em; color: var(--text-color-light); }
     }
-
+    .fc { max-width: 100%; margin: 0 auto; }
+    
     .form-actions { display: flex; gap: 1rem; margin-top: 1rem; }
     .form-actions button { flex: 1; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -344,6 +325,7 @@
         <main>
             <section id="dashboard"><div class="grid-container"><div class="card kpi-card"><div class="kpi-value" id="kpi-ingresos-mes">$0.00</div><div class="kpi-label">Ingresos del Mes</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-activos">0</div><div class="kpi-label">Proyectos Activos</div></div><div class="card kpi-card"><div class="kpi-value" id="kpi-proyectos-por-cobrar">0</div><div class="kpi-label">Proyectos por Cobrar</div></div></div></section>
             <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
+            <!-- CORRECCIÓN: Se añade el div wrapper a cada tabla -->
             <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
             <section id="flujo-trabajo"><div class="card"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
             <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
@@ -783,6 +765,8 @@
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
       function goToArtistFromModal(artistId, artistName) { closeEventModal(); irAVistaArtista(artistId, artistName); }
+      
+      // --- CORRECCIÓN DEFINITIVA CALENDARIO ---
       async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
         if (currentCalendar) {
@@ -791,25 +775,24 @@
         try {
             const eventos = await fetchAPI('/api/proyectos/agenda');
             const isMobile = window.innerWidth < 768;
+            
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
                 initialView: 'dayGridMonth',
-                // CORRECCIÓN JS: Altura automática en móvil para que no se vea aplastado y permita scroll en la página
-                height: isMobile ? 'auto' : '100%',
-                // CORRECCIÓN JS: Toolbar simplificada al máximo
                 headerToolbar: {
-                    left: 'prev,next',
+                    left: 'prev,next today',
                     center: 'title',
-                    right: 'dayGridMonth,listWeek'
+                    right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
-                // Movemos el botón "Hoy" al footer solo en móvil si se necesita espacio, o lo quitamos para limpiar
+                height: isMobile ? 'auto' : 'auto', // 'auto' es mejor para que se adapte al contenido
+                aspectRatio: isMobile ? 1.2 : 1.8,  // Mejor que una altura fija
+                dayMaxEventRows: isMobile ? 2 : true, // En móvil, muestra 2 eventos y luego "+más"
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true,
                 editable: true,
-                businessHours: { daysOfWeek: [ 1, 2, 3, 4, 5 ], startTime: '09:00', endTime: '19:00' },
                 events: eventos,
                 dateClick: (info) => {
-                    if (info.view.type === 'dayGridMonth' || info.view.type === 'timeGridWeek') {
+                    if (info.view.type.includes('Grid')) { // Funciona para dayGrid y timeGrid
                         mostrarSeccion('registrar-proyecto');
                         document.getElementById('fechaProyecto')._flatpickr.setDate(info.date);
                         showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info');
@@ -824,9 +807,7 @@
                     try {
                         await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString());
                         showToast('Fecha actualizada.', 'success');
-                        if (document.getElementById('flujo-trabajo').classList.contains('active')) {
-                            cargarFlujoDeTrabajo();
-                        }
+                        cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos');
                     } catch (error) {
                         showToast(`Error al actualizar: ${error.message}`, 'error');
                         info.revert();
@@ -839,9 +820,11 @@
             });
             currentCalendar.render();
         } catch (error) {
-            calendarEl.innerHTML = '<p>Error al cargar agenda.</p>';
+            calendarEl.innerHTML = '<p>Error al cargar agenda. Por favor, recarga la página.</p>';
+            console.error(error);
         }
       }
+
       async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = proyectosCacheados.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function aprobarCotizacion(id) { if (!confirm('¿Aprobar esta cotización y moverla al Flujo de Trabajo?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch(error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } }
       async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Te enviamos un resumen de tu cotización de FiaRecords Studio.\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nPara confirmar o si tienes alguna duda, contáctanos. ¡Gracias!`; const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`; window.open(url, '_blank'); } catch (error) { showToast('No se pudo cargar la información para compartir.', 'error'); } }
@@ -879,7 +862,7 @@
               
               html += '<h3>Proyectos del Artista</h3>'; 
               if(proyectos.length) { 
-                  html += '<div style="width:100%;"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
+                  html += '<div class="table-responsive"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                   proyectos.forEach(p => { 
                       const nombreProyecto = p.nombreProyecto || p.items.map(i=>i.nombre).join(', ');
                       html += `<tr>
@@ -901,7 +884,7 @@
               html += '<h3>Pagos del Artista</h3>'; 
               const pagosArtista = todosPagos.filter(p => p.artista === nombre); 
               if (pagosArtista.length) { 
-                  html += '<div style="width:100%;"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
+                  html += '<div class="table-responsive"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
                   pagosArtista.forEach(p => { 
                       html += `<tr>
                           <td>${new Date(p.fecha).toLocaleDateString()}</td>
