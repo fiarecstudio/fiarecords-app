@@ -326,11 +326,9 @@
             <section id="flujo-trabajo"><div class="card"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
             <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
             <section id="registrar-proyecto"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Nuevo Proyecto o Cotización</h2></div><form id="formProyecto" onsubmit="return false;"><label for="proyectoArtista">Artista/Cliente</label><div id="artista-selector-container"><select id="proyectoArtista"><option value="publico_general">Público General</option></select><button type="button" id="btnNuevoArtista" title="Registrar nuevo artista">+</button></div>
-              <!-- CORRECCIÓN: Estructura mejorada para el campo de nuevo artista -->
               <div id="nuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul><div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;"><div class="info-row"><label>Total:</label><span id="totalAPagar">$0.00</span></div><div class="form-row"><div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div><div class="form-actions"><button id="btnGenerarCotizacion" style="background-color: var(--primary-color); color: white;">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
             <section id="registro-manual"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Registro Manual de Proyecto</h2><p style="font-size: 0.9em; color: var(--text-color-light);">Usa este formulario para proyectos sin costo, antiguos o que no requieren cotización.</p></div><form id="formProyectoManual" onsubmit="return false;"><label for="manualProyectoArtista">Artista/Cliente</label><div id="manual-artista-selector-container"><select id="manualProyectoArtista" required></select><button type="button" id="manualBtnNuevoArtista" title="Registrar nuevo artista">+</button></div>
-              <!-- CORRECCIÓN: Estructura mejorada para el campo de nuevo artista (manual) -->
               <div id="manualNuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="manualNombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarManualNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <label for="manualNombreProyecto">Nombre del Proyecto</label><input type="text" id="manualNombreProyecto" required /><label for="manualFechaProyecto">Fecha de Inicio</label><input type="text" id="manualFechaProyecto" required /><label for="manualDescripcion">Descripción (Servicios realizados)</label><textarea id="manualDescripcion" rows="3"></textarea><button type="button" onclick="app.guardarProyectoManual()">Guardar Proyecto</button></form></div></section>
             <section id="historial-proyectos"><div class="card"><div class="card-header"><h2>Historial de Proyectos Completados</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
@@ -747,22 +745,35 @@
       }
       async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id); proyectoActual = {}; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('cotizaciones'); } }
       async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('Proyecto guardado y agendado.', 'success'); proyectoActual = {}; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('flujo-trabajo'); } }
+      
       async function registrarNuevoArtistaDesdeFormulario(formPrefix) {
-          const nombreInput = document.getElementById(`${formPrefix}NombreNuevoArtista`);
+          const inputId = formPrefix ? `${formPrefix}NombreNuevoArtista` : 'nombreNuevoArtista';
+          const containerId = formPrefix ? `${formPrefix}NuevoArtistaContainer` : 'nuevoArtistaContainer';
+          
+          const nombreInput = document.getElementById(inputId);
           const nombre = nombreInput.value.trim();
-          if (!nombre) return;
+          
+          if (!nombre) {
+              showToast('Por favor, introduce un nombre para el artista.', 'error');
+              return;
+          }
+          
           try {
               const nuevoArtista = await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) });
+              
               const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista';
               const addPublico = formPrefix !== 'manual';
+              
               await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, addPublico, nuevoArtista._id);
-              document.getElementById(`${formPrefix}NuevoArtistaContainer`).style.display = 'none';
+              
+              document.getElementById(containerId).style.display = 'none';
               nombreInput.value = '';
               showToast('Artista registrado y seleccionado.', 'success');
           } catch (error) {
               showToast(`Error: ${error.message}`, 'error');
           }
       }
+
       function openEventModal(info) { const props = info.event.extendedProps; document.getElementById('modal-event-title').textContent = info.event.title; document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); document.getElementById('modal-event-total').textContent = `$${props.total.toFixed(2)}`; document.getElementById('modal-event-status').textContent = props.estatus; document.getElementById('modal-event-process').textContent = props.proceso; document.getElementById('modal-event-services').innerHTML = props.servicios.split('\n').map(s => `<li>${s}</li>`).join(''); const btnWorkflow = document.getElementById('btn-go-to-workflow'); btnWorkflow.onclick = () => app.goToProjectInWorkflow(info.event.id); const btnArtist = document.getElementById('btn-go-to-artist'); if (props.artistaId) { btnArtist.style.display = 'block'; btnArtist.onclick = () => app.goToArtistFromModal(props.artistaId, props.artistaNombre); } else { btnArtist.style.display = 'none'; } document.getElementById('event-modal').style.display = 'flex'; }
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
@@ -1069,7 +1080,6 @@
         document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
         document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
         
-        // --- CORRECCIÓN FINAL: Event listeners para los nuevos botones y campos ---
         document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
         document.getElementById('nombreNuevoArtista').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario(''); } });
         
