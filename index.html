@@ -180,10 +180,22 @@
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--fc-button-active-bg-color, var(--primary-color)); }
     .fc .fc-day-today { background-color: var(--fc-today-bg-color, rgba(79, 70, 229, 0.05)); }
     
-    /* --- CORRECCIÓN MODO OSCURO CALENDARIO --- */
     .fc .fc-col-header-cell-cushion { text-decoration: none; color: var(--text-color-light); }
     body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-dark); }
     body.dark-mode .fc th { background-color: transparent; }
+
+    /* --- CORRECCIÓN MODO OSCURO (VISTA LISTA) --- */
+    body.dark-mode .fc-list-day-text, 
+    body.dark-mode .fc-list-event-title a {
+        color: var(--text-color-dark);
+    }
+    body.dark-mode .fc-list-table td {
+        border-color: var(--border-color);
+    }
+    body.dark-mode .fc-list-event-time,
+    body.dark-mode .fc .fc-list-empty {
+        color: var(--text-color-light);
+    }
 
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
@@ -766,18 +778,12 @@
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
                 initialView: 'dayGridMonth',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
-                },
+                headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek' },
                 height: isMobile ? 'auto' : 'auto',
                 aspectRatio: isMobile ? 1.2 : 1.8,
                 dayMaxEventRows: isMobile ? 2 : true,
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
-                navLinks: true,
-                editable: true,
-                events: eventos,
+                navLinks: true, editable: true, events: eventos,
                 dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } },
                 eventClick: openEventModal,
                 eventDrop: async (info) => {
