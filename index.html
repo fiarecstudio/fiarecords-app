@@ -135,20 +135,24 @@
         td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-top: 0.5rem; padding-bottom: 0.5rem; text-align: right; white-space: normal; }
         td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
         td:before { position: absolute; top: 0.5rem; left: 0.5rem; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); }
+
         #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaCotizacionesBody td:nth-of-type(3):before { content: "Fecha:"; }
         #tablaCotizacionesBody td:nth-of-type(4):before { content: ""; display: none; }
+
         #tablaPagosBody td:nth-of-type(1):before { content: "Fecha:"; }
         #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
         #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
         #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
         #tablaPagosBody td:nth-of-type(5):before { content: ""; display: none; }
+
         #tablaHistorialBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
         #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
         #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
+        
         #vista-artista-contenido table td:nth-of-type(1):before { content: "Dato 1:"; } 
         #vista-artista-contenido table tr { display: flex; flex-direction: column; }
         #vista-artista-contenido table td { padding-left: 0 !important; text-align: left; }
@@ -193,8 +197,6 @@
     #nuevoArtistaContainer, #manualNuevoArtistaContainer { display: none; }
     .status-tag { padding: 0.25rem 0.75rem; border-radius: 16px; font-size: 0.8em; font-weight: 600; color: white; text-align: center; display: inline-block; }
     td select { padding: 0.4rem; margin: 0; font-size: 0.9em; border-radius: 6px; }
-    
-    /* --- MEJORAS CALENDARIO --- */
     #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; }
     .fc-event { cursor: pointer; padding: 4px; font-size: 0.85em; }
     .fc-daygrid-event-dot { display: none; }
@@ -209,29 +211,20 @@
     .fc .fc-button:hover { background-color: var(--fc-button-hover-bg-color, var(--secondary-button-hover-bg)); }
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--fc-button-active-bg-color, var(--primary-color)); }
     .fc .fc-day-today { background-color: var(--fc-today-bg-color, rgba(79, 70, 229, 0.05)); }
+    
+    /* CORRECCIÓN CSS PARA CALENDARIO MÓVIL */
     #agenda .card { padding: 0.5rem; }
     @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
-    
-    /* Ajustes Específicos Calendario Móvil */
-    @media (max-width: 768px) {
-        .fc .fc-toolbar {
-            flex-direction: column;
-            gap: 1rem;
-        }
-        .fc .fc-toolbar-title {
-            font-size: 1.1em;
-        }
-        .fc .fc-button {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.9em;
-        }
-        .fc-view-harness {
-            /* Esto asegura que el calendario tenga altura si se pone auto */
-            min-height: 400px; 
-        }
-    }
     .fc { max-width: 100%; margin: 0 auto; }
     
+    @media (max-width: 768px) {
+        .fc .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+        .fc .fc-toolbar-title { font-size: 1.1em; }
+        .fc .fc-button { padding: 0.3rem 0.6rem; font-size: 0.85em; }
+        /* Asegura que el calendario no se colapse en altura */
+        .fc-view-harness { min-height: 500px; }
+    }
+
     .form-actions { display: flex; gap: 1rem; margin-top: 1rem; }
     .form-actions button { flex: 1; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -800,16 +793,16 @@
             const isMobile = window.innerWidth < 768;
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'es',
-                // Aquí está la solución: vista mensual en ambos, pero adaptada
-                initialView: 'dayGridMonth', 
+                initialView: 'dayGridMonth',
+                // CORRECCIÓN JS: Altura automática en móvil para que no se vea aplastado y permita scroll en la página
+                height: isMobile ? 'auto' : '100%',
+                // CORRECCIÓN JS: Toolbar simplificada al máximo
                 headerToolbar: {
-                    left: isMobile ? 'prev,next' : 'prev,next today',
+                    left: 'prev,next',
                     center: 'title',
-                    // En móvil simplificamos botones
-                    right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
+                    right: 'dayGridMonth,listWeek'
                 },
-                // Esto corrige la altura en móvil: que crezca según el contenido
-                height: isMobile ? 'auto' : 800, 
+                // Movemos el botón "Hoy" al footer solo en móvil si se necesita espacio, o lo quitamos para limpiar
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true,
                 editable: true,
@@ -840,7 +833,6 @@
                     }
                 },
                 eventContent: (arg) => {
-                    // En móvil, simplificamos el contenido del evento para ahorrar espacio
                     let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${arg.event.title}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`;
                     return { html: innerHtml };
                 }
