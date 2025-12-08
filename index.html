@@ -9,11 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- Estilos Librerías -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   
-  <!-- Scripts Librerías -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
@@ -25,14 +23,10 @@
   <style>
     /* --- VARIABLES & RESET --- */
     :root {
-      --primary-color: #6366f1;
-      --primary-hover: #4338ca;
-      --bg-body: #f3f4f6;
-      --bg-card: #ffffff;
-      --text-main: #1f2937;
-      --text-muted: #6b7280;
-      --border-light: #e5e7eb;
-      --form-bg: #ffffff;
+      --primary-color: #6366f1; --primary-hover: #4338ca;
+      --bg-body: #f3f4f6; --bg-card: #ffffff;
+      --text-main: #1f2937; --text-muted: #6b7280;
+      --border-light: #e5e7eb; --form-bg: #ffffff;
       
       --success-bg: #d1fae5; --success-text: #065f46; --success-main: #10b981;
       --warning-bg: #fef3c7; --warning-text: #92400e; --warning-main: #f59e0b;
@@ -48,29 +42,21 @@
     }
 
     body.dark-mode {
-      --bg-body: #0f172a;
-      --bg-card: #1e293b;
-      --text-main: #f9fafb;
-      --text-muted: #94a3b8;
-      --border-light: #334155;
-      --form-bg: #334155;
-      
-      --fc-button-bg-color: #334155;
-      --fc-button-border-color: #475569;
-      --fc-button-text-color: #f8fafc;
-      --fc-button-active-bg-color: var(--primary-color);
+      --bg-body: #0f172a; --bg-card: #1e293b;
+      --text-main: #f9fafb; --text-muted: #94a3b8;
+      --border-light: #334155; --form-bg: #334155;
+      --fc-button-bg-color: #334155; --fc-button-border-color: #475569;
+      --fc-button-text-color: #f8fafc; --fc-button-active-bg-color: var(--primary-color);
       --fc-page-bg-color: #1e293b;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
     body { font-family: var(--font-main); background-color: var(--bg-body); color: var(--text-main); font-size: 14px; visibility: hidden; }
     
-    /* Layout */
     #app-wrapper { display: flex; height: 100vh; width: 100%; overflow: hidden; }
     .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow-y: auto; position: relative; scroll-behavior: smooth; }
     main { padding: 1.5rem; max-width: 1600px; margin: 0 auto; width: 100%; padding-bottom: 80px; }
 
-    /* Sidebar */
     .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; z-index: 50; transition: transform 0.3s ease; flex-shrink: 0; }
     .sidebar-header { margin-bottom: 1.5rem; display: flex; justify-content: center; }
     #app-logo, #login-logo { max-width: 160px; max-height: 80px; object-fit: contain; cursor: pointer; }
@@ -84,9 +70,7 @@
     .nav-group ul { padding-left: 0; list-style: none; }
 
     #btn-nuevo-proyecto-sidebar { background: linear-gradient(135deg, var(--primary-color), #4338ca); color: white; text-align: center; padding: 12px; border-radius: var(--radius); font-weight: 600; cursor: pointer; box-shadow: var(--shadow-md); margin-bottom: 1.5rem; transition: transform 0.2s; }
-    #btn-nuevo-proyecto-sidebar:hover { transform: translateY(-2px); }
-
-    /* Header */
+    
     .main-header { background: var(--bg-card); border-bottom: 1px solid var(--border-light); padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; box-shadow: var(--shadow-sm); gap: 1rem; }
     .header-left { display: flex; align-items: center; gap: 1rem; flex: 1; }
     #hamburger-menu { display: none; background: none; border: none; cursor: pointer; color: var(--text-main); }
@@ -102,7 +86,6 @@
     .search-input:focus { border-color: var(--primary-color); outline: none; background: var(--bg-card); }
     .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
 
-    /* Mobile */
     @media (max-width: 768px) {
         #app-wrapper { display: block; }
         .sidebar { position: fixed; inset: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
@@ -119,8 +102,7 @@
         .grid-container { grid-template-columns: 1fr !important; }
     }
 
-    /* UI Components */
-    .card { background: var(--bg-card); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: transform 0.2s; }
+    .card { background: var(--bg-card); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); }
     .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-main); border-bottom: 1px solid var(--border-light); padding-bottom: 0.75rem; }
     .kpi-card { text-align: center; padding: 2rem; border-left: 4px solid var(--primary-color); }
     .kpi-value { font-size: 2.2rem; font-weight: 800; color: var(--text-main); }
@@ -132,10 +114,11 @@
     label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
 
     button { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; }
+    button:active { transform: scale(0.98); }
     button[type="submit"], .btn-primary { background: var(--primary-color); color: white; }
     .btn-secondary { background: transparent; color: var(--text-main); border: 1px solid var(--border-light); }
     .btn-danger { background: var(--danger-bg); color: var(--danger-text); }
-    .btn-success { background: var(--success-bg); color: var(--success-text); }
+    .btn-icon { padding: 6px; width: 32px; height: 32px; border-radius: 50%; }
 
     .table-responsive { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-light); }
     table { width: 100%; border-collapse: collapse; min-width: 600px; }
@@ -147,6 +130,7 @@
         .table-responsive thead { display: none; }
         .table-responsive tr { margin-bottom: 1rem; border: 1px solid var(--border-light); border-radius: 8px; padding: 1rem; background: var(--bg-card); }
         .table-responsive td { padding: 8px 0; border: none; border-bottom: 1px dashed var(--border-light); display: flex; justify-content: space-between; align-items: center; }
+        .table-responsive td:last-child { border-bottom: none; padding-top: 12px; justify-content: flex-end; }
         .table-responsive td::before { content: attr(data-label); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
     }
 
@@ -156,7 +140,6 @@
     .project-card { background: var(--bg-card); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-light); }
 
-    /* Animations & Loader */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     section.active { animation: fadeIn 0.3s ease-out; display: block; }
     section { display: none; }
@@ -164,6 +147,11 @@
     body.dark-mode #loader-overlay { background: rgba(15,23,42,0.7); }
     .spinner { width: 48px; height: 48px; border: 4px solid var(--border-light); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .fc { --fc-border-color: var(--border-light); --fc-today-bg-color: rgba(99, 102, 241, 0.05); }
+    .fc .fc-toolbar-title { font-size: 1.1rem; }
+    .fc .fc-button { padding: 6px 12px; font-size: 0.85rem; }
+    .fc-event { cursor: pointer; border: none; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; margin-bottom: 2px; }
 
     /* Firma */
     .alignment-group { margin-bottom: 1rem; padding: 0.5rem; border: 1px solid var(--border-light); border-radius: 8px; }
@@ -453,6 +441,8 @@
       <div class="card" style="width:90%;max-width:500px;">
           <h2>Entrega de Archivos</h2>
           <input type="hidden" id="delivery-project-id">
+          <input type="hidden" id="delivery-artist-name">
+          <input type="hidden" id="delivery-project-name">
           <input type="text" id="delivery-link-input" placeholder="Enlace (Drive/Dropbox...)">
           <div style="display:flex; gap:10px; margin-top:1rem;">
               <button class="btn-primary" onclick="window.app.saveDeliveryLink()">Guardar</button>
@@ -462,20 +452,21 @@
       </div>
   </div>
 
-  <!-- LÓGICA JAVASCRIPT ROBUSTA -->
   <script>
-    // 1. DEFINICIÓN GLOBAL DE LA APP (PARA EVITAR ERRORES DE REFERENCIA)
+    // DEFINE APP GLOBALMENTE
     window.app = {};
 
     document.addEventListener('DOMContentLoaded', () => {
-      /* --- ESTADO Y CONFIGURACIÓN --- */
+      /* --- CONFIGURACIÓN --- */
       let localCache = { artistas: [], servicios: [], proyectos: [], pagos: [], usuarios: [], papelera: { servicios: [], artistas: [], usuarios: [] } };
       let proyectoActual = {};
       let currentCalendar = null;
       let chartInstance = null;
-      const API_URL = ''; // AJUSTAR SI ES NECESARIO
+      
+      // CAMBIO IMPORTANTE: Si tu backend está en otro puerto (ej: 3000) ponlo aquí
+      const API_URL = ''; 
 
-      /* --- GESTOR OFFLINE --- */
+      /* --- OFFLINE MANAGER --- */
       const OfflineManager = {
           key: 'fia_queue',
           get: () => JSON.parse(localStorage.getItem(OfflineManager.key) || '[]'),
@@ -544,13 +535,10 @@
           }
       };
 
-      /* --- FETCH API SEGURO --- */
+      /* --- FETCH API ROBUSTO --- */
       async function fetchAPI(endpoint, options = {}) {
           const token = localStorage.getItem('token');
-          if(!token && !endpoint.includes('login')) {
-              // Si no hay token, no fallamos, solo devolvemos null para que la UI no se rompa
-              return null; 
-          }
+          if(!token && !endpoint.includes('login')) return null;
           
           const isOnline = navigator.onLine;
           const method = options.method || 'GET';
@@ -561,9 +549,10 @@
                       const res = await fetch(API_URL + endpoint, { headers: { 'Authorization': `Bearer ${token}` }});
                       if(res.ok) {
                           const data = await res.json();
-                          if(endpoint.includes('/artistas')) localCache.artistas = data;
-                          if(endpoint.includes('/servicios')) localCache.servicios = data;
-                          if(endpoint.includes('/proyectos')) localCache.proyectos = data;
+                          // Corrección de mapeo de datos
+                          if(endpoint.includes('/artistas')) localCache.artistas = Array.isArray(data) ? data : (data.data || []);
+                          if(endpoint.includes('/servicios')) localCache.servicios = Array.isArray(data) ? data : (data.data || []);
+                          if(endpoint.includes('/proyectos')) localCache.proyectos = Array.isArray(data) ? data : (data.data || []);
                           return data;
                       }
                   } catch(e) { console.warn("Fetch failed, using cache"); }
@@ -579,7 +568,7 @@
               const body = options.body ? JSON.parse(options.body) : {};
               const tempId = 'temp_' + Date.now();
               
-              // Optimistic UI Update
+              // Optimistic UI
               if(method === 'POST') {
                   const newItem = { ...body, _id: tempId, createdAt: new Date().toISOString() };
                   if(endpoint.includes('/artistas')) localCache.artistas.push(newItem);
@@ -613,6 +602,13 @@
       }
 
       /* --- FUNCIONES UI --- */
+      function escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[t])); }
+      function showToast(text, type = 'info') {
+          const bg = type === 'success' ? 'var(--success-bg)' : 'var(--primary-color)';
+          const color = type === 'success' ? 'var(--success-text)' : '#fff';
+          Toastify({ text, duration: 3000, gravity: "top", position: "right", style: { background: bg, color: color } }).showToast();
+      }
+
       window.app.nav = (id) => {
           document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
           const sec = document.getElementById(id);
@@ -630,12 +626,12 @@
           if(id === 'registrar-proyecto') {
               const s = document.getElementById('proyectoArtista');
               s.innerHTML = '<option value="publico_general">Público General</option>';
-              (localCache.artistas || []).forEach(a => s.innerHTML += `<option value="${a._id}">${a.nombre}</option>`);
+              (localCache.artistas || []).forEach(a => s.innerHTML += `<option value="${a._id}">${escapeHTML(a.nombre)}</option>`);
               const s2 = document.getElementById('proyectoServicio');
               s2.innerHTML = '';
               (localCache.servicios || []).forEach(sv => {
                   const opt = document.createElement('option');
-                  opt.value = sv._id; opt.dataset.precio = sv.precio; opt.text = `${sv.nombre} - $${sv.precio}`;
+                  opt.value = sv._id; opt.dataset.precio = sv.precio; opt.text = `${escapeHTML(sv.nombre)} - $${sv.precio}`;
                   s2.add(opt);
               });
           }
@@ -658,13 +654,13 @@
       async function renderKanban() {
           const board = document.getElementById('kanbanBoard');
           const cols = ['Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering'];
-          const projs = await fetchAPI('/api/proyectos'); 
+          const projs = await fetchAPI('/api/proyectos') || []; 
           if(board) {
               board.innerHTML = cols.map(c => `
                   <div class="kanban-column">
                       <h3>${c}</h3>
                       <div id="col-${c}">
-                          ${(projs || []).filter(p => p.proceso === c).map(p => `
+                          ${projs.filter(p => p.proceso === c).map(p => `
                               <div class="project-card" onclick="window.app.openDocs('${p._id}')">
                                   <div class="project-card-header">
                                       <span>${escapeHTML(p.nombreProyecto || 'Sin Nombre')}</span>
@@ -706,7 +702,7 @@
           }
       };
 
-      /* --- HELPERS Y EVENTOS --- */
+      /* --- API EXPORTADA --- */
       window.app.syncNow = () => OfflineManager.process();
       
       window.app.saveItemFromForm = async (type) => {
@@ -721,7 +717,7 @@
           await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
           renderList(type);
           form.reset();
-          Toastify({text: "Guardado", backgroundColor: "var(--success-main)"}).showToast();
+          showToast("Guardado", 'success');
       };
 
       window.app.registrarNuevoArtista = async (prefix) => {
@@ -732,7 +728,6 @@
           document.getElementById(prefix === 'manual' ? 'manualNuevoArtistaContainer' : 'nuevoArtistaContainer').style.display='none';
           document.getElementById(id).value = '';
           window.app.nav(prefix === 'manual' ? 'registro-manual' : 'registrar-proyecto');
-          // Actualización optimista del select
           const sel = document.getElementById(prefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista');
           if(sel && res) sel.value = res._id; 
       };
@@ -746,7 +741,7 @@
               proceso: 'Agendado'
           };
           await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-          Toastify({text: "Guardado", backgroundColor: "var(--success-main)"}).showToast();
+          showToast("Proyecto Manual Guardado", 'success');
           document.getElementById('formProyectoManual').reset();
       };
 
@@ -756,7 +751,6 @@
           document.querySelectorAll('.project-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
       };
 
-      /* --- PDF & DOCUMENTOS --- */
       window.app.openDocs = (id) => {
           document.getElementById('modal-project-id').value = id;
           document.getElementById('document-modal').style.display = 'flex';
@@ -800,7 +794,36 @@
           }
       };
       
-      /* --- INIT & LOGICA DE ARRANQUE --- */
+      window.app.actualizarPosicionFirma = () => {
+          const w = document.getElementById('slider-firma-w').value;
+          const h = document.getElementById('slider-firma-h').value;
+          const x = document.getElementById('slider-firma-offsetX').value;
+          const y = document.getElementById('slider-firma-offsetY').value;
+          const img = document.getElementById('firma-draggable-preview');
+          img.style.width = w + 'px'; img.style.height = h + 'px';
+          img.style.left = (50 + parseInt(x)) + '%'; img.style.top = (50 + parseInt(y)) + '%';
+      };
+      window.app.guardarAjustesFirma = () => showToast("Configuración guardada", 'success');
+      window.app.openDeliveryModal = (id) => {
+          document.getElementById('delivery-project-id').value = id;
+          document.getElementById('delivery-modal').style.display = 'flex';
+      };
+      window.app.saveDeliveryLink = () => {
+          showToast("Enlace guardado", 'success');
+          document.getElementById('delivery-modal').style.display = 'none';
+      };
+      window.app.sendDeliveryByWhatsapp = () => {
+          window.open(`https://wa.me/?text=Tu proyecto está listo: ${document.getElementById('delivery-link-input').value}`);
+      };
+      window.app.enviarDatosBancarios = () => {
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF();
+          pdf.text("Datos Bancarios", 105, 20, {align: 'center'});
+          pdf.text("Banco: BBVA", 20, 40);
+          pdf.save("Datos_Bancarios.pdf");
+      };
+      
+      /* --- INIT & EVENTOS --- */
       document.getElementById('btnAgregarAProyecto').addEventListener('click', () => {
           const sel = document.getElementById('proyectoServicio');
           if(!sel.value) return;
@@ -829,14 +852,13 @@
               estatus: 'Pendiente'
           };
           await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-          Toastify({text: "Proyecto Agendado", backgroundColor: "var(--success-main)"}).showToast();
+          showToast("Proyecto Agendado", 'success');
           document.getElementById('formProyecto').reset();
           document.getElementById('listaProyectoActual').innerHTML = '';
           document.getElementById('totalAPagar').innerText = '$0.00';
           window.app.nav('flujo-trabajo');
       });
 
-      // Listeners Globales
       document.getElementById('hamburger-menu').addEventListener('click', () => {
           document.querySelector('.sidebar').classList.add('visible');
           document.getElementById('sidebar-overlay').classList.add('visible');
@@ -853,13 +875,19 @@
           document.body.classList.toggle('dark-mode', e.target.checked);
           localStorage.setItem('theme', e.target.checked ? 'dark' : 'light');
       });
+      document.getElementById('firma-input').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if(file){
+              const reader = new FileReader();
+              reader.onload = (ev) => document.getElementById('firma-draggable-preview').src = ev.target.result;
+              reader.readAsDataURL(file);
+          }
+      });
       
-      // Init Pickers
       flatpickr("#fechaProyecto", { locale: 'es', enableTime: true });
       flatpickr("#manualFechaProyecto", { locale: 'es' });
       flatpickr("#dist-fecha", { locale: 'es' });
 
-      // Init App Function
       async function initializeApp(force = false) {
           try {
               if(localStorage.getItem('token')) {
@@ -867,28 +895,42 @@
                   document.getElementById('app-wrapper').style.display = 'flex';
                   document.body.style.visibility = 'visible';
                   
-                  // Load Theme
                   if(localStorage.getItem('theme') === 'dark') {
                       document.body.classList.add('dark-mode');
                       document.getElementById('theme-switch').checked = true;
                   }
 
-                  // Load Data from Server
+                  // Load Logo
+                  try {
+                      const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
+                      if (res.ok) {
+                          const data = await res.json();
+                          if (data && data.filePath) {
+                              const basePath = API_URL ? API_URL : '';
+                              const fullPath = data.filePath.startsWith('http') ? data.filePath : `${basePath}${data.filePath}`;
+                              const logoSrc = fullPath + `?t=${new Date().getTime()}`;
+                              document.getElementById('login-logo').src = logoSrc;
+                              document.getElementById('app-logo').src = logoSrc;
+                          }
+                      }
+                  } catch (e) { console.warn("Logo load failed"); }
+
                   await Promise.all([
                       fetchAPI('/api/artistas'),
                       fetchAPI('/api/servicios'),
                       fetchAPI('/api/proyectos')
                   ]);
                   
-                  const tokenParts = localStorage.getItem('token').split('.');
-                  if(tokenParts.length === 3) {
-                      const payload = JSON.parse(atob(tokenParts[1]));
-                      document.getElementById('welcome-user').textContent = `Hola, ${payload.username}`;
-                  }
+                  try {
+                      const tokenParts = localStorage.getItem('token').split('.');
+                      if(tokenParts.length === 3) {
+                          const payload = JSON.parse(atob(tokenParts[1]));
+                          document.getElementById('welcome-user').textContent = `Hola, ${payload.username}`;
+                      }
+                  } catch(e) {}
                   
                   window.app.nav('dashboard');
                   
-                  // Initialize Chart (Check if canvas exists)
                   const chartCanvas = document.getElementById('incomeChart');
                   if(chartCanvas) {
                       const ctx = chartCanvas.getContext('2d');
@@ -899,7 +941,7 @@
                               labels: ['Ene','Feb','Mar','Abr','May'],
                               datasets: [{
                                   label: 'Ingresos',
-                                  data: [0, 0, 0, 0, 0], // Needs real data logic
+                                  data: [0, 0, 0, 0, 0],
                                   borderColor: '#6366f1',
                                   backgroundColor: 'rgba(99, 102, 241, 0.1)',
                                   fill: true
@@ -921,7 +963,6 @@
           }
       }
       
-      // Login Handling
       document.getElementById('login-form').addEventListener('submit', async e => {
           e.preventDefault();
           document.getElementById('loader-overlay').style.display = 'grid';
