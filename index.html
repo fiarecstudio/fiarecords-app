@@ -9,9 +9,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
+  <!-- Estilos Librerías -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   
+  <!-- Scripts Librerías -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
@@ -24,7 +26,7 @@
     /* --- VARIABLES & RESET --- */
     :root {
       --primary-color: #6366f1;
-      --primary-hover: #4f46e5;
+      --primary-hover: #4338ca;
       --bg-body: #f3f4f6;
       --bg-card: #ffffff;
       --text-main: #1f2937;
@@ -37,7 +39,7 @@
       --danger-bg: #fee2e2; --danger-text: #b91c1c; --danger-main: #ef4444;
       
       --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
       --radius: 12px;
       --font-main: 'Inter', sans-serif;
 
@@ -61,15 +63,15 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
-    body { font-family: var(--font-main); background-color: var(--bg-body); color: var(--text-main); font-size: 14px; visibility: hidden; overflow: hidden; }
+    body { font-family: var(--font-main); background-color: var(--bg-body); color: var(--text-main); font-size: 14px; visibility: hidden; }
     
-    /* --- LAYOUT --- */
+    /* Layout */
     #app-wrapper { display: flex; height: 100vh; width: 100%; overflow: hidden; }
     .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow-y: auto; position: relative; scroll-behavior: smooth; }
     main { padding: 1.5rem; max-width: 1600px; margin: 0 auto; width: 100%; padding-bottom: 80px; }
 
-    /* --- SIDEBAR --- */
-    .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; z-index: 50; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; }
+    /* Sidebar */
+    .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; z-index: 50; transition: transform 0.3s ease; flex-shrink: 0; }
     .sidebar-header { margin-bottom: 1.5rem; display: flex; justify-content: center; }
     #app-logo, #login-logo { max-width: 160px; max-height: 80px; object-fit: contain; cursor: pointer; }
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
@@ -82,9 +84,9 @@
     .nav-group ul { padding-left: 0; list-style: none; }
 
     #btn-nuevo-proyecto-sidebar { background: linear-gradient(135deg, var(--primary-color), #4338ca); color: white; text-align: center; padding: 12px; border-radius: var(--radius); font-weight: 600; cursor: pointer; box-shadow: var(--shadow-md); margin-bottom: 1.5rem; transition: transform 0.2s; }
-    #btn-nuevo-proyecto-sidebar:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    #btn-nuevo-proyecto-sidebar:hover { transform: translateY(-2px); }
 
-    /* --- HEADER --- */
+    /* Header */
     .main-header { background: var(--bg-card); border-bottom: 1px solid var(--border-light); padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; box-shadow: var(--shadow-sm); gap: 1rem; }
     .header-left { display: flex; align-items: center; gap: 1rem; flex: 1; }
     #hamburger-menu { display: none; background: none; border: none; cursor: pointer; color: var(--text-main); }
@@ -97,11 +99,10 @@
 
     .search-container { flex: 1; max-width: 400px; position: relative; }
     .search-input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 24px; border: 1px solid var(--border-light); background: var(--bg-body); color: var(--text-main); font-size: 0.9rem; transition: all 0.2s; margin-bottom: 0; }
-    .search-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background: var(--bg-card); }
+    .search-input:focus { border-color: var(--primary-color); outline: none; background: var(--bg-card); }
     .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
 
-    .header-actions { display: flex; gap: 8px; align-items: center; }
-
+    /* Mobile */
     @media (max-width: 768px) {
         #app-wrapper { display: block; }
         .sidebar { position: fixed; inset: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
@@ -115,10 +116,10 @@
         .header-actions { order: 2; }
         #welcome-user { display: none; }
         main { padding: 1rem; padding-bottom: 120px; }
-        .grid-container { grid-template-columns: 1fr; }
+        .grid-container { grid-template-columns: 1fr !important; }
     }
 
-    /* --- CARDS & UI --- */
+    /* UI Components */
     .card { background: var(--bg-card); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: transform 0.2s; }
     .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-main); border-bottom: 1px solid var(--border-light); padding-bottom: 0.75rem; }
     .kpi-card { text-align: center; padding: 2rem; border-left: 4px solid var(--primary-color); }
@@ -127,19 +128,14 @@
 
     .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .form-group { flex: 1; min-width: 200px; }
-    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--form-bg); color: var(--text-main); margin-bottom: 0.5rem; font-family: inherit; font-size: 0.9rem; transition: border 0.2s; }
-    input:focus, select:focus, textarea:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--form-bg); color: var(--text-main); margin-bottom: 0.5rem; font-family: inherit; font-size: 0.9rem; }
     label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
 
     button { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; }
-    button:active { transform: scale(0.98); }
     button[type="submit"], .btn-primary { background: var(--primary-color); color: white; }
-    button[type="submit"]:hover, .btn-primary:hover { background: var(--primary-hover); box-shadow: var(--shadow-md); }
     .btn-secondary { background: transparent; color: var(--text-main); border: 1px solid var(--border-light); }
-    .btn-secondary:hover { background: var(--bg-body); }
     .btn-danger { background: var(--danger-bg); color: var(--danger-text); }
     .btn-success { background: var(--success-bg); color: var(--success-text); }
-    .btn-icon { padding: 6px; width: 32px; height: 32px; border-radius: 50%; }
 
     .table-responsive { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-light); }
     table { width: 100%; border-collapse: collapse; min-width: 600px; }
@@ -151,20 +147,16 @@
         .table-responsive thead { display: none; }
         .table-responsive tr { margin-bottom: 1rem; border: 1px solid var(--border-light); border-radius: 8px; padding: 1rem; background: var(--bg-card); }
         .table-responsive td { padding: 8px 0; border: none; border-bottom: 1px dashed var(--border-light); display: flex; justify-content: space-between; align-items: center; }
-        .table-responsive td:last-child { border-bottom: none; padding-top: 12px; justify-content: flex-end; }
         .table-responsive td::before { content: attr(data-label); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
     }
 
     .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding-bottom: 1rem; }
     .kanban-column { background: var(--bg-body); border-radius: var(--radius); padding: 1rem; min-height: 150px; }
     .kanban-column h3 { font-size: 1rem; text-align: center; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase; }
-    .project-card { background: var(--bg-card); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; transition: all 0.2s; position: relative; }
-    .project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-    .badge { padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; color: white; }
-
+    .project-card { background: var(--bg-card); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-light); }
-    .list-item:last-child { border-bottom: none; }
 
+    /* Animations & Loader */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     section.active { animation: fadeIn 0.3s ease-out; display: block; }
     section { display: none; }
@@ -173,13 +165,8 @@
     .spinner { width: 48px; height: 48px; border: 4px solid var(--border-light); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .fc { --fc-border-color: var(--border-light); --fc-today-bg-color: rgba(99, 102, 241, 0.05); }
-    .fc .fc-toolbar-title { font-size: 1.1rem; }
-    .fc .fc-button { padding: 6px 12px; font-size: 0.85rem; }
-    .fc-event { cursor: pointer; border: none; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; margin-bottom: 2px; }
-
+    /* Firma */
     .alignment-group { margin-bottom: 1rem; padding: 0.5rem; border: 1px solid var(--border-light); border-radius: 8px; }
-    .alignment-group legend { font-weight: 600; padding: 0 0.5rem; }
     .alignment-group div { display: flex; justify-content: space-around; }
     input[type="range"] { -webkit-appearance: none; width: 100%; height: 6px; background: var(--border-light); border-radius: 5px; outline: none; }
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
@@ -190,10 +177,9 @@
 </head>
 <body>
 
-  <!-- LOADER -->
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <!-- LOGIN SCREEN -->
+  <!-- LOGIN -->
   <div id="login-container" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 1rem;">
     <div class="card" style="width: 100%; max-width: 400px; padding: 2.5rem;">
       <div style="text-align: center; margin-bottom: 2rem;">
@@ -218,43 +204,42 @@
     </div>
   </div>
   
-  <!-- MAIN APP -->
+  <!-- APP -->
   <div id="app-wrapper" style="display: none;">
     <div id="sidebar-overlay"></div>
 
-    <!-- SIDEBAR -->
     <nav class="sidebar">
       <div class="sidebar-header">
         <img id="app-logo" src="https://via.placeholder.com/180x80?text=FiaRecords" alt="Logotipo">
       </div>
       
-      <div id="btn-nuevo-proyecto-sidebar" onclick="app.nav('registrar-proyecto')">
+      <div id="btn-nuevo-proyecto-sidebar" onclick="window.app.nav('registrar-proyecto')">
         <span>+ Nuevo Proyecto</span>
       </div>
       
       <div class="sidebar-nav" style="flex:1; overflow-y: auto;">
-        <a class="nav-link" data-seccion="dashboard">📊 Dashboard</a>
-        <a class="nav-link" data-seccion="agenda">📅 Agenda</a>
-        <a class="nav-link" data-seccion="flujo-trabajo">📋 Flujo de Trabajo</a>
-        <a class="nav-link" data-seccion="cotizaciones">📝 Cotizaciones</a>
-        <a class="nav-link" data-seccion="pagos">💵 Pagos</a>
+        <a class="nav-link" onclick="window.app.nav('dashboard')" data-seccion="dashboard">📊 Dashboard</a>
+        <a class="nav-link" onclick="window.app.nav('agenda')" data-seccion="agenda">📅 Agenda</a>
+        <a class="nav-link" onclick="window.app.nav('flujo-trabajo')" data-seccion="flujo-trabajo">📋 Flujo de Trabajo</a>
+        <a class="nav-link" onclick="window.app.nav('cotizaciones')" data-seccion="cotizaciones">📝 Cotizaciones</a>
+        <a class="nav-link" onclick="window.app.nav('pagos')" data-seccion="pagos">💵 Pagos</a>
         
         <details class="nav-group">
           <summary>Historial & Archivo</summary>
           <ul>
-            <li><a class="nav-link" data-seccion="historial-proyectos">Historial Proyectos</a></li>
-            <li><a class="nav-link" data-seccion="registro-manual">Registro Manual</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('historial-proyectos')" data-seccion="historial-proyectos">Historial Proyectos</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('registro-manual')" data-seccion="registro-manual">Registro Manual</a></li>
           </ul>
         </details>
         
         <details class="nav-group">
           <summary>Gestión & Admin</summary>
           <ul>
-            <li><a class="nav-link" data-seccion="gestion-artistas">Artistas</a></li>
-            <li><a class="nav-link" data-seccion="gestion-servicios">Servicios</a></li>
-            <li><a class="nav-link" data-seccion="gestion-usuarios">Usuarios</a></li>
-            <li><a class="nav-link" data-seccion="configuracion">Configuración</a></li>
-            <li><a class="nav-link" data-seccion="papelera-reciclaje">Papelera</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('gestion-artistas')" data-seccion="gestion-artistas">Artistas</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('gestion-servicios')" data-seccion="gestion-servicios">Servicios</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('gestion-usuarios')" data-seccion="gestion-usuarios">Usuarios</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('configuracion')" data-seccion="configuracion">Configuración</a></li>
+            <li><a class="nav-link" onclick="window.app.nav('papelera-reciclaje')" data-seccion="papelera-reciclaje">Papelera</a></li>
           </ul>
         </details>
       </div>
@@ -272,29 +257,24 @@
       </div>
     </nav>
 
-    <!-- MAIN CONTENT -->
     <div class="main-content">
         <header class="main-header">
             <div class="header-left">
                 <button id="hamburger-menu">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
                 </button>
-                
-                <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
+                <div id="connection-status" class="connection-status status-online" onclick="window.app.syncNow()">
                     <div class="dot"></div>
                     <span id="connection-text">En Línea</span>
                 </div>
-                
                 <div id="welcome-user" style="font-weight: 600; display: none; margin-left: 10px; @media(min-width:769px){display:block;}"></div>
             </div>
-
             <div class="search-container">
                 <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="globalSearch" placeholder="Buscar..." onkeyup="app.filtrarTablas(this.value)">
+                <input type="text" class="search-input" id="globalSearch" placeholder="Buscar..." onkeyup="window.app.filtrarTablas(this.value)">
             </div>
-
             <div class="header-actions">
-              <button id="btn-enviar-datos-bancarios" class="btn-secondary btn-icon" title="Datos Bancarios" onclick="app.enviarDatosBancarios()">🏦</button>
+              <button id="btn-enviar-datos-bancarios" class="btn-secondary btn-icon" title="Datos Bancarios" onclick="window.app.enviarDatosBancarios()">🏦</button>
             </div>
         </header>
 
@@ -322,11 +302,7 @@
                 </div>
             </section>
 
-            <section id="agenda">
-                <div class="card">
-                    <div id="calendario"></div>
-                </div>
-            </section>
+            <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
 
             <section id="cotizaciones">
                 <div class="card">
@@ -363,55 +339,32 @@
                                 </div>
                             </div>
                         </div>
-
                         <div id="nuevoArtistaContainer" style="display: none; background: var(--bg-body); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
                             <label>Nombre Nuevo Artista</label>
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" id="nombreNuevoArtista" placeholder="Nombre completo" style="margin:0;">
-                                <button type="button" class="btn-primary" onclick="app.registrarNuevoArtista('')">Guardar</button>
+                                <button type="button" class="btn-primary" onclick="window.app.registrarNuevoArtista('')">Guardar</button>
                             </div>
                         </div>
-
                         <div class="form-row">
-                            <div class="form-group">
-                                <label>Nombre del Proyecto (Opcional)</label>
-                                <input type="text" id="nombreProyecto" placeholder="Ej: Single Verano">
-                            </div>
+                            <div class="form-group"><label>Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto"></div>
                             <div class="form-group" style="display: flex; align-items: center; padding-top: 24px;">
                                 <input type="checkbox" id="esAlbum" style="width: auto; margin-right: 8px;">
                                 <label for="esAlbum" style="margin: 0; cursor: pointer;">Es Álbum/EP</label>
                             </div>
                         </div>
-
                         <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 1.5rem 0;">
-
                         <h3>Servicios</h3>
                         <div class="form-row" style="align-items: flex-end;">
-                            <div class="form-group" style="flex: 3;">
-                                <label>Seleccionar Servicio</label>
-                                <select id="proyectoServicio"></select>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label>Cant.</label>
-                                <input type="number" id="proyectoUnidades" value="1" min="1">
-                            </div>
+                            <div class="form-group" style="flex: 3;"><label>Seleccionar Servicio</label><select id="proyectoServicio"></select></div>
+                            <div class="form-group" style="flex: 1;"><label>Cant.</label><input type="number" id="proyectoUnidades" value="1" min="1"></div>
                             <button type="button" id="btnAgregarAProyecto" class="btn-secondary" style="margin-bottom: 0.5rem;">Añadir</button>
                         </div>
-
                         <ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1rem; border: 1px solid var(--border-light); border-radius: 8px; background: var(--bg-body);"></ul>
-
                         <div style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: 700; border-top: 2px dashed var(--border-light); padding-top: 1rem;">
-                            <span>Total:</span>
-                            <span id="totalAPagar">$0.00</span>
+                            <span>Total:</span><span id="totalAPagar">$0.00</span>
                         </div>
-
-                        <div class="form-row" style="margin-top: 1rem;">
-                            <div class="form-group">
-                                <label>Fecha de Inicio</label>
-                                <input type="text" id="fechaProyecto">
-                            </div>
-                        </div>
-
+                        <div class="form-row" style="margin-top: 1rem;"><div class="form-group"><label>Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div>
                         <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap;">
                             <button id="btnGenerarCotizacion" class="btn-secondary" style="flex: 1;">Generar Cotización PDF</button>
                             <button id="btnEnviarAFlujo" class="btn-primary" style="flex: 1;">Guardar y Agendar</button>
@@ -420,128 +373,17 @@
                 </div>
             </section>
             
-            <section id="pagos">
-                <div class="card">
-                    <h2>Historial de Pagos</h2>
-                    <div class="table-responsive">
-                        <table>
-                            <thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
-                            <tbody id="tablaPagosBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <section id="historial-proyectos">
-                <div class="card">
-                    <h2>Proyectos Completados</h2>
-                    <div class="table-responsive">
-                        <table>
-                            <thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead>
-                            <tbody id="tablaHistorialBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <section id="vista-artista">
-                <div class="card">
-                    <div class="card-header"><h2 id="vista-artista-nombre"></h2></div>
-                    <div id="vista-artista-contenido"></div>
-                </div>
-            </section>
+            <section id="pagos"><div class="card"><h2>Historial de Pagos</h2><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
+            <section id="historial-proyectos"><div class="card"><h2>Proyectos Completados</h2><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
+            <section id="vista-artista"><div class="card"><div class="card-header"><h2 id="vista-artista-nombre"></h2></div><div id="vista-artista-contenido"></div></div></section>
             
-            <section id="gestion-servicios">
-                <div class="card">
-                    <h2>Gestión de Servicios</h2>
-                    <form id="formServicios" onsubmit="return false;">
-                        <input type="hidden" id="idServicio">
-                        <div class="form-row">
-                            <div class="form-group"><input type="text" id="nombreServicio" placeholder="Nombre Servicio" required></div>
-                            <div class="form-group"><input type="number" id="precioServicio" placeholder="Precio" required></div>
-                            <div style="margin-top: 2px;">
-                                <button type="submit" onclick="app.saveItemFromForm('servicios')">Guardar</button>
-                                <button type="button" class="btn-secondary" onclick="document.getElementById('formServicios').reset()">Limpiar</button>
-                            </div>
-                        </div>
-                    </form>
-                    <div class="table-responsive">
-                       <ul id="listaServicios" style="list-style: none; padding:0; margin-top: 1rem;"></ul>
-                    </div>
-                </div>
-            </section>
-
-            <section id="gestion-artistas">
-                <div class="card">
-                    <h2>Gestión de Artistas</h2>
-                    <form id="formArtistas" onsubmit="return false;">
-                        <input type="hidden" id="idArtista">
-                        <div class="form-row">
-                            <div class="form-group"><input type="text" id="nombreArtista" placeholder="Nombre Real" required></div>
-                            <div class="form-group"><input type="text" id="nombreArtisticoArtista" placeholder="Nombre Artístico"></div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group"><input type="tel" id="telefonoArtista" placeholder="Teléfono"></div>
-                            <div class="form-group"><input type="email" id="correoArtista" placeholder="Email"></div>
-                        </div>
-                        <button type="submit" onclick="app.saveItemFromForm('artistas')">Guardar</button>
-                        <button type="button" class="btn-secondary" onclick="document.getElementById('formArtistas').reset()">Limpiar</button>
-                    </form>
-                    <ul id="listaArtistas" style="margin-top: 1rem; list-style: none; padding:0;"></ul>
-                </div>
-            </section>
+            <section id="gestion-servicios"><div class="card"><h2>Gestión de Servicios</h2><form id="formServicios" onsubmit="return false;"><input type="hidden" id="idServicio"><div class="form-row"><div class="form-group"><input type="text" id="nombreServicio" placeholder="Nombre" required></div><div class="form-group"><input type="number" id="precioServicio" placeholder="Precio" required></div><div><button type="submit" onclick="window.app.saveItemFromForm('servicios')">Guardar</button> <button type="button" class="btn-secondary" onclick="document.getElementById('formServicios').reset()">Limpiar</button></div></div></form><ul id="listaServicios" style="list-style: none; padding:0; margin-top: 1rem;"></ul></div></section>
+            <section id="gestion-artistas"><div class="card"><h2>Gestión de Artistas</h2><form id="formArtistas" onsubmit="return false;"><input type="hidden" id="idArtista"><div class="form-row"><div class="form-group"><input type="text" id="nombreArtista" placeholder="Nombre Real" required></div><div class="form-group"><input type="text" id="nombreArtisticoArtista" placeholder="Nombre Artístico"></div></div><div class="form-row"><div class="form-group"><input type="tel" id="telefonoArtista" placeholder="Teléfono"></div><div class="form-group"><input type="email" id="correoArtista" placeholder="Email"></div></div><button type="submit" onclick="window.app.saveItemFromForm('artistas')">Guardar</button> <button type="button" class="btn-secondary" onclick="document.getElementById('formArtistas').reset()">Limpiar</button></form><ul id="listaArtistas" style="margin-top: 1rem; list-style: none; padding:0;"></ul></div></section>
             
-            <section id="registro-manual">
-                <div class="card">
-                    <h2>Registro Manual (Proyecto sin Cotización)</h2>
-                    <form id="formProyectoManual" onsubmit="return false;">
-                        <label>Artista</label>
-                        <div style="display:flex; gap:10px; margin-bottom:10px;">
-                             <select id="manualProyectoArtista" style="margin-bottom:0;"></select>
-                             <button type="button" class="btn-secondary" onclick="document.getElementById('manualNuevoArtistaContainer').style.display='block'">+</button>
-                        </div>
-                        <div id="manualNuevoArtistaContainer" style="display: none; background: var(--bg-body); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-                            <label>Nombre Nuevo Artista</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="manualNombreNuevoArtista" placeholder="Nombre completo" style="margin:0;">
-                                <button type="button" class="btn-primary" onclick="app.registrarNuevoArtista('manual')">Guardar</button>
-                            </div>
-                        </div>
-                        <label>Nombre Proyecto</label><input type="text" id="manualNombreProyecto" required>
-                        <label>Fecha</label><input type="text" id="manualFechaProyecto" required>
-                        <label>Descripción</label><textarea id="manualDescripcion"></textarea>
-                        <button type="button" class="btn-primary" onclick="app.guardarProyectoManual()">Guardar Proyecto</button>
-                    </form>
-                </div>
-            </section>
-
-            <section id="gestion-usuarios">
-                <div class="card">
-                    <h2>Gestión de Usuarios</h2>
-                    <form id="formUsuarios" onsubmit="return false;">
-                        <input type="hidden" id="idUsuario">
-                        <div class="form-row">
-                            <input type="text" id="usernameUsuario" placeholder="Usuario" required>
-                            <input type="password" id="passwordUsuario" placeholder="Nueva Contraseña">
-                            <select id="roleUsuario"><option value="ingeniero">Ingeniero</option><option value="admin">Admin</option></select>
-                        </div>
-                        <button type="submit" onclick="app.saveItemFromForm('usuarios')">Guardar</button>
-                    </form>
-                    <ul id="listaUsuarios" style="margin-top: 1rem; list-style: none; padding:0;"></ul>
-                </div>
-            </section>
-
-            <section id="papelera-reciclaje">
-                <div class="card">
-                    <h2>Papelera de Reciclaje</h2>
-                    <h3>Servicios <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="app.vaciarPapelera('servicios')">Vaciar</button></h3>
-                    <ul id="papeleraServicios"></ul>
-                    <h3>Artistas <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="app.vaciarPapelera('artistas')">Vaciar</button></h3>
-                    <ul id="papeleraArtistas"></ul>
-                    <h3>Usuarios <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="app.vaciarPapelera('usuarios')">Vaciar</button></h3>
-                    <ul id="papeleraUsuarios"></ul>
-                </div>
-            </section>
+            <section id="registro-manual"><div class="card"><h2>Registro Manual</h2><form id="formProyectoManual" onsubmit="return false;"><div style="display:flex; gap:10px; margin-bottom:10px;"><select id="manualProyectoArtista" style="margin-bottom:0;"></select><button type="button" class="btn-secondary" onclick="document.getElementById('manualNuevoArtistaContainer').style.display='block'">+</button></div><div id="manualNuevoArtistaContainer" style="display: none; background: var(--bg-body); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;"><div style="display: flex; gap: 8px;"><input type="text" id="manualNombreNuevoArtista" placeholder="Nombre completo"><button type="button" class="btn-primary" onclick="window.app.registrarNuevoArtista('manual')">Guardar</button></div></div><label>Nombre Proyecto</label><input type="text" id="manualNombreProyecto" required><label>Fecha</label><input type="text" id="manualFechaProyecto" required><label>Descripción</label><textarea id="manualDescripcion"></textarea><button type="button" class="btn-primary" onclick="window.app.guardarProyectoManual()">Guardar Proyecto</button></form></div></section>
+            <section id="gestion-usuarios"><div class="card"><h2>Gestión de Usuarios</h2><form id="formUsuarios" onsubmit="return false;"><input type="hidden" id="idUsuario"><div class="form-row"><input type="text" id="usernameUsuario" placeholder="Usuario" required><input type="password" id="passwordUsuario" placeholder="Contraseña"><select id="roleUsuario"><option value="ingeniero">Ingeniero</option><option value="admin">Admin</option></select></div><button type="submit" onclick="window.app.saveItemFromForm('usuarios')">Guardar</button></form><ul id="listaUsuarios" style="margin-top: 1rem; list-style: none; padding:0;"></ul></div></section>
+            
+            <section id="papelera-reciclaje"><div class="card"><h2>Papelera</h2><h3>Servicios <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="window.app.vaciarPapelera('servicios')">Vaciar</button></h3><ul id="papeleraServicios"></ul><h3>Artistas <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="window.app.vaciarPapelera('artistas')">Vaciar</button></h3><ul id="papeleraArtistas"></ul><h3>Usuarios <button class="btn-danger" style="font-size:0.7rem; padding:4px 8px;" onclick="window.app.vaciarPapelera('usuarios')">Vaciar</button></h3><ul id="papeleraUsuarios"></ul></div></section>
             
             <section id="configuracion">
                 <div class="card">
@@ -549,64 +391,50 @@
                     <h3>Firma Digital</h3>
                     <div id="config-layout" style="display:flex; flex-wrap:wrap; gap:2rem;">
                       <div style="flex: 1;">
-                        <label>Alineación Vertical</label>
-                        <div class="alignment-group">
-                            <label><input type="radio" name="vAlign" value="top" onchange="app.actualizarPosicionFirma()"> Top</label>
-                            <label><input type="radio" name="vAlign" value="middle" onchange="app.actualizarPosicionFirma()"> Middle</label>
-                            <label><input type="radio" name="vAlign" value="bottom" onchange="app.actualizarPosicionFirma()"> Bottom</label>
-                        </div>
                         <label>Ajuste Manual</label>
-                        <div class="form-row"><label>W</label><input type="range" id="slider-firma-w" min="10" max="150" value="50" oninput="app.actualizarPosicionFirma()"></div>
-                        <div class="form-row"><label>H</label><input type="range" id="slider-firma-h" min="10" max="80" value="20" oninput="app.actualizarPosicionFirma()"></div>
-                        <div class="form-row"><label>X</label><input type="range" id="slider-firma-offsetX" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()"></div>
-                        <div class="form-row"><label>Y</label><input type="range" id="slider-firma-offsetY" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()"></div>
+                        <div class="form-row"><label>W</label><input type="range" id="slider-firma-w" min="10" max="150" value="50" oninput="window.app.actualizarPosicionFirma()"></div>
+                        <div class="form-row"><label>H</label><input type="range" id="slider-firma-h" min="10" max="80" value="20" oninput="window.app.actualizarPosicionFirma()"></div>
+                        <div class="form-row"><label>X</label><input type="range" id="slider-firma-offsetX" min="-50" max="50" value="0" oninput="window.app.actualizarPosicionFirma()"></div>
+                        <div class="form-row"><label>Y</label><input type="range" id="slider-firma-offsetY" min="-50" max="50" value="0" oninput="window.app.actualizarPosicionFirma()"></div>
                         <input type="file" id="firma-input" accept="image/*">
-                        <button onclick="app.guardarAjustesFirma()" style="margin-top:10px;">Guardar Config</button>
+                        <button onclick="window.app.guardarAjustesFirma()" style="margin-top:10px;">Guardar Config</button>
                       </div>
-                      <div style="flex:1;">
-                        <div id="firma-preview-container">
-                           <img id="firma-draggable-preview" src="https://via.placeholder.com/150x50?text=Firma" style="width:50px; height:20px;">
-                        </div>
-                      </div>
+                      <div style="flex:1;"><div id="firma-preview-container"><img id="firma-draggable-preview" src="https://via.placeholder.com/150x50?text=Firma" style="width:50px; height:20px;"></div></div>
                     </div>
                     <hr style="margin:2rem 0;">
                     <h3>Datos Bancarios</h3>
-                    <form id="form-datos-bancarios">
-                        <div class="form-row"><input type="text" id="banco" placeholder="Banco"><input type="text" id="titular" placeholder="Titular"></div>
-                        <div class="form-row"><input type="text" id="tarjeta" placeholder="Tarjeta"><input type="text" id="clabe" placeholder="CLABE"></div>
-                        <button type="button" onclick="app.guardarDatosBancarios()">Guardar Datos</button>
-                    </form>
+                    <form id="form-datos-bancarios"><div class="form-row"><input type="text" id="banco" placeholder="Banco"><input type="text" id="titular" placeholder="Titular"></div><div class="form-row"><input type="text" id="tarjeta" placeholder="Tarjeta"><input type="text" id="clabe" placeholder="CLABE"></div><button type="button" onclick="window.app.guardarDatosBancarios()">Guardar Datos</button></form>
                 </div>
             </section>
-
         </main>
     </div>
   </div>
 
+  <!-- MODALS -->
   <div id="document-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
       <div class="card" style="width:90%;max-width:600px;max-height:90vh;overflow-y:auto;position:relative;">
           <button style="position:absolute;right:1rem;top:1rem;background:none;border:none;font-size:1.5rem;" onclick="document.getElementById('document-modal').style.display='none'">×</button>
           <h2>Generar Documentos</h2>
           <input type="hidden" id="modal-project-id">
           <div style="display:flex;gap:10px;margin-bottom:1rem;">
-              <button onclick="app.showDocumentSection('contrato')" class="btn-secondary">Contrato</button>
-              <button onclick="app.showDocumentSection('distribucion')" class="btn-secondary">Distribución</button>
+              <button onclick="window.app.showDocumentSection('contrato')" class="btn-secondary">Contrato</button>
+              <button onclick="window.app.showDocumentSection('distribucion')" class="btn-secondary">Distribución</button>
           </div>
           <div id="section-contrato" style="display:block;">
               <label>Nombre Álbum</label><input type="text" id="contrato-nombre-album">
               <label>Cantidad Canciones</label><input type="number" id="contrato-canciones">
               <label>Duración</label><input type="text" id="contrato-duracion">
-              <label>Pago Inicial</label><input type="number" id="contrato-pago-inicial" oninput="app.calcularSaldo()">
+              <label>Pago Inicial</label><input type="number" id="contrato-pago-inicial" oninput="window.app.calcularSaldo()">
               <label>Pago Final</label><input type="number" id="contrato-pago-final" readonly>
-              <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="app.saveAndGenerateContract()">Generar PDF Contrato</button>
+              <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="window.app.saveAndGenerateContract()">Generar PDF Contrato</button>
           </div>
           <div id="section-distribucion" style="display:none;">
               <label>Título Lanzamiento</label><input type="text" id="dist-titulo">
               <label>Fecha Lanzamiento</label><input type="text" id="dist-fecha">
               <label>UPC</label><input type="text" id="dist-upc">
               <div id="dist-tracks-container"></div>
-              <button class="btn-secondary" onclick="app.addTrackField()">+ Track</button>
-              <button class="btn-primary" style="width:100%;margin-top:10px;" onclick="app.saveAndGenerateDistribution()">Generar PDF Distribución</button>
+              <button class="btn-secondary" onclick="window.app.addTrackField()">+ Track</button>
+              <button class="btn-primary" style="width:100%;margin-top:10px;" onclick="window.app.saveAndGenerateDistribution()">Generar PDF Distribución</button>
           </div>
       </div>
   </div>
@@ -625,60 +453,29 @@
       <div class="card" style="width:90%;max-width:500px;">
           <h2>Entrega de Archivos</h2>
           <input type="hidden" id="delivery-project-id">
-          <input type="hidden" id="delivery-artist-name">
-          <input type="hidden" id="delivery-project-name">
           <input type="text" id="delivery-link-input" placeholder="Enlace (Drive/Dropbox...)">
           <div style="display:flex; gap:10px; margin-top:1rem;">
-              <button class="btn-primary" onclick="app.saveDeliveryLink()">Guardar</button>
-              <button class="btn-success" onclick="app.sendDeliveryByWhatsapp()">WhatsApp</button>
+              <button class="btn-primary" onclick="window.app.saveDeliveryLink()">Guardar</button>
+              <button class="btn-success" onclick="window.app.sendDeliveryByWhatsapp()">WhatsApp</button>
               <button class="btn-secondary" onclick="document.getElementById('delivery-modal').style.display='none'">Cerrar</button>
           </div>
       </div>
   </div>
 
+  <!-- LÓGICA JAVASCRIPT ROBUSTA -->
   <script>
+    // 1. DEFINICIÓN GLOBAL DE LA APP (PARA EVITAR ERRORES DE REFERENCIA)
+    window.app = {};
+
     document.addEventListener('DOMContentLoaded', () => {
-      /* --- STATE & CONFIG --- */
-      let localCache = { 
-          artistas: [], 
-          servicios: [], 
-          proyectos: [], 
-          pagos: [],
-          usuarios: [],
-          papelera: { servicios: [], artistas: [], usuarios: [] }
-      };
+      /* --- ESTADO Y CONFIGURACIÓN --- */
+      let localCache = { artistas: [], servicios: [], proyectos: [], pagos: [], usuarios: [], papelera: { servicios: [], artistas: [], usuarios: [] } };
       let proyectoActual = {};
       let currentCalendar = null;
       let chartInstance = null;
-      let configCache = { firmaPos: { cotizacion: {w:50, h:20, offsetX:0, offsetY:0, vAlign:'bottom'} } };
-      const API_URL = ''; // CAMBIAR SI TU BACKEND NO ESTÁ EN EL MISMO DOMINIO (ej: 'http://localhost:3000')
-      const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
+      const API_URL = ''; // AJUSTAR SI ES NECESARIO
 
-      /* --- HELPER FUNCTIONS --- */
-      function showToast(text, type = 'info') {
-          const bg = type === 'success' ? 'var(--success-bg)' : type === 'error' ? 'var(--danger-bg)' : 'var(--primary-color)';
-          const color = type === 'success' ? 'var(--success-text)' : type === 'error' ? 'var(--danger-text)' : '#fff';
-          Toastify({ text, duration: 3000, gravity: "top", position: "right", style: { background: bg, color: color, borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' } }).showToast();
-      }
-      function escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[t])); }
-      function showLoader() { document.getElementById('loader-overlay').style.display = 'grid'; }
-      function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
-
-      async function loadPublicLogo() {
-          try {
-              const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
-              if (res.ok) {
-                  const data = await res.json();
-                  if (data && data.filePath) {
-                      const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
-                      document.getElementById('login-logo').src = logoSrc;
-                      document.getElementById('app-logo').src = logoSrc;
-                  }
-              }
-          } catch (e) { console.error("Error cargando logo"); }
-      }
-
-      /* --- OFFLINE MANAGER (SMART QUEUE) --- */
+      /* --- GESTOR OFFLINE --- */
       const OfflineManager = {
           key: 'fia_queue',
           get: () => JSON.parse(localStorage.getItem(OfflineManager.key) || '[]'),
@@ -693,25 +490,27 @@
               const isOnline = navigator.onLine;
               const statusDiv = document.getElementById('connection-status');
               const textSpan = document.getElementById('connection-text');
-              if(isOnline) {
-                  if(q.length > 0) {
-                      statusDiv.className = 'connection-status status-syncing';
-                      textSpan.textContent = `Sincronizando (${q.length})`;
-                      OfflineManager.process(); 
+              if(statusDiv && textSpan) {
+                  if(isOnline) {
+                      if(q.length > 0) {
+                          statusDiv.className = 'connection-status status-syncing';
+                          textSpan.textContent = `Sincronizando (${q.length})`;
+                          OfflineManager.process(); 
+                      } else {
+                          statusDiv.className = 'connection-status status-online';
+                          textSpan.textContent = 'En Línea';
+                      }
                   } else {
-                      statusDiv.className = 'connection-status status-online';
-                      textSpan.textContent = 'En Línea';
+                      statusDiv.className = 'connection-status status-offline';
+                      textSpan.textContent = q.length ? `Offline (${q.length})` : 'Modo Offline';
                   }
-              } else {
-                  statusDiv.className = 'connection-status status-offline';
-                  textSpan.textContent = q.length ? `Offline (${q.length})` : 'Modo Offline';
               }
           },
           process: async () => {
               const q = OfflineManager.get();
               if(!q.length || !navigator.onLine) return;
               
-              showLoader();
+              document.getElementById('loader-overlay').style.display = 'grid';
               let newQ = [];
               let idMap = {}; 
               const token = localStorage.getItem('token');
@@ -730,26 +529,28 @@
                       if(res.ok) {
                           const data = await res.json();
                           if(req.tempId && data._id) idMap[req.tempId] = data._id;
-                      } else { throw new Error('Sync Error'); }
+                      } else { throw new Error('Error Sync'); }
                   } catch(e) {
-                      console.error("Sync failed:", req.url);
                       newQ.push(req);
                   }
               }
               localStorage.setItem(OfflineManager.key, JSON.stringify(newQ));
-              hideLoader();
+              document.getElementById('loader-overlay').style.display = 'none';
               OfflineManager.updateUI();
               if(newQ.length === 0) {
-                  showToast("Sincronización completada", 'success');
+                  Toastify({text: "Sincronización completada", backgroundColor: "var(--success-main)"}).showToast();
                   initializeApp(true);
               }
           }
       };
 
-      /* --- API WRAPPER --- */
+      /* --- FETCH API SEGURO --- */
       async function fetchAPI(endpoint, options = {}) {
           const token = localStorage.getItem('token');
-          if(!token && !endpoint.includes('login')) return window.location.reload();
+          if(!token && !endpoint.includes('login')) {
+              // Si no hay token, no fallamos, solo devolvemos null para que la UI no se rompa
+              return null; 
+          }
           
           const isOnline = navigator.onLine;
           const method = options.method || 'GET';
@@ -758,23 +559,27 @@
               if(isOnline) {
                   try {
                       const res = await fetch(API_URL + endpoint, { headers: { 'Authorization': `Bearer ${token}` }});
-                      if(!res.ok) throw new Error(res.statusText);
-                      const data = await res.json();
-                      if(endpoint.includes('/artistas')) localCache.artistas = data;
-                      if(endpoint.includes('/servicios')) localCache.servicios = data;
-                      if(endpoint.includes('/proyectos')) localCache.proyectos = data;
-                      return data;
-                  } catch(e) {} 
+                      if(res.ok) {
+                          const data = await res.json();
+                          if(endpoint.includes('/artistas')) localCache.artistas = data;
+                          if(endpoint.includes('/servicios')) localCache.servicios = data;
+                          if(endpoint.includes('/proyectos')) localCache.proyectos = data;
+                          return data;
+                      }
+                  } catch(e) { console.warn("Fetch failed, using cache"); }
               }
-              if(endpoint.includes('/artistas')) return localCache.artistas;
-              if(endpoint.includes('/servicios')) return localCache.servicios;
-              if(endpoint.includes('/proyectos')) return localCache.proyectos;
+              if(endpoint.includes('/artistas')) return localCache.artistas || [];
+              if(endpoint.includes('/servicios')) return localCache.servicios || [];
+              if(endpoint.includes('/proyectos')) return localCache.proyectos || [];
               return [];
           }
           
+          // WRITE METHODS
           if(['POST','PUT','DELETE'].includes(method)) {
               const body = options.body ? JSON.parse(options.body) : {};
               const tempId = 'temp_' + Date.now();
+              
+              // Optimistic UI Update
               if(method === 'POST') {
                   const newItem = { ...body, _id: tempId, createdAt: new Date().toISOString() };
                   if(endpoint.includes('/artistas')) localCache.artistas.push(newItem);
@@ -783,29 +588,20 @@
                       newItem.estatus = newItem.estatus || 'Agendado';
                       newItem.proceso = newItem.proceso || 'Agendado';
                       localCache.proyectos.push(newItem);
-                      if(currentCalendar) {
-                          currentCalendar.addEvent({
-                              id: tempId,
-                              title: newItem.nombreProyecto || 'Nuevo',
-                              start: newItem.fecha,
-                              backgroundColor: 'var(--warning-main)'
-                          });
-                      }
+                      if(currentCalendar) currentCalendar.addEvent({ id: tempId, title: newItem.nombreProyecto || 'Nuevo', start: newItem.fecha, backgroundColor: 'var(--warning-main)' });
                   }
               }
+
               if(isOnline) {
-                  showLoader();
                   try {
                       const res = await fetch(API_URL + endpoint, {
                           method,
                           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                           body: options.body
                       });
-                      const data = await res.json();
-                      hideLoader();
-                      return data;
+                      if(res.ok) return await res.json();
+                      throw new Error('Server Error');
                   } catch(e) {
-                      hideLoader();
                       OfflineManager.add(API_URL + endpoint, method, body, tempId);
                       return { ...body, _id: tempId, offline: true };
                   }
@@ -816,7 +612,35 @@
           }
       }
 
-      /* --- APP FUNCTIONS --- */
+      /* --- FUNCIONES UI --- */
+      window.app.nav = (id) => {
+          document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+          const sec = document.getElementById(id);
+          if(sec) sec.classList.add('active');
+          if(window.innerWidth <= 768) {
+              document.querySelector('.sidebar').classList.remove('visible');
+              document.getElementById('sidebar-overlay').classList.remove('visible');
+          }
+          
+          if(id === 'agenda') window.app.loadCalendar();
+          if(id === 'flujo-trabajo') renderKanban();
+          if(id === 'gestion-artistas') renderList('artistas');
+          if(id === 'gestion-servicios') renderList('servicios');
+          
+          if(id === 'registrar-proyecto') {
+              const s = document.getElementById('proyectoArtista');
+              s.innerHTML = '<option value="publico_general">Público General</option>';
+              (localCache.artistas || []).forEach(a => s.innerHTML += `<option value="${a._id}">${a.nombre}</option>`);
+              const s2 = document.getElementById('proyectoServicio');
+              s2.innerHTML = '';
+              (localCache.servicios || []).forEach(sv => {
+                  const opt = document.createElement('option');
+                  opt.value = sv._id; opt.dataset.precio = sv.precio; opt.text = `${sv.nombre} - $${sv.precio}`;
+                  s2.add(opt);
+              });
+          }
+      };
+
       function renderList(type) {
           const list = document.getElementById(type === 'artistas' ? 'listaArtistas' : type === 'servicios' ? 'listaServicios' : 'listaUsuarios');
           const data = localCache[type] || [];
@@ -824,8 +648,8 @@
               <li class="list-item">
                   <span>${escapeHTML(item.nombre || item.username)} ${item.precio ? `($${item.precio})` : ''}</span>
                   <div>
-                      <button class="btn-secondary btn-icon" onclick="app.editItem('${item._id}', '${type}')">✏️</button>
-                      <button class="btn-danger btn-icon" onclick="app.deleteItem('${item._id}', '${type}')">🗑️</button>
+                      <button class="btn-secondary btn-icon" onclick="window.app.editItem('${item._id}', '${type}')">✏️</button>
+                      <button class="btn-danger btn-icon" onclick="window.app.deleteItem('${item._id}', '${type}')">🗑️</button>
                   </div>
               </li>
           `).join('');
@@ -834,63 +658,38 @@
       async function renderKanban() {
           const board = document.getElementById('kanbanBoard');
           const cols = ['Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering'];
-          const projs = await fetchAPI('/api/proyectos');
-          board.innerHTML = cols.map(c => `
-              <div class="kanban-column">
-                  <h3>${c}</h3>
-                  <div id="col-${c}">
-                      ${projs.filter(p => p.proceso === c).map(p => `
-                          <div class="project-card" onclick="app.openDocs('${p._id}')">
-                              <div class="project-card-header">
-                                  <span>${escapeHTML(p.nombreProyecto || 'Sin Nombre')}</span>
-                                  <span class="badge" style="background:var(--col-${c.toLowerCase()}); color:var(--text-main);">${p.estatus}</span>
+          const projs = await fetchAPI('/api/proyectos'); 
+          if(board) {
+              board.innerHTML = cols.map(c => `
+                  <div class="kanban-column">
+                      <h3>${c}</h3>
+                      <div id="col-${c}">
+                          ${(projs || []).filter(p => p.proceso === c).map(p => `
+                              <div class="project-card" onclick="window.app.openDocs('${p._id}')">
+                                  <div class="project-card-header">
+                                      <span>${escapeHTML(p.nombreProyecto || 'Sin Nombre')}</span>
+                                      <span class="badge" style="background:var(--col-${c.toLowerCase()}); color:var(--text-main);">${p.estatus}</span>
+                                  </div>
+                                  <div style="font-size:0.85rem; color:var(--text-muted);">
+                                      ${new Date(p.fecha).toLocaleDateString()}
+                                  </div>
                               </div>
-                              <div style="font-size:0.85rem; color:var(--text-muted);">
-                                  ${new Date(p.fecha).toLocaleDateString()}
-                              </div>
-                          </div>
-                      `).join('')}
+                          `).join('')}
+                      </div>
                   </div>
-              </div>
-          `).join('');
+              `).join('');
+          }
       }
 
-      /* --- EXPOSED API --- */
-      window.app = {
-          nav: (id) => {
-              document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-              document.getElementById(id).classList.add('active');
-              if(window.innerWidth <= 768) {
-                  document.querySelector('.sidebar').classList.remove('visible');
-                  document.getElementById('sidebar-overlay').classList.remove('visible');
-              }
-              if(id === 'agenda') app.loadCalendar();
-              if(id === 'flujo-trabajo') renderKanban();
-              if(id === 'gestion-artistas') renderList('artistas');
-              if(id === 'gestion-servicios') renderList('servicios');
-              if(id === 'registrar-proyecto') {
-                  const s = document.getElementById('proyectoArtista');
-                  s.innerHTML = '<option value="publico_general">Público General</option>';
-                  localCache.artistas.forEach(a => s.innerHTML += `<option value="${a._id}">${a.nombre}</option>`);
-                  const s2 = document.getElementById('proyectoServicio');
-                  s2.innerHTML = '';
-                  localCache.servicios.forEach(sv => {
-                      const opt = document.createElement('option');
-                      opt.value = sv._id;
-                      opt.dataset.precio = sv.precio;
-                      opt.text = `${sv.nombre} - $${sv.precio}`;
-                      s2.add(opt);
-                  });
-              }
-          },
-          loadCalendar: async () => {
-              const events = localCache.proyectos.map(p => ({
-                  id: p._id,
-                  title: p.nombreProyecto || 'Proyecto',
-                  start: p.fecha,
-                  backgroundColor: p._id.toString().startsWith('temp_') ? 'var(--warning-main)' : 'var(--primary-color)'
-              }));
-              const el = document.getElementById('calendario');
+      window.app.loadCalendar = async () => {
+          const events = (localCache.proyectos || []).map(p => ({
+              id: p._id,
+              title: p.nombreProyecto || 'Proyecto',
+              start: p.fecha,
+              backgroundColor: p._id.toString().startsWith('temp_') ? 'var(--warning-main)' : 'var(--primary-color)'
+          }));
+          const el = document.getElementById('calendario');
+          if(el) {
               if(currentCalendar) currentCalendar.destroy();
               currentCalendar = new FullCalendar.Calendar(el, {
                   initialView: 'dayGridMonth',
@@ -899,126 +698,109 @@
                   height: 'auto',
                   events: events,
                   dateClick: info => {
-                      app.nav('registrar-proyecto');
+                      window.app.nav('registrar-proyecto');
                       setTimeout(() => document.querySelector("#fechaProyecto")._flatpickr.setDate(info.dateStr), 100);
                   }
               });
               currentCalendar.render();
-          },
-          saveItemFromForm: async (type) => {
-              const form = document.getElementById(type === 'artistas' ? 'formArtistas' : type === 'servicios' ? 'formServicios' : 'formUsuarios');
-              const body = {};
-              Array.from(form.elements).forEach(el => {
-                  if(el.id) body[el.id.replace(type === 'artistas' ? 'Artista' : type === 'servicios' ? 'Servicio' : 'Usuario', '').toLowerCase()] = el.value;
-              });
-              if(type === 'artistas') { body.nombre = document.getElementById('nombreArtista').value; }
-              if(type === 'servicios') { body.nombre = document.getElementById('nombreServicio').value; }
-              await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
-              renderList(type);
-              form.reset();
-              showToast("Guardado", 'success');
-          },
-          registrarNuevoArtista: async (prefix) => {
-              const id = prefix === 'manual' ? 'manualNombreNuevoArtista' : 'nombreNuevoArtista';
-              const name = document.getElementById(id).value;
-              if(!name) return;
-              const res = await fetchAPI('/api/artistas', { method:'POST', body: JSON.stringify({ nombre: name }) });
-              document.getElementById(prefix === 'manual' ? 'manualNuevoArtistaContainer' : 'nuevoArtistaContainer').style.display='none';
-              document.getElementById(id).value = '';
-              app.nav(prefix === 'manual' ? 'registro-manual' : 'registrar-proyecto');
-              const sel = document.getElementById(prefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista');
-              sel.value = res._id; 
-          },
-          guardarProyectoManual: async () => {
-              const body = {
-                  artista: document.getElementById('manualProyectoArtista').value,
-                  nombreProyecto: document.getElementById('manualNombreProyecto').value,
-                  fecha: document.getElementById('manualFechaProyecto').value,
-                  estatus: 'Pagado',
-                  proceso: 'Agendado'
-              };
-              await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-              showToast("Proyecto Manual Guardado", 'success');
-              document.getElementById('formProyectoManual').reset();
-          },
-          filtrarTablas: (q) => {
-              q = q.toLowerCase();
-              document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none');
-              document.querySelectorAll('.project-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
-          },
-          syncNow: () => OfflineManager.process(),
-          enviarDatosBancarios: () => {
-              const { jsPDF } = window.jspdf;
-              const pdf = new jsPDF();
-              pdf.text("Datos Bancarios", 105, 20, {align: 'center'});
-              pdf.text("Banco: BBVA", 20, 40);
-              pdf.save("Datos_Bancarios.pdf");
-          },
-          openDocs: (id) => {
-              document.getElementById('modal-project-id').value = id;
-              document.getElementById('document-modal').style.display = 'flex';
-          },
-          showDocumentSection: (sec) => {
-              document.getElementById('section-contrato').style.display = sec === 'contrato' ? 'block' : 'none';
-              document.getElementById('section-distribucion').style.display = sec === 'distribucion' ? 'block' : 'none';
-          },
-          saveAndGenerateContract: async () => {
-              const { jsPDF } = window.jspdf;
-              const doc = new jsPDF();
-              doc.text("Contrato FiaRecords", 10, 10);
-              const firmaImg = document.getElementById('firma-draggable-preview');
-              if(firmaImg) doc.addImage(firmaImg.src, 'PNG', 20, 200, 50, 20);
-              doc.save("Contrato.pdf");
-              document.getElementById('document-modal').style.display = 'none';
-          },
-          saveAndGenerateDistribution: async () => {
-              const { jsPDF } = window.jspdf;
-              const doc = new jsPDF();
-              doc.text("Hoja de Distribución", 10, 10);
-              doc.save("Distribucion.pdf");
-              document.getElementById('document-modal').style.display = 'none';
-          },
-          deleteItem: async (id, type) => {
-              if(confirm("¿Eliminar?")) {
-                  await fetchAPI(`/api/${type}/${id}`, { method: 'DELETE' });
-                  renderList(type);
-              }
-          },
-          addTrackField: () => {
-              const div = document.createElement('div');
-              div.style.marginBottom = '5px';
-              div.innerHTML = `<input type="text" class="track-title" placeholder="Título"><input type="text" class="track-isrc" placeholder="ISRC">`;
-              document.getElementById('dist-tracks-container').appendChild(div);
-          },
-          actualizarPosicionFirma: () => {
-              const w = document.getElementById('slider-firma-w').value;
-              const h = document.getElementById('slider-firma-h').value;
-              const x = document.getElementById('slider-firma-offsetX').value;
-              const y = document.getElementById('slider-firma-offsetY').value;
-              const img = document.getElementById('firma-draggable-preview');
-              img.style.width = w + 'px'; img.style.height = h + 'px';
-              img.style.left = (50 + parseInt(x)) + '%'; img.style.top = (50 + parseInt(y)) + '%';
-          },
-          guardarAjustesFirma: () => showToast("Configuración guardada", 'success'),
-          openDeliveryModal: (id) => {
-              document.getElementById('delivery-project-id').value = id;
-              document.getElementById('delivery-modal').style.display = 'flex';
-          },
-          saveDeliveryLink: () => {
-              showToast("Enlace guardado", 'success');
-              document.getElementById('delivery-modal').style.display = 'none';
-          },
-          sendDeliveryByWhatsapp: () => {
-              window.open(`https://wa.me/?text=Tu proyecto está listo: ${document.getElementById('delivery-link-input').value}`);
-          },
-          calcularSaldo: () => {
-              const total = parseFloat(document.getElementById('modal-project-id').dataset.total || 0);
-              const init = parseFloat(document.getElementById('contrato-pago-inicial').value || 0);
-              document.getElementById('contrato-pago-final').value = total - init;
           }
       };
 
-      /* --- EVENT LISTENERS & INIT --- */
+      /* --- HELPERS Y EVENTOS --- */
+      window.app.syncNow = () => OfflineManager.process();
+      
+      window.app.saveItemFromForm = async (type) => {
+          const form = document.getElementById(type === 'artistas' ? 'formArtistas' : type === 'servicios' ? 'formServicios' : 'formUsuarios');
+          const body = {};
+          Array.from(form.elements).forEach(el => {
+              if(el.id) body[el.id.replace(type === 'artistas' ? 'Artista' : type === 'servicios' ? 'Servicio' : 'Usuario', '').toLowerCase()] = el.value;
+          });
+          if(type === 'artistas') { body.nombre = document.getElementById('nombreArtista').value; }
+          if(type === 'servicios') { body.nombre = document.getElementById('nombreServicio').value; }
+          
+          await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
+          renderList(type);
+          form.reset();
+          Toastify({text: "Guardado", backgroundColor: "var(--success-main)"}).showToast();
+      };
+
+      window.app.registrarNuevoArtista = async (prefix) => {
+          const id = prefix === 'manual' ? 'manualNombreNuevoArtista' : 'nombreNuevoArtista';
+          const name = document.getElementById(id).value;
+          if(!name) return;
+          const res = await fetchAPI('/api/artistas', { method:'POST', body: JSON.stringify({ nombre: name }) });
+          document.getElementById(prefix === 'manual' ? 'manualNuevoArtistaContainer' : 'nuevoArtistaContainer').style.display='none';
+          document.getElementById(id).value = '';
+          window.app.nav(prefix === 'manual' ? 'registro-manual' : 'registrar-proyecto');
+          // Actualización optimista del select
+          const sel = document.getElementById(prefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista');
+          if(sel && res) sel.value = res._id; 
+      };
+
+      window.app.guardarProyectoManual = async () => {
+          const body = {
+              artista: document.getElementById('manualProyectoArtista').value,
+              nombreProyecto: document.getElementById('manualNombreProyecto').value,
+              fecha: document.getElementById('manualFechaProyecto').value,
+              estatus: 'Pagado',
+              proceso: 'Agendado'
+          };
+          await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
+          Toastify({text: "Guardado", backgroundColor: "var(--success-main)"}).showToast();
+          document.getElementById('formProyectoManual').reset();
+      };
+
+      window.app.filtrarTablas = (q) => {
+          q = q.toLowerCase();
+          document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none');
+          document.querySelectorAll('.project-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
+      };
+
+      /* --- PDF & DOCUMENTOS --- */
+      window.app.openDocs = (id) => {
+          document.getElementById('modal-project-id').value = id;
+          document.getElementById('document-modal').style.display = 'flex';
+      };
+      window.app.showDocumentSection = (sec) => {
+          document.getElementById('section-contrato').style.display = sec === 'contrato' ? 'block' : 'none';
+          document.getElementById('section-distribucion').style.display = sec === 'distribucion' ? 'block' : 'none';
+      };
+      window.app.saveAndGenerateContract = async () => {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF();
+          doc.text("Contrato FiaRecords", 10, 10);
+          const firmaImg = document.getElementById('firma-draggable-preview');
+          if(firmaImg) doc.addImage(firmaImg.src, 'PNG', 20, 200, 50, 20);
+          doc.save("Contrato.pdf");
+          document.getElementById('document-modal').style.display = 'none';
+      };
+      window.app.saveAndGenerateDistribution = async () => {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF();
+          doc.text("Hoja de Distribución", 10, 10);
+          doc.save("Distribucion.pdf");
+          document.getElementById('document-modal').style.display = 'none';
+      };
+      window.app.addTrackField = () => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '5px';
+          div.innerHTML = `<input type="text" class="track-title" placeholder="Título"><input type="text" class="track-isrc" placeholder="ISRC">`;
+          document.getElementById('dist-tracks-container').appendChild(div);
+      };
+      window.app.calcularSaldo = () => {
+          const total = parseFloat(document.getElementById('modal-project-id').dataset.total || 0);
+          const init = parseFloat(document.getElementById('contrato-pago-inicial').value || 0);
+          document.getElementById('contrato-pago-final').value = total - init;
+      };
+
+      window.app.deleteItem = async (id, type) => {
+          if(confirm("¿Eliminar?")) {
+              await fetchAPI(`/api/${type}/${id}`, { method: 'DELETE' });
+              renderList(type);
+          }
+      };
+      
+      /* --- INIT & LOGICA DE ARRANQUE --- */
       document.getElementById('btnAgregarAProyecto').addEventListener('click', () => {
           const sel = document.getElementById('proyectoServicio');
           if(!sel.value) return;
@@ -1047,13 +829,14 @@
               estatus: 'Pendiente'
           };
           await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-          showToast("Proyecto Agendado", 'success');
+          Toastify({text: "Proyecto Agendado", backgroundColor: "var(--success-main)"}).showToast();
           document.getElementById('formProyecto').reset();
           document.getElementById('listaProyectoActual').innerHTML = '';
           document.getElementById('totalAPagar').innerText = '$0.00';
-          app.nav('flujo-trabajo');
+          window.app.nav('flujo-trabajo');
       });
 
+      // Listeners Globales
       document.getElementById('hamburger-menu').addEventListener('click', () => {
           document.querySelector('.sidebar').classList.add('visible');
           document.getElementById('sidebar-overlay').classList.add('visible');
@@ -1066,64 +849,82 @@
           const i = document.getElementById('password');
           i.type = i.type === 'password' ? 'text' : 'password';
       });
-      document.getElementById('firma-input').addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if(file){
-              const reader = new FileReader();
-              reader.onload = (ev) => document.getElementById('firma-draggable-preview').src = ev.target.result;
-              reader.readAsDataURL(file);
-          }
+      document.getElementById('theme-switch').addEventListener('change', (e) => {
+          document.body.classList.toggle('dark-mode', e.target.checked);
+          localStorage.setItem('theme', e.target.checked ? 'dark' : 'light');
       });
       
+      // Init Pickers
       flatpickr("#fechaProyecto", { locale: 'es', enableTime: true });
       flatpickr("#manualFechaProyecto", { locale: 'es' });
       flatpickr("#dist-fecha", { locale: 'es' });
 
+      // Init App Function
       async function initializeApp(force = false) {
           try {
               if(localStorage.getItem('token')) {
                   document.getElementById('login-container').style.display = 'none';
                   document.getElementById('app-wrapper').style.display = 'flex';
-                  await loadPublicLogo();
+                  document.body.style.visibility = 'visible';
+                  
+                  // Load Theme
+                  if(localStorage.getItem('theme') === 'dark') {
+                      document.body.classList.add('dark-mode');
+                      document.getElementById('theme-switch').checked = true;
+                  }
+
+                  // Load Data from Server
                   await Promise.all([
                       fetchAPI('/api/artistas'),
                       fetchAPI('/api/servicios'),
                       fetchAPI('/api/proyectos')
                   ]);
-                  const payload = JSON.parse(atob(localStorage.getItem('token').split('.')[1]));
-                  document.getElementById('welcome-user').textContent = `Hola, ${payload.username}`;
-                  app.nav('dashboard');
-                  const ctx = document.getElementById('incomeChart').getContext('2d');
-                  if(chartInstance) chartInstance.destroy();
-                  chartInstance = new Chart(ctx, {
-                      type: 'line',
-                      data: {
-                          labels: ['Ene','Feb','Mar','Abr','May'],
-                          datasets: [{
-                              label: 'Ingresos',
-                              data: [0, 0, 0, 0, 0], // Reemplazar con datos reales
-                              borderColor: '#6366f1',
-                              backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                              fill: true
-                          }]
-                      },
-                      options: { responsive: true, maintainAspectRatio: false }
-                  });
+                  
+                  const tokenParts = localStorage.getItem('token').split('.');
+                  if(tokenParts.length === 3) {
+                      const payload = JSON.parse(atob(tokenParts[1]));
+                      document.getElementById('welcome-user').textContent = `Hola, ${payload.username}`;
+                  }
+                  
+                  window.app.nav('dashboard');
+                  
+                  // Initialize Chart (Check if canvas exists)
+                  const chartCanvas = document.getElementById('incomeChart');
+                  if(chartCanvas) {
+                      const ctx = chartCanvas.getContext('2d');
+                      if(chartInstance) chartInstance.destroy();
+                      chartInstance = new Chart(ctx, {
+                          type: 'line',
+                          data: {
+                              labels: ['Ene','Feb','Mar','Abr','May'],
+                              datasets: [{
+                                  label: 'Ingresos',
+                                  data: [0, 0, 0, 0, 0], // Needs real data logic
+                                  borderColor: '#6366f1',
+                                  backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                  fill: true
+                              }]
+                          },
+                          options: { responsive: true, maintainAspectRatio: false }
+                      });
+                  }
+                  
                   OfflineManager.updateUI();
               } else {
                   document.getElementById('login-container').style.display = 'flex';
+                  document.body.style.visibility = 'visible';
               }
           } catch(e) {
-              console.error("Init failed", e);
+              console.error("Initialization error:", e);
               document.getElementById('login-container').style.display = 'flex';
-          } finally {
               document.body.style.visibility = 'visible';
           }
       }
       
+      // Login Handling
       document.getElementById('login-form').addEventListener('submit', async e => {
           e.preventDefault();
-          showLoader();
+          document.getElementById('loader-overlay').style.display = 'grid';
           try {
               const u = document.getElementById('username').value;
               const p = document.getElementById('password').value;
@@ -1140,7 +941,9 @@
               }
           } catch(err) {
               document.getElementById('login-error').textContent = 'Error de conexión';
-          } finally { hideLoader(); }
+          } finally { 
+              document.getElementById('loader-overlay').style.display = 'none'; 
+          }
       });
 
       document.getElementById('logout-button').addEventListener('click', () => {
