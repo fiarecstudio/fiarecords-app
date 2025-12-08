@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>FiaRecords Studio - Suite Completa</title>
+  <title>FiaRecords Studio - Suite</title>
   
   <!-- FUENTES Y LIBRERÍAS -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,13 +23,14 @@
   <style>
     /* --- VARIABLES & RESET --- */
     :root {
-      --primary-color: #6366f1; /* Indigo moderno */
+      --primary-color: #6366f1;
       --primary-hover: #4f46e5;
       --bg-body: #f3f4f6;
       --bg-card: #ffffff;
       --text-main: #1f2937;
       --text-muted: #6b7280;
       --border-light: #e5e7eb;
+      --form-bg: #ffffff;
       
       --success-bg: #d1fae5; --success-text: #065f46; --success-main: #10b981;
       --warning-bg: #fef3c7; --warning-text: #92400e; --warning-main: #f59e0b;
@@ -40,7 +41,6 @@
       --radius: 12px;
       --font-main: 'Inter', sans-serif;
 
-      /* Kanban Colors */
       --col-agendado: #e0e7ff; --col-grabacion: #fae8ff; --col-edicion: #fce7f3;
       --col-mezcla: #fef3c7; --col-mastering: #d1fae5;
     }
@@ -51,6 +51,7 @@
       --text-main: #f9fafb;
       --text-muted: #94a3b8;
       --border-light: #334155;
+      --form-bg: #334155;
       
       --fc-button-bg-color: #334155;
       --fc-button-border-color: #475569;
@@ -70,7 +71,7 @@
     /* --- SIDEBAR --- */
     .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; z-index: 50; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; }
     .sidebar-header { margin-bottom: 1.5rem; display: flex; justify-content: center; }
-    #app-logo, #login-logo { max-width: 160px; max-height: 60px; object-fit: contain; }
+    #app-logo, #login-logo { max-width: 160px; max-height: 80px; object-fit: contain; cursor: pointer; }
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
     
     .nav-link { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: var(--radius); color: var(--text-muted); text-decoration: none; font-weight: 500; transition: all 0.2s; cursor: pointer; margin-bottom: 4px; }
@@ -88,14 +89,12 @@
     .header-left { display: flex; align-items: center; gap: 1rem; flex: 1; }
     #hamburger-menu { display: none; background: none; border: none; cursor: pointer; color: var(--text-main); }
     
-    /* Connection Status */
     .connection-status { padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
     .status-online { background-color: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-bg); }
     .status-offline { background-color: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-bg); }
     .status-syncing { background-color: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-bg); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 
-    /* Universal Search */
     .search-container { flex: 1; max-width: 400px; position: relative; }
     .search-input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 24px; border: 1px solid var(--border-light); background: var(--bg-body); color: var(--text-main); font-size: 0.9rem; transition: all 0.2s; margin-bottom: 0; }
     .search-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background: var(--bg-card); }
@@ -103,14 +102,12 @@
 
     .header-actions { display: flex; gap: 8px; align-items: center; }
 
-    /* --- MOBILE RESPONSIVE --- */
     @media (max-width: 768px) {
         #app-wrapper { display: block; }
         .sidebar { position: fixed; inset: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
         .sidebar.visible { transform: translateX(0); }
         #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; display: none; backdrop-filter: blur(2px); }
         #sidebar-overlay.visible { display: block; }
-        
         .main-header { flex-wrap: wrap; padding: 0.8rem 1rem; gap: 0.8rem; }
         .header-left { min-width: 100%; justify-content: space-between; order: 1; }
         #hamburger-menu { display: block; }
@@ -124,19 +121,16 @@
     /* --- CARDS & UI --- */
     .card { background: var(--bg-card); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: transform 0.2s; }
     .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-main); border-bottom: 1px solid var(--border-light); padding-bottom: 0.75rem; }
-    
     .kpi-card { text-align: center; padding: 2rem; border-left: 4px solid var(--primary-color); }
     .kpi-value { font-size: 2.2rem; font-weight: 800; color: var(--text-main); }
     .kpi-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-top: 0.5rem; }
 
-    /* Forms */
     .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .form-group { flex: 1; min-width: 200px; }
-    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--bg-card); color: var(--text-main); margin-bottom: 0.5rem; font-family: inherit; font-size: 0.9rem; transition: border 0.2s; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--form-bg); color: var(--text-main); margin-bottom: 0.5rem; font-family: inherit; font-size: 0.9rem; transition: border 0.2s; }
     input:focus, select:focus, textarea:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); }
     label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
 
-    /* Buttons */
     button { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; }
     button:active { transform: scale(0.98); }
     button[type="submit"], .btn-primary { background: var(--primary-color); color: white; }
@@ -147,7 +141,6 @@
     .btn-success { background: var(--success-bg); color: var(--success-text); }
     .btn-icon { padding: 6px; width: 32px; height: 32px; border-radius: 50%; }
 
-    /* Tables */
     .table-responsive { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-light); }
     table { width: 100%; border-collapse: collapse; min-width: 600px; }
     th { background: var(--bg-body); text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; }
@@ -162,7 +155,6 @@
         .table-responsive td::before { content: attr(data-label); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
     }
 
-    /* Kanban */
     .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding-bottom: 1rem; }
     .kanban-column { background: var(--bg-body); border-radius: var(--radius); padding: 1rem; min-height: 150px; }
     .kanban-column h3 { font-size: 1rem; text-align: center; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase; }
@@ -170,11 +162,9 @@
     .project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
     .badge { padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; color: white; }
 
-    /* Lists */
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-light); }
     .list-item:last-child { border-bottom: none; }
 
-    /* Animations & Loader */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     section.active { animation: fadeIn 0.3s ease-out; display: block; }
     section { display: none; }
@@ -183,7 +173,11 @@
     .spinner { width: 48px; height: 48px; border: 4px solid var(--border-light); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Configuración de Firma (Estilos Específicos Restaurados) */
+    .fc { --fc-border-color: var(--border-light); --fc-today-bg-color: rgba(99, 102, 241, 0.05); }
+    .fc .fc-toolbar-title { font-size: 1.1rem; }
+    .fc .fc-button { padding: 6px 12px; font-size: 0.85rem; }
+    .fc-event { cursor: pointer; border: none; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; margin-bottom: 2px; }
+
     .alignment-group { margin-bottom: 1rem; padding: 0.5rem; border: 1px solid var(--border-light); border-radius: 8px; }
     .alignment-group legend { font-weight: 600; padding: 0 0.5rem; }
     .alignment-group div { display: flex; justify-content: space-around; }
@@ -191,9 +185,7 @@
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
     #firma-preview-container { position: relative; width: 100%; aspect-ratio: 210/297; border: 2px dashed var(--border-light); overflow: hidden; background: white; margin-top: 1rem; }
     #firma-draggable-preview { position: absolute; border: 1px solid rgba(0,0,0,0.2); }
-    
-    /* Templates Invisibles para PDF */
-    .doc-template { display: none; } /* Used by JS logic implicitly */
+    .doc-template { display: none; }
   </style>
 </head>
 <body>
@@ -211,7 +203,7 @@
       <form id="login-form">
         <div style="margin-bottom: 1rem;">
           <label>Usuario</label>
-          <input type="text" id="username" required placeholder="admin">
+          <input type="text" id="username" required>
         </div>
         <div style="margin-bottom: 1.5rem;">
           <label>Contraseña</label>
@@ -296,7 +288,6 @@
                 <div id="welcome-user" style="font-weight: 600; display: none; margin-left: 10px; @media(min-width:769px){display:block;}"></div>
             </div>
 
-            <!-- Global Search (Mobile Optimized) -->
             <div class="search-container">
                 <span class="search-icon">🔍</span>
                 <input type="text" class="search-input" id="globalSearch" placeholder="Buscar..." onkeyup="app.filtrarTablas(this.value)">
@@ -308,7 +299,6 @@
         </header>
 
         <main>
-            <!-- SECTION: DASHBOARD -->
             <section id="dashboard" class="active">
                 <div class="grid-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem;">
                     <div class="card kpi-card">
@@ -332,14 +322,12 @@
                 </div>
             </section>
 
-            <!-- SECTION: AGENDA -->
             <section id="agenda">
                 <div class="card">
                     <div id="calendario"></div>
                 </div>
             </section>
 
-            <!-- SECTION: COTIZACIONES -->
             <section id="cotizaciones">
                 <div class="card">
                     <h2>Cotizaciones Pendientes</h2>
@@ -352,7 +340,6 @@
                 </div>
             </section>
 
-            <!-- SECTION: FLUJO TRABAJO -->
             <section id="flujo-trabajo">
                 <div class="card" style="background: transparent; border: none; box-shadow: none; padding: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
@@ -363,7 +350,6 @@
                 </div>
             </section>
 
-            <!-- SECTION: REGISTRAR PROYECTO -->
             <section id="registrar-proyecto">
                 <div class="card" style="max-width: 900px; margin: 0 auto;">
                     <h2>Nuevo Proyecto / Cotización</h2>
@@ -378,7 +364,6 @@
                             </div>
                         </div>
 
-                        <!-- Add Artist Inline -->
                         <div id="nuevoArtistaContainer" style="display: none; background: var(--bg-body); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
                             <label>Nombre Nuevo Artista</label>
                             <div style="display: flex; gap: 8px;">
@@ -435,7 +420,6 @@
                 </div>
             </section>
             
-            <!-- SECTION: PAGOS -->
             <section id="pagos">
                 <div class="card">
                     <h2>Historial de Pagos</h2>
@@ -448,7 +432,6 @@
                 </div>
             </section>
 
-            <!-- SECTION: HISTORIAL -->
             <section id="historial-proyectos">
                 <div class="card">
                     <h2>Proyectos Completados</h2>
@@ -461,7 +444,6 @@
                 </div>
             </section>
 
-            <!-- SECTION: VISTA ARTISTA -->
             <section id="vista-artista">
                 <div class="card">
                     <div class="card-header"><h2 id="vista-artista-nombre"></h2></div>
@@ -469,7 +451,6 @@
                 </div>
             </section>
             
-            <!-- ADMIN SECTIONS -->
             <section id="gestion-servicios">
                 <div class="card">
                     <h2>Gestión de Servicios</h2>
@@ -519,7 +500,6 @@
                              <select id="manualProyectoArtista" style="margin-bottom:0;"></select>
                              <button type="button" class="btn-secondary" onclick="document.getElementById('manualNuevoArtistaContainer').style.display='block'">+</button>
                         </div>
-                        
                         <div id="manualNuevoArtistaContainer" style="display: none; background: var(--bg-body); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
                             <label>Nombre Nuevo Artista</label>
                             <div style="display: flex; gap: 8px;">
@@ -527,7 +507,6 @@
                                 <button type="button" class="btn-primary" onclick="app.registrarNuevoArtista('manual')">Guardar</button>
                             </div>
                         </div>
-
                         <label>Nombre Proyecto</label><input type="text" id="manualNombreProyecto" required>
                         <label>Fecha</label><input type="text" id="manualFechaProyecto" required>
                         <label>Descripción</label><textarea id="manualDescripcion"></textarea>
@@ -567,7 +546,7 @@
             <section id="configuracion">
                 <div class="card">
                     <h2>Configuración</h2>
-                    <h3>Firma Digital (Drag & Drop)</h3>
+                    <h3>Firma Digital</h3>
                     <div id="config-layout" style="display:flex; flex-wrap:wrap; gap:2rem;">
                       <div style="flex: 1;">
                         <label>Alineación Vertical</label>
@@ -604,18 +583,15 @@
     </div>
   </div>
 
-  <!-- MODALS -->
   <div id="document-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
       <div class="card" style="width:90%;max-width:600px;max-height:90vh;overflow-y:auto;position:relative;">
           <button style="position:absolute;right:1rem;top:1rem;background:none;border:none;font-size:1.5rem;" onclick="document.getElementById('document-modal').style.display='none'">×</button>
           <h2>Generar Documentos</h2>
           <input type="hidden" id="modal-project-id">
-          
           <div style="display:flex;gap:10px;margin-bottom:1rem;">
               <button onclick="app.showDocumentSection('contrato')" class="btn-secondary">Contrato</button>
               <button onclick="app.showDocumentSection('distribucion')" class="btn-secondary">Distribución</button>
           </div>
-          
           <div id="section-contrato" style="display:block;">
               <label>Nombre Álbum</label><input type="text" id="contrato-nombre-album">
               <label>Cantidad Canciones</label><input type="number" id="contrato-canciones">
@@ -624,7 +600,6 @@
               <label>Pago Final</label><input type="number" id="contrato-pago-final" readonly>
               <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="app.saveAndGenerateContract()">Generar PDF Contrato</button>
           </div>
-          
           <div id="section-distribucion" style="display:none;">
               <label>Título Lanzamiento</label><input type="text" id="dist-titulo">
               <label>Fecha Lanzamiento</label><input type="text" id="dist-fecha">
@@ -661,10 +636,9 @@
       </div>
   </div>
 
-  <!-- JAVASCRIPT LOGIC -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      /* --- STATE MANAGEMENT --- */
+      /* --- STATE & CONFIG --- */
       let localCache = { 
           artistas: [], 
           servicios: [], 
@@ -677,8 +651,32 @@
       let currentCalendar = null;
       let chartInstance = null;
       let configCache = { firmaPos: { cotizacion: {w:50, h:20, offsetX:0, offsetY:0, vAlign:'bottom'} } };
-      const API_URL = ''; 
+      const API_URL = ''; // CAMBIAR SI TU BACKEND NO ESTÁ EN EL MISMO DOMINIO (ej: 'http://localhost:3000')
       const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
+
+      /* --- HELPER FUNCTIONS --- */
+      function showToast(text, type = 'info') {
+          const bg = type === 'success' ? 'var(--success-bg)' : type === 'error' ? 'var(--danger-bg)' : 'var(--primary-color)';
+          const color = type === 'success' ? 'var(--success-text)' : type === 'error' ? 'var(--danger-text)' : '#fff';
+          Toastify({ text, duration: 3000, gravity: "top", position: "right", style: { background: bg, color: color, borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' } }).showToast();
+      }
+      function escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[t])); }
+      function showLoader() { document.getElementById('loader-overlay').style.display = 'grid'; }
+      function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
+
+      async function loadPublicLogo() {
+          try {
+              const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
+              if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.filePath) {
+                      const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
+                      document.getElementById('login-logo').src = logoSrc;
+                      document.getElementById('app-logo').src = logoSrc;
+                  }
+              }
+          } catch (e) { console.error("Error cargando logo"); }
+      }
 
       /* --- OFFLINE MANAGER (SMART QUEUE) --- */
       const OfflineManager = {
@@ -695,7 +693,6 @@
               const isOnline = navigator.onLine;
               const statusDiv = document.getElementById('connection-status');
               const textSpan = document.getElementById('connection-text');
-              
               if(isOnline) {
                   if(q.length > 0) {
                       statusDiv.className = 'connection-status status-syncing';
@@ -714,7 +711,7 @@
               const q = OfflineManager.get();
               if(!q.length || !navigator.onLine) return;
               
-              document.getElementById('loader-overlay').style.display = 'grid';
+              showLoader();
               let newQ = [];
               let idMap = {}; 
               const token = localStorage.getItem('token');
@@ -725,37 +722,31 @@
                       Object.keys(idMap).forEach(temp => {
                           bodyStr = bodyStr.replace(new RegExp(temp, 'g'), idMap[temp]);
                       });
-                      
                       const res = await fetch(req.url, {
                           method: req.method,
                           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                           body: bodyStr
                       });
-                      
                       if(res.ok) {
                           const data = await res.json();
                           if(req.tempId && data._id) idMap[req.tempId] = data._id;
-                      } else {
-                          throw new Error('Sync Error');
-                      }
+                      } else { throw new Error('Sync Error'); }
                   } catch(e) {
                       console.error("Sync failed:", req.url);
                       newQ.push(req);
                   }
               }
-              
               localStorage.setItem(OfflineManager.key, JSON.stringify(newQ));
-              document.getElementById('loader-overlay').style.display = 'none';
+              hideLoader();
               OfflineManager.updateUI();
-              
               if(newQ.length === 0) {
-                  Toastify({text: "Sincronización completada", backgroundColor: "var(--success-main)"}).showToast();
+                  showToast("Sincronización completada", 'success');
                   initializeApp(true);
               }
           }
       };
 
-      /* --- API WRAPPER WITH OPTIMISTIC UPDATE --- */
+      /* --- API WRAPPER --- */
       async function fetchAPI(endpoint, options = {}) {
           const token = localStorage.getItem('token');
           if(!token && !endpoint.includes('login')) return window.location.reload();
@@ -767,6 +758,7 @@
               if(isOnline) {
                   try {
                       const res = await fetch(API_URL + endpoint, { headers: { 'Authorization': `Bearer ${token}` }});
+                      if(!res.ok) throw new Error(res.statusText);
                       const data = await res.json();
                       if(endpoint.includes('/artistas')) localCache.artistas = data;
                       if(endpoint.includes('/servicios')) localCache.servicios = data;
@@ -783,7 +775,6 @@
           if(['POST','PUT','DELETE'].includes(method)) {
               const body = options.body ? JSON.parse(options.body) : {};
               const tempId = 'temp_' + Date.now();
-              
               if(method === 'POST') {
                   const newItem = { ...body, _id: tempId, createdAt: new Date().toISOString() };
                   if(endpoint.includes('/artistas')) localCache.artistas.push(newItem);
@@ -802,14 +793,22 @@
                       }
                   }
               }
-
               if(isOnline) {
-                  const res = await fetch(API_URL + endpoint, {
-                      method,
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                      body: options.body
-                  });
-                  return await res.json();
+                  showLoader();
+                  try {
+                      const res = await fetch(API_URL + endpoint, {
+                          method,
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                          body: options.body
+                      });
+                      const data = await res.json();
+                      hideLoader();
+                      return data;
+                  } catch(e) {
+                      hideLoader();
+                      OfflineManager.add(API_URL + endpoint, method, body, tempId);
+                      return { ...body, _id: tempId, offline: true };
+                  }
               } else {
                   OfflineManager.add(API_URL + endpoint, method, body, tempId);
                   return { ...body, _id: tempId, offline: true };
@@ -823,7 +822,7 @@
           const data = localCache[type] || [];
           list.innerHTML = data.map(item => `
               <li class="list-item">
-                  <span>${item.nombre || item.username} ${item.precio ? `($${item.precio})` : ''}</span>
+                  <span>${escapeHTML(item.nombre || item.username)} ${item.precio ? `($${item.precio})` : ''}</span>
                   <div>
                       <button class="btn-secondary btn-icon" onclick="app.editItem('${item._id}', '${type}')">✏️</button>
                       <button class="btn-danger btn-icon" onclick="app.deleteItem('${item._id}', '${type}')">🗑️</button>
@@ -836,7 +835,6 @@
           const board = document.getElementById('kanbanBoard');
           const cols = ['Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering'];
           const projs = await fetchAPI('/api/proyectos');
-          
           board.innerHTML = cols.map(c => `
               <div class="kanban-column">
                   <h3>${c}</h3>
@@ -844,7 +842,7 @@
                       ${projs.filter(p => p.proceso === c).map(p => `
                           <div class="project-card" onclick="app.openDocs('${p._id}')">
                               <div class="project-card-header">
-                                  <span>${p.nombreProyecto || 'Sin Nombre'}</span>
+                                  <span>${escapeHTML(p.nombreProyecto || 'Sin Nombre')}</span>
                                   <span class="badge" style="background:var(--col-${c.toLowerCase()}); color:var(--text-main);">${p.estatus}</span>
                               </div>
                               <div style="font-size:0.85rem; color:var(--text-muted);">
@@ -857,7 +855,7 @@
           `).join('');
       }
 
-      /* --- PUBLIC API (WINDOW.APP) --- */
+      /* --- EXPOSED API --- */
       window.app = {
           nav: (id) => {
               document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
@@ -866,12 +864,10 @@
                   document.querySelector('.sidebar').classList.remove('visible');
                   document.getElementById('sidebar-overlay').classList.remove('visible');
               }
-              // Init Section Data
               if(id === 'agenda') app.loadCalendar();
               if(id === 'flujo-trabajo') renderKanban();
               if(id === 'gestion-artistas') renderList('artistas');
               if(id === 'gestion-servicios') renderList('servicios');
-              
               if(id === 'registrar-proyecto') {
                   const s = document.getElementById('proyectoArtista');
                   s.innerHTML = '<option value="publico_general">Público General</option>';
@@ -887,7 +883,6 @@
                   });
               }
           },
-          
           loadCalendar: async () => {
               const events = localCache.proyectos.map(p => ({
                   id: p._id,
@@ -895,7 +890,6 @@
                   start: p.fecha,
                   backgroundColor: p._id.toString().startsWith('temp_') ? 'var(--warning-main)' : 'var(--primary-color)'
               }));
-              
               const el = document.getElementById('calendario');
               if(currentCalendar) currentCalendar.destroy();
               currentCalendar = new FullCalendar.Calendar(el, {
@@ -911,7 +905,6 @@
               });
               currentCalendar.render();
           },
-
           saveItemFromForm: async (type) => {
               const form = document.getElementById(type === 'artistas' ? 'formArtistas' : type === 'servicios' ? 'formServicios' : 'formUsuarios');
               const body = {};
@@ -920,26 +913,22 @@
               });
               if(type === 'artistas') { body.nombre = document.getElementById('nombreArtista').value; }
               if(type === 'servicios') { body.nombre = document.getElementById('nombreServicio').value; }
-              
               await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
               renderList(type);
               form.reset();
-              Toastify({text: "Guardado", backgroundColor: "var(--success-main)"}).showToast();
+              showToast("Guardado", 'success');
           },
-
           registrarNuevoArtista: async (prefix) => {
               const id = prefix === 'manual' ? 'manualNombreNuevoArtista' : 'nombreNuevoArtista';
               const name = document.getElementById(id).value;
               if(!name) return;
               const res = await fetchAPI('/api/artistas', { method:'POST', body: JSON.stringify({ nombre: name }) });
-              
               document.getElementById(prefix === 'manual' ? 'manualNuevoArtistaContainer' : 'nuevoArtistaContainer').style.display='none';
               document.getElementById(id).value = '';
               app.nav(prefix === 'manual' ? 'registro-manual' : 'registrar-proyecto');
               const sel = document.getElementById(prefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista');
               sel.value = res._id; 
           },
-
           guardarProyectoManual: async () => {
               const body = {
                   artista: document.getElementById('manualProyectoArtista').value,
@@ -949,127 +938,87 @@
                   proceso: 'Agendado'
               };
               await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-              Toastify({text: "Proyecto Manual Guardado", backgroundColor: "var(--success-main)"}).showToast();
+              showToast("Proyecto Manual Guardado", 'success');
               document.getElementById('formProyectoManual').reset();
           },
-
           filtrarTablas: (q) => {
               q = q.toLowerCase();
               document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none');
               document.querySelectorAll('.project-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
           },
-
           syncNow: () => OfflineManager.process(),
-          
           enviarDatosBancarios: () => {
               const { jsPDF } = window.jspdf;
               const pdf = new jsPDF();
               pdf.text("Datos Bancarios", 105, 20, {align: 'center'});
-              // Simulación de datos
               pdf.text("Banco: BBVA", 20, 40);
-              pdf.text("Cuenta: 1234567890", 20, 50);
               pdf.save("Datos_Bancarios.pdf");
           },
-          
           openDocs: (id) => {
               document.getElementById('modal-project-id').value = id;
               document.getElementById('document-modal').style.display = 'flex';
           },
-          
           showDocumentSection: (sec) => {
               document.getElementById('section-contrato').style.display = sec === 'contrato' ? 'block' : 'none';
               document.getElementById('section-distribucion').style.display = sec === 'distribucion' ? 'block' : 'none';
           },
-          
-          addTrackField: () => {
-              const div = document.createElement('div');
-              div.style.marginBottom = '5px';
-              div.innerHTML = `<input type="text" class="track-title" placeholder="Título"><input type="text" class="track-isrc" placeholder="ISRC">`;
-              document.getElementById('dist-tracks-container').appendChild(div);
-          },
-          
           saveAndGenerateContract: async () => {
               const { jsPDF } = window.jspdf;
               const doc = new jsPDF();
-              const pId = document.getElementById('modal-project-id').value;
-              const proj = localCache.proyectos.find(p=>p._id === pId) || {};
-              
-              doc.setFontSize(18);
-              doc.text("CONTRATO DE SERVICIOS", 105, 20, {align:'center'});
-              doc.setFontSize(12);
-              doc.text(`Cliente: ${proj.nombreProyecto || 'Cliente'}`, 20, 40);
-              doc.text(`Album: ${document.getElementById('contrato-nombre-album').value}`, 20, 50);
-              doc.text("Terminos y Condiciones Legales completos...", 20, 70);
-              // Firma logic restoration
+              doc.text("Contrato FiaRecords", 10, 10);
               const firmaImg = document.getElementById('firma-draggable-preview');
-              if(firmaImg) {
-                  // Simply put firma at bottom
-                  doc.addImage(firmaImg.src, 'PNG', 20, 200, 50, 20);
-              }
+              if(firmaImg) doc.addImage(firmaImg.src, 'PNG', 20, 200, 50, 20);
               doc.save("Contrato.pdf");
               document.getElementById('document-modal').style.display = 'none';
           },
-          
           saveAndGenerateDistribution: async () => {
               const { jsPDF } = window.jspdf;
               const doc = new jsPDF();
-              doc.text("Hoja de Distribución", 105, 20, {align:'center'});
-              
-              const tracks = document.querySelectorAll('#dist-tracks-container div');
-              let y = 40;
-              tracks.forEach((t, i) => {
-                  const title = t.querySelector('.track-title').value;
-                  const isrc = t.querySelector('.track-isrc').value;
-                  doc.text(`${i+1}. ${title} - ${isrc}`, 20, y);
-                  y += 10;
-              });
-              
+              doc.text("Hoja de Distribución", 10, 10);
               doc.save("Distribucion.pdf");
               document.getElementById('document-modal').style.display = 'none';
           },
-          
           deleteItem: async (id, type) => {
               if(confirm("¿Eliminar?")) {
                   await fetchAPI(`/api/${type}/${id}`, { method: 'DELETE' });
                   renderList(type);
               }
           },
-          
+          addTrackField: () => {
+              const div = document.createElement('div');
+              div.style.marginBottom = '5px';
+              div.innerHTML = `<input type="text" class="track-title" placeholder="Título"><input type="text" class="track-isrc" placeholder="ISRC">`;
+              document.getElementById('dist-tracks-container').appendChild(div);
+          },
           actualizarPosicionFirma: () => {
               const w = document.getElementById('slider-firma-w').value;
               const h = document.getElementById('slider-firma-h').value;
               const x = document.getElementById('slider-firma-offsetX').value;
               const y = document.getElementById('slider-firma-offsetY').value;
-              
               const img = document.getElementById('firma-draggable-preview');
-              img.style.width = w + 'px';
-              img.style.height = h + 'px';
-              img.style.left = (50 + parseInt(x)) + '%';
-              img.style.top = (50 + parseInt(y)) + '%';
+              img.style.width = w + 'px'; img.style.height = h + 'px';
+              img.style.left = (50 + parseInt(x)) + '%'; img.style.top = (50 + parseInt(y)) + '%';
           },
-          
-          guardarAjustesFirma: () => Toastify({text:"Configuración guardada"}).showToast(),
-          
-          openDeliveryModal: (id, artist, proj) => {
+          guardarAjustesFirma: () => showToast("Configuración guardada", 'success'),
+          openDeliveryModal: (id) => {
               document.getElementById('delivery-project-id').value = id;
               document.getElementById('delivery-modal').style.display = 'flex';
           },
           saveDeliveryLink: () => {
-              Toastify({text:"Enlace guardado"}).showToast();
+              showToast("Enlace guardado", 'success');
               document.getElementById('delivery-modal').style.display = 'none';
           },
           sendDeliveryByWhatsapp: () => {
-              window.open(`https://wa.me/?text=Hola, tu proyecto está listo: ${document.getElementById('delivery-link-input').value}`);
+              window.open(`https://wa.me/?text=Tu proyecto está listo: ${document.getElementById('delivery-link-input').value}`);
           },
           calcularSaldo: () => {
-              // Basic calculation
               const total = parseFloat(document.getElementById('modal-project-id').dataset.total || 0);
               const init = parseFloat(document.getElementById('contrato-pago-inicial').value || 0);
               document.getElementById('contrato-pago-final').value = total - init;
           }
       };
 
-      // --- INIT LOGIC ---
+      /* --- EVENT LISTENERS & INIT --- */
       document.getElementById('btnAgregarAProyecto').addEventListener('click', () => {
           const sel = document.getElementById('proyectoServicio');
           if(!sel.value) return;
@@ -1081,10 +1030,8 @@
               unidades: document.getElementById('proyectoUnidades').value
           };
           proyectoActual[item.id] = item;
-          // Render list
           const l = document.getElementById('listaProyectoActual');
           l.innerHTML += `<li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">${item.unidades}x ${item.nombre} <span>$${(item.precioUnitario*item.unidades).toFixed(2)}</span></li>`;
-          // Calc total
           const total = Object.values(proyectoActual).reduce((a,b) => a + (b.precioUnitario * b.unidades), 0);
           document.getElementById('totalAPagar').innerText = `$${total.toFixed(2)}`;
       });
@@ -1100,14 +1047,13 @@
               estatus: 'Pendiente'
           };
           await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-          Toastify({text: "Proyecto Agendado", backgroundColor: "var(--success-main)"}).showToast();
+          showToast("Proyecto Agendado", 'success');
           document.getElementById('formProyecto').reset();
           document.getElementById('listaProyectoActual').innerHTML = '';
           document.getElementById('totalAPagar').innerText = '$0.00';
           app.nav('flujo-trabajo');
       });
 
-      // UI Listeners
       document.getElementById('hamburger-menu').addEventListener('click', () => {
           document.querySelector('.sidebar').classList.add('visible');
           document.getElementById('sidebar-overlay').classList.add('visible');
@@ -1129,62 +1075,79 @@
           }
       });
       
-      // Init Pickers
       flatpickr("#fechaProyecto", { locale: 'es', enableTime: true });
       flatpickr("#manualFechaProyecto", { locale: 'es' });
       flatpickr("#dist-fecha", { locale: 'es' });
 
-      // Init App
       async function initializeApp(force = false) {
-          if(localStorage.getItem('token')) {
-              document.getElementById('login-container').style.display = 'none';
-              document.getElementById('app-wrapper').style.display = 'flex';
-              document.body.style.visibility = 'visible';
-              
-              // Load data immediately
-              await Promise.all([
-                  fetchAPI('/api/artistas'),
-                  fetchAPI('/api/servicios'),
-                  fetchAPI('/api/proyectos')
-              ]);
-              app.nav('dashboard');
-              
-              // Render Chart
-              const ctx = document.getElementById('incomeChart').getContext('2d');
-              new Chart(ctx, {
-                  type: 'line',
-                  data: {
-                      labels: ['Ene','Feb','Mar','Abr','May'],
-                      datasets: [{
-                          label: 'Ingresos',
-                          data: [5000, 10000, 7500, 12000, 15000],
-                          borderColor: '#6366f1',
-                          backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                          fill: true
-                      }]
-                  },
-                  options: { responsive: true, maintainAspectRatio: false }
-              });
-              
-              OfflineManager.updateUI();
-          } else {
+          try {
+              if(localStorage.getItem('token')) {
+                  document.getElementById('login-container').style.display = 'none';
+                  document.getElementById('app-wrapper').style.display = 'flex';
+                  await loadPublicLogo();
+                  await Promise.all([
+                      fetchAPI('/api/artistas'),
+                      fetchAPI('/api/servicios'),
+                      fetchAPI('/api/proyectos')
+                  ]);
+                  const payload = JSON.parse(atob(localStorage.getItem('token').split('.')[1]));
+                  document.getElementById('welcome-user').textContent = `Hola, ${payload.username}`;
+                  app.nav('dashboard');
+                  const ctx = document.getElementById('incomeChart').getContext('2d');
+                  if(chartInstance) chartInstance.destroy();
+                  chartInstance = new Chart(ctx, {
+                      type: 'line',
+                      data: {
+                          labels: ['Ene','Feb','Mar','Abr','May'],
+                          datasets: [{
+                              label: 'Ingresos',
+                              data: [0, 0, 0, 0, 0], // Reemplazar con datos reales
+                              borderColor: '#6366f1',
+                              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                              fill: true
+                          }]
+                      },
+                      options: { responsive: true, maintainAspectRatio: false }
+                  });
+                  OfflineManager.updateUI();
+              } else {
+                  document.getElementById('login-container').style.display = 'flex';
+              }
+          } catch(e) {
+              console.error("Init failed", e);
               document.getElementById('login-container').style.display = 'flex';
+          } finally {
               document.body.style.visibility = 'visible';
           }
       }
       
-      // Fake Login Logic
-      document.getElementById('login-form').addEventListener('submit', e => {
+      document.getElementById('login-form').addEventListener('submit', async e => {
           e.preventDefault();
-          localStorage.setItem('token', 'fake-jwt-token');
-          initializeApp();
+          showLoader();
+          try {
+              const u = document.getElementById('username').value;
+              const p = document.getElementById('password').value;
+              const res = await fetch(`${API_URL}/auth/login`, {
+                  method: 'POST', headers: {'Content-Type':'application/json'},
+                  body: JSON.stringify({username: u, password: p})
+              });
+              const data = await res.json();
+              if(res.ok) {
+                  localStorage.setItem('token', data.token);
+                  initializeApp();
+              } else {
+                  document.getElementById('login-error').textContent = data.error || 'Error de login';
+              }
+          } catch(err) {
+              document.getElementById('login-error').textContent = 'Error de conexión';
+          } finally { hideLoader(); }
       });
+
       document.getElementById('logout-button').addEventListener('click', () => {
           localStorage.removeItem('token');
           location.reload();
       });
 
-      // Network Listeners
       window.addEventListener('online', OfflineManager.updateUI);
       window.addEventListener('offline', OfflineManager.updateUI);
 
