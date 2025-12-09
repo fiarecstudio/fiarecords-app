@@ -18,40 +18,27 @@
   <style>
     body { visibility: hidden; }
     :root {
-      /* Colores Base Premium */
       --primary-color: #6366f1; 
       --primary-hover: #4f46e5;
       --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-      
       --danger-color: #ef4444; 
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      
       --success-color: #10b981;
       --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      
       --warning-color: #f59e0b;
-      
-      /* Fondos y Estructura */
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
-      
-      /* Texto */
       --text-color-dark: #111827;
       --text-color-light: #6b7280;
-      
-      /* Bordes y Sombras */
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
       --secondary-button-hover-bg: #e5e7eb;
-
-      /* Procesos */
       --proceso-Agendado: #3b82f6; --proceso-Grabacion: #8b5cf6; --proceso-Edicion: #ec4899; --proceso-Mezcla: #f59e0b; --proceso-Mastering: #10b981; --proceso-Completo: #64748b;
     }
 
@@ -59,35 +46,22 @@
       --background-color: #0f172a; 
       --card-background: #1e293b; 
       --sidebar-background: #1e293b;
-      
       --text-color-dark: #f1f5f9; 
       --text-color-light: #94a3b8;
-      
       --border-color: #334155; 
       --form-control-bg: #0f172a;
-      
       --secondary-button-bg: #334155; 
       --secondary-button-text: #f1f5f9; 
       --secondary-button-hover-bg: #475569;
-      
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-      
       --fc-button-bg-color: var(--secondary-button-bg); --fc-button-text-color: var(--secondary-button-text);
       --fc-button-border-color: var(--border-color); --fc-button-hover-bg-color: var(--secondary-button-hover-bg);
       --fc-button-active-bg-color: var(--primary-color); --fc-today-bg-color: rgba(255, 255, 255, 0.05);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
-    
-    body { 
-        font-family: 'Poppins', sans-serif; 
-        background-color: var(--background-color); 
-        color: var(--text-color-dark); 
-        line-height: 1.6;
-        overflow-x: hidden; 
-    }
-
+    body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -100,15 +74,14 @@
     .spinner { width: 45px; height: 45px; border: 4px solid rgba(255,255,255,0.3); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s ease infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* OFFLINE STATUS - Aseguramos visibilidad */
-    .connection-status { padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.3s; }
-    .status-online { background-color: rgba(34, 197, 94, 0.1); color: var(--success-color); border: 1px solid var(--success-color); }
-    .status-offline { background-color: rgba(239, 68, 68, 0.2) !important; color: var(--danger-color) !important; border: 1px solid var(--danger-color) !important; }
-    .status-syncing { background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); border: 1px solid var(--warning-color); }
+    /* OFFLINE STATUS - CORREGIDO PARA QUE SE VEA ROJO */
+    .connection-status { padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.3s; border: 1px solid transparent; }
+    .status-online { background-color: rgba(34, 197, 94, 0.1); color: var(--success-color); border-color: var(--success-color); }
+    .status-offline { background-color: rgba(239, 68, 68, 0.2) !important; color: var(--danger-color) !important; border-color: var(--danger-color) !important; }
+    .status-syncing { background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); border-color: var(--warning-color); }
     .status-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background-color: currentColor; }
 
     .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; overflow-x: hidden; }
-    
     .main-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background-color: var(--card-background); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
     .search-box { position: relative; margin: 0 1rem; flex: 1; max-width: 450px; }
     .search-box input { width: 100%; padding: 0.6rem 1.2rem; border-radius: 50px; border: 1px solid var(--border-color); background: var(--form-control-bg); color: var(--text-color-dark); margin-bottom: 0; transition: all 0.3s ease; }
@@ -116,7 +89,6 @@
 
     main { padding: 1.5rem; flex: 1; width: 100%; max-width: 100%; box-sizing: border-box; }
     @media (min-width: 768px) { main { padding: 2rem; } }
-    
     section { display: none; animation: fadeIn 0.3s ease; }
     section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -159,7 +131,6 @@
     
     .card { background-color: var(--card-background); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow); border: 1px solid var(--border-color); }
     .card-header h2 { font-size: 1.25rem; font-weight: 700; color: var(--text-color-dark); margin-bottom: 0.5rem; }
-    
     form label { display: block; margin-bottom: 0.4rem; font-weight: 500; font-size: 0.9rem; color: var(--text-color-light); }
     form input, form select, form textarea { width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1rem; background-color: var(--form-control-bg); color: var(--text-color-dark); transition: border 0.3s; }
     form input:focus, form select:focus, form textarea:focus { outline: none; border-color: var(--primary-color); }
@@ -174,12 +145,10 @@
     .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
     .btn-secondary:hover { background-color: var(--secondary-button-hover-bg); border-color: var(--text-color-light); }
     .btn-restaurar, .btn-aprobar { background: var(--success-gradient); color: white; }
-    
     .table-actions { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start; flex-wrap: nowrap; }
     .table-actions button, .list-item-actions button { padding: 0.5rem 0.8rem; width: auto; min-width: 36px; height: 36px; font-size: 0.85rem; margin: 0; white-space: nowrap; }
 
     .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
-    
     .table-responsive { width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; border-spacing: 0; margin-top: 1rem; }
     th { padding: 1rem; text-align: left; color: var(--text-color-light); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--border-color); white-space: nowrap; }
@@ -217,7 +186,6 @@
 
     .clickable-artist { cursor: pointer; font-weight: 600; color: var(--primary-color); }
     .clickable-artist:hover { text-decoration: underline; }
-
     #login-container { max-width: 400px; margin: 10vh auto; padding: 2.5rem; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-radius: 10px; margin-bottom: 0.8rem; background-color: var(--card-background); border: 1px solid var(--border-color); }
     .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem; }
@@ -227,20 +195,16 @@
     .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .4s; }
     input:checked + .slider { background-color: var(--primary-color); }
     input:checked + .slider:before { transform: translateX(22px); }
-    
     .form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .form-group { flex: 1; min-width: 200px; }
     .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
     #totalAPagar { font-size: 1.4rem; font-weight: 700; color: var(--primary-color); }
-    
     .kpi-card { text-align: center; border-bottom: 4px solid var(--primary-color); }
     .kpi-value { font-size: 2.2rem; font-weight: 700; color: var(--text-color-dark); }
     .kpi-label { font-size: 0.9rem; color: var(--text-color-light); text-transform: uppercase; letter-spacing: 0.5px; }
-    
     .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; align-items: start; }
     .kanban-column { background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; display: none; animation: fadeIn 0.5s; border: 1px solid var(--border-color); }
     .kanban-column h3 { text-align: center; margin: 0; padding: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1rem; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; color: var(--text-color-light); }
-    
     .project-card { background: var(--card-background); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: var(--shadow-sm); border-left: 5px solid; transition: transform 0.2s, box-shadow 0.2s; }
     .project-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
     .project-card-header { font-weight: 600; font-size: 1.05em; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
@@ -254,7 +218,7 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* CALENDARIO */
+    /* CALENDARIO - CORRECCIONES OFFLINE, MOBILE Y HOVER */
     #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; min-height: 550px; padding: 0.5rem; }
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
     .fc .fc-toolbar-title { font-size: 1.25em; color: var(--primary-color); }
@@ -262,20 +226,30 @@
     
     /* CORRECCIÓN HOVER CALENDARIO MODO OSCURO */
     .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); }
-    body.dark-mode .fc .fc-button:hover { background-color: var(--primary-color); color: #fff; } /* Fix para que no se ponga blanco */
+    body.dark-mode .fc .fc-button:hover { background-color: var(--primary-color); color: #fff; }
+    
+    /* CORRECCION: LISTA BLANCA AL PASAR CURSOR EN MODO OSCURO */
+    body.dark-mode .fc-list-event:hover td {
+        background-color: var(--secondary-button-hover-bg);
+        color: var(--text-color-dark); /* Forzar color de texto visible */
+    }
     
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
     .fc-daygrid-day-number { color: var(--text-color-light); font-weight: 500; }
     
     @media (max-width: 768px) {
-        /* CORRECCIÓN CALENDARIO MOCHADO Y PEGADO EN MÓVIL */
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 1rem !important; }
         .fc .fc-toolbar-chunk { display: flex; justify-content: center; align-items: center; }
         .fc .fc-toolbar-title { font-size: 1.1em; width: 100%; text-align: center; order: -1; margin-bottom: 0.5rem; }
         .fc .fc-button { padding: 0.3rem 0.6rem; font-size: 0.8em; }
-        .fc-view-harness { min-height: 400px; overflow-x: auto; /* Permite scroll horizontal */ }
+        .fc-view-harness { min-height: 400px; overflow-x: auto; }
         
-        /* Forza un ancho mínimo a la tabla de días en la vista de semana para que no se vea aplastado */
+        /* CORRECCIÓN CALENDARIO MOCHADO EN MES (CELULAR) */
+        .fc-daygrid-day-frame {
+            min-height: 85px !important; /* Fuerza altura mínima a cada día */
+        }
+        
+        /* Ancho mínimo para que la semana no se vea aplastada */
         .fc-timegrid-body { min-width: 600px; } 
         .fc-scrollgrid-sync-table { min-width: 600px; }
         .fc-col-header-table { min-width: 600px; }
@@ -287,7 +261,6 @@
     .modal-close { font-size: 1.8rem; cursor: pointer; background: none; border: none; color: var(--text-color-light); line-height: 1; padding: 0; }
     .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; }
     .form-actions button { flex: 1; }
-
     .alignment-group { margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--secondary-button-bg); }
     .alignment-group legend { font-weight: 600; padding: 0 0.5rem; color: var(--primary-color); }
     .alignment-group div { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 0.5rem; }
@@ -590,7 +563,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       let isInitialized = false; 
       let proyectoActual = {}; 
-      // Cache local para modo offline "inteligente"
       let localCache = {
           artistas: [],
           servicios: [],
@@ -606,14 +578,13 @@
       
       const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
-      // UTILS
       function showToast(message, type = 'success') { const options = { text: message, duration: 3000, gravity: "top", position: "right", className: `toast-${type}` }; Toastify(options).showToast(); }
       function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({'&': '&amp;','<': '&lt;','>': '&gt;',"'": '&#39;','"': '&quot;'}[tag])); }
       function showLoader() { document.getElementById('loader-overlay').style.display = 'flex'; }
       function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
       async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
 
-      // OFFLINE MANAGER SMART
+      // OFFLINE MANAGER FIXED
       const OfflineManager = {
           QUEUE_KEY: 'fia_offline_queue',
           getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -635,7 +606,7 @@
                   if (queue.length > 0) {
                       DOMElements.connectionStatus.className = 'connection-status status-syncing';
                       DOMElements.connectionText.textContent = `Sincronizando (${queue.length})`;
-                      OfflineManager.sync(); // Auto sync
+                      OfflineManager.sync(); 
                   } else {
                       DOMElements.connectionStatus.className = 'connection-status status-online';
                       DOMElements.connectionText.textContent = 'En Línea';
@@ -651,18 +622,14 @@
               
               const token = localStorage.getItem('token');
               const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-              let mapping = {}; // Map temp IDs to real IDs
+              let mapping = {};
               
-              // Process queue sequentially
               let newQueue = [];
-              let successCount = 0;
-
+              
               for (const req of queue) {
                   try {
-                      // ID Replacement logic for dependencies
                       let bodyStr = req.options.body;
                       if(bodyStr) {
-                          // Replace all known temp IDs with real IDs
                           Object.keys(mapping).forEach(tempId => {
                               bodyStr = bodyStr.replace(new RegExp(tempId, 'g'), mapping[tempId]);
                           });
@@ -674,15 +641,13 @@
                       if(res.ok && req.tempId) {
                           const data = await res.json();
                           if(data._id) {
-                              mapping[req.tempId] = data._id; // Store mapping
+                              mapping[req.tempId] = data._id;
                           }
                       }
                       
                       if(!res.ok) throw new Error('Failed');
-                      successCount++;
                   } catch (e) {
                       console.error("Fallo al sincronizar:", req.url);
-                      // Keep in queue if failed (unless it's a permanent error, simplified here)
                       newQueue.push(req);
                   }
               }
@@ -696,8 +661,6 @@
               }
               
               OfflineManager.updateIndicator();
-              
-              // Reload current view to get fresh data from server
               const currentHash = location.hash.replace('#', '');
               if (currentHash) window.app.mostrarSeccion(currentHash, false);
           },
@@ -706,9 +669,78 @@
           }
       };
 
-      window.app = { syncNow: OfflineManager.syncNow }; // Expose sync
+      window.app = { syncNow: OfflineManager.syncNow };
 
-      // SEARCH
+      // FETCH API MODIFICADA PARA QUE NO SE CUELGUE EN OFFLINE
+      async function fetchAPI(url, options = {}) { 
+        const token = localStorage.getItem('token'); 
+        if (!token) { showLogin(); throw new Error('No autenticado'); } 
+        const headers = { 'Authorization': `Bearer ${token}` }; 
+        if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
+        
+        // 1. INTENTO DE LECTURA (GET) EN CACHÉ SI NO HAY RED
+        if ((!options.method || options.method === 'GET') && !navigator.onLine) {
+             if(url.includes('/artistas')) return localCache.artistas;
+             if(url.includes('/servicios')) return localCache.servicios;
+             if(url.includes('/proyectos')) return localCache.proyectos;
+        }
+
+        // 2. INTENTO DE ESCRITURA (POST/PUT/DELETE) EN OFFLINE
+        if (!navigator.onLine && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+            const tempId = `temp_${Date.now()}`;
+            let mockResponse = { ok: true, offline: true, _id: tempId };
+            let body = {};
+            if (options.body) body = JSON.parse(options.body);
+
+            // Actualización optimista
+            if (url.includes('/artistas')) {
+                const newArtist = { ...body, _id: tempId };
+                localCache.artistas.push(newArtist);
+                mockResponse = { ...newArtist, offline: true };
+            } 
+            else if (url.includes('/servicios')) {
+                const newService = { ...body, _id: tempId };
+                localCache.servicios.push(newService);
+                mockResponse = { ...newService, offline: true };
+            }
+            
+            OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
+            return mockResponse;
+        }
+
+        // 3. PETICIÓN REAL
+        showLoader();
+        try {
+            const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
+            if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); } 
+            if (res.status === 204 || (options.method === 'DELETE' && res.ok)) return {ok: true}; 
+            const data = await res.json(); 
+            if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
+            
+            // Actualizar caché si es GET exitoso
+            if (!options.method || options.method === 'GET') {
+                if(url.includes('/artistas')) localCache.artistas = data;
+                if(url.includes('/servicios')) localCache.servicios = data;
+                if(url.includes('/proyectos')) localCache.proyectos = data;
+            }
+
+            return data; 
+        } catch(e) {
+            // 4. MANEJO DE ERROR DE RED (FALLBACK A OFFLINE SI FALLA FETCH AUNQUE NAVIGATOR DIGA ONLINE)
+            if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+                OfflineManager.updateIndicator(); // Forzar update visual
+                if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+                     const tempId = `temp_${Date.now()}`;
+                     OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
+                     return { ok: true, offline: true, _id: tempId };
+                }
+            }
+            throw e;
+        } finally {
+            hideLoader(); // SIEMPRE OCULTAR LOADER
+        }
+      }
+
       function filtrarTablas(query) {
           query = query.toLowerCase();
           document.querySelectorAll('section.active tbody tr').forEach(row => { const text = row.innerText.toLowerCase(); row.style.display = text.includes(query) ? '' : 'none'; });
@@ -752,7 +784,7 @@
 
       async function showApp(payload) { 
         if (!configCache) await loadInitialConfig();
-        DOMElements.welcomeUser.textContent = `Bienvenido, ${escapeHTML(payload.username)}`; 
+        DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
         const esAdmin = payload.role === 'admin'; 
         document.querySelector('[data-seccion="gestion-usuarios"]').style.display = esAdmin ? 'flex' : 'none'; 
         document.querySelector('[data-seccion="papelera-reciclaje"]').style.display = esAdmin ? 'flex' : 'none'; 
@@ -762,7 +794,6 @@
         DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; } 
         
-        // Routing support
         const hashSection = location.hash.replace('#', '');
         mostrarSeccion(hashSection || 'dashboard', false);
         
@@ -793,76 +824,6 @@
       
       DOMElements.logoutButton.addEventListener('click', showLogin);
       
-      // SMART FETCH API WITH CACHING
-      async function fetchAPI(url, options = {}) { 
-        const token = localStorage.getItem('token'); 
-        if (!token) { showLogin(); throw new Error('No autenticado'); } 
-        const headers = { 'Authorization': `Bearer ${token}` }; 
-        if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
-        
-        const isOnline = navigator.onLine;
-
-        // --- HANDLE GET (READ) ---
-        if (!options.method || options.method === 'GET') {
-            if (!isOnline) {
-                // Return from Local Cache if offline
-                if(url.includes('/artistas')) return localCache.artistas;
-                if(url.includes('/servicios')) return localCache.servicios;
-                if(url.includes('/proyectos')) return localCache.proyectos; // Simplification
-                // If not in simple cache, try real fetch which might fail
-            }
-        }
-
-        // --- HANDLE POST/PUT/DELETE (WRITE) ---
-        if (!isOnline && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-            // Generate Temp ID
-            const tempId = `temp_${Date.now()}`;
-            let mockResponse = { ok: true, offline: true, _id: tempId };
-
-            // Parse Body
-            let body = {};
-            if (options.body) body = JSON.parse(options.body);
-
-            // Optimistic Update Local Cache
-            if (url.includes('/artistas')) {
-                const newArtist = { ...body, _id: tempId };
-                localCache.artistas.push(newArtist);
-                mockResponse = { ...newArtist, offline: true };
-            } 
-            else if (url.includes('/servicios')) {
-                const newService = { ...body, _id: tempId };
-                localCache.servicios.push(newService);
-                mockResponse = { ...newService, offline: true };
-            }
-            // Queue request
-            OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-            
-            return mockResponse;
-        }
-
-        showLoader();
-        try {
-            const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
-            if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); } 
-            if (res.status === 204 || (options.method === 'DELETE' && res.ok)) return {ok: true}; 
-            const data = await res.json(); 
-            if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
-            
-            // Update Local Cache on success GET
-            if (!options.method || options.method === 'GET') {
-                if(url.includes('/artistas')) localCache.artistas = data;
-                if(url.includes('/servicios')) localCache.servicios = data;
-                if(url.includes('/proyectos')) localCache.proyectos = data;
-            }
-
-            return data; 
-        } catch(e) {
-            throw e;
-        } finally {
-            hideLoader();
-        }
-      }
-
       function mostrarSeccion(id, updateHistory = true) { 
         document.querySelectorAll('section').forEach(sec => sec.classList.remove('active')); 
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active-link')); 
@@ -880,7 +841,6 @@
             }
             if(updateHistory) history.pushState(null, null, `#${id}`);
             
-            // Limpiar buscador al cambiar de sección
             const searchInput = document.getElementById('globalSearch');
             if(searchInput) { searchInput.value = ''; }
 
@@ -928,10 +888,8 @@
           const url = `/api/${type}/${id || ''}`; 
           try { 
               const res = await fetchAPI(url, { method, body: JSON.stringify(body) }); 
-              // Silent success for offline
               if (res.offline) { 
-                 // Optimistic update logic already handled in fetchAPI
-                 // Just clean form
+                 showToast('Guardado en cola (Offline). Se sincronizará al conectar.', 'warning');
               } else {
                  showToast(`Elemento ${id ? 'actualizado' : 'guardado'} con éxito.`, 'success'); 
               }
@@ -942,7 +900,6 @@
       async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a la papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       async function editarItem(id, endpoint) { 
           try { 
-              // Try local cache first for editing offline items
               let item;
               if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id);
               else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id);
@@ -1174,8 +1131,8 @@
                     right: isMobile ? 'dayGridMonth,timeGridWeek,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
                 height: isMobile ? 'auto' : 'auto',
-                aspectRatio: isMobile ? 1.2 : 1.8,
-                dayMaxEventRows: isMobile ? 2 : true,
+                aspectRatio: isMobile ? 0.8 : 1.8, // MAS ALTO EN MOVIL
+                dayMaxEventRows: isMobile ? false : true, // Mostrar todos en movil (scroll)
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true, editable: true, events: eventos,
                 dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } },
@@ -1462,7 +1419,6 @@
       function initAppEventListeners(payload) {
         flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
         
-        // Hash navigation support
         window.addEventListener('hashchange', () => {
             const section = location.hash.replace('#', '');
             if (section) mostrarSeccion(section, false);
