@@ -1,227 +1,296 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>FiaRecords Studio - Suite</title>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FiaRecords Studio - Gestión</title>
   
-  <!-- FUENTES Y LIBRERÍAS (Las mismas que funcionan) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-  
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script><script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
   <style>
-    /* --- DISEÑO VISUAL MEJORADO (CSS) --- */
+    body { visibility: hidden; }
     :root {
-      --primary-color: #6366f1; /* Indigo moderno */
-      --primary-hover: #4f46e5;
-      --bg-body: #f3f4f6;
-      --bg-card: #ffffff;
-      --text-main: #1f2937;
-      --text-muted: #6b7280;
-      --border-light: #e5e7eb;
-      --form-bg: #ffffff;
-      
-      --success-bg: #d1fae5; --success-text: #065f46; --success-main: #10b981;
-      --warning-bg: #fef3c7; --warning-text: #92400e; --warning-main: #f59e0b;
-      --danger-bg: #fee2e2; --danger-text: #b91c1c; --danger-main: #ef4444;
-      
-      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-      --radius: 12px;
-      --font-main: 'Inter', sans-serif;
-
-      /* Colores para el Kanban y Etiquetas */
-      --proceso-Agendado: #3b82f6; 
-      --proceso-Grabacion: #8b5cf6; 
-      --proceso-Edicion: #ec4899; 
-      --proceso-Mezcla: #f59e0b; 
-      --proceso-Mastering: #10b981; 
-      --proceso-Completo: #64748b;
+      --primary-color: #4f46e5; --primary-hover: #4338ca; --danger-color: #ef4444; --success-color: #22c55e; --warning-color: #f59e0b;
+      --background-color: #f8fafc; --card-background: #ffffff; --text-color-dark: #1e293b; --text-color-light: #64748b;
+      --border-color: #e2e8f0; --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); --form-control-bg: #ffffff;
+      --secondary-button-bg: #f1f5f9; --secondary-button-text: #1e293b; --secondary-button-hover-bg: #e2e8f0;
+      --proceso-Agendado: #3b82f6; --proceso-Grabacion: #8b5cf6; --proceso-Edicion: #ec4899; --proceso-Mezcla: #f59e0b; --proceso-Mastering: #10b981; --proceso-Completo: #64748b;
     }
-
     body.dark-mode {
-      --bg-body: #0f172a;
-      --bg-card: #1e293b;
-      --text-main: #f9fafb;
-      --text-muted: #94a3b8;
-      --border-light: #334155;
-      --form-bg: #334155;
-      
-      --fc-button-bg-color: #334155;
-      --fc-button-border-color: #475569;
-      --fc-button-text-color: #f8fafc;
-      --fc-button-active-bg-color: var(--primary-color);
-      --fc-page-bg-color: #1e293b;
-      --fc-day-today: rgba(255,255,255,0.05);
+      --background-color: #0f172a; --card-background: #1e293b; --text-color-dark: #f1f5f9; --text-color-light: #94a3b8;
+      --border-color: #334155; --form-control-bg: #334155;
+      --secondary-button-bg: #334155; --secondary-button-text: #f1f5f9; --secondary-button-hover-bg: #475569;
+      --fc-button-bg-color: var(--secondary-button-bg); --fc-button-text-color: var(--secondary-button-text);
+      --fc-button-border-color: var(--border-color); --fc-button-hover-bg-color: var(--secondary-button-hover-bg);
+      --fc-button-active-bg-color: var(--primary-color); --fc-today-bg-color: rgba(255, 255, 255, 0.05);
     }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
-    body { font-family: var(--font-main); background-color: var(--bg-body); color: var(--text-main); font-size: 14px; visibility: hidden; }
-    
-    /* Layout */
-    #app-wrapper { display: flex; height: 100vh; width: 100%; overflow: hidden; }
-    .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow-y: auto; position: relative; scroll-behavior: smooth; }
-    main { padding: 1.5rem; max-width: 1600px; margin: 0 auto; width: 100%; padding-bottom: 80px; }
-
-    /* Sidebar */
-    .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; z-index: 50; transition: transform 0.3s ease; flex-shrink: 0; }
-    .sidebar-header { margin-bottom: 1.5rem; display: flex; justify-content: center; }
-    #app-logo, #login-logo { max-width: 160px; max-height: 80px; object-fit: contain; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); }
+    #app-logo, #login-logo { max-width: 180px; max-height: 80px; object-fit: contain; }
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
     
-    .nav-link { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: var(--radius); color: var(--text-muted); text-decoration: none; font-weight: 500; transition: all 0.2s; cursor: pointer; margin-bottom: 4px; }
-    .nav-link:hover { background-color: rgba(99, 102, 241, 0.08); color: var(--primary-color); }
-    .nav-link.active-link { background-color: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
-    
-    .nav-group summary { padding: 12px 16px; font-weight: 600; color: var(--text-main); cursor: pointer; list-style: none; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; margin-top: 1rem; }
-    .nav-group ul { padding-left: 0; list-style: none; }
-
-    #btn-nuevo-proyecto-sidebar { background: linear-gradient(135deg, var(--primary-color), #4338ca); color: white; text-align: center; padding: 12px; border-radius: var(--radius); font-weight: 600; cursor: pointer; box-shadow: var(--shadow-md); margin-bottom: 1.5rem; transition: transform 0.2s; }
-    #btn-nuevo-proyecto-sidebar:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-
-    /* Header */
-    .main-header { background: var(--bg-card); border-bottom: 1px solid var(--border-light); padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; box-shadow: var(--shadow-sm); gap: 1rem; }
-    .header-left { display: flex; align-items: center; gap: 1rem; flex: 1; }
-    #hamburger-menu { display: none; background: none; border: none; cursor: pointer; color: var(--text-main); }
-    
-    .connection-status { padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
-    .status-online { background-color: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-bg); }
-    .status-offline { background-color: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-bg); }
-    .status-syncing { background-color: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-bg); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
-    .search-container { flex: 1; max-width: 400px; position: relative; }
-    .search-input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 24px; border: 1px solid var(--border-light); background: var(--bg-body); color: var(--text-main); font-size: 0.9rem; transition: all 0.2s; margin-bottom: 0; }
-    .search-input:focus { border-color: var(--primary-color); outline: none; background: var(--bg-card); }
-    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
-
-    /* Mobile */
-    @media (max-width: 768px) {
-        #app-wrapper { display: block; }
-        .sidebar { position: fixed; inset: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
-        .sidebar.sidebar-visible { transform: translateX(0); }
-        #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; display: none; backdrop-filter: blur(2px); }
-        #sidebar-overlay.overlay-visible { display: block; }
-        
-        .main-header { flex-wrap: wrap; padding: 0.8rem 1rem; gap: 0.8rem; }
-        .header-left { min-width: 100%; justify-content: space-between; order: 1; }
-        #hamburger-menu { display: block; }
-        .search-container { order: 3; min-width: 100%; margin-top: 5px; }
-        .header-actions { order: 2; }
-        #welcome-user { display: none; }
-        main { padding: 1rem; padding-bottom: 120px; }
-        .grid-container { grid-template-columns: 1fr !important; }
-        
-        /* Ajuste de tablas móvil */
-        .table-responsive td { display: flex; justify-content: space-between; text-align: right; padding-left: 0 !important; }
-        .table-responsive td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 10px; color: var(--text-muted); }
-    }
-
-    /* Cards & UI */
-    .card { background: var(--bg-card); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); }
-    .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-main); border-bottom: 1px solid var(--border-light); padding-bottom: 0.75rem; }
-    .card h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main); }
-    
-    .kpi-card { text-align: center; padding: 2rem; border-left: 4px solid var(--primary-color); }
-    .kpi-value { font-size: 2.2rem; font-weight: 800; color: var(--text-main); }
-    .kpi-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-top: 0.5rem; }
-
-    .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-    .form-group { flex: 1; min-width: 200px; }
-    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--form-bg); color: var(--text-main); margin-bottom: 0.5rem; font-family: inherit; font-size: 0.9rem; }
-    label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
-
-    button { padding: 10px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; }
-    button[type="submit"], .btn-primary { background: var(--primary-color); color: white; }
-    .btn-secondary { background: transparent; color: var(--text-main); border: 1px solid var(--border-light); }
-    .btn-danger, .btn-eliminar, .btn-vaciar { background: var(--danger-bg); color: var(--danger-text) !important; }
-    .btn-success, .btn-aprobar, .btn-restaurar { background: var(--success-bg); color: var(--success-text); }
-    .btn-icon { padding: 6px; width: 32px; height: 32px; border-radius: 50%; }
-
-    .table-responsive { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-light); }
-    table { width: 100%; border-collapse: collapse; min-width: 600px; }
-    th { background: var(--bg-body); text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; }
-    td { padding: 12px 16px; border-top: 1px solid var(--border-light); color: var(--text-main); vertical-align: middle; }
-    
-    @media (max-width: 768px) {
-        .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive tr, .table-responsive td { display: block; }
-        .table-responsive thead { display: none; }
-        .table-responsive tr { margin-bottom: 1rem; border: 1px solid var(--border-light); border-radius: 8px; padding: 1rem; background: var(--bg-card); }
-        .table-responsive td { padding: 8px 0; border: none; border-bottom: 1px dashed var(--border-light); }
-        .table-responsive td:last-child { border-bottom: none; }
-    }
-
-    /* Kanban Fixed for Dark Mode */
-    .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding-bottom: 1rem; }
-    .kanban-column { background: var(--bg-body); border-radius: var(--radius); padding: 1rem; min-height: 150px; }
-    .kanban-column h3 { font-size: 1rem; text-align: center; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase; }
-    .project-card { 
-        background: var(--bg-card); 
-        color: var(--text-main); 
-        padding: 1rem; 
-        border-radius: 8px; 
-        margin-bottom: 0.8rem; 
-        box-shadow: var(--shadow-sm); 
-        border-left: 4px solid var(--primary-color); 
-        cursor: pointer; 
-        position: relative; 
-    }
-    .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--text-muted); }
-    .proceso-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; color: white; margin-top: 5px; }
-
-    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-light); }
-
-    section { display: none; }
-    section.active { display: block; animation: fadeIn 0.3s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
-    #loader-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); z-index: 2000; display: none; place-items: center; }
-    body.dark-mode #loader-overlay { background: rgba(15,23,42,0.7); }
-    .spinner { width: 48px; height: 48px; border: 4px solid var(--border-light); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    /* Loader Spinner */
+    #loader-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+    body.dark-mode #loader-overlay { background: rgba(15, 23, 42, 0.8); }
+    .spinner { width: 40px; height: 40px; border: 4px solid var(--primary-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Firma */
-    .alignment-group { margin-bottom: 1rem; padding: 0.5rem; border: 1px solid var(--border-light); border-radius: 8px; }
-    .alignment-group div { display: flex; justify-content: space-around; }
-    #firma-preview-container { position: relative; width: 100%; aspect-ratio: 210/297; border: 2px dashed var(--border-light); overflow: hidden; background: white; margin-top: 1rem; }
-    #firma-draggable-preview { position: absolute; border: 1px solid rgba(0,0,0,0.2); }
-    .doc-template { display: none; }
+    /* Offline Indicator */
+    .connection-status {
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .status-online { background-color: rgba(34, 197, 94, 0.15); color: var(--success-color); border: 1px solid var(--success-color); }
+    .status-offline { background-color: rgba(239, 68, 68, 0.15); color: var(--danger-color); border: 1px solid var(--danger-color); }
+    .status-indicator-dot { width: 8px; height: 8px; border-radius: 50%; background-color: currentColor; }
+    .status-syncing { background-color: rgba(245, 158, 11, 0.15); color: var(--warning-color); border: 1px solid var(--warning-color); }
+
+    .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
+    .main-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; background-color: var(--card-background); border-bottom: 1px solid var(--border-color); flex-shrink: 0; position: sticky; top: 0; z-index: 100; }
     
-    /* Utility */
-    .filter-buttons button.active { background: var(--primary-color); color: white; }
+    /* Search Box */
+    .search-box { position: relative; margin: 0 1rem; flex: 1; max-width: 400px; }
+    .search-box input { width: 100%; padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--border-color); background: var(--form-control-bg); color: var(--text-color-dark); margin-bottom: 0; }
+    .search-box input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2); }
+
+    main { padding: 1rem; flex: 1; }
+    @media (min-width: 768px) { main { padding: 2rem; } }
+    section { display: none; animation: fadeIn 0.3s ease; }
+    section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .sidebar { width: 260px; background-color: var(--card-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; height: 100dvh; }
+    .sidebar-header { text-align: center; margin-bottom: 1rem; flex-shrink: 0; }
+    #app-logo { cursor: pointer; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto; padding-right: 5px; }
+    .sidebar-footer { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 1rem; background-color: var(--card-background); }
+    #btn-nuevo-proyecto-sidebar { background-color: var(--primary-color); color: white; text-align: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; flex-shrink: 0; }
+    #btn-nuevo-proyecto-sidebar:hover { background-color: var(--primary-hover); }
+    .nav-group summary { list-style: none; padding: 0.75rem 1rem; font-weight: 700; color: var(--text-color-dark); cursor: pointer; position: relative; }
+    .nav-group summary::before { content: '►'; position: absolute; left: 0; font-size: 0.6em; transition: transform 0.2s; }
+    .nav-group[open] > summary::before { transform: rotate(90deg); }
+    .nav-group ul { list-style: none; padding-left: 1.5rem; }
+    .nav-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; border-radius: 8px; text-decoration: none; color: var(--text-color-light); font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .nav-link:hover { background-color: var(--secondary-button-bg); }
+    .nav-link.active-link { background-color: var(--primary-color); color: white; }
+
+    #hamburger-menu, #btn-enviar-datos-bancarios { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; }
+    #hamburger-menu svg, #btn-enviar-datos-bancarios svg { width: 24px; height: 24px; stroke: var(--text-color-dark); }
+    .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+    #sidebar-overlay { display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 998; }
+
+    @media (max-width: 768px) {
+      #app-wrapper { display: block; }
+      #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
+      .main-header { padding: 0.5rem 1rem; }
+      .search-box { display: none; }
+      .sidebar { position: fixed; left: 0; top: 0; z-index: 999; transform: translateX(-100%); transition: transform 0.3s ease-in-out; width: 85%; max-width: 300px; }
+      .sidebar.sidebar-visible { transform: translateX(0); }
+      #sidebar-overlay.overlay-visible { display: block; }
+      .connection-status span { display: none; } 
+    }
+    @media (min-width: 769px) {
+      #app-wrapper { display: flex; height: 100vh; overflow: hidden; }
+      #hamburger-menu { display: none; }
+      #btn-enviar-datos-bancarios { display: block; }
+    }
+    
+    .card { background-color: var(--card-background); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow); transition: transform 0.2s; }
+    .card-header h2 { font-size: 1.25rem; font-weight: 600; }
+    .card h3 { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; margin-bottom: 1rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+    form label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+    form input, form select, form textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem; background-color: var(--form-control-bg); color: var(--text-color-dark); }
+    .password-wrapper { position: relative; }
+    #toggle-password { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); cursor: pointer; }
+    button { cursor: pointer; border-radius: 8px; border: none; padding: 0.75rem 1.25rem; font-weight: 600; transition: filter 0.2s; }
+    button:hover { filter: brightness(90%); }
+    button[type="submit"] { background-color: var(--primary-color); color: white; }
+    .btn-eliminar, .btn-vaciar { background-color: var(--danger-color); color: white !important; }
+    .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); }
+    .btn-restaurar { background-color: var(--success-color); color: white; }
+    .btn-vaciar { padding: 0.4rem 0.8rem; font-size: 0.8em; }
+    .btn-aprobar { background-color: var(--success-color); color: white; padding: 0.4rem 0.8rem; font-size: 0.9em; white-space: nowrap; }
+    #logout-button { width: 100%; }
+    
+    .list-item-actions button, .table-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem; font-size: 1em; line-height: 1; width: 36px; height: 36px; margin-left: 0.5rem; }
+    .table-actions .btn-aprobar { width: auto; height: auto; padding: 0.4rem 0.8rem; }
+    .project-card-footer button { padding: 0.4rem 0.8rem; font-size: 0.85em; }
+    .btn-quitar-servicio { width: 24px; height: 24px; font-size: 0.8em; line-height: 1; border-radius: 50%; padding: 0; }
+    
+    .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+    
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+    
+    @media (max-width: 768px) {
+        .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive th, .table-responsive td, .table-responsive tr { display: block; }
+        .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
+        .table-responsive tr { margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background-color: var(--card-background); box-shadow: var(--shadow); }
+        .table-responsive td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-top: 0.5rem; padding-bottom: 0.5rem; text-align: right; white-space: normal; }
+        .table-responsive td:last-child { border-bottom: none; padding-top: 1rem; display: flex; justify-content: flex-end; padding-left: 0 !important; }
+        .table-responsive td:before { position: absolute; top: 0.5rem; left: 0.5rem; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); }
+        #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
+        #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
+        #tablaCotizacionesBody td:nth-of-type(3):before { content: "Fecha:"; }
+        #tablaCotizacionesBody td:nth-of-type(4):before { content: ""; display: none; }
+        #tablaPagosBody td:nth-of-type(1):before { content: "Fecha:"; }
+        #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
+        #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
+        #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
+        #tablaPagosBody td:nth-of-type(5):before { content: ""; display: none; }
+        #tablaHistorialBody td:nth-of-type(1):before { content: "Artista:"; }
+        #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
+        #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
+        #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
+        #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
+        #vista-artista-contenido .table-responsive tr { display: flex; flex-direction: column; }
+        #vista-artista-contenido .table-responsive td { padding-left: 0 !important; text-align: left; }
+        #vista-artista-contenido .table-responsive td:before { display: none; } 
+        #vista-artista-contenido .table-responsive td:nth-child(1) { font-weight: bold; color: var(--primary-color); }
+    }
+
+    .clickable-artist { cursor: pointer; text-decoration: underline; color: var(--text-color-dark); }
+    body.dark-mode .clickable-artist { color: var(--text-color-dark); }
+    #login-container { max-width: 400px; margin: 15vh auto; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--border-color); }
+    .table-actions { display: flex; align-items: center; flex-wrap: nowrap; }
+    .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; }
+    .theme-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+    .theme-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 26px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; border-radius: 50%; transition: .4s; }
+    input:checked + .slider { background-color: var(--primary-color); }
+    input:checked + .slider:before { transform: translateX(24px); }
+    .form-row { display: flex; gap: 1rem; }
+    .form-group { flex: 1; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; }
+    #totalAPagar { font-size: 1.3rem; font-weight: 700; }
+    .kpi-card { text-align: center; }
+    .kpi-value { font-size: 2.5rem; font-weight: 700; color: var(--primary-color); }
+    .kpi-label { font-size: 1rem; color: var(--text-color-light); }
+    .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+    .kanban-column { background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; display: none; animation: fadeIn 0.5s; }
+    .kanban-column h3 { text-align: center; margin: 0; padding: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1rem; font-size: 1.1em; }
+    .project-card { background: var(--card-background); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: var(--shadow); border-left: 5px solid; transition: box-shadow 0.2s ease, transform 0.2s; }
+    .project-card:hover { box-shadow: 0 8px 16px -4px rgba(0,0,0,0.2); transform: translateY(-2px); }
+    .project-card-header { font-weight: 600; font-size: 1.1em; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+    .project-card-header-main { display: flex; align-items: center; gap: 0.5rem; }
+    .project-card-body ul { list-style: none; padding-left: 0; margin: 0.5rem 0; font-size: 0.9em; color: var(--text-color-light); }
+    .project-card-footer { border-top: 1px solid var(--border-color); margin-top: 1rem; padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+    .status-badge { padding: 3px 10px; border-radius: 16px; font-size: 0.75em; color: white; }
+    .filter-buttons { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .filter-buttons button { padding: 0.5rem 1rem; font-size: 0.9em; }
+    .filter-buttons button.active { background-color: var(--primary-color); color: white; }
+    .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
+    #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
+    #nuevoArtistaContainer, #manualNuevoArtistaContainer { display: none; }
+    .status-tag { padding: 0.25rem 0.75rem; border-radius: 16px; font-size: 0.8em; font-weight: 600; color: white; text-align: center; display: inline-block; }
+    td select { padding: 0.4rem; margin: 0; font-size: 0.9em; border-radius: 6px; }
+    
+    #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; min-height: 550px; }
+    .fc-event { cursor: pointer; padding: 4px; font-size: 0.85em; }
+    .fc-daygrid-event-dot { display: none; }
+    .fc-event-time { font-weight: bold; }
+    .fc-event-title { white-space: normal; }
+    .fc .fc-daygrid-day-frame { cursor: pointer; }
+    .fc-event-main-frame { display: flex; flex-direction: column; }
+    .proceso-tag-event { font-size: 0.75em; padding: 2px 6px; border-radius: 10px; color: white; align-self: flex-start; margin-top: 4px; }
+    .fc .fc-daygrid-day-number { text-decoration: none; color: var(--text-color-light); }
+    .fc .fc-toolbar-title { font-size: 1.25em; }
+    .fc .fc-button { background-color: var(--fc-button-bg-color, var(--secondary-button-bg)); color: var(--fc-button-text-color, var(--secondary-button-text)); border-color: var(--fc-button-border-color, var(--border-color)); }
+    .fc .fc-button:hover { background-color: var(--fc-button-hover-bg-color, var(--secondary-button-hover-bg)); }
+    .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--fc-button-active-bg-color, var(--primary-color)); }
+    .fc .fc-day-today { background-color: var(--fc-today-bg-color, rgba(79, 70, 229, 0.05)); }
+    
+    .fc .fc-col-header-cell-cushion { text-decoration: none; color: var(--text-color-light); }
+    body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-dark); }
+    body.dark-mode .fc th { background-color: transparent; }
+
+    body.dark-mode .fc-list-day-cushion { background-color: var(--card-background); }
+    body.dark-mode .fc-list-day-text, body.dark-mode .fc-list-day-side-text, body.dark-mode .fc-list-event-title a { color: var(--text-color-dark) !important; }
+    body.dark-mode .fc-list-table td { border-color: var(--border-color); }
+    body.dark-mode .fc-list-event-time, body.dark-mode .fc .fc-list-empty { color: var(--text-color-light); }
+
+    #agenda .card { padding: 0.5rem; }
+    @media (min-width: 768px) { #agenda .card { padding: 1.5rem; } }
+    
+    @media (max-width: 768px) {
+        .fc .fc-toolbar { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+        .fc .fc-toolbar-title { font-size: 1.1em; order: -1; width: 100%; text-align: center; }
+        .fc .fc-button { padding: 0.4rem 0.6rem; font-size: 0.8em; }
+        .fc-view-harness { min-height: 400px; }
+        .fc-list-event { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; padding: 0.5rem; }
+        .fc-list-event-title { font-weight: 600; font-size: 0.9em; }
+        .fc-list-event-time { font-size: 0.8em; color: var(--text-color-light); }
+    }
+    .fc { max-width: 100%; margin: 0 auto; }
+    
+    .form-actions { display: flex; gap: 1rem; margin-top: 1rem; }
+    .form-actions button { flex: 1; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
+    .modal-content { background: var(--card-background); padding: 2rem; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .modal-header h2 { margin: 0; }
+    .modal-close { font-size: 1.5rem; cursor: pointer; background: none; border: none; color: var(--text-color-dark); }
+    .document-section { display: none; }
+    .document-section.active { display: block; }
+    #dist-tracks-container .form-row { margin-bottom: 0.5rem; }
+    
+    .alignment-group { margin-bottom: 1rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; }
+    .alignment-group legend { font-weight: 600; padding: 0 0.5rem; }
+    .alignment-group div { display: flex; justify-content: space-around; }
+    .alignment-group label { cursor: pointer; }
+    input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: var(--secondary-button-hover-bg); border-radius: 5px; outline: none; margin-top: 0.5rem; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: var(--primary-color); cursor: pointer; border-radius: 50%; }
+    input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: var(--primary-color); cursor: pointer; border-radius: 50%; border: none; }
+    #config-layout { display: flex; flex-wrap: wrap; gap: 2rem; }
+    #config-controls { flex: 1 1 400px; }
+    #config-preview { flex: 1 1 350px; min-width: 350px; }
+    #firma-preview-container { position: relative; width: 100%; aspect-ratio: 210 / 297; max-height: 500px; border: 2px dashed var(--border-color); background-color: var(--background-color); box-shadow: var(--shadow); overflow: hidden; }
+    #firma-draggable-preview { position: absolute; top: 0; left: 0; transform-origin: top left; transition: all 0.1s linear; pointer-events: none; border: 1px solid rgba(0,0,0,0.2); object-fit: contain; }
+    .doc-template { display: none; width: 100%; height: 100%; padding: 20px; font-family: 'Times New Roman', Times, serif; font-size: 8px; color: var(--text-color-light); line-height: 1.4; }
+    .doc-template.template-visible { display: block; }
+    .doc-template h4 { font-size: 12px; text-align: center; margin-bottom: 20px; font-weight: bold; }
+    .doc-template .line { border-top: 0.5px solid var(--text-color-light); margin: 5px 0; }
+    .doc-template .signature-area { position: absolute; bottom: 30px; transform: translateY(0); }
+    .doc-template .signature-line { width: 80px; }
+    #contract-signature-block { position: absolute; bottom: 30px; left: 20px; right: 20px; display: flex; justify-content: space-between; transform: translateY(0); transition: transform 0.1s linear; }
+    .doc-template .signature-line-small { width: 70px; }
+    #template-contrato .signature-area-rep { position: relative; width: 45%; }
+    #template-contrato .signature-area-client { width: 45%; }
+    .doc-template p { margin: 2px 0; }
+    .doc-template ol { padding-left: 15px; margin: 0;}
+    .doc-template li { margin-bottom: 3px; }
+
+    .toastify.toast-success { background: var(--success-color); }
+    .toastify.toast-error { background: var(--danger-color); }
+    .toastify.toast-info { background: var(--primary-color); }
   </style>
 </head>
 <body>
-
-  <!-- LOADER -->
+  <!-- Overlay de carga global -->
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <!-- LOGIN -->
-  <div id="login-container" class="card" style="max-width: 400px; margin: 10vh auto; padding: 2rem;">
-    <div style="text-align: center; margin-bottom: 1.5rem;"><img id="login-logo" src="https://via.placeholder.com/180x80?text=FiaRecords" alt="Logotipo"></div>
-    <form id="login-form">
-      <div style="margin-bottom:1rem;"><label for="username">Usuario</label><input type="text" id="username" required></div>
-      <div style="margin-bottom:1rem;"><label for="password">Contraseña</label><div class="password-wrapper" style="position:relative"><input type="password" id="password" required><span id="toggle-password" style="position:absolute;right:10px;top:10px;cursor:pointer">👁️</span></div></div>
-      <button type="submit" style="width:100%;">Entrar</button>
-      <p id="login-error" style="color: var(--danger-text); text-align: center; margin-top: 1rem;"></p>
-    </form>
-  </div>
+  <div id="login-container" class="card"><div style="text-align: center; margin-bottom: 1.5rem;"><img id="login-logo" src="https://via.placeholder.com/180x80?text=FiaRecords" alt="Logotipo"></div><form id="login-form"><div><label for="username">Usuario</label><input type="text" id="username" required></div><div><label for="password">Contraseña</label><div class="password-wrapper"><input type="password" id="password" required><span id="toggle-password">👁️</span></div></div><button type="submit" style="width:100%;">Entrar</button><p id="login-error" style="color: var(--danger-color); text-align: center; margin-top: 1rem;"></p></form></div>
   
-  <!-- APP WRAPPER -->
-  <div id="app-wrapper" style="display: none;">
+  <div id="app-wrapper">
     <div id="sidebar-overlay"></div>
-
     <nav class="sidebar">
       <div class="sidebar-header"><img id="app-logo" src="https://via.placeholder.com/180x80?text=FiaRecords" alt="Logotipo"></div>
       
@@ -261,43 +330,48 @@
       
       <div class="sidebar-footer">
         <div id="customization-container" style="display: none;">
+          <p style="font-size: 0.8em; text-align: center; margin-bottom: 1rem;">Haz clic en el logo para cambiarlo.</p>
           <input type="file" id="logo-input" accept="image/*" style="display: none;">
         </div>
         <div class="theme-toggle-container">
           <span>Modo Oscuro</span>
-          <label class="theme-switch" style="position:relative; width:40px; height:20px; display:inline-block">
-            <input type="checkbox" id="theme-switch" style="opacity:0;width:0;height:0">
-            <span class="slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:#ccc;transition:.4s;border-radius:20px"></span>
+          <label class="theme-switch">
+            <input type="checkbox" id="theme-switch" />
+            <span class="slider"></span>
           </label>
         </div>
-        <button id="logout-button" class="btn-eliminar" style="width:100%">Cerrar Sesión</button>
+        <button id="logout-button" class="btn-eliminar">Cerrar Sesión</button>
       </div>
     </nav>
 
     <div class="main-content">
         <header class="main-header">
-            <div class="header-left">
-                <button id="hamburger-menu">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-                </button>
-                <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
-                    <div class="dot"></div>
-                    <span id="connection-text">En Línea</span>
-                </div>
-                <div id="welcome-user" style="font-weight: 600; margin-left: 10px;"></div>
+            <button id="hamburger-menu">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+            </button>
+            <div id="welcome-user"></div>
+            
+            <!-- Indicador de estado de conexión -->
+            <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
+                <div class="status-indicator-dot"></div>
+                <span id="connection-text">En Línea</span>
             </div>
 
-            <div class="search-container">
-                <input type="text" class="search-input" id="globalSearch" placeholder="🔍 Buscar en esta sección..." onkeyup="app.filtrarTablas(this.value)">
+            <!-- Buscador Global -->
+            <div class="search-box">
+                <input type="text" id="globalSearch" placeholder="🔍 Buscar en esta sección..." onkeyup="app.filtrarTablas(this.value)">
             </div>
-            
             <div class="header-actions">
-              <button id="btn-enviar-datos-bancarios" title="Enviar Datos Bancarios" class="btn-secondary">🏦</button>
+              <button id="btn-enviar-datos-bancarios" title="Enviar Datos Bancarios">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+              </button>
             </div>
         </header>
-
         <main>
-            <!-- DASHBOARD -->
             <section id="dashboard">
                 <div class="grid-container">
                     <div class="card kpi-card"><div class="kpi-value" id="kpi-ingresos-mes">$0.00</div><div class="kpi-label">Ingresos del Mes</div></div>
@@ -311,42 +385,23 @@
                     </div>
                 </div>
             </section>
-
-            <!-- AGENDA -->
             <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
-
-            <!-- COTIZACIONES -->
             <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
-
-            <!-- FLUJO TRABAJO -->
-            <section id="flujo-trabajo"><div class="card" style="background:transparent; border:none; box-shadow:none;"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
-
-            <!-- PAGOS -->
+            <section id="flujo-trabajo"><div class="card"><div class="card-header"><h2>Flujo de Trabajo</h2></div><div class="filter-buttons" id="filtrosFlujo"></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
             <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
-
-            <!-- REGISTRAR PROYECTO -->
             <section id="registrar-proyecto"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Nuevo Proyecto o Cotización</h2></div><form id="formProyecto" onsubmit="return false;"><label for="proyectoArtista">Artista/Cliente</label><div id="artista-selector-container"><select id="proyectoArtista"><option value="publico_general">Público General</option></select><button type="button" id="btnNuevoArtista" title="Registrar nuevo artista">+</button></div>
-              <div id="nuevoArtistaContainer" style="display:none;"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
-              <div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-light);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul><div style="margin-top: 2rem; border-top: 1px solid var(--border-light); padding-top: 1.5rem;"><div class="info-row"><label>Total:</label><span id="totalAPagar">$0.00</span></div><div class="form-row"><div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div><div class="form-actions"><button id="btnGenerarCotizacion" style="background-color: var(--primary-color); color: white;">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
-
-            <!-- REGISTRO MANUAL -->
-            <section id="registro-manual"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Registro Manual de Proyecto</h2><p style="font-size: 0.9em; color: var(--text-muted);">Usa este formulario para proyectos sin costo, antiguos o que no requieren cotización.</p></div><form id="formProyectoManual" onsubmit="return false;"><label for="manualProyectoArtista">Artista/Cliente</label><div id="manual-artista-selector-container"><select id="manualProyectoArtista" required></select><button type="button" id="manualBtnNuevoArtista" title="Registrar nuevo artista">+</button></div>
-              <div id="manualNuevoArtistaContainer" style="display:none;"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="manualNombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarManualNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
+              <div id="nuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
+              <div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul><div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;"><div class="info-row"><label>Total:</label><span id="totalAPagar">$0.00</span></div><div class="form-row"><div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div><div class="form-actions"><button id="btnGenerarCotizacion" style="background-color: var(--primary-color); color: white;">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
+            <section id="registro-manual"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Registro Manual de Proyecto</h2><p style="font-size: 0.9em; color: var(--text-color-light);">Usa este formulario para proyectos sin costo, antiguos o que no requieren cotización.</p></div><form id="formProyectoManual" onsubmit="return false;"><label for="manualProyectoArtista">Artista/Cliente</label><div id="manual-artista-selector-container"><select id="manualProyectoArtista" required></select><button type="button" id="manualBtnNuevoArtista" title="Registrar nuevo artista">+</button></div>
+              <div id="manualNuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="manualNombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarManualNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <label for="manualNombreProyecto">Nombre del Proyecto</label><input type="text" id="manualNombreProyecto" required /><label for="manualFechaProyecto">Fecha de Inicio</label><input type="text" id="manualFechaProyecto" required /><label for="manualDescripcion">Descripción (Servicios realizados)</label><textarea id="manualDescripcion" rows="3"></textarea><button type="button" onclick="app.guardarProyectoManual()">Guardar Proyecto</button></form></div></section>
-
-            <!-- HISTORIAL -->
             <section id="historial-proyectos"><div class="card"><div class="card-header"><h2>Historial de Proyectos Completados</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
-
-            <!-- VISTA ARTISTA -->
             <section id="vista-artista"><div class="card"><div class="card-header"><h2 id="vista-artista-nombre"></h2></div><div id="vista-artista-contenido"></div></div></section>
-
-            <!-- GESTION -->
             <section id="gestion-servicios"><div class="card"><div class="card-header"><h2>Gestión de Servicios</h2></div><form id="formServicios"><input type="hidden" id="idServicio"><input type="text" id="nombreServicio" placeholder="Nombre" required /><input type="number" step="0.01" id="precioServicio" placeholder="Precio" required /><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormServicios" style="margin-left: 1rem;">Limpiar</button></form><h3 style="margin-top: 2rem;">Servicios Existentes</h3><ul id="listaServicios"></ul></div></section>
             <section id="gestion-artistas"><div class="card"><div class="card-header"><h2>Gestión de Artistas</h2></div><form id="formArtistas"><input type="hidden" id="idArtista"><div class="form-row"><div class="form-group"><label for="nombreArtista">Nombre Real</label><input type="text" id="nombreArtista" required /></div><div class="form-group"><label for="nombreArtisticoArtista">Nombre Artístico</label><input type="text" id="nombreArtisticoArtista" /></div></div><div class="form-row"><div class="form-group"><label for="telefonoArtista">Teléfono</label><input type="tel" id="telefonoArtista" /></div><div class="form-group"><label for="correoArtista">Correo Electrónico</label><input type="email" id="correoArtista" /></div></div><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormArtistas" style="margin-left: 1rem;">Limpiar</button></form><h3 style="margin-top: 2rem;">Artistas Registrados</h3><ul id="listaArtistas"></ul></div></section>
             <section id="gestion-usuarios"><div class="card"><div class="card-header"><h2>Gestión de Usuarios</h2></div><form id="formUsuarios"><input type="hidden" id="idUsuario"><input type="text" id="usernameUsuario" placeholder="Usuario" required /><input type="password" id="passwordUsuario" placeholder="Contraseña (dejar en blanco para no cambiar)" /><select id="roleUsuario" required><option value="">-- Rol --</option><option value="ingeniero">Ingeniero</option><option value="admin">Administrador</option></select><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormUsuarios" style="margin-left: 1rem;">Limpiar</button></form><h3 style="margin-top: 2rem;">Usuarios Existentes</h3><ul id="listaUsuarios"></ul></div></section>
             <section id="papelera-reciclaje"><div class="card"><h3>Servicios Eliminados<button class="btn-vaciar" onclick="app.vaciarPapelera('servicios')">Vaciar</button></h3><ul id="papeleraServicios"></ul><h3>Artistas Eliminados<button class="btn-vaciar" onclick="app.vaciarPapelera('artistas')">Vaciar</button></h3><ul id="papeleraArtistas"></ul><h3>Usuarios Eliminados<button class="btn-vaciar" onclick="app.vaciarPapelera('usuarios')">Vaciar</button></h3><ul id="papeleraUsuarios"></ul></div></section>
             
-            <!-- CONFIGURACION -->
             <section id="configuracion">
               <div class="card">
                 <div class="card-header"><h2>Configuración del Sistema</h2></div>
@@ -354,12 +409,13 @@
                 <div class="form-row" style="align-items: center; gap: 2rem; margin-bottom: 2rem;">
                   <div class="form-group" style="flex: 0 0 150px;">
                     <label>Firma Actual</label>
-                    <img id="firma-preview-img" src="https://via.placeholder.com/150x60?text=Cargando..." alt="Firma" style="width: 150px; height: auto; border: 1px solid var(--border-light); border-radius: 8px;">
+                    <img id="firma-preview-img" src="https://via.placeholder.com/150x60?text=Cargando..." alt="Firma" style="width: 150px; height: auto; border: 1px solid var(--border-color); border-radius: 8px;">
                     <input type="file" id="firma-input" accept="image/png" style="display: none;">
                     <button onclick="document.getElementById('firma-input').click()" class="btn-secondary" style="width: 100%; margin-top: 0.5rem;">Cambiar Imagen</button>
                   </div>
                   <div class="form-group" style="flex: 1;">
                     <p>Usa los presets de alineación y los controles de ajuste fino para posicionar la firma. El sistema evitará que se salga de los márgenes.</p>
+                    <p style="font-size: 0.9em; color: var(--text-color-light);">La imagen se guarda al seleccionarla. Los ajustes de posición se guardan con el botón de abajo.</p>
                   </div>
                 </div>
                 <hr style="margin: 2rem 0;">
@@ -521,20 +577,30 @@
     document.addEventListener('DOMContentLoaded', () => {
       let isInitialized = false; 
       let proyectoActual = {}; 
-      // Local Cache para OFFLINE
-      let localCache = { artistas: [], servicios: [], proyectos: [], pagos: [], cotizaciones: [], usuarios: [] };
+      // Cache local para modo offline "inteligente"
+      let localCache = {
+          artistas: [],
+          servicios: [],
+          proyectos: [],
+          cotizaciones: [],
+          usuarios: [],
+          historial: [],
+          pagos: []
+      };
+      
       let currentCalendar = null; let configCache = null; let chartInstance = null; const API_URL = '';
       const DOMElements = { loginContainer: document.getElementById('login-container'), appWrapper: document.getElementById('app-wrapper'), logoutButton: document.getElementById('logout-button'), welcomeUser: document.getElementById('welcome-user'), appLogo: document.getElementById('app-logo'), loginLogo: document.getElementById('login-logo'), customizationContainer: document.getElementById('customization-container'), logoInput: document.getElementById('logo-input'), connectionStatus: document.getElementById('connection-status'), connectionText: document.getElementById('connection-text') };
       
       const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
+      // UTILS
       function showToast(message, type = 'success') { const options = { text: message, duration: 3000, gravity: "top", position: "right", className: `toast-${type}` }; Toastify(options).showToast(); }
       function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({'&': '&amp;','<': '&lt;','>': '&gt;',"'": '&#39;','"': '&quot;'}[tag])); }
       function showLoader() { document.getElementById('loader-overlay').style.display = 'flex'; }
       function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
       async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
 
-      // --- OFFLINE MANAGER (Lógica de sincronización) ---
+      // OFFLINE MANAGER SMART
       const OfflineManager = {
           QUEUE_KEY: 'fia_offline_queue',
           getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -544,60 +610,90 @@
               localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(queue));
               OfflineManager.updateIndicator();
           },
+          clearQueue: () => {
+            localStorage.removeItem(OfflineManager.QUEUE_KEY);
+            OfflineManager.updateIndicator();
+          },
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
               const isOnline = navigator.onLine;
+              
               if (isOnline) {
                   if (queue.length > 0) {
                       DOMElements.connectionStatus.className = 'connection-status status-syncing';
                       DOMElements.connectionText.textContent = `Sincronizando (${queue.length})`;
-                      OfflineManager.sync(); 
+                      OfflineManager.sync(); // Auto sync
                   } else {
                       DOMElements.connectionStatus.className = 'connection-status status-online';
                       DOMElements.connectionText.textContent = 'En Línea';
                   }
               } else {
                   DOMElements.connectionStatus.className = 'connection-status status-offline';
-                  DOMElements.connectionText.textContent = queue.length > 0 ? `Offline (${queue.length})` : 'Modo Offline';
+                  DOMElements.connectionText.textContent = queue.length > 0 ? `Offline (${queue.length} ptes)` : 'Modo Offline';
               }
           },
           sync: async () => {
               const queue = OfflineManager.getQueue();
               if (queue.length === 0) return;
+              
               const token = localStorage.getItem('token');
               const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-              let mapping = {}; // Temp ID -> Real ID
+              let mapping = {}; // Map temp IDs to real IDs
+              
+              // Process queue sequentially
               let newQueue = [];
+              let successCount = 0;
 
               for (const req of queue) {
                   try {
+                      // ID Replacement logic for dependencies
                       let bodyStr = req.options.body;
                       if(bodyStr) {
+                          // Replace all known temp IDs with real IDs
                           Object.keys(mapping).forEach(tempId => {
                               bodyStr = bodyStr.replace(new RegExp(tempId, 'g'), mapping[tempId]);
                           });
                       }
+
                       const reqOptions = { ...req.options, body: bodyStr, headers: { ...req.options.headers, ...headers } };
                       const res = await fetch(req.url, reqOptions);
+                      
                       if(res.ok && req.tempId) {
                           const data = await res.json();
-                          if(data._id) mapping[req.tempId] = data._id;
+                          if(data._id) {
+                              mapping[req.tempId] = data._id; // Store mapping
+                          }
                       }
+                      
                       if(!res.ok) throw new Error('Failed');
+                      successCount++;
                   } catch (e) {
+                      console.error("Fallo al sincronizar:", req.url);
+                      // Keep in queue if failed (unless it's a permanent error, simplified here)
                       newQueue.push(req);
                   }
               }
+
               localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
-              OfflineManager.updateIndicator();
+              
               if(newQueue.length === 0) {
-                  showToast('Sincronización completada.', 'success');
-                  const hashSection = location.hash.replace('#', '');
-                  if(hashSection) mostrarSeccion(hashSection, false);
+                  showToast('¡Sincronización completada!', 'success');
+              } else {
+                  showToast('Sincronización parcial. Se reintentará luego.', 'warning');
               }
+              
+              OfflineManager.updateIndicator();
+              
+              // Reload current view to get fresh data from server
+              const currentHash = location.hash.replace('#', '');
+              if (currentHash) window.app.mostrarSeccion(currentHash, false);
           },
-          syncNow: () => { if(navigator.onLine) OfflineManager.sync(); }
+          syncNow: () => {
+              if(navigator.onLine) OfflineManager.sync();
+          }
       };
+
+      window.app = { syncNow: OfflineManager.syncNow }; // Expose sync
 
       // SEARCH
       function filtrarTablas(query) {
@@ -618,10 +714,12 @@
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
               }
-          } catch (e) {}
+          } catch (e) {
+              console.error("No se pudo precargar el logo:", e);
+          }
       }
 
-      async function loadInitialConfig() { try { const config = await fetchAPI('/api/configuracion'); configCache = config; if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } } catch (e) {} }
+      async function loadInitialConfig() { try { const config = await fetchAPI('/api/configuracion'); configCache = config; if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } } catch (e) { console.error("Error cargando configuración inicial:", e); } }
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
       (async function init() { 
@@ -651,12 +749,14 @@
         DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; } 
         
+        // Routing support
         const hashSection = location.hash.replace('#', '');
         mostrarSeccion(hashSection || 'dashboard', false);
         
+        // Listeners for Offline Mode
         OfflineManager.updateIndicator();
-        window.addEventListener('online', OfflineManager.updateIndicator);
-        window.addEventListener('offline', OfflineManager.updateIndicator);
+        window.addEventListener('online', () => { OfflineManager.updateIndicator(); });
+        window.addEventListener('offline', () => { OfflineManager.updateIndicator(); });
 
         document.body.style.visibility = 'visible'; 
       }
@@ -680,7 +780,7 @@
       
       DOMElements.logoutButton.addEventListener('click', showLogin);
       
-      // FETCH API WITH OFFLINE SUPPORT
+      // SMART FETCH API WITH CACHING
       async function fetchAPI(url, options = {}) { 
         const token = localStorage.getItem('token'); 
         if (!token) { showLogin(); throw new Error('No autenticado'); } 
@@ -689,55 +789,64 @@
         
         const isOnline = navigator.onLine;
 
-        // READ (GET) - Try Network, Fallback Cache
+        // --- HANDLE GET (READ) ---
         if (!options.method || options.method === 'GET') {
-            if(isOnline) {
-                try {
-                    const res = await fetch(`${API_URL}${url}`, { ...options, headers });
-                    if(res.ok) {
-                        const data = await res.json();
-                        if(url.includes('/artistas')) localCache.artistas = data;
-                        if(url.includes('/servicios')) localCache.servicios = data;
-                        if(url.includes('/proyectos')) localCache.proyectos = data;
-                        return data;
-                    }
-                } catch(e) {}
+            if (!isOnline) {
+                // Return from Local Cache if offline
+                if(url.includes('/artistas')) return localCache.artistas;
+                if(url.includes('/servicios')) return localCache.servicios;
+                if(url.includes('/proyectos')) return localCache.proyectos; // Simplification
+                // If not in simple cache, try real fetch which might fail
             }
-            if(url.includes('/artistas')) return localCache.artistas;
-            if(url.includes('/servicios')) return localCache.servicios;
-            if(url.includes('/proyectos')) return localCache.proyectos;
-            // If strictly needed online and failed:
-            if (!isOnline && !url.includes('/artistas') && !url.includes('/servicios') && !url.includes('/proyectos')) throw new Error('Offline');
         }
 
-        // WRITE (POST/PUT/DELETE)
-        if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-            // Optimistic UI
+        // --- HANDLE POST/PUT/DELETE (WRITE) ---
+        if (!isOnline && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+            // Generate Temp ID
             const tempId = `temp_${Date.now()}`;
-            if(options.method === 'POST') {
-                const body = options.body ? JSON.parse(options.body) : {};
-                const newItem = { ...body, _id: tempId };
-                if(url.includes('/artistas')) localCache.artistas.push(newItem);
-                if(url.includes('/servicios')) localCache.servicios.push(newItem);
-                if(url.includes('/proyectos')) {
-                    newItem.estatus = newItem.estatus || 'Agendado';
-                    newItem.proceso = newItem.proceso || 'Agendado';
-                    localCache.proyectos.push(newItem);
-                    if(currentCalendar) currentCalendar.addEvent({ id: tempId, title: newItem.nombreProyecto || 'Nuevo', start: newItem.fecha, backgroundColor: 'var(--warning-main)' });
-                }
-            }
+            let mockResponse = { ok: true, offline: true, _id: tempId };
 
-            if (!isOnline) {
-                OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                return { ok: true, offline: true, _id: tempId }; 
-            }
+            // Parse Body
+            let body = {};
+            if (options.body) body = JSON.parse(options.body);
 
+            // Optimistic Update Local Cache
+            if (url.includes('/artistas')) {
+                const newArtist = { ...body, _id: tempId };
+                localCache.artistas.push(newArtist);
+                mockResponse = { ...newArtist, offline: true };
+            } 
+            else if (url.includes('/servicios')) {
+                const newService = { ...body, _id: tempId };
+                localCache.servicios.push(newService);
+                mockResponse = { ...newService, offline: true };
+            }
+            // Queue request
+            OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
+            
+            return mockResponse;
+        }
+
+        showLoader();
+        try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
             if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); } 
             if (res.status === 204 || (options.method === 'DELETE' && res.ok)) return {ok: true}; 
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
+            
+            // Update Local Cache on success GET
+            if (!options.method || options.method === 'GET') {
+                if(url.includes('/artistas')) localCache.artistas = data;
+                if(url.includes('/servicios')) localCache.servicios = data;
+                if(url.includes('/proyectos')) localCache.proyectos = data;
+            }
+
             return data; 
+        } catch(e) {
+            throw e;
+        } finally {
+            hideLoader();
         }
       }
 
@@ -758,6 +867,7 @@
             }
             if(updateHistory) history.pushState(null, null, `#${id}`);
             
+            // Limpiar buscador al cambiar de sección
             const searchInput = document.getElementById('globalSearch');
             if(searchInput) { searchInput.value = ''; }
 
@@ -805,8 +915,10 @@
           const url = `/api/${type}/${id || ''}`; 
           try { 
               const res = await fetchAPI(url, { method, body: JSON.stringify(body) }); 
+              // Silent success for offline
               if (res.offline) { 
-                 showToast('Guardado en cola Offline', 'info');
+                 // Optimistic update logic already handled in fetchAPI
+                 // Just clean form
               } else {
                  showToast(`Elemento ${id ? 'actualizado' : 'guardado'} con éxito.`, 'success'); 
               }
@@ -817,10 +929,10 @@
       async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a la papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       async function editarItem(id, endpoint) { 
           try { 
+              // Try local cache first for editing offline items
               let item;
-              // Try Cache First
-              if(endpoint === 'artistas') item = localCache.artistas.find(i=>i._id === id);
-              else if(endpoint === 'servicios') item = localCache.servicios.find(i=>i._id === id);
+              if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id);
+              else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id);
               
               if(!item) item = await fetchAPI(`/api/${endpoint}/${id}`); 
               
@@ -854,24 +966,41 @@
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
 
+            // Gráfico
             const ctx = document.getElementById('incomeChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
+            
             const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const dataValues = stats.monthlyIncome || [0,0,0,0,0,0,0,0,0,0,0,0];
-            chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
-        } catch(e) {} 
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ingresos ($)',
+                        data: dataValues,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        } catch(e) { console.error("Error cargando dashboard:", e); } 
       }
 
       async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; const claseTd = esArtistaRegistrado ? 'clickable-artist' : ''; const eventoDblClick = esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''; return `<tr><td class="${claseTd}" ${eventoDblClick}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">Aprobar</button><button class="btn-secondary" title="Regenerar PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="Compartir por WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">No hay cotizaciones pendientes.</td></tr>`; } catch(e) { tablaBody.innerHTML = `<tr><td colspan="4">No se pueden cargar datos offline.</td></tr>`; } }
       const procesos = ['Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
-      async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if(!filtros.innerHTML) { filtros.innerHTML = `<button class="active" onclick="app.filtrarFlujo('Todos')">Todos</button>` + procesos.filter(p=>p!=='Completo').map(p => `<button onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join(''); try { proyectosCacheados = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch(e) {} }
+      async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if(!filtros.innerHTML) { filtros.innerHTML = `<button class="active" onclick="app.filtrarFlujo('Todos')">Todos</button>` + procesos.filter(p=>p!=='Completo').map(p => `<button onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join(''); try { localCache.proyectos = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch(e) { console.error("Error cargando flujo:", e); } }
       function filtrarFlujo(filtro) { 
           document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active')); 
           document.querySelector(`#filtrosFlujo button[onclick="app.filtrarFlujo('${filtro}')"]`).classList.add('active'); 
           document.querySelectorAll('.kanban-column').forEach(c => c.style.display = (filtro === 'Todos' || c.dataset.columna === filtro) ? 'block' : 'none'); 
           procesos.forEach(col => { if(document.getElementById(`columna-${col}`)) document.getElementById(`columna-${col}`).innerHTML = '' }); 
-          if(proyectosCacheados) {
-            proyectosCacheados.filter(p => p.proceso !== 'Completo').forEach(p => { 
+          if(localCache.proyectos) {
+            localCache.proyectos.filter(p => p.proceso !== 'Completo').forEach(p => { 
                 const card = document.createElement('div'); 
                 card.className = `project-card`; 
                 card.dataset.id = p._id;
@@ -906,7 +1035,7 @@
             });
           }
       }
-      async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = proyectosCacheados.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está completamente pagado. ¿Deseas marcarlo como completo de todas formas?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = proyectosCacheados.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { proyectosCacheados = proyectosCacheados.filter(p => p._id !== id); showToast('¡Proyecto completado! Se ha movido al historial.', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+      async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está completamente pagado. ¿Deseas marcarlo como completo de todas formas?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { localCache.proyectos = localCache.proyectos.filter(p => p._id !== id); showToast('¡Proyecto completado! Se ha movido al historial.', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; const eventoDblClick = p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''; const claseArtista = p.artista ? 'clickable-artist' : ''; return `<tr><td class="${claseArtista}" ${eventoDblClick}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs 📄</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">Pagos 💵</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">No hay proyectos completados.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error al cargar historial o sin conexión.</td></tr>`; } }
       async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover este proyecto a la papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Proyecto movido a la papelera.', 'info'); if (desdeCotizaciones) cargarCotizaciones(); else cargarHistorial(); } catch (error) { showToast(`Error al eliminar: ${error.message}`, 'error'); } }
       async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (currentValue) select.value = currentValue; } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
@@ -986,6 +1115,7 @@
               const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista';
               const addPublico = formPrefix !== 'manual';
               
+              // No "Offline Queue" toast here. Just works.
               await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, addPublico, nuevoArtista._id);
               
               document.getElementById(containerId).style.display = 'none';
@@ -1245,7 +1375,7 @@
           modal.querySelector('#delivery-project-id').value = projectId;
           modal.querySelector('#delivery-artist-name').value = artistName;
           modal.querySelector('#delivery-project-name').value = projectName;
-          const project = proyectosCacheados.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
+          const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
           modal.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : '';
           modal.style.display = 'flex';
       }
@@ -1256,7 +1386,7 @@
           try {
               await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) });
               showToast('Enlace de entrega guardado.', 'success');
-              let project = proyectosCacheados.find(p => p._id === projectId);
+              let project = localCache.proyectos.find(p => p._id === projectId);
               if (!project) project = historialCacheados.find(p => p._id === projectId);
               if (project) project.enlaceEntrega = enlace;
               closeDeliveryModal();
@@ -1275,7 +1405,7 @@
           window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
       }
       async function editarNombreProyecto(id) {
-          const proyecto = proyectosCacheados.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
+          const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
           if (!proyecto) return showToast('Proyecto no encontrado.', 'error');
           const nuevoNombre = prompt('Introduce el nuevo nombre para el proyecto:', proyecto.nombreProyecto || '');
           if (nuevoNombre === null || nuevoNombre.trim() === proyecto.nombreProyecto) return;
@@ -1350,7 +1480,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, syncNow: OfflineManager.syncNow };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas };
     });
   </script>
 </body>
