@@ -18,27 +18,45 @@
   <style>
     body { visibility: hidden; }
     :root {
+      /* Colores Base */
       --primary-color: #6366f1; 
       --primary-hover: #4f46e5;
       --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      
       --danger-color: #ef4444; 
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      
       --success-color: #10b981;
       --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      
       --warning-color: #f59e0b;
+      
+      /* Fondos y Estructura */
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
-      --text-color-dark: #1f2937;
+      
+      /* Texto */
+      --text-color-dark: #111827;
       --text-color-light: #6b7280;
+      
+      /* Bordes y Sombras */
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
       --secondary-button-hover-bg: #e5e7eb;
-      --proceso-Agendado: #3b82f6; --proceso-Grabacion: #8b5cf6; --proceso-Edicion: #ec4899; --proceso-Mezcla: #f59e0b; --proceso-Mastering: #10b981; --proceso-Completo: #64748b;
+
+      /* Procesos */
+      --proceso-Agendado: #3b82f6; 
+      --proceso-Grabacion: #8b5cf6; 
+      --proceso-Edicion: #ec4899; 
+      --proceso-Mezcla: #f59e0b; 
+      --proceso-Mastering: #10b981; 
+      --proceso-Completo: #64748b;
     }
 
     body.dark-mode {
@@ -61,7 +79,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
-    
+
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
     body:not(.dark-mode) #app-logo[src*="placeholder"], body:not(.dark-mode) #login-logo[src*="placeholder"] { filter: invert(1); }
     
@@ -110,8 +128,10 @@
     @media (max-width: 768px) {
       #app-wrapper { display: block; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
+      /* BUSCADOR MOVIL */
       .main-header { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
       .search-box { display: block; width: 100%; max-width: none; margin: 0.5rem 0 0 0; order: 99; }
+      
       .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 280px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
@@ -211,15 +231,13 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* CALENDARIO - ARREGLO CORTE EN PC */
+    /* CALENDARIO - FIX PARA PC (AUTO HEIGHT) */
     #calendario { 
         --fc-border-color: transparent; 
         --fc-event-border-color: transparent; 
-        min-height: 550px; 
-        padding: 0.5rem;
-        /* Padding extra a la derecha para que el scrollbar no tape los días */
-        padding-right: 15px; 
-        box-sizing: border-box;
+        padding: 0.5rem; 
+        /* QUITAR HEIGHT FIJO, DEJAR QUE CREZCA */
+        /* padding-right opcional para compensar */
     }
     
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
@@ -237,13 +255,8 @@
     .fc-daygrid-day-number { color: var(--text-color-dark); font-weight: 500; text-decoration: none; margin: 4px; }
     .fc-col-header-cell-cushion { color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
 
-    /* Forzar que el contenedor interno tome todo el ancho disponible */
-    .fc-view-harness { width: 100%; }
-    
     /* REGLAS ESPECÍFICAS MÓVIL */
     @media (max-width: 768px) {
-        #calendario { padding-right: 0.5rem; } /* Quitar padding extra en móvil */
-        
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 1rem !important; gap: 0; }
         .fc .fc-toolbar-title { font-size: 1.1em; order: 0; }
         .fc .fc-toolbar-chunk { display: flex; gap: 0.5rem; }
@@ -668,6 +681,7 @@
           },
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
+              // Doble verificación de online
               const isOnline = navigator.onLine;
               
               if (isOnline) {
@@ -730,12 +744,14 @@
         const headers = { 'Authorization': `Bearer ${token}` }; 
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
+        // 1. INTENTO DE LECTURA (GET) OFFLINE FIRST
         if ((!options.method || options.method === 'GET') && !navigator.onLine) {
              if(url.includes('/artistas')) return localCache.artistas;
              if(url.includes('/servicios')) return localCache.servicios;
              if(url.includes('/proyectos')) return localCache.proyectos;
         }
 
+        // 2. INTENTO DE ESCRITURA (POST/PUT) OFFLINE
         if (!navigator.onLine && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
             const tempId = `temp_${Date.now()}`;
             let mockResponse = { ok: true, offline: true, _id: tempId };
@@ -745,13 +761,13 @@
             if (url.includes('/artistas')) {
                 const newArtist = { ...body, _id: tempId };
                 localCache.artistas.push(newArtist);
-                localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
+                localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); // PERSISTIR
                 mockResponse = { ...newArtist, offline: true };
             } 
             else if (url.includes('/servicios')) {
                 const newService = { ...body, _id: tempId };
                 localCache.servicios.push(newService);
-                localStorage.setItem('cache_servicios', JSON.stringify(localCache.servicios)); 
+                localStorage.setItem('cache_servicios', JSON.stringify(localCache.servicios)); // PERSISTIR
                 mockResponse = { ...newService, offline: true };
             }
             
@@ -759,6 +775,7 @@
             return mockResponse;
         }
 
+        // 3. ONLINE REQUEST
         showLoader();
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
@@ -767,6 +784,7 @@
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
             
+            // ACTUALIZAR CACHÉ PERSISTENTE
             if (!options.method || options.method === 'GET') {
                 if(url.includes('/artistas')) {
                     localCache.artistas = data;
@@ -783,6 +801,7 @@
             }
             return data; 
         } catch(e) {
+            // FALLBACK A OFFLINE SI FALLA LA RED
             if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
                 OfflineManager.updateIndicator(); 
                 if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
@@ -790,6 +809,7 @@
                      OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                      return { ok: true, offline: true, _id: tempId };
                 }
+                // Si falla un GET, intentar devolver caché viejo
                 if(url.includes('/artistas')) return localCache.artistas;
                 if(url.includes('/servicios')) return localCache.servicios;
             }
@@ -1276,7 +1296,7 @@
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
       function goToArtistFromModal(artistId, artistName) { closeEventModal(); irAVistaArtista(artistId, artistName, ''); }
       
-      // CALENDARIO CONFIG
+      // CALENDARIO CONFIG (UPDATED FOR PC & MOBILE)
       async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
         if (currentCalendar) { currentCalendar.destroy(); }
@@ -1291,9 +1311,8 @@
                     center: 'title',
                     right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
-                // Si es movil, NO ajustar la altura automáticamente, dejar que fluya
-                height: isMobile ? 'auto' : 700, 
-                // En móvil desactiva la limitación de eventos (para que salgan los puntitos)
+                // EN PC SE USA 'auto' PARA QUE CREZCA SEGÚN CONTENIDO Y EVITE SCROLLBAR INTERNO
+                height: 'auto', 
                 dayMaxEvents: isMobile ? false : true, 
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true, editable: true, events: eventos,
@@ -1303,17 +1322,15 @@
                     if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) { info.revert(); return; }
                     try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Fecha actualizada.', 'success'); cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'); } catch (error) { showToast(`Error al actualizar: ${error.message}`, 'error'); info.revert(); }
                 },
-                // Renderizado condicional de eventos (Puntos en móvil vs Texto en PC)
                 eventContent: (arg) => { 
                     if(isMobile) {
-                        return { html: '' }; // En móvil se maneja por CSS (puntos)
+                        return { html: '' }; // Puntos en móvil
                     } else {
                         let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; 
                     }
                 },
                 eventDidMount: function(info) {
                     if(isMobile) {
-                        // Asignar color dinámico al punto
                         let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`;
                         info.el.style.backgroundColor = colorVar;
                     }
