@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>FiaRecords Studio - Gestión Pro</title>
+  <title>FiaRecords Studio - App</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -18,50 +18,73 @@
   <style>
     body { visibility: hidden; }
     :root {
+      /* Colores Base */
       --primary-color: #6366f1; 
       --primary-hover: #4f46e5;
       --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      
       --danger-color: #ef4444; 
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      
       --success-color: #10b981;
       --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      
       --warning-color: #f59e0b;
+      
+      /* Fondos y Estructura */
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
-      --text-color-dark: #1f2937;
+      
+      /* Texto */
+      --text-color-dark: #111827;
       --text-color-light: #6b7280;
+      
+      /* Bordes y Sombras */
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
-      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
       --secondary-button-hover-bg: #e5e7eb;
-      --proceso-Agendado: #3b82f6; --proceso-Grabacion: #8b5cf6; --proceso-Edicion: #ec4899; --proceso-Mezcla: #f59e0b; --proceso-Mastering: #10b981; --proceso-Completo: #64748b;
+
+      /* Procesos (Colores para los puntos del calendario) */
+      --proceso-Agendado: #3b82f6; 
+      --proceso-Grabacion: #8b5cf6; 
+      --proceso-Edicion: #ec4899; 
+      --proceso-Mezcla: #f59e0b; 
+      --proceso-Mastering: #10b981; 
+      --proceso-Completo: #64748b;
     }
 
     body.dark-mode {
-      --background-color: #0f172a; 
-      --card-background: #1e293b; 
-      --sidebar-background: #1e293b;
-      --text-color-dark: #f3f4f6; 
-      --text-color-light: #9ca3af;
-      --border-color: #374151; 
-      --form-control-bg: #111827;
-      --secondary-button-bg: #374151; 
-      --secondary-button-text: #f3f4f6; 
-      --secondary-button-hover-bg: #4b5563;
-      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+      --background-color: #000000; /* Fondo negro puro estilo Samsung/OLED */
+      --card-background: #121212; 
+      --sidebar-background: #121212;
+      
+      --text-color-dark: #ffffff; 
+      --text-color-light: #a0a0a0;
+      
+      --border-color: #333333; 
+      --form-control-bg: #1c1c1c;
+      
+      --secondary-button-bg: #2a2a2a; 
+      --secondary-button-text: #ffffff; 
+      --secondary-button-hover-bg: #3a3a3a;
+      
+      --shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.05);
+      
       --fc-button-bg-color: var(--secondary-button-bg); 
       --fc-button-text-color: var(--secondary-button-text);
       --fc-button-border-color: var(--border-color);
-      --fc-today-bg-color: rgba(255, 255, 255, 0.05);
+      --fc-today-bg-color: rgba(255, 255, 255, 0.1);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
-    
+
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
     body:not(.dark-mode) #app-logo[src*="placeholder"], body:not(.dark-mode) #login-logo[src*="placeholder"] { filter: invert(1); }
     
@@ -123,7 +146,7 @@
       #btn-enviar-datos-bancarios { display: block; }
     }
     
-    .card { background-color: var(--card-background); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow); border: 1px solid var(--border-color); }
+    .card { background-color: var(--card-background); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); }
     .card-header h2 { font-size: 1.25rem; font-weight: 700; color: var(--text-color-dark); margin-bottom: 0.5rem; }
     form label { display: block; margin-bottom: 0.4rem; font-weight: 500; font-size: 0.9rem; color: var(--text-color-light); }
     form input, form select, form textarea { width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1rem; background-color: var(--form-control-bg); color: var(--text-color-dark); transition: border 0.3s; }
@@ -136,6 +159,7 @@
     button[type="submit"], .btn-primary { background: var(--primary-gradient); color: white; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4); }
     .btn-eliminar, .btn-vaciar { background: var(--danger-gradient); color: white !important; }
     .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
+    .btn-secondary:hover { background-color: var(--secondary-button-hover-bg); border-color: var(--text-color-light); }
     .btn-restaurar, .btn-aprobar { background: var(--success-gradient); color: white; }
     .table-actions { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start; flex-wrap: nowrap; }
     .table-actions button, .list-item-actions button { padding: 0.5rem 0.8rem; width: auto; min-width: 36px; height: 36px; font-size: 0.85rem; margin: 0; white-space: nowrap; }
@@ -177,6 +201,7 @@
     }
 
     .clickable-artist { cursor: pointer; font-weight: 600; color: var(--primary-color); }
+    .clickable-artist:hover { text-decoration: underline; }
     #login-container { max-width: 400px; margin: 10vh auto; padding: 2.5rem; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-radius: 10px; margin-bottom: 0.8rem; background-color: var(--card-background); border: 1px solid var(--border-color); }
     .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem; }
@@ -186,7 +211,6 @@
     .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .4s; }
     input:checked + .slider { background-color: var(--primary-color); }
     input:checked + .slider:before { transform: translateX(22px); }
-    
     .form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .form-group { flex: 1; min-width: 200px; }
     .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
@@ -194,11 +218,11 @@
     .kpi-card { text-align: center; border-bottom: 4px solid var(--primary-color); }
     .kpi-value { font-size: 2.2rem; font-weight: 700; color: var(--text-color-dark); }
     .kpi-label { font-size: 0.9rem; color: var(--text-color-light); text-transform: uppercase; letter-spacing: 0.5px; }
-    
     .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; align-items: start; }
     .kanban-column { background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; display: none; animation: fadeIn 0.5s; border: 1px solid var(--border-color); }
     .kanban-column h3 { text-align: center; margin: 0; padding: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1rem; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; color: var(--text-color-light); }
     .project-card { background: var(--card-background); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: var(--shadow-sm); border-left: 5px solid; transition: transform 0.2s, box-shadow 0.2s; }
+    .project-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
     .project-card-header { font-weight: 600; font-size: 1.05em; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
     .project-card-header-main { display: flex; align-items: center; gap: 0.5rem; }
     .project-card-body ul { list-style: none; padding-left: 0; margin: 0.5rem 0; font-size: 0.9em; color: var(--text-color-light); }
@@ -210,50 +234,85 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* ESTILOS CALENDARIO REPARADOS Y MEJORADOS */
+    /* ---------------------------------------------------- */
+    /* CALENDARIO - DISEÑO NATIVO MÓVIL (PUNTOS) */
+    /* ---------------------------------------------------- */
     #calendario { 
-        --fc-border-color: var(--border-color); 
+        --fc-border-color: transparent; /* Sin bordes feos */
         --fc-event-border-color: transparent; 
         min-height: 550px; 
         padding: 0.5rem; 
     }
     
+    /* Escritorio Normal */
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
-    .fc .fc-toolbar-title { font-size: 1.25em; color: var(--primary-color); }
-    .fc .fc-button { background-color: var(--card-background); color: var(--text-color-dark); border-color: var(--border-color); padding: 0.4em 0.8em; font-size: 0.9em; text-transform: capitalize; }
+    .fc .fc-toolbar-title { font-size: 1.25em; color: var(--primary-color); font-weight: 700; text-transform: capitalize; }
+    .fc .fc-button { background-color: var(--card-background); color: var(--text-color-dark); border-color: var(--border-color); padding: 0.4em 0.8em; font-size: 0.9em; text-transform: capitalize; border-radius: 20px; box-shadow: none; }
     
-    /* CORRECCIÓN HOVER CALENDARIO MODO OSCURO (evita texto blanco invisible) */
     .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); color: var(--text-color-dark); }
     body.dark-mode .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); color: var(--text-color-dark); }
     .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--primary-color) !important; color: white !important; border-color: var(--primary-color) !important; }
     
-    /* CORRECCIÓN LISTA BLANCA HOVER PC */
     .fc-theme-standard .fc-list-day-cushion { background-color: var(--secondary-button-bg); }
     .fc-list-event:hover td { background-color: var(--secondary-button-bg) !important; }
     body.dark-mode .fc-list-event:hover td { background-color: rgba(255,255,255,0.05) !important; }
     
-    .fc-daygrid-day-number { color: var(--text-color-light); font-weight: 500; text-decoration: none; }
-    
-    /* REGLAS ESPECÍFICAS MÓVIL */
+    .fc-daygrid-day-number { color: var(--text-color-dark); font-weight: 500; text-decoration: none; margin: 4px; }
+    .fc-col-header-cell-cushion { color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
+
+    /* REGLAS ESPECÍFICAS MÓVIL - ESTILO TIPO SAMSUNG/IOS */
     @media (max-width: 768px) {
-        .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 1rem !important; }
-        .fc .fc-toolbar-chunk { display: flex; justify-content: center; align-items: center; }
-        .fc .fc-toolbar-title { font-size: 1.1em; width: 100%; text-align: center; order: -1; margin-bottom: 0.5rem; }
-        .fc .fc-button { padding: 0.3rem 0.6rem; font-size: 0.8em; }
-        .fc-view-harness { min-height: 400px; }
+        .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 1rem !important; gap: 0; }
+        .fc .fc-toolbar-title { font-size: 1.1em; order: 0; }
+        .fc .fc-toolbar-chunk { display: flex; gap: 0.5rem; }
+        .fc .fc-button { padding: 0.3rem 0.8rem; font-size: 0.8em; }
         
-        /* SCROLL HORIZONTAL PARA SEMANA */
-        .fc-view-harness > .fc-view { overflow-x: auto; }
-        .fc-scrollgrid { min-width: 600px; /* Fuerza ancho mínimo para evitar aplastamiento */ }
+        /* Ocultar barra scroll horizontal fea, ajustar ancho */
+        .fc-view-harness { min-height: 400px; width: 100%; overflow: hidden; }
+        .fc-scroller { overflow: hidden !important; }
         
-        /* ENCABEZADOS DE DÍA MÁS PEQUEÑOS EN MÓVIL */
-        .fc-col-header-cell-cushion { font-size: 0.75rem; padding: 2px !important; }
+        /* Celdas cuadradas limpias */
+        .fc-daygrid-day-frame { 
+            min-height: 60px !important; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start;
+        }
+
+        /* Eventos como PUNTOS (Dots) */
+        .fc-daygrid-day-events {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 2px;
+            min-height: 10px;
+        }
+
+        .fc-event {
+            display: block !important;
+            width: 6px !important;
+            height: 6px !important;
+            border-radius: 50% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            /* El color viene inline desde el JS, o fallback */
+            background-color: var(--primary-color); 
+            font-size: 0 !important; /* Ocultar texto */
+            border: none !important;
+            position: relative;
+        }
         
-        /* ALTURA DE CELDAS DE MES MÓVIL */
-        .fc-daygrid-day-frame { min-height: 80px; }
+        /* Quitar titulos en movil */
+        .fc-event-title, .fc-event-time { display: none !important; }
+
+        /* Encabezados de días pequeños */
+        .fc-col-header-cell-cushion { font-size: 0.7rem; padding: 5px 0 !important; opacity: 0.7; }
         
-        /* COLOR ENCABEZADO DARK MODE MÓVIL */
-        body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-light); }
+        /* Quitar bordes internos para look más limpio */
+        .fc-theme-standard td, .fc-theme-standard th { border: none; border-bottom: 1px solid rgba(128,128,128,0.1); }
+        .fc-scrollgrid { border: none !important; }
     }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(3px); }
@@ -1109,6 +1168,8 @@
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
       function goToProjectInWorkflow(projectId) { closeEventModal(); mostrarSeccion('flujo-trabajo'); setTimeout(() => { const card = document.querySelector(`.project-card[data-id="${projectId}"]`); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200); }
       function goToArtistFromModal(artistId, artistName) { closeEventModal(); irAVistaArtista(artistId, artistName, ''); }
+      
+      // CALENDARIO CONFIG
       async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
         if (currentCalendar) { currentCalendar.destroy(); }
@@ -1121,11 +1182,12 @@
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
-                    right: isMobile ? 'dayGridMonth,timeGridWeek,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
+                    right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
-                height: isMobile ? 'auto' : 'auto',
-                aspectRatio: isMobile ? 0.8 : 1.8, 
-                dayMaxEventRows: isMobile ? false : true, 
+                // Si es movil, NO ajustar la altura automáticamente, dejar que fluya
+                height: isMobile ? 'auto' : 700, 
+                // En móvil desactiva la limitación de eventos (para que salgan los puntitos)
+                dayMaxEvents: isMobile ? false : true, 
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true, editable: true, events: eventos,
                 dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } },
@@ -1134,11 +1196,26 @@
                     if (!confirm(`¿Mover el proyecto de "${info.event.title}" al ${info.event.start.toLocaleDateString()}?`)) { info.revert(); return; }
                     try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Fecha actualizada.', 'success'); cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'); } catch (error) { showToast(`Error al actualizar: ${error.message}`, 'error'); info.revert(); }
                 },
-                eventContent: (arg) => { let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; }
+                // Renderizado condicional de eventos (Puntos en móvil vs Texto en PC)
+                eventContent: (arg) => { 
+                    if(isMobile) {
+                        return { html: '' }; // En móvil se maneja por CSS (puntos)
+                    } else {
+                        let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; 
+                    }
+                },
+                eventDidMount: function(info) {
+                    if(isMobile) {
+                        // Asignar color dinámico al punto
+                        let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`;
+                        info.el.style.backgroundColor = colorVar;
+                    }
+                }
             });
             currentCalendar.render();
         } catch (error) { calendarEl.innerHTML = '<p>Error al cargar agenda. Por favor, recarga la página o verifica tu conexión.</p>'; console.error(error); }
       }
+
       async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function aprobarCotizacion(id) { if (!confirm('¿Aprobar esta cotización y moverla al Flujo de Trabajo?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch(error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } }
       async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Te enviamos un resumen de tu cotización de FiaRecords Studio.\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nPara confirmar o si tienes alguna duda, contáctanos. ¡Gracias!`; const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`; window.open(url, '_blank'); } catch (error) { showToast('No se pudo cargar la información para compartir.', 'error'); } }
