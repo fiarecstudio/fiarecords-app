@@ -60,7 +60,7 @@
     }
 
     body.dark-mode {
-      --background-color: #000000; /* Fondo negro puro estilo Samsung/OLED */
+      --background-color: #000000; 
       --card-background: #121212; 
       --sidebar-background: #121212;
       
@@ -133,8 +133,21 @@
     @media (max-width: 768px) {
       #app-wrapper { display: block; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
-      .main-header { padding: 0.75rem 1rem; }
-      .search-box { display: none; }
+      
+      /* AJUSTE PARA BUSCADOR EN MÓVIL */
+      .main-header { 
+          padding: 0.75rem 1rem;
+          flex-wrap: wrap; /* Permitir que los elementos bajen de línea */
+          gap: 0.5rem;
+      }
+      .search-box { 
+          display: block; /* Mostrar buscador */
+          width: 100%; /* Ocupar todo el ancho */
+          max-width: none; 
+          margin: 0.5rem 0 0 0;
+          order: 99; /* Forzar que aparezca abajo */
+      }
+      
       .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 280px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
@@ -234,17 +247,14 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* ---------------------------------------------------- */
-    /* CALENDARIO - DISEÑO NATIVO MÓVIL (PUNTOS) */
-    /* ---------------------------------------------------- */
+    /* CALENDARIO */
     #calendario { 
-        --fc-border-color: transparent; /* Sin bordes feos */
+        --fc-border-color: transparent; 
         --fc-event-border-color: transparent; 
         min-height: 550px; 
         padding: 0.5rem; 
     }
     
-    /* Escritorio Normal */
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
     .fc .fc-toolbar-title { font-size: 1.25em; color: var(--primary-color); font-weight: 700; text-transform: capitalize; }
     .fc .fc-button { background-color: var(--card-background); color: var(--text-color-dark); border-color: var(--border-color); padding: 0.4em 0.8em; font-size: 0.9em; text-transform: capitalize; border-radius: 20px; box-shadow: none; }
@@ -260,18 +270,16 @@
     .fc-daygrid-day-number { color: var(--text-color-dark); font-weight: 500; text-decoration: none; margin: 4px; }
     .fc-col-header-cell-cushion { color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
 
-    /* REGLAS ESPECÍFICAS MÓVIL - ESTILO TIPO SAMSUNG/IOS */
+    /* REGLAS ESPECÍFICAS MÓVIL */
     @media (max-width: 768px) {
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 1rem !important; gap: 0; }
         .fc .fc-toolbar-title { font-size: 1.1em; order: 0; }
         .fc .fc-toolbar-chunk { display: flex; gap: 0.5rem; }
         .fc .fc-button { padding: 0.3rem 0.8rem; font-size: 0.8em; }
         
-        /* Ocultar barra scroll horizontal fea, ajustar ancho */
         .fc-view-harness { min-height: 400px; width: 100%; overflow: hidden; }
         .fc-scroller { overflow: hidden !important; }
         
-        /* Celdas cuadradas limpias */
         .fc-daygrid-day-frame { 
             min-height: 60px !important; 
             display: flex; 
@@ -280,7 +288,6 @@
             justify-content: flex-start;
         }
 
-        /* Eventos como PUNTOS (Dots) */
         .fc-daygrid-day-events {
             display: flex;
             justify-content: center;
@@ -297,20 +304,14 @@
             border-radius: 50% !important;
             padding: 0 !important;
             margin: 0 !important;
-            /* El color viene inline desde el JS, o fallback */
             background-color: var(--primary-color); 
-            font-size: 0 !important; /* Ocultar texto */
+            font-size: 0 !important;
             border: none !important;
             position: relative;
         }
         
-        /* Quitar titulos en movil */
         .fc-event-title, .fc-event-time { display: none !important; }
-
-        /* Encabezados de días pequeños */
         .fc-col-header-cell-cushion { font-size: 0.7rem; padding: 5px 0 !important; opacity: 0.7; }
-        
-        /* Quitar bordes internos para look más limpio */
         .fc-theme-standard td, .fc-theme-standard th { border: none; border-bottom: 1px solid rgba(128,128,128,0.1); }
         .fc-scrollgrid { border: none !important; }
     }
