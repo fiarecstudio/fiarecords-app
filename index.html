@@ -18,64 +18,41 @@
   <style>
     body { visibility: hidden; }
     :root {
-      /* Colores Base */
       --primary-color: #6366f1; 
       --primary-hover: #4f46e5;
       --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-      
       --danger-color: #ef4444; 
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      
       --success-color: #10b981;
       --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      
       --warning-color: #f59e0b;
-      
-      /* Fondos y Estructura */
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
-      
-      /* Texto */
-      --text-color-dark: #111827;
+      --text-color-dark: #1f2937;
       --text-color-light: #6b7280;
-      
-      /* Bordes y Sombras */
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
-      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
       --secondary-button-hover-bg: #e5e7eb;
-
-      /* Procesos */
-      --proceso-Agendado: #3b82f6; 
-      --proceso-Grabacion: #8b5cf6; 
-      --proceso-Edicion: #ec4899; 
-      --proceso-Mezcla: #f59e0b; 
-      --proceso-Mastering: #10b981; 
-      --proceso-Completo: #64748b;
+      --proceso-Agendado: #3b82f6; --proceso-Grabacion: #8b5cf6; --proceso-Edicion: #ec4899; --proceso-Mezcla: #f59e0b; --proceso-Mastering: #10b981; --proceso-Completo: #64748b;
     }
 
     body.dark-mode {
       --background-color: #000000; 
       --card-background: #121212; 
       --sidebar-background: #121212;
-      
-      --text-color-dark: #ffffff; 
-      --text-color-light: #a0a0a0;
-      
-      --border-color: #333333; 
+      --text-color-dark: #f3f4f6; 
+      --text-color-light: #9ca3af;
+      --border-color: #374151; 
       --form-control-bg: #1c1c1c;
-      
       --secondary-button-bg: #2a2a2a; 
       --secondary-button-text: #ffffff; 
       --secondary-button-hover-bg: #3a3a3a;
-      
       --shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.05);
-      
       --fc-button-bg-color: var(--secondary-button-bg); 
       --fc-button-text-color: var(--secondary-button-text);
       --fc-button-border-color: var(--border-color);
@@ -84,7 +61,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
-
+    
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
     body:not(.dark-mode) #app-logo[src*="placeholder"], body:not(.dark-mode) #login-logo[src*="placeholder"] { filter: invert(1); }
     
@@ -133,21 +110,8 @@
     @media (max-width: 768px) {
       #app-wrapper { display: block; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
-      
-      /* AJUSTE PARA BUSCADOR EN MÓVIL */
-      .main-header { 
-          padding: 0.75rem 1rem;
-          flex-wrap: wrap; 
-          gap: 0.5rem;
-      }
-      .search-box { 
-          display: block; 
-          width: 100%; 
-          max-width: none; 
-          margin: 0.5rem 0 0 0;
-          order: 99; 
-      }
-      
+      .main-header { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
+      .search-box { display: block; width: 100%; max-width: none; margin: 0.5rem 0 0 0; order: 99; }
       .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 280px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
@@ -247,12 +211,15 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* CALENDARIO */
+    /* CALENDARIO - ARREGLO CORTE EN PC */
     #calendario { 
         --fc-border-color: transparent; 
         --fc-event-border-color: transparent; 
         min-height: 550px; 
-        padding: 0.5rem; 
+        padding: 0.5rem;
+        /* Padding extra a la derecha para que el scrollbar no tape los días */
+        padding-right: 15px; 
+        box-sizing: border-box;
     }
     
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
@@ -270,8 +237,13 @@
     .fc-daygrid-day-number { color: var(--text-color-dark); font-weight: 500; text-decoration: none; margin: 4px; }
     .fc-col-header-cell-cushion { color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
 
+    /* Forzar que el contenedor interno tome todo el ancho disponible */
+    .fc-view-harness { width: 100%; }
+    
     /* REGLAS ESPECÍFICAS MÓVIL */
     @media (max-width: 768px) {
+        #calendario { padding-right: 0.5rem; } /* Quitar padding extra en móvil */
+        
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 1rem !important; gap: 0; }
         .fc .fc-toolbar-title { font-size: 1.1em; order: 0; }
         .fc .fc-toolbar-chunk { display: flex; gap: 0.5rem; }
@@ -440,14 +412,21 @@
               <div id="nuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul>
               
-              <!-- SECCIÓN DE DESCUENTO AGREGADA AQUÍ -->
+              <!-- DESCUENTO -->
               <div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
                   <div class="form-row" style="justify-content: flex-end; align-items: center; margin-bottom: 0.5rem;">
                       <label style="margin-right: 1rem; margin-bottom: 0;">Descuento ($):</label>
                       <input type="number" id="proyectoDescuento" min="0" step="0.01" value="" placeholder="0.00" style="width: 150px; margin-bottom: 0;">
                   </div>
                   <div class="info-row"><label>Total a Pagar:</label><span id="totalAPagar">$0.00</span></div>
-                  <div class="form-row"><div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div></div><div class="form-actions"><button id="btnGenerarCotizacion" class="btn-primary">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
+                  
+                  <!-- FECHA Y HORA -->
+                  <div class="form-row">
+                      <div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div>
+                      <div class="form-group"><label for="horaProyecto">Hora</label><input type="time" id="horaProyecto"></div>
+                  </div>
+                  
+                  <div class="form-actions"><button id="btnGenerarCotizacion" class="btn-primary">Generar Cotización y PDF</button><button id="btnEnviarAFlujo" class="btn-secondary">Guardar y Agendar</button></div></div></form></div></section>
             <section id="registro-manual"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Registro Manual de Proyecto</h2><p style="font-size: 0.9em; color: var(--text-color-light);">Usa este formulario para proyectos sin costo, antiguos o que no requieren cotización.</p></div><form id="formProyectoManual" onsubmit="return false;"><label for="manualProyectoArtista">Artista/Cliente</label><div id="manual-artista-selector-container"><select id="manualProyectoArtista" required></select><button type="button" id="manualBtnNuevoArtista" title="Registrar nuevo artista" class="btn-primary" style="padding: 0.75rem 1rem;">+</button></div>
               <div id="manualNuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="manualNombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarManualNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <label for="manualNombreProyecto">Nombre del Proyecto</label><input type="text" id="manualNombreProyecto" required /><label for="manualFechaProyecto">Fecha de Inicio</label><input type="text" id="manualFechaProyecto" required /><label for="manualDescripcion">Descripción (Servicios realizados)</label><textarea id="manualDescripcion" rows="3"></textarea><button type="button" onclick="app.guardarProyectoManual()">Guardar Proyecto</button></form></div></section>
@@ -596,12 +575,30 @@
             <h2 id="modal-event-title">Detalles del Proyecto</h2>
             <button class="modal-close" onclick="app.closeEventModal()">×</button>
         </div>
+        <input type="hidden" id="modal-event-id">
         <p><strong>Fecha:</strong> <span id="modal-event-date"></span></p>
         <p><strong>Total:</strong> <span id="modal-event-total"></span></p>
         <p><strong>Estado:</strong> <span id="modal-event-status"></span></p>
         <p><strong>Proceso:</strong> <span id="modal-event-process"></span></p>
         <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Servicios:</h4>
         <ul id="modal-event-services" style="list-style-position: inside; padding-left: 0;"></ul>
+        
+        <!-- SECCIÓN PARA EDITAR FECHA Y HORA -->
+        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-button-bg); border-radius: 12px;">
+            <h4 style="margin-bottom: 0.5rem; margin-top: 0;">Reprogramar Cita</h4>
+            <div class="form-row">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size: 0.8em;">Nueva Fecha</label>
+                    <input type="text" id="edit-event-date" style="margin-bottom: 0.5rem;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size: 0.8em;">Nueva Hora</label>
+                    <input type="time" id="edit-event-time" style="margin-bottom: 0.5rem;">
+                </div>
+            </div>
+            <button onclick="app.actualizarHorarioProyecto()" style="width: 100%; padding: 0.5rem; font-size: 0.9em; margin-top: 0.5rem;">Actualizar Fecha/Hora</button>
+        </div>
+
         <div class="form-actions" style="margin-top: 1.5rem;">
             <button id="btn-go-to-workflow" class="btn-secondary" onclick="">Ir al Flujo de Trabajo</button>
             <button id="btn-go-to-artist" onclick="">Ver Historial del Artista</button>
@@ -1091,7 +1088,20 @@
       async function guardarProyecto(procesoDestino) { 
           const artistaSelect = document.getElementById('proyectoArtista'); 
           const artistaId = artistaSelect.value; 
-          const fecha = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0] || new Date(); 
+          // COMBINAR FECHA Y HORA
+          const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0];
+          const horaInput = document.getElementById('horaProyecto').value;
+          
+          let fechaFinal = new Date();
+          if(fechaInput) {
+              fechaFinal = fechaInput;
+              if(horaInput) {
+                  const [hours, minutes] = horaInput.split(':');
+                  fechaFinal.setHours(hours);
+                  fechaFinal.setMinutes(minutes);
+              }
+          }
+
           if (Object.keys(proyectoActual).length === 0) { showToast('Agrega al menos un servicio.', 'error'); return null; } 
           
           const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
@@ -1105,11 +1115,11 @@
               artista: artistaId === 'publico_general' ? null : artistaId, 
               nombreProyecto: document.getElementById('nombreProyecto').value, 
               items: items, 
-              total: total, // Se envía el total ya con descuento
-              descuento: descuento, // Se envía el descuento por si el backend lo guarda
+              total: total, 
+              descuento: descuento, 
               estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', 
               metodoPago: 'Pendiente', 
-              fecha: fecha.toISOString(), 
+              fecha: fechaFinal.toISOString(), // FECHA CON HORA
               prioridad: 'Normal', 
               proceso: procesoDestino, 
               esAlbum: document.getElementById('esAlbum').checked 
@@ -1159,6 +1169,7 @@
               }
               proyectoActual = {}; 
               document.getElementById('proyectoDescuento').value = ''; // Limpiar descuento
+              document.getElementById('horaProyecto').value = '';
               mostrarProyectoActual(); 
               document.getElementById('formProyecto').reset(); 
               mostrarSeccion('cotizaciones'); 
@@ -1170,6 +1181,7 @@
               showToast('Proyecto guardado y agendado.', 'success'); 
               proyectoActual = {}; 
               document.getElementById('proyectoDescuento').value = ''; // Limpiar descuento
+              document.getElementById('horaProyecto').value = '';
               mostrarProyectoActual(); 
               document.getElementById('formProyecto').reset(); 
               mostrarSeccion('flujo-trabajo'); 
@@ -1205,12 +1217,25 @@
 
       function openEventModal(info) { 
         const props = info.event.extendedProps; 
+        // GUARDAR ID PARA EDICION
+        document.getElementById('modal-event-id').value = info.event.id;
+        
         document.getElementById('modal-event-title').textContent = info.event.title; 
-        document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); 
+        document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }); 
         document.getElementById('modal-event-total').textContent = `$${props.total.toFixed(2)}`; 
         document.getElementById('modal-event-status').textContent = props.estatus; 
         document.getElementById('modal-event-process').textContent = props.proceso; 
         document.getElementById('modal-event-services').innerHTML = props.servicios.split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); 
+        
+        // PRE-LLENAR INPUTS DE EDICIÓN
+        const eventDate = info.event.start;
+        flatpickr("#edit-event-date", { defaultDate: eventDate, locale: "es" });
+        
+        // Formatear hora HH:mm para el input type="time"
+        const hours = String(eventDate.getHours()).padStart(2, '0');
+        const minutes = String(eventDate.getMinutes()).padStart(2, '0');
+        document.getElementById('edit-event-time').value = `${hours}:${minutes}`;
+
         const btnWorkflow = document.getElementById('btn-go-to-workflow'); 
         btnWorkflow.onclick = () => app.goToProjectInWorkflow(info.event.id); 
         const btnArtist = document.getElementById('btn-go-to-artist'); 
@@ -1219,6 +1244,32 @@
             btnArtist.onclick = () => app.goToArtistFromModal(props.artistaId, props.artistaNombre); 
         } else { btnArtist.style.display = 'none'; } 
         document.getElementById('event-modal').style.display = 'flex'; 
+      }
+      
+      // NUEVA FUNCION ACTUALIZAR HORARIO
+      async function actualizarHorarioProyecto() {
+          const id = document.getElementById('modal-event-id').value;
+          const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0];
+          const newTimeInput = document.getElementById('edit-event-time').value;
+          
+          if (!newDateInput) return showToast("Selecciona una fecha válida", "error");
+          
+          let finalDate = new Date(newDateInput);
+          if (newTimeInput) {
+              const [h, m] = newTimeInput.split(':');
+              finalDate.setHours(h);
+              finalDate.setMinutes(m);
+          }
+          
+          try {
+              await app.cambiarAtributo(id, 'fecha', finalDate.toISOString());
+              showToast("Fecha y hora actualizadas correctamente", "success");
+              closeEventModal();
+              // Recargar calendario para ver cambios
+              app.cargarAgenda(); 
+          } catch(e) {
+              showToast("Error al actualizar: " + e.message, "error");
+          }
       }
 
       function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
@@ -1586,7 +1637,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda };
     });
   </script>
 </body>
