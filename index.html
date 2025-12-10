@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>FiaRecords Studio - Gestión Premium</title>
+  <title>FiaRecords Studio - Gestión Pro</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -29,12 +29,11 @@
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
-      --text-color-dark: #111827;
+      --text-color-dark: #1f2937;
       --text-color-light: #6b7280;
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
-      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
@@ -46,27 +45,23 @@
       --background-color: #0f172a; 
       --card-background: #1e293b; 
       --sidebar-background: #1e293b;
-      --text-color-dark: #f1f5f9; 
-      --text-color-light: #94a3b8;
-      --border-color: #334155; 
-      --form-control-bg: #0f172a;
-      --secondary-button-bg: #334155; 
-      --secondary-button-text: #f1f5f9; 
-      --secondary-button-hover-bg: #475569;
+      --text-color-dark: #f3f4f6; 
+      --text-color-light: #9ca3af;
+      --border-color: #374151; 
+      --form-control-bg: #111827;
+      --secondary-button-bg: #374151; 
+      --secondary-button-text: #f3f4f6; 
+      --secondary-button-hover-bg: #4b5563;
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-      --fc-button-bg-color: var(--secondary-button-bg); --fc-button-text-color: var(--secondary-button-text);
-      --fc-button-border-color: var(--border-color); --fc-button-hover-bg-color: var(--secondary-button-hover-bg);
-      --fc-button-active-bg-color: var(--primary-color); --fc-today-bg-color: rgba(255, 255, 255, 0.05);
+      --fc-button-bg-color: var(--secondary-button-bg); 
+      --fc-button-text-color: var(--secondary-button-text);
+      --fc-button-border-color: var(--border-color);
+      --fc-today-bg-color: rgba(255, 255, 255, 0.05);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+    * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    body.dark-mode ::-webkit-scrollbar-thumb { background: #475569; }
-
+    
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
     body:not(.dark-mode) #app-logo[src*="placeholder"], body:not(.dark-mode) #login-logo[src*="placeholder"] { filter: invert(1); }
     
@@ -74,11 +69,11 @@
     .spinner { width: 45px; height: 45px; border: 4px solid rgba(255,255,255,0.3); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s ease infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* OFFLINE STATUS - CORREGIDO PARA QUE SE VEA ROJO */
+    /* OFFLINE STATUS */
     .connection-status { padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.3s; border: 1px solid transparent; }
-    .status-online { background-color: rgba(34, 197, 94, 0.1); color: var(--success-color); border-color: var(--success-color); }
+    .status-online { background-color: rgba(34, 197, 94, 0.15); color: var(--success-color); border-color: var(--success-color); }
     .status-offline { background-color: rgba(239, 68, 68, 0.2) !important; color: var(--danger-color) !important; border-color: var(--danger-color) !important; }
-    .status-syncing { background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); border-color: var(--warning-color); }
+    .status-syncing { background-color: rgba(245, 158, 11, 0.15); color: var(--warning-color); border-color: var(--warning-color); }
     .status-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background-color: currentColor; }
 
     .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; overflow-x: hidden; }
@@ -95,7 +90,6 @@
 
     .sidebar { width: 260px; background-color: var(--sidebar-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100vh; height: 100dvh; z-index: 1000; transition: transform 0.3s ease; }
     .sidebar-header { text-align: center; margin-bottom: 1.5rem; flex-shrink: 0; }
-    #app-logo { cursor: pointer; }
     .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto; padding-right: 5px; }
     .sidebar-footer { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 0.8rem; }
     #btn-nuevo-proyecto-sidebar { background: var(--primary-gradient); color: white; text-align: center; padding: 0.8rem; border-radius: 10px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); border: none; transition: transform 0.2s; }
@@ -140,10 +134,8 @@
     button { cursor: pointer; border-radius: 10px; border: none; padding: 0.75rem 1.25rem; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
     button:active { transform: scale(0.98); }
     button[type="submit"], .btn-primary { background: var(--primary-gradient); color: white; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4); }
-    button[type="submit"]:hover, .btn-primary:hover { filter: brightness(110%); transform: translateY(-1px); }
     .btn-eliminar, .btn-vaciar { background: var(--danger-gradient); color: white !important; }
     .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
-    .btn-secondary:hover { background-color: var(--secondary-button-hover-bg); border-color: var(--text-color-light); }
     .btn-restaurar, .btn-aprobar { background: var(--success-gradient); color: white; }
     .table-actions { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start; flex-wrap: nowrap; }
     .table-actions button, .list-item-actions button { padding: 0.5rem 0.8rem; width: auto; min-width: 36px; height: 36px; font-size: 0.85rem; margin: 0; white-space: nowrap; }
@@ -185,7 +177,6 @@
     }
 
     .clickable-artist { cursor: pointer; font-weight: 600; color: var(--primary-color); }
-    .clickable-artist:hover { text-decoration: underline; }
     #login-container { max-width: 400px; margin: 10vh auto; padding: 2.5rem; }
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-radius: 10px; margin-bottom: 0.8rem; background-color: var(--card-background); border: 1px solid var(--border-color); }
     .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem; }
@@ -195,6 +186,7 @@
     .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .4s; }
     input:checked + .slider { background-color: var(--primary-color); }
     input:checked + .slider:before { transform: translateX(22px); }
+    
     .form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .form-group { flex: 1; min-width: 200px; }
     .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
@@ -202,11 +194,11 @@
     .kpi-card { text-align: center; border-bottom: 4px solid var(--primary-color); }
     .kpi-value { font-size: 2.2rem; font-weight: 700; color: var(--text-color-dark); }
     .kpi-label { font-size: 0.9rem; color: var(--text-color-light); text-transform: uppercase; letter-spacing: 0.5px; }
+    
     .kanban-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; align-items: start; }
     .kanban-column { background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; display: none; animation: fadeIn 0.5s; border: 1px solid var(--border-color); }
     .kanban-column h3 { text-align: center; margin: 0; padding: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1rem; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; color: var(--text-color-light); }
     .project-card { background: var(--card-background); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: var(--shadow-sm); border-left: 5px solid; transition: transform 0.2s, box-shadow 0.2s; }
-    .project-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
     .project-card-header { font-weight: 600; font-size: 1.05em; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
     .project-card-header-main { display: flex; align-items: center; gap: 0.5rem; }
     .project-card-body ul { list-style: none; padding-left: 0; margin: 0.5rem 0; font-size: 0.9em; color: var(--text-color-light); }
@@ -218,41 +210,50 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* CALENDARIO - CORRECCIONES OFFLINE, MOBILE Y HOVER */
-    #calendario { --fc-border-color: var(--border-color); --fc-event-border-color: transparent; min-height: 550px; padding: 0.5rem; }
+    /* ESTILOS CALENDARIO REPARADOS Y MEJORADOS */
+    #calendario { 
+        --fc-border-color: var(--border-color); 
+        --fc-event-border-color: transparent; 
+        min-height: 550px; 
+        padding: 0.5rem; 
+    }
+    
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
     .fc .fc-toolbar-title { font-size: 1.25em; color: var(--primary-color); }
     .fc .fc-button { background-color: var(--card-background); color: var(--text-color-dark); border-color: var(--border-color); padding: 0.4em 0.8em; font-size: 0.9em; text-transform: capitalize; }
     
-    /* CORRECCIÓN HOVER CALENDARIO MODO OSCURO */
-    .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); }
-    body.dark-mode .fc .fc-button:hover { background-color: var(--primary-color); color: #fff; }
+    /* CORRECCIÓN HOVER CALENDARIO MODO OSCURO (evita texto blanco invisible) */
+    .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); color: var(--text-color-dark); }
+    body.dark-mode .fc .fc-button:hover { background-color: var(--secondary-button-hover-bg); color: var(--text-color-dark); }
+    .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--primary-color) !important; color: white !important; border-color: var(--primary-color) !important; }
     
-    /* CORRECCION: LISTA BLANCA AL PASAR CURSOR EN MODO OSCURO */
-    body.dark-mode .fc-list-event:hover td {
-        background-color: var(--secondary-button-hover-bg);
-        color: var(--text-color-dark); /* Forzar color de texto visible */
-    }
+    /* CORRECCIÓN LISTA BLANCA HOVER PC */
+    .fc-theme-standard .fc-list-day-cushion { background-color: var(--secondary-button-bg); }
+    .fc-list-event:hover td { background-color: var(--secondary-button-bg) !important; }
+    body.dark-mode .fc-list-event:hover td { background-color: rgba(255,255,255,0.05) !important; }
     
-    .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
-    .fc-daygrid-day-number { color: var(--text-color-light); font-weight: 500; }
+    .fc-daygrid-day-number { color: var(--text-color-light); font-weight: 500; text-decoration: none; }
     
+    /* REGLAS ESPECÍFICAS MÓVIL */
     @media (max-width: 768px) {
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 1rem !important; }
         .fc .fc-toolbar-chunk { display: flex; justify-content: center; align-items: center; }
         .fc .fc-toolbar-title { font-size: 1.1em; width: 100%; text-align: center; order: -1; margin-bottom: 0.5rem; }
         .fc .fc-button { padding: 0.3rem 0.6rem; font-size: 0.8em; }
-        .fc-view-harness { min-height: 400px; overflow-x: auto; }
+        .fc-view-harness { min-height: 400px; }
         
-        /* CORRECCIÓN CALENDARIO MOCHADO EN MES (CELULAR) */
-        .fc-daygrid-day-frame {
-            min-height: 85px !important; /* Fuerza altura mínima a cada día */
-        }
+        /* SCROLL HORIZONTAL PARA SEMANA */
+        .fc-view-harness > .fc-view { overflow-x: auto; }
+        .fc-scrollgrid { min-width: 600px; /* Fuerza ancho mínimo para evitar aplastamiento */ }
         
-        /* Ancho mínimo para que la semana no se vea aplastada */
-        .fc-timegrid-body { min-width: 600px; } 
-        .fc-scrollgrid-sync-table { min-width: 600px; }
-        .fc-col-header-table { min-width: 600px; }
+        /* ENCABEZADOS DE DÍA MÁS PEQUEÑOS EN MÓVIL */
+        .fc-col-header-cell-cushion { font-size: 0.75rem; padding: 2px !important; }
+        
+        /* ALTURA DE CELDAS DE MES MÓVIL */
+        .fc-daygrid-day-frame { min-height: 80px; }
+        
+        /* COLOR ENCABEZADO DARK MODE MÓVIL */
+        body.dark-mode .fc-col-header-cell-cushion { color: var(--text-color-light); }
     }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(3px); }
@@ -563,10 +564,11 @@
     document.addEventListener('DOMContentLoaded', () => {
       let isInitialized = false; 
       let proyectoActual = {}; 
+      // Inicializar caché con datos locales si existen
       let localCache = {
-          artistas: [],
-          servicios: [],
-          proyectos: [],
+          artistas: JSON.parse(localStorage.getItem('cache_artistas') || '[]'),
+          servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
+          proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
           usuarios: [],
           historial: [],
@@ -584,7 +586,7 @@
       function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
       async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
 
-      // OFFLINE MANAGER FIXED
+      // OFFLINE MANAGER FIXED & PERSISTENT
       const OfflineManager = {
           QUEUE_KEY: 'fia_offline_queue',
           getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -600,6 +602,7 @@
           },
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
+              // Doble verificación de online
               const isOnline = navigator.onLine;
               
               if (isOnline) {
@@ -623,7 +626,6 @@
               const token = localStorage.getItem('token');
               const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
               let mapping = {};
-              
               let newQueue = [];
               
               for (const req of queue) {
@@ -634,73 +636,59 @@
                               bodyStr = bodyStr.replace(new RegExp(tempId, 'g'), mapping[tempId]);
                           });
                       }
-
                       const reqOptions = { ...req.options, body: bodyStr, headers: { ...req.options.headers, ...headers } };
                       const res = await fetch(req.url, reqOptions);
-                      
                       if(res.ok && req.tempId) {
                           const data = await res.json();
-                          if(data._id) {
-                              mapping[req.tempId] = data._id;
-                          }
+                          if(data._id) mapping[req.tempId] = data._id;
                       }
-                      
                       if(!res.ok) throw new Error('Failed');
                   } catch (e) {
-                      console.error("Fallo al sincronizar:", req.url);
                       newQueue.push(req);
                   }
               }
-
               localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
-              
-              if(newQueue.length === 0) {
-                  showToast('¡Sincronización completada!', 'success');
-              } else {
-                  showToast('Sincronización parcial. Se reintentará luego.', 'warning');
-              }
-              
+              if(newQueue.length === 0) { showToast('Sincronización completada', 'success'); }
               OfflineManager.updateIndicator();
               const currentHash = location.hash.replace('#', '');
               if (currentHash) window.app.mostrarSeccion(currentHash, false);
           },
-          syncNow: () => {
-              if(navigator.onLine) OfflineManager.sync();
-          }
+          syncNow: () => { if(navigator.onLine) OfflineManager.sync(); }
       };
 
       window.app = { syncNow: OfflineManager.syncNow };
 
-      // FETCH API MODIFICADA PARA QUE NO SE CUELGUE EN OFFLINE
+      // FETCH API ROBUSTA
       async function fetchAPI(url, options = {}) { 
         const token = localStorage.getItem('token'); 
         if (!token) { showLogin(); throw new Error('No autenticado'); } 
         const headers = { 'Authorization': `Bearer ${token}` }; 
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
-        // 1. INTENTO DE LECTURA (GET) EN CACHÉ SI NO HAY RED
+        // 1. INTENTO DE LECTURA (GET) OFFLINE FIRST
         if ((!options.method || options.method === 'GET') && !navigator.onLine) {
              if(url.includes('/artistas')) return localCache.artistas;
              if(url.includes('/servicios')) return localCache.servicios;
              if(url.includes('/proyectos')) return localCache.proyectos;
         }
 
-        // 2. INTENTO DE ESCRITURA (POST/PUT/DELETE) EN OFFLINE
+        // 2. INTENTO DE ESCRITURA (POST/PUT) OFFLINE
         if (!navigator.onLine && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
             const tempId = `temp_${Date.now()}`;
             let mockResponse = { ok: true, offline: true, _id: tempId };
             let body = {};
             if (options.body) body = JSON.parse(options.body);
 
-            // Actualización optimista
             if (url.includes('/artistas')) {
                 const newArtist = { ...body, _id: tempId };
                 localCache.artistas.push(newArtist);
+                localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); // PERSISTIR
                 mockResponse = { ...newArtist, offline: true };
             } 
             else if (url.includes('/servicios')) {
                 const newService = { ...body, _id: tempId };
                 localCache.servicios.push(newService);
+                localStorage.setItem('cache_servicios', JSON.stringify(localCache.servicios)); // PERSISTIR
                 mockResponse = { ...newService, offline: true };
             }
             
@@ -708,7 +696,7 @@
             return mockResponse;
         }
 
-        // 3. PETICIÓN REAL
+        // 3. ONLINE REQUEST
         showLoader();
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
@@ -717,27 +705,38 @@
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
             
-            // Actualizar caché si es GET exitoso
+            // ACTUALIZAR CACHÉ PERSISTENTE
             if (!options.method || options.method === 'GET') {
-                if(url.includes('/artistas')) localCache.artistas = data;
-                if(url.includes('/servicios')) localCache.servicios = data;
-                if(url.includes('/proyectos')) localCache.proyectos = data;
+                if(url.includes('/artistas')) {
+                    localCache.artistas = data;
+                    localStorage.setItem('cache_artistas', JSON.stringify(data));
+                }
+                if(url.includes('/servicios')) {
+                    localCache.servicios = data;
+                    localStorage.setItem('cache_servicios', JSON.stringify(data));
+                }
+                if(url.includes('/proyectos')) {
+                    localCache.proyectos = data;
+                    localStorage.setItem('cache_proyectos', JSON.stringify(data));
+                }
             }
-
             return data; 
         } catch(e) {
-            // 4. MANEJO DE ERROR DE RED (FALLBACK A OFFLINE SI FALLA FETCH AUNQUE NAVIGATOR DIGA ONLINE)
+            // FALLBACK A OFFLINE SI FALLA LA RED
             if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-                OfflineManager.updateIndicator(); // Forzar update visual
+                OfflineManager.updateIndicator(); 
                 if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
                      const tempId = `temp_${Date.now()}`;
                      OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                      return { ok: true, offline: true, _id: tempId };
                 }
+                // Si falla un GET, intentar devolver caché viejo
+                if(url.includes('/artistas')) return localCache.artistas;
+                if(url.includes('/servicios')) return localCache.servicios;
             }
             throw e;
         } finally {
-            hideLoader(); // SIEMPRE OCULTAR LOADER
+            hideLoader(); 
         }
       }
 
@@ -759,12 +758,10 @@
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
               }
-          } catch (e) {
-              console.error("No se pudo precargar el logo:", e);
-          }
+          } catch (e) { console.error("Logo error:", e); }
       }
 
-      async function loadInitialConfig() { try { const config = await fetchAPI('/api/configuracion'); configCache = config; if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } } catch (e) { console.error("Error cargando configuración inicial:", e); } }
+      async function loadInitialConfig() { try { const config = await fetchAPI('/api/configuracion'); configCache = config; if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } } catch (e) { console.error("Config error:", e); } }
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
       (async function init() { 
@@ -777,9 +774,7 @@
                 if (payload.exp * 1000 < Date.now()) return showLogin(); 
                 await showApp(payload); 
             } catch (e) { showLogin(); } 
-        } else { 
-            showLogin(); 
-        } 
+        } else { showLogin(); } 
       })();
 
       async function showApp(payload) { 
@@ -936,7 +931,6 @@
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
 
-            // Gráfico
             const ctx = document.getElementById('incomeChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
             
@@ -1085,7 +1079,6 @@
               const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista';
               const addPublico = formPrefix !== 'manual';
               
-              // No "Offline Queue" toast here. Just works.
               await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, addPublico, nuevoArtista._id);
               
               document.getElementById(containerId).style.display = 'none';
@@ -1131,8 +1124,8 @@
                     right: isMobile ? 'dayGridMonth,timeGridWeek,listMonth' : 'dayGridMonth,timeGridWeek,listWeek'
                 },
                 height: isMobile ? 'auto' : 'auto',
-                aspectRatio: isMobile ? 0.8 : 1.8, // MAS ALTO EN MOVIL
-                dayMaxEventRows: isMobile ? false : true, // Mostrar todos en movil (scroll)
+                aspectRatio: isMobile ? 0.8 : 1.8, 
+                dayMaxEventRows: isMobile ? false : true, 
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true, editable: true, events: eventos,
                 dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Creando nuevo proyecto para el ${info.date.toLocaleDateString()}`, 'info'); } },
