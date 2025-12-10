@@ -231,13 +231,12 @@
     .proceso-tag { padding: 3px 10px; border-radius: 16px; color: white; font-size: 0.75em; display: inline-block; margin-top: 8px; }
     #artista-selector-container, #manual-artista-selector-container { display: flex; gap: 0.5rem; align-items: flex-start; }
     
-    /* CALENDARIO - FIX PARA PC (AUTO HEIGHT) */
+    /* CALENDARIO */
     #calendario { 
         --fc-border-color: transparent; 
         --fc-event-border-color: transparent; 
         padding: 0.5rem; 
         /* QUITAR HEIGHT FIJO, DEJAR QUE CREZCA */
-        /* padding-right opcional para compensar */
     }
     
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
@@ -255,6 +254,9 @@
     .fc-daygrid-day-number { color: var(--text-color-dark); font-weight: 500; text-decoration: none; margin: 4px; }
     .fc-col-header-cell-cushion { color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
 
+    /* Forzar que el contenedor interno tome todo el ancho disponible */
+    .fc-view-harness { width: 100%; }
+    
     /* REGLAS ESPECÍFICAS MÓVIL */
     @media (max-width: 768px) {
         .fc .fc-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 1rem !important; gap: 0; }
@@ -265,6 +267,27 @@
         .fc-view-harness { min-height: 400px; width: 100%; overflow: hidden; }
         .fc-scroller { overflow: hidden !important; }
         
+        /* ESTILO "DOTS" SOLO PARA EL GRID DE MES (NO LISTA) */
+        .fc-daygrid-event {
+            display: block !important;
+            width: 6px !important;
+            height: 6px !important;
+            border-radius: 50% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background-color: var(--primary-color); 
+            font-size: 0 !important;
+            border: none !important;
+            position: relative;
+        }
+
+        /* Ocultar texto SOLO en los dots del mes */
+        .fc-daygrid-event .fc-event-title, 
+        .fc-daygrid-event .fc-event-time { display: none !important; }
+
+        /* ASEGURAR QUE LA VISTA DE LISTA SE VEA NORMAL */
+        .fc-list-event-title, .fc-list-event-time { display: block !important; font-size: 0.9em; }
+
         .fc-daygrid-day-frame { 
             min-height: 60px !important; 
             display: flex; 
@@ -281,21 +304,7 @@
             margin-top: 2px;
             min-height: 10px;
         }
-
-        .fc-event {
-            display: block !important;
-            width: 6px !important;
-            height: 6px !important;
-            border-radius: 50% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            background-color: var(--primary-color); 
-            font-size: 0 !important;
-            border: none !important;
-            position: relative;
-        }
         
-        .fc-event-title, .fc-event-time { display: none !important; }
         .fc-col-header-cell-cushion { font-size: 0.7rem; padding: 5px 0 !important; opacity: 0.7; }
         .fc-theme-standard td, .fc-theme-standard th { border: none; border-bottom: 1px solid rgba(128,128,128,0.1); }
         .fc-scrollgrid { border: none !important; }
@@ -1086,25 +1095,7 @@
       const cargarOpcionesParaProyectoManual = () => { cargarOpcionesParaSelect('/api/artistas', 'manualProyectoArtista', '_id', item => item.nombreArtistico || item.nombre, false); flatpickr("#manualFechaProyecto", { defaultDate: "today", locale: "es" }); };
       function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
       function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
-      
-      // NUEVA FUNCIÓN PARA MOSTRAR TOTAL CON DESCUENTO
-      function mostrarProyectoActual() { 
-          const lista = document.getElementById('listaProyectoActual'); 
-          let subtotal = 0; 
-          lista.innerHTML = Object.values(proyectoActual).map(item => { 
-              const itemTotal = item.precioUnitario * item.unidades; 
-              subtotal += itemTotal; 
-              return `<li class="list-item"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn-quitar-servicio" onclick="app.quitarDeProyecto('${item.id}')">X</button></span></li>`; 
-          }).join(''); 
-          
-          // Lógica de descuento
-          const descuentoInput = document.getElementById('proyectoDescuento');
-          const descuento = parseFloat(descuentoInput.value) || 0;
-          const total = Math.max(0, subtotal - descuento); // Evitar negativos
-
-          document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; 
-      }
-
+      function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let total = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const subtotal = item.precioUnitario * item.unidades; total += subtotal; return `<li class="list-item"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${subtotal.toFixed(2)} <button class="btn-quitar-servicio" onclick="app.quitarDeProyecto('${item.id}')">X</button></span></li>`; }).join(''); document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
       async function guardarProyecto(procesoDestino) { 
           const artistaSelect = document.getElementById('proyectoArtista'); 
           const artistaId = artistaSelect.value; 
@@ -1323,14 +1314,18 @@
                     try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Fecha actualizada.', 'success'); cargarFlujoDeTrabajo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'); } catch (error) { showToast(`Error al actualizar: ${error.message}`, 'error'); info.revert(); }
                 },
                 eventContent: (arg) => { 
-                    if(isMobile) {
-                        return { html: '' }; // Puntos en móvil
+                    // CONDICIONAL PARA MOSTRAR TEXTO EN LISTA MÓVIL
+                    if(isMobile && !arg.view.type.includes('list')) {
+                        return { html: '' }; // Puntos en móvil solo en mes
                     } else {
+                        // Texto normal en PC y en Lista Móvil
                         let innerHtml = `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div><div class="proceso-tag-event" style="background-color: var(--proceso-${arg.event.extendedProps.proceso}, #808080)">${arg.event.extendedProps.proceso}</div></div>`; return { html: innerHtml }; 
                     }
                 },
                 eventDidMount: function(info) {
-                    if(isMobile) {
+                    // Solo aplicar color de fondo al elemento si es móvil Y NO es vista de lista
+                    // (En lista, FullCalendar maneja el punto de color automáticamente)
+                    if(isMobile && !info.view.type.includes('list')) {
                         let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`;
                         info.el.style.backgroundColor = colorVar;
                     }
