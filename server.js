@@ -1,5 +1,5 @@
 // ==================================================================
-//               SERVER.JS - VERSIÓN FINAL Y VERIFICADA
+//               SERVER.JS - CORREGIDO PARA PWA
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
@@ -15,7 +15,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- 1. Definición de Rutas de la API ---
-// El servidor intentará hacer match con estas rutas primero.
 app.use('/auth', require('./routes/auth'));
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -25,21 +24,29 @@ app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // --- 2. Servir Archivos Estáticos ---
-// Si una petición no coincide con la API, Express buscará si es un archivo.
+// Mueve tus archivos sw.js, manifest.json, iconos e index.html a una carpeta llamada "public" si es posible.
+// Si los tienes en la raíz junto a server.js, esto funciona pero es menos seguro.
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname))); 
 
-// --- 3. Ruta Catch-All (Manejador Final - MÉTODO INFALIBLE CORREGIDO) ---
-// Este método no causa el error 'PathError' y ahora distingue las peticiones de API.
+// --- 2.5 RUTAS EXPLÍCITAS PARA PWA (LA SOLUCIÓN) ---
+// Esto fuerza al servidor a enviar el archivo correcto en lugar del HTML
+app.get('/sw.js', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'sw.js'));
+});
+
+app.get('/manifest.json', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'manifest.json'));
+});
+
+// --- 3. Ruta Catch-All (Manejador Final) ---
 app.use((req, res, next) => {
-    // Si la petición NO es para la API, envía el index.html
+    // Si la petición NO es para la API y NO es el service worker, envía el index.html
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth')) {
         return res.sendFile(path.resolve(__dirname, 'index.html'));
     }
-    // Si es una petición a la API que no encontró ruta, pasa al siguiente manejador de errores.
     next();
 });
-
 
 // --- Conexión a Base de Datos y Arranque del Servidor ---
 mongoose.connect(process.env.MONGO_URI)
