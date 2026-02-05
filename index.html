@@ -76,7 +76,6 @@
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
 
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
-    
     /* Logo Invert */
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
     
@@ -517,7 +516,6 @@
     </div>
   </div>
 
-  <!-- MODALS Y DEMÁS IGUAL, SCRIPT ACTUALIZADO ABAJO -->
   <div id="document-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2 id="modal-title">Generar Documentos</h2><button class="modal-close" onclick="app.closeDocumentsModal()">×</button></div><input type="hidden" id="modal-project-id"><div class="filter-buttons"><button id="btn-show-contrato" class="active" onclick="app.showDocumentSection('contrato')">Contrato de Grabación</button><button id="btn-show-distribucion" onclick="app.showDocumentSection('distribucion')">Distribución Digital</button></div><div id="section-contrato" class="document-section active"><h3>Detalles del Contrato</h3><label for="contrato-nombre-album">Nombre del Álbum/EP</label><input type="text" id="contrato-nombre-album"><label for="contrato-canciones">Cantidad de Canciones</label><input type="number" id="contrato-canciones"><label for="contrato-duracion">Duración del Contrato</label><input type="text" id="contrato-duracion"><label for="contrato-pago-inicial">Pago Inicial ($)</label><input type="number" id="contrato-pago-inicial" oninput="app.calcularSaldoContrato()"><label for="contrato-pago-final">Saldo Restante ($)</label><input type="number" id="contrato-pago-final" readonly><button onclick="app.saveAndGenerateContract()" style="width: 100%; margin-top: 1rem;">Guardar y Generar Contrato PDF</button></div><div id="section-distribucion" class="document-section"><h3>Detalles de Distribución</h3><label for="dist-titulo">Título del Lanzamiento</label><input type="text" id="dist-titulo"><label for="dist-fecha">Fecha de Lanzamiento</label><input type="text" id="dist-fecha"><label for="dist-upc">Código UPC/EAN</label><input type="text" id="dist-upc" placeholder="Código de barras"><hr style="margin: 1.5rem 0;"><h4>Tracks y Códigos ISRC</h4><div id="dist-tracks-container"></div><button onclick="app.addTrackField()" class="btn-secondary" style="width: 100%; margin-bottom: 1rem;">+ Añadir Track</button><button onclick="app.saveAndGenerateDistribution()" style="width: 100%;">Guardar y Generar Documento PDF</button></div></div></div>
   <div id="event-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2 id="modal-event-title">Detalles del Proyecto</h2><button class="modal-close" onclick="app.closeEventModal()">×</button></div><input type="hidden" id="modal-event-id"><p><strong>Fecha:</strong> <span id="modal-event-date"></span></p><p><strong>Total:</strong> <span id="modal-event-total"></span></p><p><strong>Estado:</strong> <span id="modal-event-status"></span></p><p><strong>Proceso:</strong> <span id="modal-event-process"></span></p><h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Servicios:</h4><ul id="modal-event-services" style="list-style-position: inside; padding-left: 0;"></ul><div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-button-bg); border-radius: 12px;"><h4 style="margin-bottom: 0.5rem; margin-top: 0;">Reprogramar Cita</h4><div class="form-row"><div class="form-group" style="margin-bottom:0;"><label style="font-size: 0.8em;">Nueva Fecha</label><input type="text" id="edit-event-date" style="margin-bottom: 0.5rem;"></div><div class="form-group" style="margin-bottom:0;"><label style="font-size: 0.8em;">Nueva Hora</label><input type="time" id="edit-event-time" style="margin-bottom: 0.5rem;"></div></div><button onclick="app.actualizarHorarioProyecto()" style="width: 100%; padding: 0.5rem; font-size: 0.9em; margin-top: 0.5rem;">Actualizar Fecha/Hora</button></div><div class="form-actions" style="margin-top: 1.5rem;"><button id="btn-go-to-workflow" class="btn-secondary" onclick="">Ir al Flujo de Trabajo</button><button id="btn-go-to-artist" onclick="">Ver Historial del Artista</button></div></div></div>
   <div id="delivery-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Gestionar Entrega de Proyecto</h2><button class="modal-close" onclick="app.closeDeliveryModal()">×</button></div><input type="hidden" id="delivery-project-id"><input type="hidden" id="delivery-artist-name"><input type="hidden" id="delivery-project-name"><div class="form-group"><label for="delivery-link-input">Enlace de Descarga</label><input type="url" id="delivery-link-input" placeholder="Pega el enlace aquí"></div><div class="form-actions"><button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar Enlace</button><button onclick="app.sendDeliveryByWhatsapp()">Enviar por WhatsApp</button></div></div></div>
@@ -620,24 +618,20 @@
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
         if ((!options.method || options.method === 'GET')) {
-             if (!navigator.onLine) {
-                 if(url.includes('/artistas')) return localCache.artistas;
-                 if(url.includes('/servicios')) return localCache.servicios;
-                 if(url.includes('/proyectos')) {
-                     if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion');
-                     if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado');
-                     if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado').map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
-                     return localCache.proyectos;
-                 }
-                 if(url.includes('/pagos')) return localCache.pagos;
-                 if(url.includes('/dashboard/stats')) {
-                     const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').length;
-                     const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado||0)) > 0 && p.estatus !== 'Cancelado').length;
-                     const now = new Date();
-                     const ingresosMes = localCache.pagos.filter(p => { const d = new Date(p.fecha); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).reduce((sum, p) => sum + p.monto, 0);
-                     return { ingresosMes, proyectosActivos: activos, proyectosPorCobrar: porCobrar, monthlyIncome: [] };
-                 }
+             // OPTIMISTIC READ: SIEMPRE DEVOLVER CACHE SI EXISTE, LUEGO INTENTAR RED SI HAY
+             let cachedData = null;
+             if(url.includes('/artistas')) cachedData = localCache.artistas;
+             if(url.includes('/servicios')) cachedData = localCache.servicios;
+             if(url.includes('/proyectos')) {
+                 if(url.includes('cotizaciones')) cachedData = localCache.proyectos.filter(p => p.estatus === 'Cotizacion');
+                 else if(url.includes('completos')) cachedData = localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado');
+                 else if(url.includes('agenda')) cachedData = localCache.proyectos.filter(p => p.estatus !== 'Cancelado').map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
+                 else cachedData = localCache.proyectos;
              }
+             if(url.includes('/pagos')) cachedData = localCache.pagos;
+             
+             // Si no hay red, devolvemos caché
+             if (!navigator.onLine) return cachedData || [];
         }
 
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
@@ -703,6 +697,7 @@
                      OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                      return { ok: true, offline: true, _id: tempId };
                 }
+                // FALLBACK CACHE
                 if(url.includes('/artistas')) return localCache.artistas;
                 if(url.includes('/servicios')) return localCache.servicios;
                 if(url.includes('/proyectos')) return localCache.proyectos;
@@ -738,17 +733,33 @@
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000); 
         applyTheme(localStorage.getItem('theme') || 'light'); 
-        const token = localStorage.getItem('token'); 
-        if (token) { 
-            try { 
-                const payload = JSON.parse(atob(token.split('.')[1])); 
-                if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin(); 
-                await showApp(payload); 
-            } catch (e) { showLogin(); } 
+        
+        let payload = null;
+        const token = localStorage.getItem('token');
+        
+        if (token) {
+            try {
+                payload = JSON.parse(atob(token.split('.')[1]));
+                // Solo validar expiración si hay red, si no, dejar pasar
+                if (navigator.onLine && payload.exp * 1000 < Date.now()) {
+                    return showLogin();
+                }
+            } catch (e) { return showLogin(); }
+            
+            await showApp(payload);
         } else { showLogin(); } 
       })();
 
       async function showApp(payload) { 
+        // INTENTO DE PRECARGA DE DATOS PARA EVITAR PANTALLA BLANCA
+        try {
+            await Promise.all([
+                fetchAPI('/api/artistas'),
+                fetchAPI('/api/servicios'),
+                fetchAPI('/api/proyectos')
+            ]);
+        } catch(e) { console.log('Iniciando con caché local'); }
+
         if (!configCache) await loadInitialConfig();
         DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
         const esAdmin = payload.role === 'admin'; 
@@ -777,7 +788,8 @@
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error); 
             localStorage.setItem('token', data.token); 
-            await showApp(JSON.parse(atob(data.token.split('.')[1]))); 
+            // Recargar página para asegurar limpieza de estado
+            location.reload();
         } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
       });
       DOMElements.logoutButton.addEventListener('click', showLogin);
@@ -874,7 +886,7 @@
           const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
           const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; const total = Math.max(0, subtotal - descuento);
           const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoDestino, esAlbum: document.getElementById('esAlbum').checked }; 
-          try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error: ${error.message}`, 'error'); return null; } 
+          try { const nuevoProyecto = await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); return nuevoProyecto; } catch (error) { showToast(`Error: ${error.message}`, 'error'); return null; } 
       }
       async function guardarProyectoManual() {
         const artistaId = document.getElementById('manualProyectoArtista').value; const nombreProyecto = document.getElementById('manualNombreProyecto').value; const fecha = document.getElementById('manualFechaProyecto')._flatpickr.selectedDates[0]; const descripcion = document.getElementById('manualDescripcion').value;
@@ -914,7 +926,7 @@
           const deudaBody = document.getElementById('tablaDeudasBody'); deudaBody.innerHTML = '';
           const deudores = localCache.proyectos.filter(p => (p.total - (p.montoPagado || 0)) > 0 && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion');
           if(deudores.length) {
-              deudaBody.innerHTML = deudores.map(p => `<tr><td>${p.artista ? p.artista.nombre : 'General'}</td><td>${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td><td style="color:var(--danger-color);font-weight:bold;">$${(p.total - (p.montoPagado||0)).toFixed(2)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar</button></td></tr>`).join('');
+              deudaBody.innerHTML = deudores.map(p => `<tr><td>${p.artista ? (p.artista.nombre || p.artista) : 'General'}</td><td>${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td><td style="color:var(--danger-color);font-weight:bold;">$${(p.total - (p.montoPagado||0)).toFixed(2)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar</button></td></tr>`).join('');
           } else { deudaBody.innerHTML = `<tr><td colspan="4">No hay cuentas por cobrar.</td></tr>`; }
 
           // HISTORIAL
@@ -975,37 +987,19 @@
               
               // INVERTIR LOGO PARA PDF SI ES NECESARIO
               if (logoBase64) {
-                  // Si estamos en modo claro, el logo es negro -> OK para PDF
-                  // Si estamos en modo oscuro, el logo es blanco -> NO SE VE en PDF -> Invertir a negro
-                  if (document.body.classList.contains('dark-mode')) {
-                      const blackLogo = await getInvertedLogoDataUrl(logoBase64);
-                      pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15);
-                  } else {
-                      // Modo claro, logo ya es visible (o deberíamos verificar si la imagen original es blanca)
-                      // Asumimos que la imagen original subida es NEGRA (para modo claro) o BLANCA (para oscuro).
-                      // Si la imagen original es BLANCA, siempre hay que invertirla para papel.
-                      // Vamos a invertirla preventivamente si detectamos que es la imagen por defecto clara.
-                      // MEJOR ESTRATEGIA: Asumir que para papel siempre queremos NEGRO.
-                      // Si la imagen original es blanca, invertirla.
-                      // Si la imagen original es negra, dejarla.
-                      // Como no podemos saber el color exacto facilmente, usamos el filtro CSS actual como guia.
-                      // Si en pantalla se aplica invert(1) (modo claro), es que la imagen original es blanca.
-                      // Entonces para PDF (fondo blanco) necesitamos que sea negra -> Invertir.
-                      
-                      // HACK: Simplemente la invertimos siempre para asegurar contraste si es blanca transparente
-                      const blackLogo = await getInvertedLogoDataUrl(logoBase64);
-                      pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15);
-                  }
+                  // HACK: Simplemente la invertimos siempre para asegurar contraste si es blanca transparente
+                  const blackLogo = await getInvertedLogoDataUrl(logoBase64);
+                  pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15);
               } 
               
               pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase()}`, 200, 50, { align: 'right' }); pdf.text("Descripción del Servicio:", 14, 65); const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
               if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); }
               pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text("Precio del Servicio:", 14, finalY); pdf.text(`$${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' }); finalY += 15; pdf.setFont(undefined, 'normal'); pdf.text("Condiciones:", 14, finalY); pdf.setFontSize(9); pdf.text("1. La cotización es válida por 30 días.", 14, finalY + 5); pdf.text("2. Se requiere un depósito del 50% para reservar la fecha.", 14, finalY + 10); pdf.text("3. El saldo restante debe pagarse antes de la entrega final del material.", 14, finalY + 15); finalY += 30; pdf.setFontSize(10); pdf.text("Agradecemos tu confianza y esperamos trabajar juntos en tu proyecto.", 105, finalY, { align: 'center' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
-          } catch (error) { showToast("Error PDF", 'error'); console.error(error); } 
+          } catch (error) { showToast("Error al generar el PDF.", 'error'); console.error(error); } 
       }
-      async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('No hay pago.', 'error'); const esPagoFinal = proyecto.montoPagado >= proyecto.total; const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(new Date(pago.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase(), 14, 45); pdf.line(14, 47, 200, 47); pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO ${esPagoFinal && saldoRestante <= 0 ? 'FINAL' : 'PARCIAL'}`, 105, 55, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Recibí de: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 70); pdf.text("Concepto:", 14, 85); const conceptos = proyecto.items.map(item => `- ${item.nombre || 'Servicio'}`); conceptos.forEach((line, i) => pdf.text(line, 16, 92 + (i * 7))); let finalY = 92 + (conceptos.length * 7) + 5; pdf.autoTable({ startY: finalY, theme: 'plain', styles: { fontSize: 11 }, body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)} MXN`], ['Este Pago:', `$${pago.monto.toFixed(2)} MXN`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)} MXN`]], columnStyles: { 0: { fontStyle: 'bold', halign: 'left' }, 1: { halign: 'right' } } }); finalY = pdf.lastAutoTable.finalY + 7; pdf.text("Método de Pago:", 14, finalY); pdf.text(pago.metodo, 200, finalY, { align: 'right' }); finalY += 15; pdf.line(14, finalY, 200, finalY); finalY += 10; pdf.setFontSize(9); pdf.text("Notas: Este recibo es prueba del pago recibido por los servicios mencionados.", 14, finalY); finalY += 10; pdf.text("Términos y Condiciones:", 14, finalY); pdf.text("1. Los anticipos no son reembolsables.", 14, finalY + 5); pdf.text("2. Si el saldo pendiente no se liquida, no se entregará el material grabado.", 14, finalY + 10); const fileName = `Recibo-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error PDF', 'error'); }}
-      async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS DE GRABACIÓN DE AUDIO', 105, 40, { align: 'center', maxWidth: 180 }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 14, 55); pdf.text('Entre:', 14, 65); pdf.setFont(undefined, 'bold').text('FIA RECORDS (en adelante, "El Estudio")', 20, 72); pdf.text(`EL CLIENTE: ${proyecto.artista.nombre} (en adelante, "El Cliente")`, 20, 79); pdf.setFont(undefined, 'normal').text('Ambas partes acuerdan lo siguiente:', 14, 89); pdf.autoTable({ startY: 95, theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Objeto del Contrato']], body: [[`El Estudio se compromete a proporcionar servicios de grabación para el álbum "${c.nombreAlbum || 'N/A'}" de ${c.cantidadCanciones || 'varias'} canciones, bajo los términos descritos.`]]}); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Servicios Incluidos']], body: [proyecto.items.map(i => `- ${i.nombre}`)] }); let finalY = pdf.lastAutoTable.finalY; pdf.setFont(undefined, 'bold').text('Términos y Condiciones:', 14, finalY += 10); const terminos = `1. Duración del Contrato: Este contrato tiene una duración de ${c.duracion || '[sin especificar]'}, comenzando a partir de la primera sesión de grabación.\n2. Sesiones de Grabación: La grabación se realizará según lo acordado. Las sesiones deben ser programadas con anticipación.\n3. Tarifa y Forma de Pago: El Cliente pagará un total de $${proyecto.total.toFixed(2)}. El pago se realizará de la siguiente manera: un pago inicial de $${(c.pagoInicial || 0).toFixed(2)} y el saldo de $${(c.pagoFinal || 0).toFixed(2)} antes de la última sesión.\n4. Política de Cancelación: Si El Cliente necesita cancelar o reprogramar, deberá notificar con al menos 24 horas de anticipación. Cancelaciones tardías pueden incurrir en una tarifa de $200.\n5. Entrega del Trabajo: El Estudio entregará las versiones mezcladas y masterizadas dentro de 10 días después de la grabación final de cada pista, en formato digital (WAV, MP3).\n6. Propiedad Intelectual: Los derechos de autor permanecerán con El Cliente, siempre que se cumplan todos los pagos. El Estudio se reserva el derecho de usar fragmentos para su portafolio.\n7. Responsabilidad: El Cliente es responsable de proporcionar el material necesario (letras, etc.).\n8. Modificaciones: Cualquier modificación a este contrato deberá ser por escrito y firmada por ambas partes.\n9. Ley Aplicable: Este contrato se regirá por las leyes de Nuevo León, México.`; pdf.setFontSize(9).setFont(undefined, 'normal').text(terminos, 14, finalY + 5, { maxWidth: 180, lineHeightFactor: 1.5 }); const fileName = `Contrato-${proyecto.artista.nombre.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
-      async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).setFont(undefined, 'bold').text('ENTREGA PARA DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha de Entrega: ${new Date().toLocaleDateString('es-ES')}`, 14, 35); pdf.autoTable({ startY: 40, theme: 'plain', styles: { fontSize: 10 }, body: [ ['Artista:', proyecto.artista.nombre], ['Título del Lanzamiento:', d.tituloLanzamiento], ['Fecha de Lanzamiento:', new Date(d.fechaLanzamiento).toLocaleDateString('es-ES')], ['UPC/EAN:', d.upc] ] }); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, head: [['Listado de Pistas (Tracklist)']], body: d.tracks.map((t, i) => [`Pista ${i+1}: ${t.titulo}\n    Código ISRC: ${t.isrc || 'N/A'}`]) }); let finalY = pdf.lastAutoTable.finalY + 10; const confirmacion = 'Por medio de este documento, Fia Records confirma la recepción de los códigos de identificación y la metadata final para el lanzamiento mencionado. El material de audio masterizado ha sido entregado y aprobado por el artista.'; pdf.text(confirmacion, 14, finalY, { maxWidth: 180, align: 'justify' }); const fileName = `Distribucion-${d.tituloLanzamiento.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
+      async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('No hay pago para generar recibo.', 'error'); const esPagoFinal = proyecto.montoPagado >= proyecto.total; const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(new Date(pago.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase(), 14, 45); pdf.line(14, 47, 200, 47); pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO ${esPagoFinal && saldoRestante <= 0 ? 'FINAL' : 'PARCIAL'}`, 105, 55, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Recibí de: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 70); pdf.text("Concepto:", 14, 85); const conceptos = proyecto.items.map(item => `- ${item.nombre || 'Servicio'}`); conceptos.forEach((line, i) => pdf.text(line, 16, 92 + (i * 7))); let finalY = 92 + (conceptos.length * 7) + 5; pdf.autoTable({ startY: finalY, theme: 'plain', styles: { fontSize: 11 }, body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)} MXN`], ['Este Pago:', `$${pago.monto.toFixed(2)} MXN`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)} MXN`]], columnStyles: { 0: { fontStyle: 'bold', halign: 'left' }, 1: { halign: 'right' } } }); finalY = pdf.lastAutoTable.finalY + 7; pdf.text("Método de Pago:", 14, finalY); pdf.text(pago.metodo, 200, finalY, { align: 'right' }); finalY += 15; pdf.line(14, finalY, 200, finalY); finalY += 10; pdf.setFontSize(9); pdf.text("Notas: Este recibo es prueba del pago recibido por los servicios mencionados.", 14, finalY); finalY += 10; pdf.text("Términos y Condiciones:", 14, finalY); pdf.text("1. Los anticipos no son reembolsables.", 14, finalY + 5); pdf.text("2. Si el saldo pendiente no se liquida, no se entregará el material grabado.", 14, finalY + 10); const fileName = `Recibo-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar el recibo.', 'error'); console.error(error); }}
+      async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS DE GRABACIÓN DE AUDIO', 105, 40, { align: 'center', maxWidth: 180 }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 14, 55); pdf.text('Entre:', 14, 65); pdf.setFont(undefined, 'bold').text('FIA RECORDS (en adelante, "El Estudio")', 20, 72); pdf.text(`EL CLIENTE: ${proyecto.artista.nombre} (en adelante, "El Cliente")`, 20, 79); pdf.setFont(undefined, 'normal').text('Ambas partes acuerdan lo siguiente:', 14, 89); pdf.autoTable({ startY: 95, theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Objeto del Contrato']], body: [[`El Estudio se compromete a proporcionar servicios de grabación para el álbum "${c.nombreAlbum || 'N/A'}" de ${c.cantidadCanciones || 'varias'} canciones, bajo los términos descritos.`]]}); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Servicios Incluidos']], body: [proyecto.items.map(i => `- ${i.nombre}`)] }); let finalY = pdf.lastAutoTable.finalY; pdf.setFont(undefined, 'bold').text('Términos y Condiciones:', 14, finalY += 10); const terminos = `1. Duración del Contrato: Este contrato tiene una duración de ${c.duracion || '[sin especificar]'}, comenzando a partir de la primera sesión de grabación.\n2. Sesiones de Grabación: La grabación se realizará según lo acordado. Las sesiones deben ser programadas con anticipación.\n3. Tarifa y Forma de Pago: El Cliente pagará un total de $${proyecto.total.toFixed(2)}. El pago se realizará de la siguiente manera: un pago inicial de $${(c.pagoInicial || 0).toFixed(2)} y el saldo de $${(c.pagoFinal || 0).toFixed(2)} antes de la última sesión.\n4. Política de Cancelación: Si El Cliente necesita cancelar o reprogramar, deberá notificar con al menos 24 horas de anticipación. Cancelaciones tardías pueden incurrir en una tarifa de $200.\n5. Entrega del Trabajo: El Estudio entregará las versiones mezcladas y masterizadas dentro de 10 días después de la grabación final de cada pista, en formato digital (WAV, MP3).\n6. Propiedad Intelectual: Los derechos de autor permanecerán con El Cliente, siempre que se cumplan todos los pagos. El Estudio se reserva el derecho de usar fragmentos para su portafolio.\n7. Responsabilidad: El Cliente es responsable de proporcionar el material necesario (letras, etc.).\n8. Modificaciones: Cualquier modificación a este contrato deberá ser por escrito y firmada por ambas partes.\n9. Ley Aplicable: Este contrato se regirá por las leyes de Nuevo León, México.`; pdf.setFontSize(9).setFont(undefined, 'normal').text(terminos, 14, finalY + 5, { maxWidth: 180, lineHeightFactor: 1.5 }); const fileName = `Contrato-${proyecto.artista.nombre.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error al generar Contrato PDF", 'error'); console.error(e); }}
+      async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).setFont(undefined, 'bold').text('ENTREGA PARA DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha de Entrega: ${new Date().toLocaleDateString('es-ES')}`, 14, 35); pdf.autoTable({ startY: 40, theme: 'plain', styles: { fontSize: 10 }, body: [ ['Artista:', proyecto.artista.nombre], ['Título del Lanzamiento:', d.tituloLanzamiento], ['Fecha de Lanzamiento:', new Date(d.fechaLanzamiento).toLocaleDateString('es-ES')], ['UPC/EAN:', d.upc] ] }); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, head: [['Listado de Pistas (Tracklist)']], body: d.tracks.map((t, i) => [`Pista ${i+1}: ${t.titulo}\n    Código ISRC: ${t.isrc || 'N/A'}`]) }); let finalY = pdf.lastAutoTable.finalY + 10; const confirmacion = 'Por medio de este documento, Fia Records confirma la recepción de los códigos de identificación y la metadata final para el lanzamiento mencionado. El material de audio masterizado ha sido entregado y aprobado por el artista.'; pdf.text(confirmacion, 14, finalY, { maxWidth: 180, align: 'justify' }); const fileName = `Distribucion-${d.tituloLanzamiento.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error al generar PDF de Distribución", 'error'); console.error(e); }}
 
       window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, cargarPagos };
     });
