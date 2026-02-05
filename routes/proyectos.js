@@ -5,50 +5,13 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// --- ESQUEMAS DE BASE DE DATOS ---
-// Definimos los esquemas aquí mismo para asegurar que no falte ningún modelo
+// IMPORTANTE: Aquí importamos el modelo que definimos en el otro archivo
+// Asegúrate de que la ruta '../models/Proyecto' sea correcta
+const Proyecto = require('../models/Proyecto');
 
-const ItemSchema = new mongoose.Schema({
-    servicio: String, // ID del servicio
-    nombre: String,
-    unidades: Number,
-    precioUnitario: Number
-});
+// --- RUTAS ---
 
-const PagoSchema = new mongoose.Schema({
-    monto: Number,
-    metodo: String,
-    fecha: { type: Date, default: Date.now },
-    artista: String
-});
-
-const ProyectoSchema = new mongoose.Schema({
-    artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' }, // Referencia al artista o null
-    nombreProyecto: String,
-    items: [ItemSchema],
-    total: Number,
-    descuento: Number,
-    montoPagado: { type: Number, default: 0 },
-    estatus: String, // 'Cotizacion', 'Pendiente de Pago', 'Pagado', 'Cancelado'
-    metodoPago: String,
-    fecha: Date,
-    prioridad: String,
-    proceso: String, // 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'
-    esAlbum: Boolean,
-    enlaceEntrega: String,
-    pagos: [PagoSchema],
-    createdAt: { type: Date, default: Date.now },
-    detallesContrato: { type: Object, default: {} },
-    detallesDistribucion: { type: Object, default: {} }
-});
-
-// Evitar error si el modelo ya fue compilado
-const Proyecto = mongoose.models.Proyecto || mongoose.model('Proyecto', ProyectoSchema);
-
-
-// --- RUTAS DE LA API ---
-
-// 1. Obtener todos los proyectos (Caché inicial)
+// 1. Obtener todos
 router.get('/', async (req, res) => {
     try {
         const proyectos = await Proyecto.find().populate('artista').sort({ fecha: 1 });
@@ -56,7 +19,7 @@ router.get('/', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. Obtener agenda (proyectos activos para el calendario)
+// 2. Obtener agenda (activos y no cancelados)
 router.get('/agenda', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ 
@@ -82,7 +45,7 @@ router.get('/agenda', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Obtener solo cotizaciones
+// 3. Obtener cotizaciones
 router.get('/cotizaciones', async (req, res) => {
     try {
         const cotizaciones = await Proyecto.find({ estatus: 'Cotizacion' }).populate('artista');
@@ -90,7 +53,7 @@ router.get('/cotizaciones', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Obtener proyectos completados (Historial)
+// 4. Obtener completados
 router.get('/completos', async (req, res) => {
     try {
         const completos = await Proyecto.find({ proceso: 'Completo' }).populate('artista').sort({ fecha: -1 });
@@ -98,7 +61,7 @@ router.get('/completos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Obtener todos los pagos (Reportes)
+// 5. Obtener pagos
 router.get('/pagos/todos', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ "pagos.0": { $exists: true } });
@@ -120,7 +83,7 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Obtener historial por Artista específico
+// 6. Obtener por Artista
 router.get('/por-artista/:id', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ artista: req.params.id }).populate('artista').sort({ fecha: -1 });
@@ -128,7 +91,7 @@ router.get('/por-artista/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 7. Obtener un proyecto por ID
+// 7. Obtener UNO por ID
 router.get('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
@@ -137,47 +100,35 @@ router.get('/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 8. CREAR NUEVO PROYECTO
+// 8. Crear Proyecto
 router.post('/', async (req, res) => {
     try {
-        // Limpieza de ID temporal si viene del frontend offline
-        if (req.body._id && req.body._id.startsWith('temp')) {
-            delete req.body._id;
-        }
-        
+        if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
         const nuevo = new Proyecto(req.body);
         const guardado = await nuevo.save();
-        
-        // Devolvemos el objeto populado si es posible, si no, el objeto simple
         res.status(201).json(guardado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 9. ACTUALIZAR PROCESO (Columna Kanban)
+// 9. Actualizar Proceso
 router.put('/:id/proceso', async (req, res) => {
     try {
         const updateData = { proceso: req.body.proceso };
-        // Si se mueve de cotización a agendado, cambiar estatus
-        if (req.body.proceso === 'Agendado') {
-            updateData.estatus = 'Pendiente de Pago';
-        }
-        
+        if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago';
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 10. ACTUALIZAR ESTATUS (Vital para Cancelar Citas)
+// 10. Actualizar Estatus (Cancelar)
 router.put('/:id/estatus', async (req, res) => {
     try {
-        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { 
-            estatus: req.body.estatus 
-        }, { new: true });
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { estatus: req.body.estatus }, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 11. ACTUALIZAR NOMBRE DEL PROYECTO
+// 11. Actualizar Nombre
 router.put('/:id/nombre', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true });
@@ -185,7 +136,7 @@ router.put('/:id/nombre', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 12. ACTUALIZAR FECHA Y HORA
+// 12. Actualizar Fecha
 router.put('/:id/fecha', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true });
@@ -193,7 +144,7 @@ router.put('/:id/fecha', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 13. ACTUALIZAR ENLACE DE ENTREGA
+// 13. Enlace Entrega
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true });
@@ -201,7 +152,7 @@ router.put('/:id/enlace-entrega', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 14. AGREGAR PAGO
+// 14. Agregar Pago
 router.post('/:id/pagos', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
@@ -217,7 +168,6 @@ router.post('/:id/pagos', async (req, res) => {
         proyecto.pagos.push(nuevoPago);
         proyecto.montoPagado = (proyecto.montoPagado || 0) + req.body.monto;
         
-        // Auto-actualizar estatus si se completa el pago
         if (proyecto.montoPagado >= proyecto.total - (proyecto.descuento || 0)) {
             proyecto.estatus = 'Pagado';
         }
@@ -227,19 +177,18 @@ router.post('/:id/pagos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 15. GUARDAR DOCUMENTOS (Contrato/Distribución)
+// 15. Documentos
 router.put('/:id/documentos', async (req, res) => {
     try {
         const update = {};
         if (req.body.tipo === 'contrato') update.detallesContrato = req.body.data;
         if (req.body.tipo === 'distribucion') update.detallesDistribucion = req.body.data;
-        
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, update, { new: true }).populate('artista');
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 16. ELIMINAR PROYECTO
+// 16. Eliminar
 router.delete('/:id', async (req, res) => {
     try {
         await Proyecto.findByIdAndDelete(req.params.id);
@@ -247,7 +196,7 @@ router.delete('/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 17. ELIMINAR PAGO ESPECÍFICO
+// 17. Eliminar Pago
 router.delete('/:id/pagos/:pagoId', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
@@ -259,7 +208,6 @@ router.delete('/:id/pagos/:pagoId', async (req, res) => {
         proyecto.montoPagado -= pago.monto;
         pago.deleteOne(); 
         
-        // Si se elimina un pago y queda deuda, regresa a pendiente
         if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) {
             proyecto.estatus = 'Pendiente de Pago';
         }
