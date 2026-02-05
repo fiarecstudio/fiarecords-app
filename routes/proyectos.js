@@ -5,7 +5,9 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// Definir el esquema aquí o importarlo si tienes modelo separado
+// --- ESQUEMAS DE BASE DE DATOS ---
+// Definimos los esquemas aquí mismo para asegurar que no falte ningún modelo
+
 const ItemSchema = new mongoose.Schema({
     servicio: String, // ID del servicio
     nombre: String,
@@ -16,12 +18,12 @@ const ItemSchema = new mongoose.Schema({
 const PagoSchema = new mongoose.Schema({
     monto: Number,
     metodo: String,
-    fecha: Date,
+    fecha: { type: Date, default: Date.now },
     artista: String
 });
 
 const ProyectoSchema = new mongoose.Schema({
-    artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' }, // Referencia o null
+    artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' }, // Referencia al artista o null
     nombreProyecto: String,
     items: [ItemSchema],
     total: Number,
@@ -40,11 +42,13 @@ const ProyectoSchema = new mongoose.Schema({
     detallesDistribucion: { type: Object, default: {} }
 });
 
-const Proyecto = mongoose.model('Proyecto', ProyectoSchema);
+// Evitar error si el modelo ya fue compilado
+const Proyecto = mongoose.models.Proyecto || mongoose.model('Proyecto', ProyectoSchema);
 
-// --- RUTAS ---
 
-// 1. Obtener todos (para caché inicial)
+// --- RUTAS DE LA API ---
+
+// 1. Obtener todos los proyectos (Caché inicial)
 router.get('/', async (req, res) => {
     try {
         const proyectos = await Proyecto.find().populate('artista').sort({ fecha: 1 });
@@ -52,7 +56,7 @@ router.get('/', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. Obtener agenda (proyectos activos)
+// 2. Obtener agenda (proyectos activos para el calendario)
 router.get('/agenda', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ 
@@ -78,7 +82,7 @@ router.get('/agenda', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Obtener cotizaciones
+// 3. Obtener solo cotizaciones
 router.get('/cotizaciones', async (req, res) => {
     try {
         const cotizaciones = await Proyecto.find({ estatus: 'Cotizacion' }).populate('artista');
@@ -86,7 +90,7 @@ router.get('/cotizaciones', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Obtener completados (Historial)
+// 4. Obtener proyectos completados (Historial)
 router.get('/completos', async (req, res) => {
     try {
         const completos = await Proyecto.find({ proceso: 'Completo' }).populate('artista').sort({ fecha: -1 });
@@ -94,7 +98,7 @@ router.get('/completos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Obtener pagos globales
+// 5. Obtener todos los pagos (Reportes)
 router.get('/pagos/todos', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ "pagos.0": { $exists: true } });
@@ -116,7 +120,7 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Obtener por Artista
+// 6. Obtener historial por Artista específico
 router.get('/por-artista/:id', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ artista: req.params.id }).populate('artista').sort({ fecha: -1 });
@@ -124,7 +128,7 @@ router.get('/por-artista/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 7. Obtener UNO por ID
+// 7. Obtener un proyecto por ID
 router.get('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
@@ -133,30 +137,37 @@ router.get('/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 8. CREAR PROYECTO
+// 8. CREAR NUEVO PROYECTO
 router.post('/', async (req, res) => {
     try {
-        // Quitamos _id si viene temp para que Mongo genere uno
-        if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
+        // Limpieza de ID temporal si viene del frontend offline
+        if (req.body._id && req.body._id.startsWith('temp')) {
+            delete req.body._id;
+        }
         
         const nuevo = new Proyecto(req.body);
         const guardado = await nuevo.save();
+        
+        // Devolvemos el objeto populado si es posible, si no, el objeto simple
         res.status(201).json(guardado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 9. ACTUALIZAR PROCESO (Kanban)
+// 9. ACTUALIZAR PROCESO (Columna Kanban)
 router.put('/:id/proceso', async (req, res) => {
     try {
-        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { 
-            proceso: req.body.proceso,
-            estatus: req.body.proceso === 'Agendado' ? 'Pendiente de Pago' : undefined // Si se aprueba cotizacion
-        }, { new: true });
+        const updateData = { proceso: req.body.proceso };
+        // Si se mueve de cotización a agendado, cambiar estatus
+        if (req.body.proceso === 'Agendado') {
+            updateData.estatus = 'Pendiente de Pago';
+        }
+        
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 10. ACTUALIZAR ESTATUS (Para Cancelar) - ESTA ERA LA RUTA QUE FALTABA
+// 10. ACTUALIZAR ESTATUS (Vital para Cancelar Citas)
 router.put('/:id/estatus', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { 
@@ -166,7 +177,7 @@ router.put('/:id/estatus', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 11. ACTUALIZAR NOMBRE
+// 11. ACTUALIZAR NOMBRE DEL PROYECTO
 router.put('/:id/nombre', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true });
@@ -174,7 +185,7 @@ router.put('/:id/nombre', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 12. ACTUALIZAR FECHA
+// 12. ACTUALIZAR FECHA Y HORA
 router.put('/:id/fecha', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true });
@@ -182,7 +193,7 @@ router.put('/:id/fecha', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 13. ACTUALIZAR ENLACE ENTREGA
+// 13. ACTUALIZAR ENLACE DE ENTREGA
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true });
@@ -206,7 +217,7 @@ router.post('/:id/pagos', async (req, res) => {
         proyecto.pagos.push(nuevoPago);
         proyecto.montoPagado = (proyecto.montoPagado || 0) + req.body.monto;
         
-        // Auto-actualizar estatus si se paga completo
+        // Auto-actualizar estatus si se completa el pago
         if (proyecto.montoPagado >= proyecto.total - (proyecto.descuento || 0)) {
             proyecto.estatus = 'Pagado';
         }
@@ -216,7 +227,7 @@ router.post('/:id/pagos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 15. GUARDAR DOCUMENTOS
+// 15. GUARDAR DOCUMENTOS (Contrato/Distribución)
 router.put('/:id/documentos', async (req, res) => {
     try {
         const update = {};
@@ -231,13 +242,12 @@ router.put('/:id/documentos', async (req, res) => {
 // 16. ELIMINAR PROYECTO
 router.delete('/:id', async (req, res) => {
     try {
-        // En un sistema real moveríamos a una colección 'Papelera', aquí borramos físico
         await Proyecto.findByIdAndDelete(req.params.id);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 17. ELIMINAR PAGO
+// 17. ELIMINAR PAGO ESPECÍFICO
 router.delete('/:id/pagos/:pagoId', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
@@ -247,9 +257,10 @@ router.delete('/:id/pagos/:pagoId', async (req, res) => {
         if(!pago) return res.status(404).json({error: 'Pago no encontrado'});
 
         proyecto.montoPagado -= pago.monto;
-        pago.deleteOne(); // Sintaxis Mongoose subdocumento
+        pago.deleteOne(); 
         
-        if (proyecto.montoPagado < proyecto.total) {
+        // Si se elimina un pago y queda deuda, regresa a pendiente
+        if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) {
             proyecto.estatus = 'Pendiente de Pago';
         }
 
