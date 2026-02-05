@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>FiaRecords Studio - Gestión Pro</title>
   
-  <!-- PWA -->
+  <!-- PWA: Manifiesto y Color del Tema -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -24,29 +24,43 @@
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
   <style>
-    body { visibility: hidden; }
+    /* CORRECCIÓN: Eliminado para evitar pantalla negra */
+    /* body { visibility: hidden; } */
+    
     :root {
       /* Colores Base */
       --primary-color: #6366f1; 
       --primary-hover: #4f46e5;
       --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      
       --danger-color: #ef4444; 
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      
       --success-color: #10b981;
       --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      
       --warning-color: #f59e0b;
+      
+      /* Fondos y Estructura */
       --background-color: #f3f4f6;
       --card-background: #ffffff;
       --sidebar-background: #ffffff;
+      
+      /* Texto */
       --text-color-dark: #111827;
       --text-color-light: #6b7280;
+      
+      /* Bordes y Sombras */
       --border-color: #e5e7eb;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      
       --form-control-bg: #f9fafb;
       --secondary-button-bg: #f3f4f6; 
       --secondary-button-text: #374151; 
       --secondary-button-hover-bg: #e5e7eb;
+
+      /* Procesos */
       --proceso-Agendado: #3b82f6; 
       --proceso-Grabacion: #8b5cf6; 
       --proceso-Edicion: #ec4899; 
@@ -77,7 +91,7 @@
     body { font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); line-height: 1.6; overflow-x: hidden; }
 
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; }
-    /* Corrección Logo */
+    /* Corrección Logo: Invertir en modo claro para que sea negro si la imagen es blanca */
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
     
     #loader-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
@@ -167,7 +181,6 @@
     body.dark-mode tbody tr:nth-child(even) { background-color: rgba(255,255,255,0.02); }
     tbody tr:hover { background-color: var(--secondary-button-bg); }
 
-    /* MÓVIL */
     @media (max-width: 768px) {
         .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive th, .table-responsive td, .table-responsive tr { display: block; width: 100%; }
         .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
@@ -189,6 +202,12 @@
         #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
         #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
         #tablaHistorialBody td:nth-of-type(5):before { content: ""; display: none; }
+        
+        /* Nuevos selectores responsive para la tabla de Deudas */
+        #tablaDeudasBody td:nth-of-type(1):before { content: "Artista:"; }
+        #tablaDeudasBody td:nth-of-type(2):before { content: "Proyecto:"; }
+        #tablaDeudasBody td:nth-of-type(3):before { content: "Deuda:"; }
+        
         #vista-artista-contenido .table-responsive tr { display: flex; flex-direction: column; }
         #vista-artista-contenido .table-responsive td { padding-left: 0 !important; text-align: left; }
         #vista-artista-contenido .table-responsive td:before { display: none; } 
@@ -234,6 +253,7 @@
         --fc-border-color: transparent; 
         --fc-event-border-color: transparent; 
         padding: 0.5rem; 
+        /* QUITAR HEIGHT FIJO, DEJAR QUE CREZCA */
     }
     
     .fc-event { cursor: pointer; padding: 3px; font-size: 0.85em; border-radius: 6px; border: none !important; margin-bottom: 2px; }
@@ -426,7 +446,24 @@
             <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
             <section id="cotizaciones"><div class="card"><div class="card-header"><h2>Cotizaciones Pendientes</h2></div><div class="table-responsive"><table><thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="tablaCotizacionesBody"></tbody></table></div></div></section>
             <section id="flujo-trabajo"><div class="card" style="background: transparent; border: none; box-shadow: none; padding: 0;"><div class="card-header" style="background: var(--card-background); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: var(--shadow);"><h2>Flujo de Trabajo</h2><div class="filter-buttons" id="filtrosFlujo" style="margin-top: 1rem; margin-bottom: 0;"></div></div><div class="kanban-board" id="kanbanBoard"></div></div></section>
-            <section id="pagos"><div class="card"><div class="card-header"><h2>Historial de Pagos</h2></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div></div></section>
+            
+            <section id="pagos">
+              <!-- NUEVA TABLA DE CUENTAS POR COBRAR -->
+              <div class="card" style="border-left: 5px solid var(--warning-color);">
+                <div class="card-header"><h2>Cuentas por Cobrar (Deudas)</h2></div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>Artista / Cliente</th><th>Proyecto</th><th>Monto Pendiente</th><th>Acciones</th></tr></thead>
+                        <tbody id="tablaDeudasBody"></tbody>
+                    </table>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header"><h2>Historial de Pagos</h2></div>
+                <div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="tablaPagosBody"></tbody></table></div>
+              </div>
+            </section>
+
             <section id="registrar-proyecto"><div class="card" style="max-width: 800px; margin: auto;"><div class="card-header"><h2>Nuevo Proyecto o Cotización</h2></div><form id="formProyecto" onsubmit="return false;"><label for="proyectoArtista">Artista/Cliente</label><div id="artista-selector-container"><select id="proyectoArtista"><option value="publico_general">Público General</option></select><button type="button" id="btnNuevoArtista" title="Registrar nuevo artista" class="btn-primary" style="padding: 0.75rem 1rem;">+</button></div>
               <div id="nuevoArtistaContainer"><label>Nombre del Nuevo Artista</label><div class="form-row" style="align-items: center; gap: 0.5rem;"><input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;"><button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; white-space: nowrap; flex-shrink: 0; padding: 0.75rem;">Guardar</button></div></div>
               <div><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div><div><input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-right: 0.5rem;"><label for="esAlbum" style="display: inline;">Es un Disco/EP</label></div><hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);"><h3>Añadir Servicios</h3><div class="form-row"><div class="form-group"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div><div class="form-group"><label for="proyectoUnidades">Unidades</label><input type="number" id="proyectoUnidades" min="1" value="1"></div></div><button type="button" id="btnAgregarAProyecto" style="width:100%;">Agregar Servicio</button><ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul>
@@ -546,123 +583,28 @@
     </div>
   </div>
 
-  <div id="document-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title">Generar Documentos</h2>
-        <button class="modal-close" onclick="app.closeDocumentsModal()">×</button>
-      </div>
-      <input type="hidden" id="modal-project-id">
-      <div class="filter-buttons">
-          <button id="btn-show-contrato" class="active" onclick="app.showDocumentSection('contrato')">Contrato de Grabación</button>
-          <button id="btn-show-distribucion" onclick="app.showDocumentSection('distribucion')">Distribución Digital</button>
-      </div>
-      <div id="section-contrato" class="document-section active">
-        <h3>Detalles del Contrato</h3>
-        <label for="contrato-nombre-album">Nombre del Álbum/EP</label>
-        <input type="text" id="contrato-nombre-album">
-        <label for="contrato-canciones">Cantidad de Canciones</label>
-        <input type="number" id="contrato-canciones">
-        <label for="contrato-duracion">Duración del Contrato (incluir unidad, ej: 3 Semanas, 1 Mes)</label>
-        <input type="text" id="contrato-duracion">
-        <label for="contrato-pago-inicial">Pago Inicial ($)</label>
-        <input type="number" id="contrato-pago-inicial" oninput="app.calcularSaldoContrato()">
-        <label for="contrato-pago-final">Saldo Restante ($)</label>
-        <input type="number" id="contrato-pago-final" readonly>
-        <button onclick="app.saveAndGenerateContract()" style="width: 100%; margin-top: 1rem;">Guardar y Generar Contrato PDF</button>
-      </div>
-      <div id="section-distribucion" class="document-section">
-        <h3>Detalles de Distribución</h3>
-        <label for="dist-titulo">Título del Lanzamiento (Álbum/Sencillo)</label>
-        <input type="text" id="dist-titulo">
-        <label for="dist-fecha">Fecha de Lanzamiento</label>
-        <input type="text" id="dist-fecha">
-        <label for="dist-upc">Código UPC/EAN</label>
-        <input type="text" id="dist-upc" placeholder="Código de barras del álbum">
-        <hr style="margin: 1.5rem 0;">
-        <h4>Tracks y Códigos ISRC</h4>
-        <div id="dist-tracks-container"></div>
-        <button onclick="app.addTrackField()" class="btn-secondary" style="width: 100%; margin-bottom: 1rem;">+ Añadir Track</button>
-        <button onclick="app.saveAndGenerateDistribution()" style="width: 100%;">Guardar y Generar Documento PDF</button>
-      </div>
-    </div>
-  </div>
-  
-  <div id="event-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2 id="modal-event-title">Detalles del Proyecto</h2>
-            <button class="modal-close" onclick="app.closeEventModal()">×</button>
-        </div>
-        <input type="hidden" id="modal-event-id">
-        <p><strong>Fecha:</strong> <span id="modal-event-date"></span></p>
-        <p><strong>Total:</strong> <span id="modal-event-total"></span></p>
-        <p><strong>Estado:</strong> <span id="modal-event-status"></span></p>
-        <p><strong>Proceso:</strong> <span id="modal-event-process"></span></p>
-        <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Servicios:</h4>
-        <ul id="modal-event-services" style="list-style-position: inside; padding-left: 0;"></ul>
-        
-        <!-- SECCIÓN PARA EDITAR FECHA Y HORA -->
-        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-button-bg); border-radius: 12px;">
-            <h4 style="margin-bottom: 0.5rem; margin-top: 0;">Reprogramar Cita</h4>
-            <div class="form-row">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label style="font-size: 0.8em;">Nueva Fecha</label>
-                    <input type="text" id="edit-event-date" style="margin-bottom: 0.5rem;">
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label style="font-size: 0.8em;">Nueva Hora</label>
-                    <input type="time" id="edit-event-time" style="margin-bottom: 0.5rem;">
-                </div>
-            </div>
-            <button onclick="app.actualizarHorarioProyecto()" style="width: 100%; padding: 0.5rem; font-size: 0.9em; margin-top: 0.5rem;">Actualizar Fecha/Hora</button>
-        </div>
-
-        <div class="form-actions" style="margin-top: 1.5rem;">
-            <button id="btn-go-to-workflow" class="btn-secondary" onclick="">Ir al Flujo de Trabajo</button>
-            <button id="btn-go-to-artist" onclick="">Ver Historial del Artista</button>
-        </div>
-    </div>
-  </div>
-  
-  <div id="delivery-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Gestionar Entrega de Proyecto</h2>
-        <button class="modal-close" onclick="app.closeDeliveryModal()">×</button>
-      </div>
-      <input type="hidden" id="delivery-project-id">
-      <input type="hidden" id="delivery-artist-name">
-      <input type="hidden" id="delivery-project-name">
-      <div class="form-group">
-        <label for="delivery-link-input">Enlace de Descarga (Google Drive, WeTransfer, etc.)</label>
-        <input type="url" id="delivery-link-input" placeholder="Pega el enlace aquí">
-      </div>
-      <div class="form-actions">
-        <button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar Enlace</button>
-        <button onclick="app.sendDeliveryByWhatsapp()">Enviar por WhatsApp</button>
-      </div>
-    </div>
-  </div>
+  <!-- MODALS -->
+  <div id="document-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2 id="modal-title">Generar Documentos</h2><button class="modal-close" onclick="app.closeDocumentsModal()">×</button></div><input type="hidden" id="modal-project-id"><div class="filter-buttons"><button id="btn-show-contrato" class="active" onclick="app.showDocumentSection('contrato')">Contrato de Grabación</button><button id="btn-show-distribucion" onclick="app.showDocumentSection('distribucion')">Distribución Digital</button></div><div id="section-contrato" class="document-section active"><h3>Detalles del Contrato</h3><label for="contrato-nombre-album">Nombre del Álbum/EP</label><input type="text" id="contrato-nombre-album"><label for="contrato-canciones">Cantidad de Canciones</label><input type="number" id="contrato-canciones"><label for="contrato-duracion">Duración del Contrato</label><input type="text" id="contrato-duracion"><label for="contrato-pago-inicial">Pago Inicial ($)</label><input type="number" id="contrato-pago-inicial" oninput="app.calcularSaldoContrato()"><label for="contrato-pago-final">Saldo Restante ($)</label><input type="number" id="contrato-pago-final" readonly><button onclick="app.saveAndGenerateContract()" style="width: 100%; margin-top: 1rem;">Guardar y Generar Contrato PDF</button></div><div id="section-distribucion" class="document-section"><h3>Detalles de Distribución</h3><label for="dist-titulo">Título del Lanzamiento</label><input type="text" id="dist-titulo"><label for="dist-fecha">Fecha de Lanzamiento</label><input type="text" id="dist-fecha"><label for="dist-upc">Código UPC/EAN</label><input type="text" id="dist-upc" placeholder="Código de barras"><hr style="margin: 1.5rem 0;"><h4>Tracks y Códigos ISRC</h4><div id="dist-tracks-container"></div><button onclick="app.addTrackField()" class="btn-secondary" style="width: 100%; margin-bottom: 1rem;">+ Añadir Track</button><button onclick="app.saveAndGenerateDistribution()" style="width: 100%;">Guardar y Generar Documento PDF</button></div></div></div>
+  <div id="event-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2 id="modal-event-title">Detalles del Proyecto</h2><button class="modal-close" onclick="app.closeEventModal()">×</button></div><input type="hidden" id="modal-event-id"><p><strong>Fecha:</strong> <span id="modal-event-date"></span></p><p><strong>Total:</strong> <span id="modal-event-total"></span></p><p><strong>Estado:</strong> <span id="modal-event-status"></span></p><p><strong>Proceso:</strong> <span id="modal-event-process"></span></p><h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Servicios:</h4><ul id="modal-event-services" style="list-style-position: inside; padding-left: 0;"></ul><div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-button-bg); border-radius: 12px;"><h4 style="margin-bottom: 0.5rem; margin-top: 0;">Reprogramar Cita</h4><div class="form-row"><div class="form-group" style="margin-bottom:0;"><label style="font-size: 0.8em;">Nueva Fecha</label><input type="text" id="edit-event-date" style="margin-bottom: 0.5rem;"></div><div class="form-group" style="margin-bottom:0;"><label style="font-size: 0.8em;">Nueva Hora</label><input type="time" id="edit-event-time" style="margin-bottom: 0.5rem;"></div></div><button onclick="app.actualizarHorarioProyecto()" style="width: 100%; padding: 0.5rem; font-size: 0.9em; margin-top: 0.5rem;">Actualizar Fecha/Hora</button></div><div class="form-actions" style="margin-top: 1.5rem;"><button id="btn-go-to-workflow" class="btn-secondary" onclick="">Ir al Flujo de Trabajo</button><button id="btn-go-to-artist" onclick="">Ver Historial del Artista</button></div></div></div>
+  <div id="delivery-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Gestionar Entrega de Proyecto</h2><button class="modal-close" onclick="app.closeDeliveryModal()">×</button></div><input type="hidden" id="delivery-project-id"><input type="hidden" id="delivery-artist-name"><input type="hidden" id="delivery-project-name"><div class="form-group"><label for="delivery-link-input">Enlace de Descarga</label><input type="url" id="delivery-link-input" placeholder="Pega el enlace aquí"></div><div class="form-actions"><button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar Enlace</button><button onclick="app.sendDeliveryByWhatsapp()">Enviar por WhatsApp</button></div></div></div>
   
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let isInitialized = false; 
       let proyectoActual = {}; 
-      let logoBase64 = null; // Para PDFs offline
-
+      
       // 1. INICIALIZAR CACHÉ (Memoria + LocalStorage)
       let localCache = {
           artistas: JSON.parse(localStorage.getItem('cache_artistas') || '[]'),
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
-          cotizaciones: [], // Se derivan de proyectos
-          historial: [],    // Se derivan de proyectos
+          cotizaciones: [], 
+          historial: [],
           pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
           usuarios: []
       };
       
-      let currentCalendar = null; let configCache = null; let chartInstance = null; const API_URL = '';
+      let currentCalendar = null; let configCache = null; let chartInstance = null; let logoBase64 = null; const API_URL = '';
       const DOMElements = { loginContainer: document.getElementById('login-container'), appWrapper: document.getElementById('app-wrapper'), logoutButton: document.getElementById('logout-button'), welcomeUser: document.getElementById('welcome-user'), appLogo: document.getElementById('app-logo'), loginLogo: document.getElementById('login-logo'), customizationContainer: document.getElementById('customization-container'), logoInput: document.getElementById('logo-input'), connectionStatus: document.getElementById('connection-status'), connectionText: document.getElementById('connection-text') };
       
       const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
@@ -673,9 +615,10 @@
       function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
       async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
 
-      // CONVERTIR IMAGEN A BASE64 (Vital para PDFs offline)
+      // PRECARGAR LOGO A BASE64 PARA PDF OFFLINE
       async function preloadLogoForPDF() {
           const imgUrl = DOMElements.appLogo.src;
+          if (imgUrl.includes('placeholder')) return;
           try {
               const response = await fetch(imgUrl);
               const blob = await response.blob();
@@ -684,10 +627,26 @@
               reader.readAsDataURL(blob);
           } catch(e) { console.warn("No se pudo precargar logo para PDF offline"); }
       }
+      
+      // HELPER: INVERTIR COLOR LOGO (CANVAS)
+      async function getInvertedLogoDataUrl(base64) {
+          return new Promise((resolve) => {
+              const img = new Image();
+              img.src = base64;
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.filter = 'invert(1)';
+                  ctx.drawImage(img, 0, 0);
+                  resolve(canvas.toDataURL('image/png'));
+              };
+              img.onerror = () => resolve(null);
+          });
+      }
 
-      // ======================================================
-      // 2. OFFLINE MANAGER MEJORADO
-      // ======================================================
+      // OFFLINE MANAGER
       const OfflineManager = {
           QUEUE_KEY: 'fia_offline_queue',
           getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -699,9 +658,7 @@
           },
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
-              const isOnline = navigator.onLine;
-              
-              if (isOnline) {
+              if (navigator.onLine) {
                   if (queue.length > 0) {
                       DOMElements.connectionStatus.className = 'connection-status status-syncing';
                       DOMElements.connectionText.textContent = `Sincronizando (${queue.length})`;
@@ -712,7 +669,7 @@
                   }
               } else {
                   DOMElements.connectionStatus.className = 'connection-status status-offline';
-                  DOMElements.connectionText.textContent = queue.length > 0 ? `Offline (${queue.length} ptes)` : 'Modo Offline';
+                  DOMElements.connectionText.textContent = queue.length > 0 ? `Offline (${queue.length})` : 'Modo Offline';
               }
           },
           sync: async () => {
@@ -723,30 +680,32 @@
               const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
               let newQueue = [];
               
-              // Procesar secuencialmente
               for (const req of queue) {
                   try {
-                      let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
-                      if(bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id; // Quitar ID temporal para que Mongo cree uno real
-
-                      const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
+                      let bodyStr = req.options.body;
+                      // Eliminar IDs temporales antes de subir
+                      if(bodyStr) {
+                         const bodyObj = JSON.parse(bodyStr);
+                         if(bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id;
+                         bodyStr = JSON.stringify(bodyObj);
+                      }
+                      
+                      const reqOptions = { ...req.options, body: bodyStr, headers: { ...req.options.headers, ...headers } };
+                      const res = await fetch(req.url, reqOptions);
                       if(!res.ok) throw new Error('Failed');
                   } catch (e) {
-                      newQueue.push(req); // Si falla, regresa a la cola
+                      newQueue.push(req);
                   }
               }
               localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
               if(newQueue.length === 0) { 
                   showToast('Sincronización completada', 'success'); 
-                  // Recargar datos frescos del servidor
-                  const proms = [
-                      fetchAPI('/api/proyectos'), 
-                      fetchAPI('/api/artistas'),
-                      fetchAPI('/api/servicios')
-                  ];
-                  await Promise.all(proms);
-                  const currentHash = location.hash.replace('#', '');
-                  if (currentHash) window.app.mostrarSeccion(currentHash, false);
+                  // Recargar datos frescos
+                  await Promise.all([
+                      cargarDashboard(),
+                      renderList('artistas'),
+                      renderList('servicios')
+                  ]);
               }
               OfflineManager.updateIndicator();
           },
@@ -755,112 +714,67 @@
 
       window.app = { syncNow: OfflineManager.syncNow };
 
-      // ======================================================
-      // 3. FETCH API INTELIGENTE (OPTIMISTIC UI)
-      // ======================================================
+      // FETCH API CON LÓGICA HÍBRIDA
       async function fetchAPI(url, options = {}) { 
         const token = localStorage.getItem('token'); 
         if (!token) { showLogin(); throw new Error('No autenticado'); } 
         const headers = { 'Authorization': `Bearer ${token}` }; 
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
-        // --- A. LECTURA (GET) ---
-        if ((!options.method || options.method === 'GET')) {
-             // Si estamos offline, devolver caché LOCAL inmediatamente
-             if (!navigator.onLine) {
-                 if(url.includes('/artistas')) return localCache.artistas;
-                 if(url.includes('/servicios')) return localCache.servicios;
-                 if(url.includes('/proyectos')) {
-                     // Filtrar según endpoint si es necesario
-                     if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion');
-                     if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado');
-                     if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado').map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
-                     return localCache.proyectos;
-                 }
-                 if(url.includes('/pagos')) return localCache.pagos;
-                 // Dashboard stats offline (Calculo manual básico)
-                 if(url.includes('/dashboard/stats')) {
-                     const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').length;
-                     const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado||0)) > 0 && p.estatus !== 'Cancelado').length;
-                     // Ingresos mes (aprox)
-                     const now = new Date();
-                     const ingresosMes = localCache.pagos.filter(p => {
-                         const d = new Date(p.fecha);
-                         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                     }).reduce((sum, p) => sum + p.monto, 0);
-                     return { ingresosMes, proyectosActivos: activos, proyectosPorCobrar: porCobrar, monthlyIncome: [] };
-                 }
+        // --- LECTURA (GET) ---
+        if ((!options.method || options.method === 'GET') && !navigator.onLine) {
+             if(url.includes('/artistas')) return localCache.artistas;
+             if(url.includes('/servicios')) return localCache.servicios;
+             if(url.includes('/proyectos')) {
+                 if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion');
+                 else if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado');
+                 else if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado').map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? (p.artista.nombre || 'Sin Nombre') : 'Sin Nombre'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: (p.items||[]).map(i=>i.nombre).join('\n') } }));
+                 else return localCache.proyectos;
              }
+             if(url.includes('/pagos')) return localCache.pagos;
         }
 
-        // --- B. ESCRITURA (POST/PUT/DELETE) ---
-        // Actualizar UI INMEDIATAMENTE (Optimistic) y luego intentar red
-        if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-            const body = options.body ? JSON.parse(options.body) : {};
-            const tempId = body._id || `temp_${Date.now()}`;
-            
-            // ACTUALIZAR CACHÉ LOCAL AL INSTANTE
-            if (url.includes('/proyectos')) {
-                if (options.method === 'POST') {
-                    const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [] };
-                    // Buscar nombre de artista si viene solo ID
-                    if(nuevoProyecto.artista && typeof nuevoProyecto.artista === 'string') {
-                        const art = localCache.artistas.find(a => a._id === nuevoProyecto.artista);
-                        if(art) nuevoProyecto.artista = art;
-                    }
-                    localCache.proyectos.push(nuevoProyecto);
-                } else if (options.method === 'PUT') {
-                    // Buscar y actualizar (Manejo correcto de URL complejas ej: /api/proyectos/123/estatus)
-                    let idTarget = url.split('/').pop(); // /api/proyectos/ID
-                    
-                    // Si la url termina en una sub-accion (estatus, proceso), el ID es el anterior
-                    if(['estatus', 'proceso', 'nombre', 'enlace-entrega', 'fecha'].includes(idTarget)) {
-                        const parts = url.split('/');
-                        idTarget = parts[parts.length - 2];
-                    }
+        // --- ESCRITURA (POST/PUT/DELETE) ---
+        if (!navigator.onLine && options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+            const tempId = `temp_${Date.now()}`;
+            let mockResponse = { ok: true, offline: true, _id: tempId };
+            let body = {};
+            if (options.body) body = JSON.parse(options.body);
 
-                    const idx = localCache.proyectos.findIndex(p => p._id === idTarget);
+            // Actualizar caché local inmediatamente (Optimistic UI)
+            if (url.includes('/proyectos')) {
+                if(options.method === 'POST') {
+                    const newProj = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [] };
+                    // Vincular artista si es posible
+                    if(typeof newProj.artista === 'string') {
+                         const art = localCache.artistas.find(a => a._id === newProj.artista);
+                         if(art) newProj.artista = art;
+                    }
+                    localCache.proyectos.push(newProj);
+                    localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
+                    mockResponse = { ...newProj, offline: true };
+                } else if (options.method === 'PUT') {
+                    // Buscar ID en URL, manejando subrutas complejas
+                    let id = url.split('/').pop();
+                    if(['estatus','proceso','nombre'].includes(id)) {
+                        const parts = url.split('/');
+                        id = parts[parts.length - 2];
+                    }
+                    const idx = localCache.proyectos.findIndex(p => p._id === id);
                     if(idx !== -1) {
                         localCache.proyectos[idx] = { ...localCache.proyectos[idx], ...body };
-                        // Casos especiales (pagos, proceso, estatus)
-                        if(url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
                         if(url.includes('/estatus')) localCache.proyectos[idx].estatus = body.estatus;
+                        if(url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
+                        localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
                     }
-                } else if (options.method === 'DELETE') {
-                    const idTarget = url.split('/').pop();
-                    localCache.proyectos = localCache.proyectos.filter(p => p._id !== idTarget);
                 }
-                localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
             }
             
-            // Manejo especial Pagos Offline
-            if (url.includes('/pagos') && options.method === 'POST') {
-               const idProy = url.split('/')[3]; // /api/proyectos/ID/pagos
-               const proy = localCache.proyectos.find(p => p._id === idProy);
-               if(proy) {
-                   const nuevoPago = { _id: `temp_pago_${Date.now()}`, monto: body.monto, metodo: body.metodo, fecha: new Date().toISOString(), proyectoId: idProy, artista: proy.artista ? proy.artista.nombre : 'General' };
-                   proy.pagos = proy.pagos || [];
-                   proy.pagos.push(nuevoPago);
-                   proy.montoPagado = (proy.montoPagado || 0) + body.monto;
-                   // Agregar al cache global de pagos tambien
-                   localCache.pagos.push(nuevoPago);
-                   localStorage.setItem('cache_pagos', JSON.stringify(localCache.pagos));
-                   localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
-               }
-            }
-
-            // Si NO hay internet, encolar y retornar falso éxito
-            if (!navigator.onLine) {
-                OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                // Retornar objeto simulado para que la UI no rompa
-                if (url.includes('/proyectos') && options.method === 'POST') {
-                    return { ...body, _id: tempId, offline: true };
-                }
-                return { ok: true, offline: true };
-            }
+            OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
+            return mockResponse;
         }
 
-        // --- C. INTENTO DE RED (NORMAL) ---
+        // --- ONLINE ---
         showLoader();
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
@@ -869,33 +783,24 @@
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
             
-            // ACTUALIZAR CACHÉ PERSISTENTE CON LA RESPUESTA FRESCA
+            // ACTUALIZAR CACHÉ PERSISTENTE
             if (!options.method || options.method === 'GET') {
                 if(url.includes('/artistas')) { localCache.artistas = data; localStorage.setItem('cache_artistas', JSON.stringify(data)); }
                 if(url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
                 if(url.includes('/proyectos') && !url.includes('agenda')) { 
-                    // Si traemos todos o lista, actualizamos el master list
                     if(Array.isArray(data) && url === '/api/proyectos') {
-                        localCache.proyectos = data;
-                        localStorage.setItem('cache_proyectos', JSON.stringify(data));
+                        localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data));
                     }
                 }
                 if(url.includes('/pagos/todos')) { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
             }
             return data; 
         } catch(e) {
-            // SI FALLA LA RED, FALLBACK A OFFLINE
-            if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-                OfflineManager.updateIndicator(); 
-                if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-                     const tempId = `temp_${Date.now()}`;
-                     OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                     return { ok: true, offline: true, _id: tempId };
-                }
-                // Si falla un GET, devolver caché viejo
-                if(url.includes('/artistas')) return localCache.artistas;
-                if(url.includes('/servicios')) return localCache.servicios;
-                if(url.includes('/proyectos')) return localCache.proyectos;
+            // Fallback si falla red pero no estamos "offline" oficialmente
+            if (options.method === 'GET') {
+                 if(url.includes('/artistas')) return localCache.artistas;
+                 if(url.includes('/servicios')) return localCache.servicios;
+                 if(url.includes('/proyectos')) return localCache.proyectos;
             }
             throw e;
         } finally {
@@ -911,45 +816,31 @@
       }
 
       async function loadPublicLogo() {
-          // Intentar carga online
           try {
               const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
               if (!res.ok) return;
               const data = await res.json();
               if (data && data.filePath) {
-                  const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
+                  const cacheBuster = `?t=${new Date().getTime()}`;
+                  const logoSrc = data.filePath + cacheBuster;
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
+                  setTimeout(preloadLogoForPDF, 1000);
               }
-          } catch (e) { console.warn("Offline: Usando logo cacheado o placeholder"); }
+          } catch (e) { console.error("Logo error:", e); }
       }
 
-      async function loadInitialConfig() { 
-          try { 
-              const config = await fetchAPI('/api/configuracion'); 
-              configCache = config; 
-              if (config.logoPath) { 
-                  DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; 
-              } 
-          } catch (e) { 
-              console.warn("Config Offline"); 
-              // Defaults offline config
-              configCache = { firmaPos: { cotizacion: {vAlign:'bottom',hAlign:'right',w:50,h:20,offsetX:0,offsetY:0} } }; 
-          } 
-      }
+      async function loadInitialConfig() { try { const config = await fetchAPI('/api/configuracion'); configCache = config; if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } } catch (e) { console.error("Config error:", e); } }
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
       (async function init() { 
         await loadPublicLogo();
-        // Precargar logo para PDFs en cuanto sea posible
-        setTimeout(preloadLogoForPDF, 2000); 
-        
         applyTheme(localStorage.getItem('theme') || 'light'); 
         const token = localStorage.getItem('token'); 
         if (token) { 
             try { 
                 const payload = JSON.parse(atob(token.split('.')[1])); 
-                // Token expirado? En offline permitimos entrar para ver datos viejos
+                // Solo validar expiración estricta si hay red
                 if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin(); 
                 await showApp(payload); 
             } catch (e) { showLogin(); } 
@@ -968,20 +859,22 @@
         DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; } 
         
+        // Carga inicial segura
         const hashSection = location.hash.replace('#', '');
         mostrarSeccion(hashSection || 'dashboard', false);
         
+        // Listeners for Offline Mode
         OfflineManager.updateIndicator();
         window.addEventListener('online', () => { OfflineManager.updateIndicator(); });
         window.addEventListener('offline', () => { OfflineManager.updateIndicator(); });
-
+        
+        // Forzar visibilidad al final
         document.body.style.visibility = 'visible'; 
       }
       function showLogin() { localStorage.removeItem('token'); DOMElements.loginContainer.style.display = 'block'; DOMElements.appWrapper.style.display = 'none'; document.body.style.visibility = 'visible'; }
       
       document.getElementById('login-form').addEventListener('submit', async (e) => { 
         e.preventDefault(); 
-        if (!navigator.onLine) { return showToast('Necesitas internet para iniciar sesión por primera vez o revalidar.', 'error'); }
         showLoader();
         try { 
             const res = await fetch(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
@@ -998,6 +891,7 @@
       
       DOMElements.logoutButton.addEventListener('click', showLogin);
       
+      // FUNCIÓN CORE: Navegación y Carga de Datos
       async function mostrarSeccion(id, updateHistory = true) { 
         document.querySelectorAll('section').forEach(sec => sec.classList.remove('active')); 
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active-link')); 
@@ -1019,7 +913,8 @@
             if(searchInput) { searchInput.value = ''; }
 
             const loadDataActions = { 'dashboard': cargarDashboard, 'agenda': cargarAgenda, 'cotizaciones': cargarCotizaciones, 'flujo-trabajo': cargarFlujoDeTrabajo, 'pagos': cargarPagos, 'registrar-proyecto': cargarOpcionesParaProyecto, 'registro-manual': cargarOpcionesParaProyectoManual, 'historial-proyectos': cargarHistorial, 'gestion-servicios': () => renderList('servicios'), 'gestion-artistas': () => renderList('artistas', true), 'gestion-usuarios': () => renderList('usuarios'), 'papelera-reciclaje': cargarPapelera, 'configuracion': cargarConfiguracion, }; 
-            await loadDataActions[id]?.(); 
+            // Usamos await opcional para no bloquear la UI si falla
+            try { await loadDataActions[id]?.(); } catch(e) { console.warn("Error cargando sección:", e); }
         } 
       }
 
@@ -1063,13 +958,12 @@
           try { 
               const res = await fetchAPI(url, { method, body: JSON.stringify(body) }); 
               if (res.offline) { 
-                 showToast('Guardado localmente. Se sincronizará al conectar.', 'warning');
-                 mostrarSeccion(`gestion-${type}`); // Refrescar lista con datos locales
+                 showToast('Guardado en cola (Offline). Se sincronizará al conectar.', 'warning');
               } else {
                  showToast(`Elemento ${id ? 'actualizado' : 'guardado'} con éxito.`, 'success'); 
-                 limpiarForm(form.id); 
-                 mostrarSeccion(`gestion-${type}`); 
               }
+              limpiarForm(form.id); 
+              mostrarSeccion(`gestion-${type}`); 
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
       async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a la papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
@@ -1106,6 +1000,15 @@
       
       async function cargarDashboard() { 
         try { 
+            // Si offline, calculo local
+            if (!navigator.onLine) {
+                 const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').length;
+                 const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado||0)) > 0 && p.estatus !== 'Cancelado').length;
+                 document.getElementById('kpi-proyectos-activos').textContent = activos; 
+                 document.getElementById('kpi-proyectos-por-cobrar').textContent = porCobrar; 
+                 return;
+            }
+
             const stats = await fetchAPI('/api/dashboard/stats'); 
             document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes||0).toFixed(2)}`; 
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
@@ -1145,7 +1048,7 @@
           procesos.forEach(col => { if(document.getElementById(`columna-${col}`)) document.getElementById(`columna-${col}`).innerHTML = '' }); 
           
           if(localCache.proyectos) {
-            // Filtro para mostrar solo activos no cancelados
+            // Filtrar cancelados
             localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').forEach(p => { 
                 const card = document.createElement('div'); 
                 card.className = `project-card`; 
@@ -1157,6 +1060,8 @@
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
                 const eventoDblClick = p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '${escapeHTML(p.artista.nombreArtistico||'')}')"` : ''; 
                 const claseArtista = p.artista ? 'clickable-artist' : ''; 
+                
+                // Botón cancelar agregado
                 card.innerHTML = `<div class="project-card-header">
                                     <div class="project-card-header-main">
                                         <span class="${claseArtista}" ${eventoDblClick}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
@@ -1175,13 +1080,14 @@
                                         <button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs 📄</button>
                                         <button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Pagos 💵</button>
                                         <select onchange="app.cambiarProceso('${p._id}', this.value)" style="margin-left: 0.5rem;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
+                                        <button class="btn-eliminar" style="margin-left:0.5rem; padding: 0.3rem 0.6rem;" title="Cancelar Cita" onclick="app.cancelarCita('${p._id}')">✕</button>
                                     </div>
                                 </div>`; 
                 document.getElementById(`columna-${p.proceso}`)?.appendChild(card); 
             });
           }
       }
-      async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está completamente pagado. ¿Deseas marcarlo como completo de todas formas?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado! Se ha movido al historial.', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+      async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está completamente pagado. ¿Deseas marcarlo como completo de todas formas?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { localCache.proyectos = localCache.proyectos.filter(p => p._id !== id); showToast('¡Proyecto completado! Se ha movido al historial.', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; const eventoDblClick = p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''; const claseArtista = p.artista ? 'clickable-artist' : ''; return `<tr><td class="${claseArtista}" ${eventoDblClick}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs 📄</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">Pagos 💵</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">No hay proyectos completados.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error al cargar historial o sin conexión.</td></tr>`; } }
       async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover este proyecto a la papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Proyecto movido a la papelera.', 'info'); if (desdeCotizaciones) cargarCotizaciones(); else cargarHistorial(); } catch (error) { showToast(`Error al eliminar: ${error.message}`, 'error'); } }
       async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (currentValue) select.value = currentValue; } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
@@ -1268,15 +1174,13 @@
           const nuevoProyecto = await guardarProyecto('Cotizacion'); 
           if (nuevoProyecto) { 
               if(nuevoProyecto.offline) {
-                  showToast('Cotización guardada (Offline). El PDF se generará al reconectar o puedes intentarlo ahora.', 'info');
+                  showToast('Cotización guardada (Offline). El PDF se generará al reconectar.', 'info');
               } else {
                   showToast('Cotización guardada.', 'success'); 
+                  await generarCotizacionPDF(nuevoProyecto._id); 
               }
-              // Intento de generar PDF incluso offline si tenemos logo cacheado
-              await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); 
-              
               proyectoActual = {}; 
-              document.getElementById('proyectoDescuento').value = ''; 
+              document.getElementById('proyectoDescuento').value = ''; // Limpiar descuento
               document.getElementById('horaProyecto').value = '';
               mostrarProyectoActual(); 
               document.getElementById('formProyecto').reset(); 
@@ -1288,7 +1192,7 @@
           if (nuevoProyecto) { 
               showToast('Proyecto guardado y agendado.', 'success'); 
               proyectoActual = {}; 
-              document.getElementById('proyectoDescuento').value = ''; 
+              document.getElementById('proyectoDescuento').value = ''; // Limpiar descuento
               document.getElementById('horaProyecto').value = '';
               mostrarProyectoActual(); 
               document.getElementById('formProyecto').reset(); 
@@ -1309,23 +1213,37 @@
           }
           
           try {
-              // El fetchAPI maneja la creacion optimista
-              await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) });
+              const nuevoArtista = await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) });
               
               const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista';
               const addPublico = formPrefix !== 'manual';
               
-              // Recargar selects desde el caché actualizado
-              await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, addPublico);
+              await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, addPublico, nuevoArtista._id);
               
-              // Seleccionar el ultimo creado (el que acabamos de meter al cache)
-              const select = document.getElementById(selectId);
-              select.selectedIndex = select.options.length - 1;
-
               document.getElementById(containerId).style.display = 'none';
               nombreInput.value = '';
           } catch (error) {
               showToast(`Error: ${error.message}`, 'error');
+          }
+      }
+
+      // NUEVO: Cancelar Cita
+      async function cancelarCita(id) {
+          if (!confirm('¿Estás seguro de cancelar esta cita?')) return;
+          try {
+              await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) });
+              showToast('Cita cancelada.', 'info');
+              
+              // Si estamos en modal, cerrarlo
+              const modal = document.getElementById('event-modal');
+              if (modal && modal.style.display === 'flex') closeEventModal();
+              
+              app.cargarAgenda();
+              if (document.getElementById('flujo-trabajo').classList.contains('active')) {
+                  app.filtrarFlujo(document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos');
+              }
+          } catch(e) {
+              showToast(`Error al cancelar: ${e.message}`, 'error');
           }
       }
 
@@ -1355,43 +1273,24 @@
             btnArtist.onclick = () => app.goToArtistFromModal(props.artistaId || props.artista._id, props.artistaNombre || (props.artista ? props.artista.nombre : '')); 
         } else { btnArtist.style.display = 'none'; } 
         
-        // --- NUEVO BOTÓN DE CANCELAR ---
-        // Eliminar botón previo si existe para no duplicar listeners
-        const oldCancelBtn = document.getElementById('btn-cancelar-evento-modal');
-        if(oldCancelBtn) oldCancelBtn.remove();
-
+        // Agregar botón cancelar en modal
+        const existingCancel = document.getElementById('btn-cancelar-modal');
+        if(existingCancel) existingCancel.remove();
+        
         if (props.estatus !== 'Cancelado') {
-            const btnCancelar = document.createElement('button');
-            btnCancelar.id = 'btn-cancelar-evento-modal';
-            btnCancelar.textContent = '❌ Cancelar Cita';
-            btnCancelar.className = 'btn-eliminar';
-            btnCancelar.style.marginTop = '1rem';
-            btnCancelar.style.width = '100%';
-            btnCancelar.onclick = () => app.cancelarCita(info.event.id);
-            document.querySelector('#event-modal .modal-content').appendChild(btnCancelar);
+            const btn = document.createElement('button');
+            btn.id = 'btn-cancelar-modal';
+            btn.className = 'btn-eliminar';
+            btn.textContent = 'Cancelar Cita';
+            btn.style.width = '100%';
+            btn.style.marginTop = '1rem';
+            btn.onclick = () => app.cancelarCita(info.event.id);
+            document.querySelector('#event-modal .modal-content').appendChild(btn);
         }
 
         document.getElementById('event-modal').style.display = 'flex'; 
       }
       
-      // NUEVA FUNCIÓN: CANCELAR CITA
-      async function cancelarCita(id) {
-          if (!confirm('¿Estás seguro de cancelar esta cita? Quedará registrada como cancelada.')) return;
-          try {
-              // Actualizamos status a 'Cancelado'
-              await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) });
-              showToast('Cita cancelada correctamente.', 'info');
-              closeEventModal();
-              // Refrescar calendario y flujo
-              app.cargarAgenda();
-              if (document.getElementById('flujo-trabajo').classList.contains('active')) {
-                  app.filtrarFlujo('Todos');
-              }
-          } catch(e) {
-              showToast(`Error al cancelar: ${e.message}`, 'error');
-          }
-      }
-
       async function actualizarHorarioProyecto() {
           const id = document.getElementById('modal-event-id').value;
           const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0];
@@ -1490,11 +1389,39 @@
                   showToast('¡Pago registrado con éxito!', 'success'); 
                   await generarReciboPDF(proyectoActualizado, proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1]); 
               }
+              // Refrescar pagos si estamos en esa sección
+              cargarPagos();
               if (desdeHistorial) { cargarHistorial(); } else { cargarFlujoDeTrabajo(); } 
           } catch (error) { console.error('Error registrando pago:', error); showToast(`Error al registrar el pago: ${error.message}`, 'error'); } 
       }
-      async function cargarPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="Compartir por WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}))">💬</button><button class="btn-eliminar" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">No hay pagos registrados.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">No se pueden cargar datos offline.</td></tr>`; } }
-      async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId) || proyecto.pagos.find(p => p._id.startsWith('temp')); if (!pago) return showToast('No se encontró el pago específico.', 'error'); await generarReciboPDF(proyecto, pago); } catch(e) { showToast('Error al reimprimir el recibo.', 'error'); } }
+      async function cargarPagos() { 
+          // 1. CARGAR TABLA DE DEUDAS (FILTRADO LOCAL)
+          const deudaBody = document.getElementById('tablaDeudasBody');
+          deudaBody.innerHTML = '';
+          const deudores = localCache.proyectos.filter(p => (p.total - (p.montoPagado || 0)) > 0 && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion');
+          
+          if(deudores.length) {
+              deudaBody.innerHTML = deudores.map(p => `<tr>
+                <td>${p.artista ? (p.artista.nombre || p.artista) : 'General'}</td>
+                <td>${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td>
+                <td style="color:var(--danger-color); font-weight:bold;">$${(p.total - (p.montoPagado||0)).toFixed(2)}</td>
+                <td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar</button></td>
+              </tr>`).join('');
+          } else {
+              deudaBody.innerHTML = `<tr><td colspan="4">No hay cuentas por cobrar.</td></tr>`;
+          }
+
+          // 2. CARGAR HISTORIAL DE PAGOS
+          const tablaBody = document.getElementById('tablaPagosBody'); 
+          tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; 
+          try { 
+              const pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
+              tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td>${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="Compartir por WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p).replace(/"/g, '&quot;')}))">💬</button><button class="btn-eliminar" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">No hay pagos registrados.</td></tr>`; 
+          } catch (e) { 
+              tablaBody.innerHTML = `<tr><td colspan="5">No se pueden cargar datos offline.</td></tr>`; 
+          } 
+      }
+      async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('No se encontró el pago específico.', 'error'); await generarReciboPDF(proyecto, pago); } catch(e) { showToast('Error al reimprimir el recibo.', 'error'); } }
       function compartirPagoPorWhatsApp(pagoString) { const pago = JSON.parse(pagoString); const mensaje = `Hola, te confirmamos tu pago a FiaRecords Studio:\n\n*Fecha:* ${new Date(pago.fecha).toLocaleDateString()}\n*Monto:* $${pago.monto.toFixed(2)} MXN\n*Método:* ${pago.metodo}\n\n¡Gracias por tu pago!`; const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`; window.open(url, '_blank'); }
       async function eliminarPago(proyectoId, pagoId) { if (!confirm('¿Estás seguro de que quieres eliminar este pago? Esta acción es irreversible y afectará el saldo del proyecto.')) return; try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Pago eliminado correctamente.', 'success'); cargarPagos(); } catch (error) { showToast(`Error al eliminar el pago: ${error.message}`, 'error'); } }
       async function openDocumentsModal(proyectoId) { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); if (!proyecto) return showToast('Proyecto no encontrado.', 'error'); document.getElementById('modal-project-id').value = proyectoId; document.getElementById('modal-project-id').dataset.total = proyecto.total; showDocumentSection('contrato'); const contrato = proyecto.detallesContrato || {}; document.getElementById('contrato-nombre-album').value = contrato.nombreAlbum || ''; document.getElementById('contrato-canciones').value = contrato.cantidadCanciones || ''; document.getElementById('contrato-duracion').value = contrato.duracion || ''; document.getElementById('contrato-pago-inicial').value = contrato.pagoInicial || ''; document.getElementById('contrato-pago-final').value = contrato.pagoFinal || ''; calcularSaldoContrato(); const dist = proyecto.detallesDistribucion || {}; document.getElementById('dist-titulo').value = dist.tituloLanzamiento || ''; document.getElementById('dist-fecha').value = dist.fechaLanzamiento ? new Date(dist.fechaLanzamiento).toISOString().split('T')[0] : ''; document.getElementById('dist-upc').value = dist.upc || ''; const tracksContainer = document.getElementById('dist-tracks-container'); tracksContainer.innerHTML = ''; (dist.tracks && dist.tracks.length > 0 ? dist.tracks : [{titulo: '', isrc: ''}]).forEach(track => addTrackField(track.titulo, track.isrc)); document.getElementById('document-modal').style.display = 'flex'; }
@@ -1505,6 +1432,25 @@
       async function saveAndGenerateContract() { const proyectoId = document.getElementById('modal-project-id').value; const data = { nombreAlbum: document.getElementById('contrato-nombre-album').value, cantidadCanciones: parseInt(document.getElementById('contrato-canciones').value), duracion: document.getElementById('contrato-duracion').value, pagoInicial: parseFloat(document.getElementById('contrato-pago-inicial').value), pagoFinal: parseFloat(document.getElementById('contrato-pago-final').value) }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'contrato', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarContratoPDF(proyectoCompleto); closeDocumentsModal(); }
       async function saveAndGenerateDistribution() { const proyectoId = document.getElementById('modal-project-id').value; const tracks = []; document.querySelectorAll('#dist-tracks-container .form-row').forEach(row => { const titulo = row.querySelector('.dist-track-titulo').value; const isrc = row.querySelector('.dist-track-isrc').value; if (titulo) tracks.push({ titulo, isrc }); }); const data = { tituloLanzamiento: document.getElementById('dist-titulo').value, fechaLanzamiento: document.getElementById('dist-fecha').value, upc: document.getElementById('dist-upc').value, tracks }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'distribucion', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarDistribucionPDF(proyectoCompleto); closeDocumentsModal(); }
       
+      // HELPER: INVERTIR LOGO (CANVAS)
+      async function getInvertedLogoDataUrl(logoBase64) {
+          return new Promise((resolve) => {
+              const img = new Image();
+              img.src = logoBase64;
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                  const ctx = canvas.getContext('2d');
+                  // Invertir colores: negro -> blanco, blanco -> negro
+                  ctx.filter = 'invert(1)';
+                  ctx.drawImage(img, 0, 0);
+                  resolve(canvas.toDataURL('image/png'));
+              };
+              img.onerror = () => resolve(null);
+          });
+      }
+
       function getFinalCoordinates(pos) { let baseX, baseY; switch(pos.vAlign) { case 'top': baseY = PDF_DIMENSIONS.MARGIN; break; case 'middle': baseY = (PDF_DIMENSIONS.HEIGHT / 2) - (pos.h / 2); break; default: baseY = PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN; } switch(pos.hAlign) { case 'left': baseX = PDF_DIMENSIONS.MARGIN; break; case 'center': baseX = (PDF_DIMENSIONS.WIDTH / 2) - (pos.w / 2); break; default: baseX = PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN; } let finalX = baseX + pos.offsetX; let finalY = baseY + pos.offsetY; finalX = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalX, PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN)); finalY = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalY, PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN)); return { x: finalX, y: finalY, w: pos.w, h: pos.h }; }
       async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : 'https://placehold.co/150x60?text=Firma'; try { const response = await fetch(firmaPath); if (!response.ok) throw new Error('Imagen de firma no encontrada.'); const firmaImg = await response.blob(); const reader = new FileReader(); reader.readAsDataURL(firmaImg); reader.onloadend = function() { try { const base64data = reader.result; const pos = getFinalCoordinates(configCache.firmaPos[docType]); if (docType === 'contrato') { pdf.line(PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 2, PDF_DIMENSIONS.MARGIN + 70, pos.y + pos.h + 2); pdf.text(proyecto.artista.nombre, PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 7); pdf.text('Firma del Cliente', PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 12); } pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7); pdf.text("Representante de FIA Records", pos.x, pos.y + pos.h + 12); } catch (e) { console.error("Error al procesar firma:", e); } finally { pdf.save(finalFileName); } } } catch(e) { console.warn(e.message); pdf.save(finalFileName); } }
       
@@ -1512,301 +1458,42 @@
           try { 
               const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
               const { jsPDF } = window.jspdf; const pdf = new jsPDF(); 
-              // USO DE LOGO PRECARGADO (BASE64) PARA OFFLINE
+              
+              // INVERTIR LOGO PARA PDF SI ES NECESARIO
               if (logoBase64) {
-                  pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15);
-              } else if (DOMElements.appLogo.src && !DOMElements.appLogo.src.includes('placehold.co')) { 
-                  // Fallback antiguo si hay internet
-                  const logoImg = DOMElements.appLogo; const canvas = document.createElement('canvas'); canvas.width = logoImg.naturalWidth; canvas.height = logoImg.naturalHeight; const ctx = canvas.getContext('2d'); ctx.filter = 'invert(1)'; ctx.drawImage(logoImg, 0, 0); const invertedLogoDataUrl = canvas.toDataURL('image/png'); pdf.addImage(invertedLogoDataUrl, 'PNG', 14, 15, 40, 15); 
+                  // Si estamos en modo claro, el logo es negro -> OK para PDF
+                  // Si estamos en modo oscuro, el logo es blanco -> NO SE VE en PDF -> Invertir a negro
+                  if (document.body.classList.contains('dark-mode')) {
+                      const blackLogo = await getInvertedLogoDataUrl(logoBase64);
+                      pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15);
+                  } else {
+                      // Modo claro, logo ya es visible (o deberíamos verificar si la imagen original es blanca)
+                      // Asumimos que la imagen original subida es NEGRA (para modo claro) o BLANCA (para oscuro).
+                      // Si la imagen original es BLANCA, siempre hay que invertirla para papel.
+                      // Vamos a invertirla preventivamente si detectamos que es la imagen por defecto clara.
+                      // MEJOR ESTRATEGIA: Asumir que para papel siempre queremos NEGRO.
+                      // Si la imagen original es blanca, invertirla.
+                      // Si la imagen original es negra, dejarla.
+                      // Como no podemos saber el color exacto facilmente, usamos el filtro CSS actual como guia.
+                      // Si en pantalla se aplica invert(1) (modo claro), es que la imagen original es blanca.
+                      // Entonces para PDF (fondo blanco) necesitamos que sea negra -> Invertir.
+                      
+                      // HACK: Simplemente la invertimos siempre para asegurar contraste si es blanca transparente
+                      const blackLogo = await getInvertedLogoDataUrl(logoBase64);
+                      pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15);
+                  }
               } 
-              pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase()}`, 200, 50, { align: 'right' }); pdf.text("Descripción del Servicio:", 14, 65); const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
+              
+              pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombre || proyecto.artista) : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase()}`, 200, 50, { align: 'right' }); pdf.text("Descripción del Servicio:", 14, 65); const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
               if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); }
-              pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text("Precio del Servicio:", 14, finalY); pdf.text(`$${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' }); finalY += 15; pdf.setFont(undefined, 'normal'); pdf.text("Condiciones:", 14, finalY); pdf.setFontSize(9); pdf.text("1. La cotización es válida por 30 días.", 14, finalY + 5); pdf.text("2. Se requiere un depósito del 50% para reservar la fecha.", 14, finalY + 10); pdf.text("3. El saldo restante debe pagarse antes de la entrega final del material.", 14, finalY + 15); finalY += 30; pdf.setFontSize(10); pdf.text("Agradecemos tu confianza y esperamos trabajar juntos en tu proyecto.", 105, finalY, { align: 'center' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
+              pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text("Precio del Servicio:", 14, finalY); pdf.text(`$${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' }); finalY += 15; pdf.setFont(undefined, 'normal'); pdf.text("Condiciones:", 14, finalY); pdf.setFontSize(9); pdf.text("1. La cotización es válida por 30 días.", 14, finalY + 5); pdf.text("2. Se requiere un depósito del 50% para reservar la fecha.", 14, finalY + 10); pdf.text("3. El saldo restante debe pagarse antes de la entrega final del material.", 14, finalY + 15); finalY += 30; pdf.setFontSize(10); pdf.text("Agradecemos tu confianza y esperamos trabajar juntos en tu proyecto.", 105, finalY, { align: 'center' }); const fileName = `Cotizacion-${proyecto.artista ? (proyecto.artista.nombre || proyecto.artista).replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
           } catch (error) { showToast("Error al generar el PDF.", 'error'); console.error(error); } 
       }
-      async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('No hay pago para generar recibo.', 'error'); const esPagoFinal = proyecto.montoPagado >= proyecto.total; const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(new Date(pago.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase(), 14, 45); pdf.line(14, 47, 200, 47); pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO ${esPagoFinal && saldoRestante <= 0 ? 'FINAL' : 'PARCIAL'}`, 105, 55, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Recibí de: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 70); pdf.text("Concepto:", 14, 85); const conceptos = proyecto.items.map(item => `- ${item.nombre || 'Servicio'}`); conceptos.forEach((line, i) => pdf.text(line, 16, 92 + (i * 7))); let finalY = 92 + (conceptos.length * 7) + 5; pdf.autoTable({ startY: finalY, theme: 'plain', styles: { fontSize: 11 }, body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)} MXN`], ['Este Pago:', `$${pago.monto.toFixed(2)} MXN`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)} MXN`]], columnStyles: { 0: { fontStyle: 'bold', halign: 'left' }, 1: { halign: 'right' } } }); finalY = pdf.lastAutoTable.finalY + 7; pdf.text("Método de Pago:", 14, finalY); pdf.text(pago.metodo, 200, finalY, { align: 'right' }); finalY += 15; pdf.line(14, finalY, 200, finalY); finalY += 10; pdf.setFontSize(9); pdf.text("Notas: Este recibo es prueba del pago recibido por los servicios mencionados.", 14, finalY); finalY += 10; pdf.text("Términos y Condiciones:", 14, finalY); pdf.text("1. Los anticipos no son reembolsables.", 14, finalY + 5); pdf.text("2. Si el saldo pendiente no se liquida, no se entregará el material grabado.", 14, finalY + 10); const fileName = `Recibo-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar el recibo.', 'error'); console.error(error); }}
-      async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS DE GRABACIÓN DE AUDIO', 105, 40, { align: 'center', maxWidth: 180 }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 14, 55); pdf.text('Entre:', 14, 65); pdf.setFont(undefined, 'bold').text('FIA RECORDS (en adelante, "El Estudio")', 20, 72); pdf.text(`EL CLIENTE: ${proyecto.artista.nombre} (en adelante, "El Cliente")`, 20, 79); pdf.setFont(undefined, 'normal').text('Ambas partes acuerdan lo siguiente:', 14, 89); pdf.autoTable({ startY: 95, theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Objeto del Contrato']], body: [[`El Estudio se compromete a proporcionar servicios de grabación para el álbum "${c.nombreAlbum || 'N/A'}" de ${c.cantidadCanciones || 'varias'} canciones, bajo los términos descritos.`]]}); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Servicios Incluidos']], body: [proyecto.items.map(i => `- ${i.nombre}`)] }); let finalY = pdf.lastAutoTable.finalY; pdf.setFont(undefined, 'bold').text('Términos y Condiciones:', 14, finalY += 10); const terminos = `1. Duración del Contrato: Este contrato tiene una duración de ${c.duracion || '[sin especificar]'}, comenzando a partir de la primera sesión de grabación.\n2. Sesiones de Grabación: La grabación se realizará según lo acordado. Las sesiones deben ser programadas con anticipación.\n3. Tarifa y Forma de Pago: El Cliente pagará un total de $${proyecto.total.toFixed(2)}. El pago se realizará de la siguiente manera: un pago inicial de $${(c.pagoInicial || 0).toFixed(2)} y el saldo de $${(c.pagoFinal || 0).toFixed(2)} antes de la última sesión.\n4. Política de Cancelación: Si El Cliente necesita cancelar o reprogramar, deberá notificar con al menos 24 horas de anticipación. Cancelaciones tardías pueden incurrir en una tarifa de $200.\n5. Entrega del Trabajo: El Estudio entregará las versiones mezcladas y masterizadas dentro de 10 días después de la grabación final de cada pista, en formato digital (WAV, MP3).\n6. Propiedad Intelectual: Los derechos de autor permanecerán con El Cliente, siempre que se cumplan todos los pagos. El Estudio se reserva el derecho de usar fragmentos para su portafolio.\n7. Responsabilidad: El Cliente es responsable de proporcionar el material necesario (letras, etc.).\n8. Modificaciones: Cualquier modificación a este contrato deberá ser por escrito y firmada por ambas partes.\n9. Ley Aplicable: Este contrato se regirá por las leyes de Nuevo León, México.`; pdf.setFontSize(9).setFont(undefined, 'normal').text(terminos, 14, finalY + 5, { maxWidth: 180, lineHeightFactor: 1.5 }); const fileName = `Contrato-${proyecto.artista.nombre.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error al generar Contrato PDF", 'error'); console.error(e); }}
+      async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('No hay pago para generar recibo.', 'error'); const esPagoFinal = proyecto.montoPagado >= proyecto.total; const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } else if (DOMElements.appLogo.src && !DOMElements.appLogo.src.includes('placehold.co')) { const logoImg=DOMElements.appLogo;const canvas=document.createElement('canvas');canvas.width=logoImg.naturalWidth;canvas.height=logoImg.naturalHeight;const ctx=canvas.getContext('2d');ctx.filter='invert(1)';ctx.drawImage(logoImg,0,0);pdf.addImage(canvas.toDataURL('image/png'),'PNG',14,15,40,15); } pdf.setFontSize(9); pdf.text("Monte Everest #318 Col. Monte Verde 5to sector Juárez N.L.", 200, 20, { align: 'right' }); pdf.text("Tel. 8132520539", 200, 25, { align: 'right' }); pdf.text("fiarec.studio@gmail.com", 200, 30, { align: 'right' }); pdf.setFontSize(11); pdf.text(new Date(pago.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase(), 14, 45); pdf.line(14, 47, 200, 47); pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO ${esPagoFinal && saldoRestante <= 0 ? 'FINAL' : 'PARCIAL'}`, 105, 55, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Recibí de: ${proyecto.artista ? (proyecto.artista.nombre || proyecto.artista) : 'Público General'}`, 14, 70); pdf.text("Concepto:", 14, 85); const conceptos = proyecto.items.map(item => `- ${item.nombre || 'Servicio'}`); conceptos.forEach((line, i) => pdf.text(line, 16, 92 + (i * 7))); let finalY = 92 + (conceptos.length * 7) + 5; pdf.autoTable({ startY: finalY, theme: 'plain', styles: { fontSize: 11 }, body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)} MXN`], ['Este Pago:', `$${pago.monto.toFixed(2)} MXN`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)} MXN`]], columnStyles: { 0: { fontStyle: 'bold', halign: 'left' }, 1: { halign: 'right' } } }); finalY = pdf.lastAutoTable.finalY + 7; pdf.text("Método de Pago:", 14, finalY); pdf.text(pago.metodo, 200, finalY, { align: 'right' }); finalY += 15; pdf.line(14, finalY, 200, finalY); finalY += 10; pdf.setFontSize(9); pdf.text("Notas: Este recibo es prueba del pago recibido por los servicios mencionados.", 14, finalY); finalY += 10; pdf.text("Términos y Condiciones:", 14, finalY); pdf.text("1. Los anticipos no son reembolsables.", 14, finalY + 5); pdf.text("2. Si el saldo pendiente no se liquida, no se entregará el material grabado.", 14, finalY + 10); const fileName = `Recibo-${proyecto.artista ? (proyecto.artista.nombre || proyecto.artista).replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar el recibo.', 'error'); console.error(error); }}
+      async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; if (logoBase64) { const blackLogo = await getInvertedLogoDataUrl(logoBase64); pdf.addImage(blackLogo, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS DE GRABACIÓN DE AUDIO', 105, 40, { align: 'center', maxWidth: 180 }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 14, 55); pdf.text('Entre:', 14, 65); pdf.setFont(undefined, 'bold').text('FIA RECORDS (en adelante, "El Estudio")', 20, 72); pdf.text(`EL CLIENTE: ${proyecto.artista.nombre} (en adelante, "El Cliente")`, 20, 79); pdf.setFont(undefined, 'normal').text('Ambas partes acuerdan lo siguiente:', 14, 89); pdf.autoTable({ startY: 95, theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Objeto del Contrato']], body: [[`El Estudio se compromete a proporcionar servicios de grabación para el álbum "${c.nombreAlbum || 'N/A'}" de ${c.cantidadCanciones || 'varias'} canciones, bajo los términos descritos.`]]}); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, headStyles: { fillColor: [0,0,0], textColor: [255,255,255] }, head: [['Servicios Incluidos']], body: [proyecto.items.map(i => `- ${i.nombre}`)] }); let finalY = pdf.lastAutoTable.finalY; pdf.setFont(undefined, 'bold').text('Términos y Condiciones:', 14, finalY += 10); const terminos = `1. Duración del Contrato: Este contrato tiene una duración de ${c.duracion || '[sin especificar]'}, comenzando a partir de la primera sesión de grabación.\n2. Sesiones de Grabación: La grabación se realizará según lo acordado. Las sesiones deben ser programadas con anticipación.\n3. Tarifa y Forma de Pago: El Cliente pagará un total de $${proyecto.total.toFixed(2)}. El pago se realizará de la siguiente manera: un pago inicial de $${(c.pagoInicial || 0).toFixed(2)} y el saldo de $${(c.pagoFinal || 0).toFixed(2)} antes de la última sesión.\n4. Política de Cancelación: Si El Cliente necesita cancelar o reprogramar, deberá notificar con al menos 24 horas de anticipación. Cancelaciones tardías pueden incurrir en una tarifa de $200.\n5. Entrega del Trabajo: El Estudio entregará las versiones mezcladas y masterizadas dentro de 10 días después de la grabación final de cada pista, en formato digital (WAV, MP3).\n6. Propiedad Intelectual: Los derechos de autor permanecerán con El Cliente, siempre que se cumplan todos los pagos. El Estudio se reserva el derecho de usar fragmentos para su portafolio.\n7. Responsabilidad: El Cliente es responsable de proporcionar el material necesario (letras, etc.).\n8. Modificaciones: Cualquier modificación a este contrato deberá ser por escrito y firmada por ambas partes.\n9. Ley Aplicable: Este contrato se regirá por las leyes de Nuevo León, México.`; pdf.setFontSize(9).setFont(undefined, 'normal').text(terminos, 14, finalY + 5, { maxWidth: 180, lineHeightFactor: 1.5 }); const fileName = `Contrato-${proyecto.artista.nombre.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error al generar Contrato PDF", 'error'); console.error(e); }}
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).setFont(undefined, 'bold').text('ENTREGA PARA DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha de Entrega: ${new Date().toLocaleDateString('es-ES')}`, 14, 35); pdf.autoTable({ startY: 40, theme: 'plain', styles: { fontSize: 10 }, body: [ ['Artista:', proyecto.artista.nombre], ['Título del Lanzamiento:', d.tituloLanzamiento], ['Fecha de Lanzamiento:', new Date(d.fechaLanzamiento).toLocaleDateString('es-ES')], ['UPC/EAN:', d.upc] ] }); pdf.autoTable({ startY: pdf.lastAutoTable.finalY + 5, head: [['Listado de Pistas (Tracklist)']], body: d.tracks.map((t, i) => [`Pista ${i+1}: ${t.titulo}\n    Código ISRC: ${t.isrc || 'N/A'}`]) }); let finalY = pdf.lastAutoTable.finalY + 10; const confirmacion = 'Por medio de este documento, Fia Records confirma la recepción de los códigos de identificación y la metadata final para el lanzamiento mencionado. El material de audio masterizado ha sido entregado y aprobado por el artista.'; pdf.text(confirmacion, 14, finalY, { maxWidth: 180, align: 'justify' }); const fileName = `Distribucion-${d.tituloLanzamiento.replace(/\s/g, '_')}.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error al generar PDF de Distribución", 'error'); console.error(e); }}
 
-      async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
-          document.getElementById('vista-artista-nombre').textContent = `Historial de: ${escapeHTML(nombre)} ${nombreArtistico ? '('+escapeHTML(nombreArtistico)+')' : ''}`; 
-          const contenido = document.getElementById('vista-artista-contenido'); 
-          contenido.innerHTML = '<p>Cargando...</p>'; 
-          try { 
-              const [proyectos, todosPagos, artistaInfo] = await Promise.all([
-                  fetchAPI(`/api/proyectos/por-artista/${artistaId}`),
-                  fetchAPI('/api/proyectos/pagos/todos'),
-                  fetchAPI(`/api/artistas/${artistaId}`)
-              ]);
-              let html = `<div class="card" style="margin-bottom: 2rem;"><p><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p><strong>Nombre Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p><p><strong>Teléfono:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p><p><strong>Correo:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
-              
-              html += '<h3>Proyectos del Artista</h3>'; 
-              if(proyectos.length) { 
-                  html += '<div class="table-responsive"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Nombre Proyecto / Servicios</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
-                  proyectos.forEach(p => { 
-                      const nombreProyecto = p.nombreProyecto || p.items.map(i=>i.nombre).join(', ');
-                      html += `<tr>
-                          <td>${new Date(p.fecha).toLocaleDateString()}</td>
-                          <td>${escapeHTML(nombreProyecto)} <button class="btn-secondary" style="width: 24px; height: 24px; padding: 0; font-size: 0.7em;" onclick="app.editarNombreProyecto('${p._id}')">✏️</button></td>
-                          <td>$${p.total.toFixed(2)}</td>
-                          <td>$${(p.montoPagado||0).toFixed(2)}</td>
-                          <td>${escapeHTML(p.proceso)} / ${escapeHTML(p.estatus)}</td>
-                          <td class="table-actions">
-                              <button class="btn-secondary" title="Reimprimir Cotización" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>
-                              ${p.detallesContrato && p.detallesContrato.nombreAlbum ? `<button class="btn-secondary" title="Reimprimir Contrato" onclick="app.generarContratoPDF('${p._id}')">📜</button>` : ''}
-                              <button class="btn-secondary" title="Gestionar Entrega" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(p.artista.nombreArtistico || p.artista.nombre)}', '${escapeHTML(nombreProyecto)}')">🔗</button>
-                          </td>
-                      </tr>`; 
-                  }); 
-                  html += '</tbody></table></div>'; 
-              } else { html += '<p>No hay proyectos para este artista.</p>'; } 
-              
-              html += '<h3>Pagos del Artista</h3>'; 
-              const pagosArtista = todosPagos.filter(p => p.artista === nombre || (artistaInfo.nombreArtistico && p.artista === artistaInfo.nombreArtistico)); 
-              if (pagosArtista.length) { 
-                  html += '<div class="table-responsive"><table style="width: 100%;"><thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead><tbody>'; 
-                  pagosArtista.forEach(p => { 
-                      html += `<tr>
-                          <td>${new Date(p.fecha).toLocaleDateString()}</td>
-                          <td>$${p.monto.toFixed(2)}</td>
-                          <td>${escapeHTML(p.metodo)}</td>
-                          <td class="table-actions">
-                              <button class="btn-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">🧾</button>
-                          </td>
-                      </tr>`; 
-                  }); 
-                  html += '</tbody></table></div>'; 
-              } else { html += '<p>No hay pagos registrados para este artista.</p>'; } 
-              contenido.innerHTML = html; 
-              mostrarSeccion('vista-artista'); 
-          } catch(e) { contenido.innerHTML = '<p>Error al cargar el historial del artista.</p>'; } 
-      }
-      async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
-      function setupCustomization(payload) { if (payload.role === 'admin') { DOMElements.appLogo.addEventListener('click', () => DOMElements.logoInput.click()); DOMElements.logoInput.addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('¡Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`No se pudo guardar: ${e.message}`, 'error'); } }); } }
-      
-      async function cargarConfiguracion() { try { if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); const draggablePreview = document.getElementById('firma-draggable-preview'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } else if (await imageExists('/uploads/firma.png')) { firmaSrc = '/uploads/firma.png'; } firmaPreview.src = draggablePreview.src = firmaSrc; 
-      
-      const db = configCache.datosBancarios || {};
-      document.getElementById('banco').value = db.banco || '';
-      document.getElementById('titular').value = db.titular || '';
-      document.getElementById('tarjeta').value = db.tarjeta || '';
-      document.getElementById('clabe').value = db.clabe || '';
-
-      document.getElementById('doc-type-selector').value = 'cotizacion'; cargarAjustesParaDocumento('cotizacion'); } catch (e) { showToast('No se pudo cargar la configuración.', 'error'); console.error(e); } }
-      function cargarAjustesParaDocumento(docType) { 
-          document.querySelectorAll('.doc-template').forEach(t => t.classList.remove('template-visible'));
-          const template = document.getElementById(`template-${docType}`);
-          if(template) template.classList.add('template-visible');
-
-          if (!configCache || !configCache.firmaPos || !configCache.firmaPos[docType]) { console.error(`Ajustes para ${docType} no encontrados.`); return; } 
-          const pos = configCache.firmaPos[docType]; 
-          document.querySelector(`input[name="vAlign"][value="${pos.vAlign}"]`).checked = true;
-          document.querySelector(`input[name="hAlign"][value="${pos.hAlign}"]`).checked = true;
-          document.getElementById('slider-firma-w').value = pos.w; 
-          document.getElementById('slider-firma-h').value = pos.h;
-          document.getElementById('slider-firma-offsetX').value = pos.offsetX; 
-          document.getElementById('slider-firma-offsetY').value = pos.offsetY; 
-          actualizarPosicionFirma(); 
-      }
-      function actualizarPosicionFirma() {
-          const docType = document.getElementById('doc-type-selector').value;
-          const pos = configCache.firmaPos[docType];
-          pos.vAlign = document.querySelector('input[name="vAlign"]:checked').value;
-          pos.hAlign = document.querySelector('input[name="hAlign"]:checked').value;
-          pos.w = parseInt(document.getElementById('slider-firma-w').value);
-          pos.h = parseInt(document.getElementById('slider-firma-h').value);
-          pos.offsetX = parseInt(document.getElementById('slider-firma-offsetX').value);
-          pos.offsetY = parseInt(document.getElementById('slider-firma-offsetY').value);
-          
-          const finalCoords = getFinalCoordinates(pos);
-          
-          document.getElementById('val-firma-w').textContent = pos.w;
-          document.getElementById('val-firma-h').textContent = pos.h;
-          document.getElementById('val-firma-offsetX').textContent = pos.offsetX;
-          document.getElementById('val-firma-offsetY').textContent = pos.offsetY;
-          
-          const previewImg = document.getElementById('firma-draggable-preview');
-          previewImg.style.width = `${(finalCoords.w / PDF_DIMENSIONS.WIDTH) * 100}%`;
-          previewImg.style.height = `${(finalCoords.h / PDF_DIMENSIONS.HEIGHT) * 100}%`;
-          previewImg.style.left = `${(finalCoords.x / PDF_DIMENSIONS.WIDTH) * 100}%`;
-          previewImg.style.top = `${(finalCoords.y / PDF_DIMENSIONS.HEIGHT) * 100}%`;
-          
-          const contractBlock = document.getElementById('contract-signature-block');
-          if (docType === 'contrato' && contractBlock) {
-             const yPercent = (finalCoords.y / PDF_DIMENSIONS.HEIGHT) * 100;
-             contractBlock.style.transform = `translateY(calc(${yPercent}% - 100%))`;
-             document.querySelector('#template-contrato .signature-area-rep').appendChild(previewImg);
-             previewImg.style.position = 'relative';
-             previewImg.style.left = 'auto';
-             previewImg.style.top = 'auto';
-             previewImg.style.width = '100%'; 
-             previewImg.style.height = 'auto';
-          } else {
-             document.getElementById('firma-preview-container').appendChild(previewImg);
-             previewImg.style.position = 'absolute';
-          }
-      }
-      async function revertirADefecto() {
-          const docType = document.getElementById('doc-type-selector').value;
-          if (!confirm(`¿Revertir los ajustes para '${docType}' a sus valores predeterminados? Los cambios no guardados se perderán.`)) return;
-          try {
-              const defaultSettings = await fetchAPI('/api/configuracion/defaults');
-              configCache.firmaPos[docType] = defaultSettings[docType];
-              cargarAjustesParaDocumento(docType);
-              showToast('Valores revertidos. Haz clic en "Guardar Ajustes" para hacer el cambio permanente.', 'info');
-          } catch (e) {
-              showToast('No se pudieron cargar los valores predeterminados.', 'error');
-          }
-      }
-      async function guardarAjustesFirma() { if (!configCache) return showToast('La configuración no está cargada.', 'error'); try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes de la firma guardados!', 'success'); } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } }
-      async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; document.getElementById('firma-draggable-preview').src = newSrc; if(configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`No se pudo subir la firma: ${e.message}`, 'error'); } }
-      async function guardarDatosBancarios() {
-        const datosBancarios = {
-          banco: document.getElementById('banco').value,
-          titular: document.getElementById('titular').value,
-          tarjeta: document.getElementById('tarjeta').value,
-          clabe: document.getElementById('clabe').value,
-        };
-        try {
-          await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios }) });
-          showToast('¡Datos bancarios guardados con éxito!', 'success');
-          configCache.datosBancarios = datosBancarios;
-        } catch (e) {
-          showToast(`Error al guardar los datos: ${e.message}`, 'error');
-        }
-      }
-      function enviarDatosBancarios() {
-        if (!configCache || !configCache.datosBancarios || !configCache.datosBancarios.banco) {
-          return showToast('No has configurado los datos bancarios. Ve a Configuración para añadirlos.', 'error');
-        }
-        const db = configCache.datosBancarios;
-        const mensaje = `¡Hola! Te comparto los datos para realizar la transferencia:\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*No. de Tarjeta:* ${db.tarjeta}\n*CLABE Interbancaria:* ${db.clabe}\n\nQuedo al pendiente. ¡Gracias!`;
-        const accion = prompt('¿Cómo deseas enviar los datos?\n1. WhatsApp\n2. Generar PDF');
-        if (accion === '1') {
-            window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
-        } else if (accion === '2') {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF();
-            if (DOMElements.appLogo.src && !DOMElements.appLogo.src.includes('placehold.co')) { const logoImg = DOMElements.appLogo; const canvas = document.createElement('canvas'); canvas.width = logoImg.naturalWidth; canvas.height = logoImg.naturalHeight; const ctx = canvas.getContext('2d'); ctx.filter = 'invert(1)'; ctx.drawImage(logoImg, 0, 0); pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 14, 15, 40, 15); }
-            pdf.setFontSize(16).text('Datos para Transferencia Bancaria', 105, 20, { align: 'center' });
-            pdf.autoTable({ startY: 40, theme: 'grid', headStyles: { fillColor: [0,0,0] }, head: [['Concepto', 'Información']], body: [ ['Banco', db.banco], ['Titular de la Cuenta', db.titular], ['Número de Tarjeta', db.tarjeta], ['CLABE Interbancaria', db.clabe] ]});
-            pdf.save('Datos-Bancarios-FiaRecords.pdf');
-        }
-      }
-      function openDeliveryModal(projectId, artistName, projectName) {
-          const modal = document.getElementById('delivery-modal');
-          modal.querySelector('#delivery-project-id').value = projectId;
-          modal.querySelector('#delivery-artist-name').value = artistName;
-          modal.querySelector('#delivery-project-name').value = projectName;
-          const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
-          modal.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : '';
-          modal.style.display = 'flex';
-      }
-      function closeDeliveryModal() { document.getElementById('delivery-modal').style.display = 'none'; }
-      async function saveDeliveryLink() {
-          const projectId = document.getElementById('delivery-project-id').value;
-          const enlace = document.getElementById('delivery-link-input').value;
-          try {
-              await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) });
-              showToast('Enlace de entrega guardado.', 'success');
-              let project = localCache.proyectos.find(p => p._id === projectId);
-              if (!project) project = historialCacheados.find(p => p._id === projectId);
-              if (project) project.enlaceEntrega = enlace;
-              closeDeliveryModal();
-          } catch(e) {
-              showToast(`Error al guardar el enlace: ${e.message}`, 'error');
-          }
-      }
-      function sendDeliveryByWhatsapp() {
-          const link = document.getElementById('delivery-link-input').value;
-          if (!link) {
-              return showToast('Por favor, guarda un enlace antes de enviarlo.', 'error');
-          }
-          const artistName = document.getElementById('delivery-artist-name').value;
-          const projectName = document.getElementById('delivery-project-name').value;
-          const mensaje = `¡Hola ${artistName}! Te compartimos el enlace a los archivos finales de tu proyecto "${projectName}".\n\nEnlace de Descarga:\n${link}\n\nHa sido un placer trabajar contigo. ¡Gracias por confiar en FiaRecords Studio!`;
-          window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
-      }
-      async function editarNombreProyecto(id) {
-          const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
-          if (!proyecto) return showToast('Proyecto no encontrado.', 'error');
-          const nuevoNombre = prompt('Introduce el nuevo nombre para el proyecto:', proyecto.nombreProyecto || '');
-          if (nuevoNombre === null || nuevoNombre.trim() === proyecto.nombreProyecto) return;
-          try {
-              await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) });
-              proyecto.nombreProyecto = nuevoNombre.trim();
-              if (document.getElementById('flujo-trabajo').classList.contains('active')) {
-                  filtrarFlujo(document.querySelector('#filtrosFlujo button.active').textContent.trim());
-              }
-              if (document.getElementById('vista-artista').classList.contains('active') && proyecto.artista) {
-                  mostrarVistaArtista(proyecto.artista._id, proyecto.artista.nombre, proyecto.artista.nombreArtistico);
-              }
-              showToast('Nombre del proyecto actualizado.', 'success');
-          } catch (e) {
-              showToast(`Error al actualizar: ${e.message}`, 'error');
-          }
-      }
-
-      function setupMobileMenu() {
-        const hamburger = document.getElementById('hamburger-menu');
-        const sidebar = document.querySelector('.sidebar');
-        const overlay = document.getElementById('sidebar-overlay');
-        const navLinks = document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-group summary');
-
-        const toggleMenu = () => {
-            sidebar.classList.toggle('sidebar-visible');
-            overlay.classList.toggle('overlay-visible');
-        };
-
-        hamburger.addEventListener('click', toggleMenu);
-        overlay.addEventListener('click', toggleMenu);
-        navLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                if (window.innerWidth <= 768 && sidebar.classList.contains('sidebar-visible') && link.matches('.nav-link')) {
-                    toggleMenu();
-                }
-            });
-        });
-      }
-
-      function initAppEventListeners(payload) {
-        flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
-        
-        window.addEventListener('hashchange', () => {
-            const section = location.hash.replace('#', '');
-            if (section) mostrarSeccion(section, false);
-        });
-
-        document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion)));
-        document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
-        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); });
-        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
-        document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
-        
-        document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
-        document.getElementById('nombreNuevoArtista').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario(''); } });
-        
-        document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; });
-        document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual'));
-        document.getElementById('manualNombreNuevoArtista').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); registrarNuevoArtistaDesdeFormulario('manual'); } });
-
-        document.getElementById('firma-input').addEventListener('change', subirFirma);
-        document.getElementById('btn-enviar-datos-bancarios').addEventListener('click', enviarDatosBancarios);
-        
-        // LISTENER PARA EL DESCUENTO
-        document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
-
-        document.getElementById('toggle-password').addEventListener('click', (e) => {
-            const passwordInput = document.getElementById('password');
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            e.target.textContent = type === 'password' ? '👁️' : '🙈';
-        });
-        setupCustomization(payload);
-        setupMobileMenu();
-      }
-
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, cargarPagos };
     });
   </script>
 
