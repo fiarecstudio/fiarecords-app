@@ -1,68 +1,261 @@
-// routes/proyectos.js
+// ==========================================
+// ARCHIVO: routes/proyectos.js
+// ==========================================
 const express = require('express');
 const router = express.Router();
-const Proyecto = require('../models/Proyecto');
-const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
 
-router.use(auth);
+// Definir el esquema aquí o importarlo si tienes modelo separado
+const ItemSchema = new mongoose.Schema({
+    servicio: String, // ID del servicio
+    nombre: String,
+    unidades: Number,
+    precioUnitario: Number
+});
 
-// --- RUTA PARA VISTA DE ARTISTA ---
-router.get('/por-artista/:artistaId', async (req, res) => {
+const PagoSchema = new mongoose.Schema({
+    monto: Number,
+    metodo: String,
+    fecha: Date,
+    artista: String
+});
+
+const ProyectoSchema = new mongoose.Schema({
+    artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' }, // Referencia o null
+    nombreProyecto: String,
+    items: [ItemSchema],
+    total: Number,
+    descuento: Number,
+    montoPagado: { type: Number, default: 0 },
+    estatus: String, // 'Cotizacion', 'Pendiente de Pago', 'Pagado', 'Cancelado'
+    metodoPago: String,
+    fecha: Date,
+    prioridad: String,
+    proceso: String, // 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'
+    esAlbum: Boolean,
+    enlaceEntrega: String,
+    pagos: [PagoSchema],
+    createdAt: { type: Date, default: Date.now },
+    detallesContrato: { type: Object, default: {} },
+    detallesDistribucion: { type: Object, default: {} }
+});
+
+const Proyecto = mongoose.model('Proyecto', ProyectoSchema);
+
+// --- RUTAS ---
+
+// 1. Obtener todos (para caché inicial)
+router.get('/', async (req, res) => {
     try {
-        const proyectos = await Proyecto.find({ artista: req.params.artistaId, isDeleted: false }).populate('artista').sort({ fecha: -1 });
+        const proyectos = await Proyecto.find().populate('artista').sort({ fecha: 1 });
         res.json(proyectos);
-    } catch (err) { res.status(500).json({ error: 'Error al obtener los proyectos del artista' }); }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- RUTA PARA GUARDAR DETALLES DE DOCUMENTOS ---
-router.put('/:id/documentos', async (req, res) => {
+// 2. Obtener agenda (proyectos activos)
+router.get('/agenda', async (req, res) => {
     try {
-        const { tipo, data } = req.body;
-        let updateData = {};
-        if (tipo === 'contrato') { updateData.detallesContrato = data; } 
-        else if (tipo === 'distribucion') { updateData.detallesDistribucion = data; } 
-        else { return res.status(400).json({ error: 'Tipo de documento no válido' }); }
-        const proyecto = await Proyecto.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
-        res.json(proyecto);
-    } catch (err) { res.status(500).json({ error: 'Error al guardar los detalles del documento' }); }
+        const proyectos = await Proyecto.find({ 
+            estatus: { $ne: 'Cancelado' },
+            proceso: { $ne: 'Completo' }
+        }).populate('artista');
+        
+        const eventos = proyectos.map(p => ({
+            id: p._id,
+            title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Sin Nombre'),
+            start: p.fecha,
+            allDay: false,
+            extendedProps: {
+                total: p.total,
+                estatus: p.estatus,
+                proceso: p.proceso,
+                servicios: p.items.map(i => i.nombre).join('\n'),
+                artistaId: p.artista ? p.artista._id : null,
+                artistaNombre: p.artista ? p.artista.nombre : null
+            }
+        }));
+        res.json(eventos);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- RUTA PARA GUARDAR EL ENLACE DE ENTREGA ---
-router.put('/:id/enlace-entrega', async (req, res) => {
+// 3. Obtener cotizaciones
+router.get('/cotizaciones', async (req, res) => {
     try {
-        const { enlace } = req.body;
-        const proyecto = await Proyecto.findByIdAndUpdate(req.params.id, { $set: { enlaceEntrega: enlace } }, { new: true });
-        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-        res.json(proyecto);
-    } catch (err) { res.status(500).json({ error: 'Error al guardar el enlace' }); }
+        const cotizaciones = await Proyecto.find({ estatus: 'Cotizacion' }).populate('artista');
+        res.json(cotizaciones);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- ¡NUEVA RUTA PARA ACTUALIZAR EL NOMBRE DEL PROYECTO! ---
+// 4. Obtener completados (Historial)
+router.get('/completos', async (req, res) => {
+    try {
+        const completos = await Proyecto.find({ proceso: 'Completo' }).populate('artista').sort({ fecha: -1 });
+        res.json(completos);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 5. Obtener pagos globales
+router.get('/pagos/todos', async (req, res) => {
+    try {
+        const proyectos = await Proyecto.find({ "pagos.0": { $exists: true } });
+        let todosPagos = [];
+        proyectos.forEach(p => {
+            p.pagos.forEach(pago => {
+                todosPagos.push({
+                    pagoId: pago._id,
+                    proyectoId: p._id,
+                    monto: pago.monto,
+                    metodo: pago.metodo,
+                    fecha: pago.fecha,
+                    artista: pago.artista || (p.artista ? 'Artista' : 'General')
+                });
+            });
+        });
+        todosPagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        res.json(todosPagos);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 6. Obtener por Artista
+router.get('/por-artista/:id', async (req, res) => {
+    try {
+        const proyectos = await Proyecto.find({ artista: req.params.id }).populate('artista').sort({ fecha: -1 });
+        res.json(proyectos);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 7. Obtener UNO por ID
+router.get('/:id', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findById(req.params.id).populate('artista');
+        if (!proyecto) return res.status(404).json({ error: 'No encontrado' });
+        res.json(proyecto);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 8. CREAR PROYECTO
+router.post('/', async (req, res) => {
+    try {
+        // Quitamos _id si viene temp para que Mongo genere uno
+        if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
+        
+        const nuevo = new Proyecto(req.body);
+        const guardado = await nuevo.save();
+        res.status(201).json(guardado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 9. ACTUALIZAR PROCESO (Kanban)
+router.put('/:id/proceso', async (req, res) => {
+    try {
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { 
+            proceso: req.body.proceso,
+            estatus: req.body.proceso === 'Agendado' ? 'Pendiente de Pago' : undefined // Si se aprueba cotizacion
+        }, { new: true });
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 10. ACTUALIZAR ESTATUS (Para Cancelar) - ESTA ERA LA RUTA QUE FALTABA
+router.put('/:id/estatus', async (req, res) => {
+    try {
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { 
+            estatus: req.body.estatus 
+        }, { new: true });
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 11. ACTUALIZAR NOMBRE
 router.put('/:id/nombre', async (req, res) => {
     try {
-        const { nombreProyecto } = req.body;
-        const proyecto = await Proyecto.findByIdAndUpdate(req.params.id, { $set: { nombreProyecto: nombreProyecto } }, { new: true });
-        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
-        res.json(proyecto);
-    } catch (err) {
-        res.status(500).json({ error: 'Error al actualizar el nombre del proyecto' });
-    }
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true });
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// (El resto de las rutas no cambia)
-router.get('/pagos/todos', async (req, res) => { try { const pagos = await Proyecto.aggregate([ { $unwind: '$pagos' }, { $sort: { 'pagos.fecha': -1 } }, { $lookup: { from: 'artistas', localField: 'artista', foreignField: '_id', as: 'artistaInfo' } }, { $project: { _id: '$pagos._id', pagoId: '$pagos._id', fecha: '$pagos.fecha', monto: '$pagos.monto', metodo: '$pagos.metodo', proyectoId: '$_id', artista: { $ifNull: [ { $arrayElemAt: ['$artistaInfo.nombre', 0] }, 'Público General' ] } }}, { $sort: { 'artista': 1, 'fecha': -1 } } ]); res.json(pagos); } catch (err) { console.error("Error al obtener todos los pagos:", err); res.status(500).json({ error: 'Error al obtener el historial de pagos' }); } });
-router.delete('/:proyectoId/pagos/:pagoId', async (req, res) => { try { const { proyectoId, pagoId } = req.params; const proyecto = await Proyecto.findById(proyectoId); if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' }); const pagoAEliminar = proyecto.pagos.id(pagoId); if (!pagoAEliminar) return res.status(404).json({ error: 'Pago no encontrado' }); proyecto.montoPagado -= pagoAEliminar.monto; if (proyecto.montoPagado <= 0) { proyecto.montoPagado = 0; proyecto.estatus = 'Pendiente de Pago'; } else if (proyecto.montoPagado < proyecto.total) { proyecto.estatus = 'Pagado Parcialmente'; } else { proyecto.estatus = 'Pagado'; } proyecto.pagos.pull(pagoId); await proyecto.save(); res.status(200).json({ message: 'Pago eliminado correctamente' }); } catch (err) { console.error("Error al eliminar pago:", err); res.status(500).json({ error: 'Error del servidor al eliminar el pago' }); } });
-router.get('/cotizaciones', async (req, res) => { try { const cotizaciones = await Proyecto.find({ isDeleted: false, proceso: 'Cotizacion' }).populate('artista', 'nombre').sort({ createdAt: -1 }); res.json(cotizaciones); } catch (err) { res.status(500).json({ error: 'Error al obtener cotizaciones' }); } });
-router.get('/', async (req, res) => { try { const proyectos = await Proyecto.find({ isDeleted: false, proceso: { $nin: ['Completo', 'Cotizacion'] } }).populate('artista', 'nombre').populate('items.servicio', 'nombre').sort({ createdAt: -1 }); res.json(proyectos); } catch (err) { res.status(500).json({ error: 'Error del servidor' }); } });
-router.get('/completos', async (req, res) => { try { const proyectos = await Proyecto.find({ isDeleted: false, proceso: 'Completo' }).populate('artista', 'nombre').sort({ fecha: -1 }); res.json(proyectos); } catch (err) { res.status(500).json({ error: 'Error del servidor' }); } });
-router.get('/agenda', async (req, res) => { try { const colorMap={'Agendado':'#5a67d8','Grabacion':'#d53f8c','Edicion':'#dd6b20','Mezcla':'#38a169','Mastering':'#00b5d8','default':'#808080'}; const proyectos = await Proyecto.find({isDeleted:false,proceso:{$nin:['Cotizacion','Completo']}}).populate('artista').populate('items.servicio','nombre'); const eventos = proyectos.map(p => { const serviciosLista = p.items.map(item => `- ${item.unidades}x ${item.servicio ? item.servicio.nombre : 'N/A'}`).join('\n'); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; return {id:p._id,title:`${p.nombreProyecto || artistaNombre}`,start:p.fecha,color:colorMap[p.proceso]||colorMap.default,extendedProps:{artistaId: p.artista ? p.artista._id : null, artistaNombre: p.artista ? p.artista.nombre : 'Público General', proceso:p.proceso,estatus:p.estatus,total:p.total,servicios:serviciosLista}}}); res.json(eventos); } catch (err) { console.error("Error en agenda:", err); res.status(500).json({ error: 'Error al obtener datos para la agenda' }); } });
-router.get('/:id', async (req, res) => { try { const proyecto = await Proyecto.findById(req.params.id).populate('artista', 'nombre').populate('items.servicio', 'nombre'); if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' }); res.json(proyecto); } catch (err) { res.status(500).json({ error: 'Error del servidor' }); } });
-router.post('/', async (req, res) => { try { let datosProyecto = req.body; if (datosProyecto.artista === 'publico_general' || !datosProyecto.artista) { datosProyecto.artista = null; } const nuevoProyecto = new Proyecto(datosProyecto); await nuevoProyecto.save(); res.status(201).json(nuevoProyecto); } catch (err) { console.error("Error al guardar proyecto:", err); res.status(500).json({ error: 'Error al guardar el proyecto. Revisa los datos enviados.' }); } });
-router.post('/:id/pagos', async (req, res) => { try { const { monto, metodo } = req.body; const proyecto = await Proyecto.findById(req.params.id); if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' }); proyecto.pagos.push({ monto, metodo }); proyecto.montoPagado = (proyecto.montoPagado || 0) + monto; if (proyecto.montoPagado >= proyecto.total) { proyecto.estatus = 'Pagado'; } else { proyecto.estatus = 'Pagado Parcialmente'; } await proyecto.save(); const proyectoActualizado = await Proyecto.findById(proyecto._id).populate('artista', 'nombre').populate('items.servicio', 'nombre'); res.json(proyectoActualizado); } catch (err) { console.error("Error al registrar pago:", err); res.status(500).json({ error: 'Error al registrar el pago' }); } });
-async function actualizarCampo(req, res) { const { id } = req.params; const campo = Object.keys(req.body)[0]; const valor = req.body[campo]; try { const proyecto = await Proyecto.findByIdAndUpdate(id, { [campo]: valor }, { new: true }); if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' }); res.json(proyecto); } catch (err) { res.status(500).json({ error: 'Error al actualizar' }); } }
-router.put('/:id/proceso', actualizarCampo);
-router.put('/:id/prioridad', actualizarCampo);
-router.put('/:id/fecha', actualizarCampo);
-router.delete('/:id', async (req, res) => { try { await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true }); res.status(204).send(); } catch (err) { res.status(500).json({ error: "Error al mover a la papelera" }); } });
+// 12. ACTUALIZAR FECHA
+router.put('/:id/fecha', async (req, res) => {
+    try {
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true });
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 13. ACTUALIZAR ENLACE ENTREGA
+router.put('/:id/enlace-entrega', async (req, res) => {
+    try {
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true });
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 14. AGREGAR PAGO
+router.post('/:id/pagos', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findById(req.params.id).populate('artista');
+        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+        const nuevoPago = {
+            monto: req.body.monto,
+            metodo: req.body.metodo,
+            fecha: new Date(),
+            artista: proyecto.artista ? proyecto.artista.nombre : 'General'
+        };
+
+        proyecto.pagos.push(nuevoPago);
+        proyecto.montoPagado = (proyecto.montoPagado || 0) + req.body.monto;
+        
+        // Auto-actualizar estatus si se paga completo
+        if (proyecto.montoPagado >= proyecto.total - (proyecto.descuento || 0)) {
+            proyecto.estatus = 'Pagado';
+        }
+
+        await proyecto.save();
+        res.json(proyecto);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 15. GUARDAR DOCUMENTOS
+router.put('/:id/documentos', async (req, res) => {
+    try {
+        const update = {};
+        if (req.body.tipo === 'contrato') update.detallesContrato = req.body.data;
+        if (req.body.tipo === 'distribucion') update.detallesDistribucion = req.body.data;
+        
+        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, update, { new: true }).populate('artista');
+        res.json(actualizado);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 16. ELIMINAR PROYECTO
+router.delete('/:id', async (req, res) => {
+    try {
+        // En un sistema real moveríamos a una colección 'Papelera', aquí borramos físico
+        await Proyecto.findByIdAndDelete(req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 17. ELIMINAR PAGO
+router.delete('/:id/pagos/:pagoId', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findById(req.params.id);
+        if(!proyecto) return res.status(404).json({error: 'Proyecto no encontrado'});
+
+        const pago = proyecto.pagos.id(req.params.pagoId);
+        if(!pago) return res.status(404).json({error: 'Pago no encontrado'});
+
+        proyecto.montoPagado -= pago.monto;
+        pago.deleteOne(); // Sintaxis Mongoose subdocumento
+        
+        if (proyecto.montoPagado < proyecto.total) {
+            proyecto.estatus = 'Pendiente de Pago';
+        }
+
+        await proyecto.save();
+        res.json(proyecto);
+    } catch(e) { res.status(500).json({error: e.message}); }
+});
 
 module.exports = router;
