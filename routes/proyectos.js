@@ -1,17 +1,14 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js
+// ARCHIVO: routes/proyectos.js (BACKEND)
 // ==========================================
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-
-// IMPORTANTE: Aquí importamos el modelo que definimos en el otro archivo
-// Asegúrate de que la ruta '../models/Proyecto' sea correcta
-const Proyecto = require('../models/Proyecto');
+const Proyecto = require('../models/Proyecto'); // Asegúrate que la ruta sea correcta
 
 // --- RUTAS ---
 
-// 1. Obtener todos
+// 1. Obtener todos (Caché inicial)
 router.get('/', async (req, res) => {
     try {
         const proyectos = await Proyecto.find().populate('artista').sort({ fecha: 1 });
@@ -45,7 +42,7 @@ router.get('/agenda', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Obtener cotizaciones
+// 3. Cotizaciones
 router.get('/cotizaciones', async (req, res) => {
     try {
         const cotizaciones = await Proyecto.find({ estatus: 'Cotizacion' }).populate('artista');
@@ -53,7 +50,7 @@ router.get('/cotizaciones', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Obtener completados
+// 4. Completados
 router.get('/completos', async (req, res) => {
     try {
         const completos = await Proyecto.find({ proceso: 'Completo' }).populate('artista').sort({ fecha: -1 });
@@ -61,20 +58,29 @@ router.get('/completos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Obtener pagos
+// 5. Pagos Globales (CORREGIDO NOMBRE ARTISTA)
 router.get('/pagos/todos', async (req, res) => {
     try {
-        const proyectos = await Proyecto.find({ "pagos.0": { $exists: true } });
+        // Traemos el artista populado para sacar el nombre real
+        const proyectos = await Proyecto.find({ "pagos.0": { $exists: true } }).populate('artista');
         let todosPagos = [];
         proyectos.forEach(p => {
             p.pagos.forEach(pago => {
+                // Lógica para obtener el nombre correcto
+                let nombreArtista = 'General';
+                if (p.artista && p.artista.nombre) {
+                    nombreArtista = p.artista.nombre;
+                } else if (pago.artista) {
+                    nombreArtista = pago.artista;
+                }
+
                 todosPagos.push({
                     pagoId: pago._id,
                     proyectoId: p._id,
                     monto: pago.monto,
                     metodo: pago.metodo,
                     fecha: pago.fecha,
-                    artista: pago.artista || (p.artista ? 'Artista' : 'General')
+                    artista: nombreArtista
                 });
             });
         });
@@ -83,7 +89,7 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Obtener por Artista
+// 6. Por Artista
 router.get('/por-artista/:id', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ artista: req.params.id }).populate('artista').sort({ fecha: -1 });
@@ -91,7 +97,7 @@ router.get('/por-artista/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 7. Obtener UNO por ID
+// 7. Por ID
 router.get('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
@@ -100,7 +106,7 @@ router.get('/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 8. Crear Proyecto
+// 8. Crear
 router.post('/', async (req, res) => {
     try {
         if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
@@ -128,7 +134,7 @@ router.put('/:id/estatus', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 11. Actualizar Nombre
+// 11. Nombre
 router.put('/:id/nombre', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true });
@@ -136,7 +142,7 @@ router.put('/:id/nombre', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 12. Actualizar Fecha
+// 12. Fecha
 router.put('/:id/fecha', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true });
@@ -144,7 +150,7 @@ router.put('/:id/fecha', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 13. Enlace Entrega
+// 13. Enlace
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true });
@@ -168,7 +174,7 @@ router.post('/:id/pagos', async (req, res) => {
         proyecto.pagos.push(nuevoPago);
         proyecto.montoPagado = (proyecto.montoPagado || 0) + req.body.monto;
         
-        if (proyecto.montoPagado >= proyecto.total - (proyecto.descuento || 0)) {
+        if (proyecto.montoPagado >= (proyecto.total - (proyecto.descuento || 0))) {
             proyecto.estatus = 'Pagado';
         }
 
