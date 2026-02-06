@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-  <title>FiaRecords Studio - Gestión Pro</title>
+  
+  <title>Fia Records Estudio de Grabación</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   <link rel="apple-touch-icon" href="icon-192.png">
+  
+  <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
@@ -986,12 +989,13 @@
                     localCache.proyectos.push(nuevoProyecto);
                 } else if (options.method === 'PUT') {
                     let idTarget = url.split('/').pop(); 
-                    if(['estatus', 'proceso', 'nombre', 'enlace-entrega', 'fecha'].includes(idTarget)) { const parts = url.split('/'); idTarget = parts[parts.length - 2]; }
+                    if(['estatus', 'proceso', 'nombre', 'enlace-entrega', 'fecha', 'total'].includes(idTarget)) { const parts = url.split('/'); idTarget = parts[parts.length - 2]; }
                     const idx = localCache.proyectos.findIndex(p => p._id === idTarget);
                     if(idx !== -1) {
                         localCache.proyectos[idx] = { ...localCache.proyectos[idx], ...body };
                         if(url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
                         if(url.includes('/estatus')) localCache.proyectos[idx].estatus = body.estatus;
+                        if(url.includes('/total')) localCache.proyectos[idx].total = body.total;
                     }
                 } else if (options.method === 'DELETE') {
                     const idTarget = url.split('/').pop();
@@ -1070,6 +1074,10 @@
                   const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
+                  
+                  // --- DINAMIC FAVICON UPDATE ---
+                  const favicon = document.getElementById('dynamic-favicon');
+                  if(favicon) favicon.href = logoSrc;
               }
           } catch (e) { console.warn("Offline: Usando logo cacheado"); }
       }
@@ -1237,7 +1245,15 @@
                 const card = document.createElement('div'); card.className = `project-card`; card.dataset.id = p._id; card.style.borderColor = `var(--proceso-${p.proceso})`; 
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li>${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
-                card.innerHTML = `<div class="project-card-header"><span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span><button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" onclick="app.editarNombreProyecto('${p._id}')">✏️</button></div>
+                
+                // --- BOTONES PARA ELIMINAR Y EDITAR AÑADIDOS AQUI ---
+                card.innerHTML = `<div class="project-card-header">
+                                    <span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
+                                    <div style="display:flex;gap:4px;">
+                                        <button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
+                                        <button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
+                                    </div>
+                                </div>
                                 <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
                                     <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
@@ -1253,7 +1269,25 @@
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
-      async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover a papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) cargarCotizaciones(); else cargarHistorial(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+      
+      // --- FUNCION DE ELIMINAR PROYECTO ---
+      async function eliminarProyecto(id, desdeCotizaciones = false) { 
+          if (!confirm('¿Mover a papelera? Desaparecerá del flujo.')) return; 
+          try { 
+              await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); 
+              showToast('Movido a papelera.', 'info'); 
+              if (desdeCotizaciones) { 
+                  cargarCotizaciones(); 
+              } else if (document.getElementById('historial-proyectos').classList.contains('active')) {
+                  cargarHistorial();
+              } else {
+                  // Si estamos en Flujo de Trabajo
+                  const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim();
+                  filtrarFlujo(filtroActual);
+              }
+          } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+      }
+      
       async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (currentValue) select.value = currentValue; } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
       const cargarOpcionesParaProyecto = () => { cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); }
       const cargarOpcionesParaProyectoManual = () => { cargarOpcionesParaSelect('/api/artistas', 'manualProyectoArtista', '_id', item => item.nombreArtistico || item.nombre, false); flatpickr("#manualFechaProyecto", { defaultDate: "today", locale: "es" }); };
@@ -1588,12 +1622,38 @@
           const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`;
           window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
       }
-      async function editarNombreProyecto(id) {
+      
+      // --- NUEVA FUNCIÓN PARA EDITAR INFO RAPIDA ---
+      async function editarInfoProyecto(id) {
           const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
           if (!proyecto) return;
-          const nuevoNombre = prompt('Nuevo nombre:', proyecto.nombreProyecto || '');
+          
+          const nuevoNombre = prompt('Editar nombre:', proyecto.nombreProyecto || '');
           if (nuevoNombre === null) return;
-          try { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); showToast('Actualizado.', 'success'); if(document.getElementById('flujo-trabajo').classList.contains('active')) filtrarFlujo(document.querySelector('#filtrosFlujo button.active').textContent.trim()); } catch (e) { showToast(`Error`, 'error'); }
+          
+          const nuevoTotalStr = prompt('Editar Precio Total ($):', proyecto.total || 0);
+          if (nuevoTotalStr === null) return;
+          const nuevoTotal = parseFloat(nuevoTotalStr);
+
+          try { 
+              if (nuevoNombre.trim() !== proyecto.nombreProyecto) {
+                 await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); 
+                 proyecto.nombreProyecto = nuevoNombre.trim(); 
+              }
+              if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) {
+                  // Asumimos que existe un endpoint o reutilizamos logica, en este caso simulamos o creamos el endpoint si tu backend lo soporta.
+                  // Si no tienes endpoint especifico de total, habría que enviar todo el objeto, pero intentaré usar un update parcial si tu backend es flexible.
+                  // NOTA: Para este ejemplo asumo que tu backend acepta PUT /api/proyectos/:id para actualizar campos generales.
+                  await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) });
+                  proyecto.total = nuevoTotal;
+              }
+              
+              showToast('Actualizado.', 'success'); 
+              if(document.getElementById('flujo-trabajo').classList.contains('active')) {
+                   const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim();
+                   filtrarFlujo(filtro); 
+              }
+          } catch (e) { showToast(`Error`, 'error'); }
       }
 
       function setupMobileMenu() {
@@ -1624,7 +1684,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
     });
   </script>
 
