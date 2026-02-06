@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
   <title>FiaRecords Studio - Gestión Pro</title>
   
   <link rel="manifest" href="manifest.json">
@@ -156,7 +156,7 @@
     .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: var(--primary-gradient); color: white; border: none; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5); display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; transition: transform 0.2s; }
     .fab-btn:active { transform: scale(0.9); }
 
-    /* RESPONSIVE LOGIC */
+    /* RESPONSIVE LOGIC MEJORADO (Horizontal y Vertical) */
     @media (max-width: 768px) {
       #app-wrapper { display: block; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
@@ -165,7 +165,7 @@
       .main-header { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.8rem; }
       .search-box { display: block; width: 100%; max-width: none; margin: 0.5rem 0 0 0; order: 99; }
       
-      .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 10px 0 30px rgba(0,0,0,0.2); }
+      .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 10px 0 30px rgba(0,0,0,0.2); overflow-y: auto; }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
       .connection-status span { display: none; } 
@@ -173,6 +173,14 @@
       /* Ocultar botón grande en sidebar móvil para usar FAB */
       #btn-nuevo-proyecto-sidebar { display: none; }
     }
+    
+    /* Manejo específico para landscape en móviles */
+    @media (max-width: 900px) and (orientation: landscape) {
+        .sidebar { width: 300px; }
+        .main-header { position: relative; } /* Evita que ocupe mucho espacio fijo en horizontal */
+        .modal-content { max-height: 85vh; }
+    }
+
     @media (min-width: 769px) {
       #app-wrapper { display: flex; height: 100vh; overflow: hidden; }
       #hamburger-menu { display: none; }
@@ -203,6 +211,7 @@
     
     .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
     .btn-secondary:hover { background-color: var(--secondary-button-hover-bg); border-color: var(--text-color-light); }
+    .btn-secondary.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
     
     .btn-restaurar, .btn-aprobar { background: var(--success-gradient); color: white; }
     
@@ -235,13 +244,13 @@
     .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; color: white; font-weight: 700; text-transform: uppercase; }
     .proceso-tag { padding: 3px 8px; border-radius: 6px; color: white; font-size: 0.7em; display: inline-block; margin-top: 8px; font-weight: 600; }
 
-    /* MÓVIL TABLAS CARD VIEW */
+    /* MÓVIL TABLAS CARD VIEW (Responsive para vertical y horizontal) */
     @media (max-width: 768px) {
         .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive th, .table-responsive td, .table-responsive tr { display: block; width: 100%; }
         .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
         .table-responsive tr { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background-color: var(--card-background); box-shadow: var(--shadow-sm); }
         .table-responsive td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-right: 0; text-align: right; white-space: normal; }
-        .table-responsive td:last-child { border-bottom: none; display: flex; justify-content: flex-end; padding-left: 0 !important; gap: 0.5rem; }
+        .table-responsive td:last-child { border-bottom: none; display: flex; justify-content: flex-end; padding-left: 0 !important; gap: 0.5rem; flex-wrap: wrap;}
         .table-responsive td:before { position: absolute; top: 1rem; left: 0; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); font-size: 0.8em; text-transform: uppercase; }
         /* Labels manuales para CSS content */
         #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
@@ -251,6 +260,12 @@
         #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
         #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
         #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
+        
+        #tablaPendientesBody td:nth-of-type(1):before { content: "Proyecto:"; }
+        #tablaPendientesBody td:nth-of-type(2):before { content: "Total:"; }
+        #tablaPendientesBody td:nth-of-type(3):before { content: "Pagado:"; }
+        #tablaPendientesBody td:nth-of-type(4):before { content: "Restante:"; }
+
         #tablaHistorialBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
@@ -467,12 +482,32 @@
 
             <section id="pagos">
               <div class="card">
-                <div class="card-header"><h2>Historial de Pagos</h2></div>
-                <div class="table-responsive">
-                  <table>
-                    <thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
-                    <tbody id="tablaPagosBody"></tbody>
-                  </table>
+                <div class="card-header">
+                    <h2>Gestión de Pagos</h2>
+                    <div class="filter-buttons">
+                        <button class="btn-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes de Cobro</button>
+                        <button class="btn-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial de Transacciones</button>
+                    </div>
+                </div>
+                
+                <div id="vista-pagos-pendientes">
+                    <h3 style="margin-bottom: 1rem; color: var(--warning-color);">Proyectos con Saldo Pendiente</h3>
+                    <div class="table-responsive">
+                      <table>
+                        <thead><tr><th>Proyecto/Artista</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
+                        <tbody id="tablaPendientesBody"></tbody>
+                      </table>
+                    </div>
+                </div>
+
+                <div id="vista-pagos-historial" style="display:none;">
+                    <h3 style="margin-bottom: 1rem;">Historial Completo</h3>
+                    <div class="table-responsive">
+                      <table>
+                        <thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
+                        <tbody id="tablaPagosBody"></tbody>
+                      </table>
+                    </div>
                 </div>
               </div>
             </section>
@@ -834,10 +869,8 @@
       const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
       function showToast(message, type = 'success') { 
-          // Colores personalizados para toast
           let bg = type === 'error' ? "linear-gradient(to right, #ff5f6d, #ffc371)" : "linear-gradient(to right, #00b09b, #96c93d)";
           if(type==='info') bg = "var(--secondary-button-bg)";
-          
           Toastify({ text: message, duration: 3000, gravity: "top", position: "right", style: { background: bg, borderRadius: "10px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" } }).showToast(); 
       }
       function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({'&': '&amp;','<': '&lt;','>': '&gt;',"'": '&#39;','"': '&quot;'}[tag])); }
@@ -845,7 +878,6 @@
       function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
       async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
 
-      // PRECARGA DE LOGO
       async function preloadLogoForPDF() {
           const imgUrl = DOMElements.appLogo.src;
           try {
@@ -857,9 +889,7 @@
           } catch(e) { console.warn("No se pudo precargar logo para PDF offline"); }
       }
 
-      // ======================================================
       // 2. OFFLINE MANAGER
-      // ======================================================
       const OfflineManager = {
           QUEUE_KEY: 'fia_offline_queue',
           getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -872,7 +902,6 @@
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
               const isOnline = navigator.onLine;
-              
               if (isOnline) {
                   if (queue.length > 0) {
                       DOMElements.connectionStatus.className = 'connection-status status-syncing';
@@ -890,27 +919,21 @@
           sync: async () => {
               const queue = OfflineManager.getQueue();
               if (queue.length === 0) return;
-              
               const token = localStorage.getItem('token');
               const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
               let newQueue = [];
-              
               for (const req of queue) {
                   try {
                       let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
                       if(bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id;
-
                       const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
                       if(!res.ok) throw new Error('Failed');
-                  } catch (e) {
-                      newQueue.push(req);
-                  }
+                  } catch (e) { newQueue.push(req); }
               }
               localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
               if(newQueue.length === 0) { 
                   showToast('Sincronización completada', 'success'); 
-                  const proms = [ fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios') ];
-                  await Promise.all(proms);
+                  await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios')]);
                   const currentHash = location.hash.replace('#', '');
                   if (currentHash) window.app.mostrarSeccion(currentHash, false);
               }
@@ -921,16 +944,13 @@
 
       window.app = { syncNow: OfflineManager.syncNow };
 
-      // ======================================================
-      // 3. FETCH API INTELIGENTE
-      // ======================================================
+      // 3. FETCH API
       async function fetchAPI(url, options = {}) { 
         const token = localStorage.getItem('token'); 
         if (!token) { showLogin(); throw new Error('No autenticado'); } 
         const headers = { 'Authorization': `Bearer ${token}` }; 
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
-        // --- GET ---
         if ((!options.method || options.method === 'GET')) {
              if (!navigator.onLine) {
                  if(url.includes('/artistas')) return localCache.artistas;
@@ -952,7 +972,6 @@
              }
         }
 
-        // --- POST/PUT/DELETE (Optimistic) ---
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
             const body = options.body ? JSON.parse(options.body) : {};
             const tempId = body._id || `temp_${Date.now()}`;
@@ -1032,9 +1051,7 @@
                 if(url.includes('/proyectos')) return localCache.proyectos;
             }
             throw e;
-        } finally {
-            hideLoader(); 
-        }
+        } finally { hideLoader(); }
       }
 
       function filtrarTablas(query) {
@@ -1061,19 +1078,14 @@
           try { 
               const config = await fetchAPI('/api/configuracion'); 
               configCache = config; 
-              if (config.logoPath) { 
-                  DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; 
-              } 
-          } catch (e) { 
-              configCache = { firmaPos: { cotizacion: {vAlign:'bottom',hAlign:'right',w:50,h:20,offsetX:0,offsetY:0} } }; 
-          } 
+              if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; } 
+          } catch (e) { configCache = { firmaPos: { cotizacion: {vAlign:'bottom',hAlign:'right',w:50,h:20,offsetX:0,offsetY:0} } }; } 
       }
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
       (async function init() { 
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000); 
-        
         applyTheme(localStorage.getItem('theme') || 'light'); 
         const token = localStorage.getItem('token'); 
         if (token) { 
@@ -1111,7 +1123,7 @@
       
       document.getElementById('login-form').addEventListener('submit', async (e) => { 
         e.preventDefault(); 
-        if (!navigator.onLine) { return showToast('Necesitas internet para iniciar sesión por primera vez.', 'error'); }
+        if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
         showLoader();
         try { 
             const res = await fetch(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
@@ -1119,11 +1131,7 @@
             if (!res.ok) throw new Error(data.error); 
             localStorage.setItem('token', data.token); 
             await showApp(JSON.parse(atob(data.token.split('.')[1]))); 
-        } catch (error) { 
-            document.getElementById('login-error').textContent = error.message; 
-        } finally {
-            hideLoader();
-        }
+        } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
       });
       
       DOMElements.logoutButton.addEventListener('click', showLogin);
@@ -1158,13 +1166,9 @@
               const data = await fetchAPI(`/api/${endpoint}`); 
               document.getElementById(listId).innerHTML = data.length ? data.map(item => { 
                   let displayName; 
-                  if (endpoint === 'artistas') {
-                      displayName = `${item.nombreArtistico || item.nombre} ${item.nombreArtistico ? `(${item.nombre})` : ''}`;
-                  } else if (endpoint === 'usuarios') {
-                      displayName = `${item.username || 'Usuario'} (${item.role})`;
-                  } else {
-                      displayName = `${item.nombre || 'Sin Nombre'} - $${item.precio.toFixed(2)}`;
-                  }
+                  if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre} ${item.nombreArtistico ? `(${item.nombre})` : ''}`; } 
+                  else if (endpoint === 'usuarios') { displayName = `${item.username || 'Usuario'} (${item.role})`; } 
+                  else { displayName = `${item.nombre || 'Sin Nombre'} - $${item.precio.toFixed(2)}`; }
                   const clickHandler = makeClickable ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
                   return `<li class="list-item" ${clickHandler} style="${makeClickable ? 'cursor:pointer;' : ''}"><span>${escapeHTML(displayName)}</span><div class="list-item-actions"><button class="btn-secondary" onclick="event.stopPropagation(); app.editarItem('${item._id}', '${endpoint}')">✏️</button><button class="btn-eliminar" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')">🗑️</button></div></li>`; 
               }).join('') : `<li>No hay elementos.</li>`; 
@@ -1177,61 +1181,31 @@
           const form = e.target; 
           const id = form.querySelector('input[type="hidden"]')?.value; 
           let body; 
-          if (type === 'servicios') { 
-              body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; 
-          } else if (type === 'artistas') {
-              body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value };
-          } else if (type === 'usuarios') { 
-              body = { username: form.usernameUsuario.value, role: form.roleUsuario.value }; 
-              const password = form.passwordUsuario.value; 
-              if (!id && !password) { showToast('La contraseña es obligatoria.', 'error'); return; } 
-              if (password) body.password = password; 
-          } 
-          const method = id ? 'PUT' : 'POST'; 
-          const url = `/api/${type}/${id || ''}`; 
+          if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; } 
+          else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } 
+          else if (type === 'usuarios') { body = { username: form.usernameUsuario.value, role: form.roleUsuario.value }; const password = form.passwordUsuario.value; if (!id && !password) { showToast('Contraseña obligatoria.', 'error'); return; } if (password) body.password = password; } 
+          const method = id ? 'PUT' : 'POST'; const url = `/api/${type}/${id || ''}`; 
           try { 
               const res = await fetchAPI(url, { method, body: JSON.stringify(body) }); 
-              if (res.offline) { 
-                 showToast('Guardado localmente.', 'warning');
-                 mostrarSeccion(`gestion-${type}`); 
-              } else {
-                 showToast(`Guardado con éxito.`, 'success'); 
-                 limpiarForm(form.id); 
-                 mostrarSeccion(`gestion-${type}`); 
-              }
+              showToast(res.offline ? 'Guardado local.' : 'Guardado éxito.', res.offline ? 'warning' : 'success'); 
+              limpiarForm(form.id); mostrarSeccion(`gestion-${type}`); 
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
-      async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a la papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+      async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       async function editarItem(id, endpoint) { 
           try { 
-              let item;
-              if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id);
-              else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id);
-              
+              let item; if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id); else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id);
               if(!item) item = await fetchAPI(`/api/${endpoint}/${id}`); 
-              
               const form = document.getElementById(`form${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`); 
-              if (endpoint === 'servicios') { 
-                  form.idServicio.value = item._id; 
-                  form.nombreServicio.value = item.nombre; 
-                  form.precioServicio.value = item.precio; 
-              } else if (endpoint === 'artistas') { 
-                  form.idArtista.value = item._id; 
-                  form.nombreArtista.value = item.nombre;
-                  form.nombreArtisticoArtista.value = item.nombreArtistico || '';
-                  form.telefonoArtista.value = item.telefono || '';
-                  form.correoArtista.value = item.correo || '';
-              } else if (endpoint === 'usuarios') { 
-                  form.idUsuario.value = item._id; 
-                  form.usernameUsuario.value = item.username; 
-                  form.roleUsuario.value = item.role; 
-              } 
+              if (endpoint === 'servicios') { form.idServicio.value = item._id; form.nombreServicio.value = item.nombre; form.precioServicio.value = item.precio; } 
+              else if (endpoint === 'artistas') { form.idArtista.value = item._id; form.nombreArtista.value = item.nombre; form.nombreArtisticoArtista.value = item.nombreArtistico || ''; form.telefonoArtista.value = item.telefono || ''; form.correoArtista.value = item.correo || ''; } 
+              else if (endpoint === 'usuarios') { form.idUsuario.value = item._id; form.usernameUsuario.value = item.username; form.roleUsuario.value = item.role; } 
               form.querySelector('button[type="submit"]').textContent = 'Actualizar'; 
-          } catch (error) { showToast(`Error al cargar: ${error.message}`, 'error'); } 
+          } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
-      async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-      async function eliminarPermanente(id, endpoint) { if (!confirm('¡ADVERTENCIA! Esta acción es irreversible.')) return; try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-      async function vaciarPapelera(endpoint) { if (!confirm(`¿Vaciar papelera de ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Papelera vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+      async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+      async function eliminarPermanente(id, endpoint) { if (!confirm('¡Irreversible!')) return; try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+      async function vaciarPapelera(endpoint) { if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       
       async function cargarDashboard() { 
         try { 
@@ -1239,50 +1213,11 @@
             document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes||0).toFixed(2)}`; 
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
-
             const ctx = document.getElementById('incomeChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
-            
-            const isDark = document.body.classList.contains('dark-mode');
-            const gridColor = isDark ? '#334155' : '#e2e8f0';
-            const textColor = isDark ? '#94a3b8' : '#64748b';
-
             const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const dataValues = stats.monthlyIncome || [0,0,0,0,0,0,0,0,0,0,0,0];
-
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Ingresos ($)',
-                        data: dataValues,
-                        borderColor: '#6366f1',
-                        backgroundColor: (context) => {
-                           const ctx = context.chart.ctx;
-                           const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-                           gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-                           gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
-                           return gradient;
-                        },
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#6366f1'
-                    }]
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: textColor } },
-                        y: { grid: { color: gridColor, borderDash: [5, 5] }, ticks: { color: textColor } }
-                    }
-                }
-            });
+            chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
         } catch(e) { console.error("Error dashboard:", e); } 
       }
 
@@ -1299,20 +1234,15 @@
           
           if(localCache.proyectos) {
             localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').forEach(p => { 
-                const card = document.createElement('div'); 
-                card.className = `project-card`; 
-                card.dataset.id = p._id;
-                card.style.borderColor = `var(--proceso-${p.proceso})`; 
+                const card = document.createElement('div'); card.className = `project-card`; card.dataset.id = p._id; card.style.borderColor = `var(--proceso-${p.proceso})`; 
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li>${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
-                const eventoDblClick = p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '${escapeHTML(p.artista.nombreArtistico||'')}')"` : ''; 
-                const claseArtista = p.artista ? 'clickable-artist' : ''; 
-                card.innerHTML = `<div class="project-card-header"><span class="${claseArtista}" ${eventoDblClick}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span><button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" onclick="app.editarNombreProyecto('${p._id}')">✏️</button></div>
+                card.innerHTML = `<div class="project-card-header"><span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span><button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" onclick="app.editarNombreProyecto('${p._id}')">✏️</button></div>
                                 <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
                                     <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
-                                    <div style="display:flex;gap:4px;">
-                                        <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.openDocumentsModal('${p._id}')">Docs</button>
+                                    <div style="display:flex;gap:4px;align-items:center;">
+                                        <button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button>
                                         <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button>
                                         <select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
                                     </div>
@@ -1322,7 +1252,7 @@
           }
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; const eventoDblClick = p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''; const claseArtista = p.artista ? 'clickable-artist' : ''; return `<tr><td class="${claseArtista}" ${eventoDblClick}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
+      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
       async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover a papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) cargarCotizaciones(); else cargarHistorial(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (currentValue) select.value = currentValue; } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
       const cargarOpcionesParaProyecto = () => { cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); }
@@ -1331,82 +1261,30 @@
       function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
       function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let total = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const subtotal = item.precioUnitario * item.unidades; total += subtotal; return `<li class="list-item"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${subtotal.toFixed(2)} <button class="btn-eliminar" style="padding:0.2rem 0.5rem;height:auto;" onclick="app.quitarDeProyecto('${item.id}')">X</button></span></li>`; }).join(''); document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
       async function guardarProyecto(procesoDestino) { 
-          const artistaSelect = document.getElementById('proyectoArtista'); 
-          const artistaId = artistaSelect.value; 
-          const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0];
-          const horaInput = document.getElementById('horaProyecto').value;
-          
-          let fechaFinal = new Date();
-          if(fechaInput) {
-              fechaFinal = fechaInput;
-              if(horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); }
-          }
-
-          if (Object.keys(proyectoActual).length === 0) { showToast('Agrega al menos un servicio.', 'error'); return null; } 
-          
+          const artistaSelect = document.getElementById('proyectoArtista'); const artistaId = artistaSelect.value; const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; const horaInput = document.getElementById('horaProyecto').value;
+          let fechaFinal = new Date(); if(fechaInput) { fechaFinal = fechaInput; if(horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); } }
+          if (Object.keys(proyectoActual).length === 0) { showToast('Faltan servicios.', 'error'); return null; } 
           const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
           const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
-          
           const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
           const total = Math.max(0, subtotal - descuento);
-
-          const body = { 
-              artista: artistaId === 'publico_general' ? null : artistaId, 
-              nombreProyecto: document.getElementById('nombreProyecto').value, 
-              items: items, 
-              total: total, 
-              descuento: descuento, 
-              estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', 
-              metodoPago: 'Pendiente', 
-              fecha: fechaFinal.toISOString(), 
-              prioridad: 'Normal', 
-              proceso: procesoDestino, 
-              esAlbum: document.getElementById('esAlbum').checked 
-          }; 
-          
-          try { 
-              const nuevoProyecto = await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-              return nuevoProyecto;
-          } catch (error) { 
-              showToast(`Error: ${error.message}`, 'error'); return null; 
-          } 
+          const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoDestino, esAlbum: document.getElementById('esAlbum').checked }; 
+          try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error: ${error.message}`, 'error'); return null; } 
       }
-
       async function guardarProyectoManual() {
-        const artistaId = document.getElementById('manualProyectoArtista').value;
-        const nombreProyecto = document.getElementById('manualNombreProyecto').value;
-        const fecha = document.getElementById('manualFechaProyecto')._flatpickr.selectedDates[0];
-        const descripcion = document.getElementById('manualDescripcion').value;
+        const artistaId = document.getElementById('manualProyectoArtista').value; const nombreProyecto = document.getElementById('manualNombreProyecto').value; const fecha = document.getElementById('manualFechaProyecto')._flatpickr.selectedDates[0]; const descripcion = document.getElementById('manualDescripcion').value;
         if (!artistaId || !nombreProyecto || !fecha) { return showToast('Datos incompletos.', 'error'); }
         const body = { artista: artistaId, nombreProyecto: nombreProyecto, items: [{ nombre: descripcion, unidades: 1, precioUnitario: 0 }], total: 0, estatus: 'Pagado', proceso: 'Agendado', fecha: fecha.toISOString(), };
         try { await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); showToast('Guardado.', 'success'); document.getElementById('formProyectoManual').reset(); mostrarSeccion('flujo-trabajo'); } catch(e) { showToast(`Error: ${e.message}`, 'error'); }
       }
-      async function generarCotizacion() { 
-          const nuevoProyecto = await guardarProyecto('Cotizacion'); 
-          if (nuevoProyecto) { 
-              if(nuevoProyecto.offline) { showToast('Guardado offline.', 'info'); } else { showToast('Cotización guardada.', 'success'); }
-              await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); 
-              proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('cotizaciones'); 
-          } 
-      }
-      async function enviarAFlujoDirecto() { 
-          const nuevoProyecto = await guardarProyecto('Agendado'); 
-          if (nuevoProyecto) { showToast('Agendado.', 'success'); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('flujo-trabajo'); } 
-      }
-      
+      async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast(nuevoProyecto.offline?'Guardado offline.':'Cotización guardada.', nuevoProyecto.offline?'warning':'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('cotizaciones'); } }
+      async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('Agendado.', 'success'); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('flujo-trabajo'); } }
       async function registrarNuevoArtistaDesdeFormulario(formPrefix) {
           const inputId = formPrefix ? `${formPrefix}NombreNuevoArtista` : 'nombreNuevoArtista';
           const containerId = formPrefix ? `${formPrefix}NuevoArtistaContainer` : 'nuevoArtistaContainer';
-          const nombreInput = document.getElementById(inputId);
-          const nombre = nombreInput.value.trim();
+          const nombreInput = document.getElementById(inputId); const nombre = nombreInput.value.trim();
           if (!nombre) { showToast('Introduce un nombre.', 'error'); return; }
-          try {
-              await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) });
-              const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista';
-              await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, formPrefix !== 'manual');
-              const select = document.getElementById(selectId); select.selectedIndex = select.options.length - 1;
-              document.getElementById(containerId).style.display = 'none'; nombreInput.value = '';
-          } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+          try { await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) }); const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista'; await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, formPrefix !== 'manual'); const select = document.getElementById(selectId); select.selectedIndex = select.options.length - 1; document.getElementById(containerId).style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
       }
 
       function openEventModal(info) { 
@@ -1418,38 +1296,21 @@
         document.getElementById('modal-event-status').textContent = props.estatus; 
         document.getElementById('modal-event-process').textContent = props.proceso; 
         document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); 
-        
         flatpickr("#edit-event-date", { defaultDate: info.event.start, locale: "es" });
         const hours = String(info.event.start.getHours()).padStart(2, '0');
         const minutes = String(info.event.start.getMinutes()).padStart(2, '0');
         document.getElementById('edit-event-time').value = `${hours}:${minutes}`;
-
         document.getElementById('btn-go-to-workflow').onclick = () => app.goToProjectInWorkflow(info.event.id); 
         const btnArtist = document.getElementById('btn-go-to-artist'); 
-        if (props.artistaId || props.artista) { 
-            btnArtist.style.display = 'block'; 
-            btnArtist.onclick = () => app.goToArtistFromModal(props.artistaId || props.artista._id, props.artistaNombre || (props.artista ? props.artista.nombre : '')); 
-        } else { btnArtist.style.display = 'none'; } 
-        
-        const oldCancelBtn = document.getElementById('btn-cancelar-evento-modal');
-        if(oldCancelBtn) oldCancelBtn.remove();
-
-        if (props.estatus !== 'Cancelado') {
-            const btnCancelar = document.createElement('button');
-            btnCancelar.id = 'btn-cancelar-evento-modal'; btnCancelar.textContent = '❌ Cancelar Cita'; btnCancelar.className = 'btn-eliminar'; btnCancelar.style.marginTop = '1rem'; btnCancelar.style.width = '100%';
-            btnCancelar.onclick = () => app.cancelarCita(info.event.id);
-            document.querySelector('#event-modal .modal-content').appendChild(btnCancelar);
-        }
+        if (props.artistaId || props.artista) { btnArtist.style.display = 'block'; btnArtist.onclick = () => app.goToArtistFromModal(props.artistaId || props.artista._id, props.artistaNombre || (props.artista ? props.artista.nombre : '')); } else { btnArtist.style.display = 'none'; } 
+        const oldCancelBtn = document.getElementById('btn-cancelar-evento-modal'); if(oldCancelBtn) oldCancelBtn.remove();
+        if (props.estatus !== 'Cancelado') { const btnCancelar = document.createElement('button'); btnCancelar.id = 'btn-cancelar-evento-modal'; btnCancelar.textContent = '❌ Cancelar Cita'; btnCancelar.className = 'btn-eliminar'; btnCancelar.style.marginTop = '1rem'; btnCancelar.style.width = '100%'; btnCancelar.onclick = () => app.cancelarCita(info.event.id); document.querySelector('#event-modal .modal-content').appendChild(btnCancelar); }
         document.getElementById('event-modal').style.display = 'flex'; 
       }
       
       async function cancelarCita(id) {
-          if (!confirm('¿Cancelar cita?')) return;
-          try {
-              await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) });
-              showToast('Cancelada.', 'info'); closeEventModal(); app.cargarAgenda();
-              if (document.getElementById('flujo-trabajo').classList.contains('active')) app.filtrarFlujo('Todos');
-          } catch(e) { showToast(`Error: ${e.message}`, 'error'); }
+          if (!confirm('¿Cancelar cita? Se liberará la fecha.')) return;
+          try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cancelada.', 'info'); closeEventModal(); app.cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) app.filtrarFlujo('Todos'); } catch(e) { showToast(`Error: ${e.message}`, 'error'); }
       }
 
       async function actualizarHorarioProyecto() {
@@ -1480,20 +1341,9 @@
                 navLinks: true, editable: true, events: eventos,
                 dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Fecha seleccionada: ${info.date.toLocaleDateString()}`, 'info'); } },
                 eventClick: openEventModal,
-                eventDrop: async (info) => {
-                    if (!confirm(`¿Mover proyecto?`)) { info.revert(); return; }
-                    try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Actualizado.', 'success'); cargarFlujoDeTrabajo('Todos'); } catch (error) { info.revert(); }
-                },
-                eventContent: (arg) => { 
-                    if(isMobile && !arg.view.type.includes('list')) { return { html: '' }; } 
-                    else { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }
-                },
-                eventDidMount: function(info) {
-                    if(isMobile && !info.view.type.includes('list')) {
-                        let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`;
-                        info.el.style.backgroundColor = colorVar;
-                    }
-                }
+                eventDrop: async (info) => { if (!confirm(`¿Mover proyecto?`)) { info.revert(); return; } try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Actualizado.', 'success'); cargarFlujoDeTrabajo('Todos'); } catch (error) { info.revert(); } },
+                eventContent: (arg) => { if(isMobile && !arg.view.type.includes('list')) { return { html: '' }; } else { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; } },
+                eventDidMount: function(info) { if(isMobile && !info.view.type.includes('list')) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; } }
             });
             currentCalendar.render();
         } catch (error) { calendarEl.innerHTML = '<p>Error agenda.</p>'; }
@@ -1502,6 +1352,7 @@
       async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function aprobarCotizacion(id) { if (!confirm('¿Aprobar cotización?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch(error) { showToast(`Error`, 'error'); } }
       async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Resumen FiaRecords:\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nContáctanos para confirmar.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error.', 'error'); } }
+      
       async function registrarPago(proyectoId, desdeHistorial = false) { 
           const cache = desdeHistorial ? historialCacheados : localCache.proyectos; 
           let proyecto = cache.find(p => p._id === proyectoId); 
@@ -1515,18 +1366,79 @@
           
           try { 
               const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) }); 
-              if(proyectoActualizado.offline) {
-                  showToast('Registrado offline.', 'info');
-                  const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1];
-                  await generarReciboPDF(proyectoActualizado, ultimoPago); 
-              } else {
-                  showToast('¡Pago registrado!', 'success'); 
-                  await generarReciboPDF(proyectoActualizado, proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1]); 
-              }
-              if (desdeHistorial) { cargarHistorial(); } else { cargarFlujoDeTrabajo(); } 
+              showToast(proyectoActualizado.offline ? 'Offline. Recibo local.' : '¡Pago registrado!', proyectoActualizado.offline ? 'info' : 'success');
+              const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1];
+              await generarReciboPDF(proyectoActualizado, ultimoPago); 
+              if (document.getElementById('pagos').classList.contains('active')) { app.cargarPagos(); } 
+              else if (desdeHistorial) { cargarHistorial(); } 
+              else { cargarFlujoDeTrabajo(); } 
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
-      async function cargarPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}).replace(/'/g, '&apos;'))">💬</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">Sin pagos.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">Error offline.</td></tr>`; } }
+
+      /* LOGICA DE PESTAÑAS Y PAGOS PENDIENTES */
+      async function cargarPagos() { 
+        mostrarSeccionPagos('pendientes', document.querySelector('.filter-buttons button.active'));
+      }
+      
+      function mostrarSeccionPagos(vista, btn) {
+          document.querySelectorAll('#pagos .filter-buttons button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          
+          if(vista === 'pendientes') {
+              document.getElementById('vista-pagos-pendientes').style.display = 'block';
+              document.getElementById('vista-pagos-historial').style.display = 'none';
+              cargarPagosPendientes();
+          } else {
+              document.getElementById('vista-pagos-pendientes').style.display = 'none';
+              document.getElementById('vista-pagos-historial').style.display = 'block';
+              cargarHistorialPagos();
+          }
+      }
+
+      async function cargarPagosPendientes() {
+          const tabla = document.getElementById('tablaPendientesBody');
+          tabla.innerHTML = '<tr><td colspan="5">Calculando...</td></tr>';
+          
+          // Filtramos proyectos activos (no cancelados, no cotizaciones) que tengan deuda
+          const pendientes = localCache.proyectos.filter(p => {
+              const pagado = p.montoPagado || 0;
+              return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion';
+          });
+
+          if(pendientes.length === 0) {
+              tabla.innerHTML = '<tr><td colspan="5">¡Todo al día! No hay pagos pendientes.</td></tr>';
+              return;
+          }
+
+          tabla.innerHTML = pendientes.map(p => {
+              const deuda = p.total - (p.montoPagado || 0);
+              const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General';
+              const proyectoNombre = p.nombreProyecto || 'Proyecto';
+              return `<tr>
+                  <td>
+                      <div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div>
+                      <div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div>
+                  </td>
+                  <td>$${p.total.toFixed(2)}</td>
+                  <td>$${(p.montoPagado||0).toFixed(2)}</td>
+                  <td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td>
+                  <td class="table-actions">
+                      <button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar 💵</button>
+                      <button class="btn-secondary" onclick="app.compartirPorWhatsApp('${p._id}')">Recordar 💬</button>
+                  </td>
+              </tr>`;
+          }).join('');
+      }
+
+      async function cargarHistorialPagos() { 
+          const tablaBody = document.getElementById('tablaPagosBody'); 
+          tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; 
+          try { 
+              const pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
+              tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}).replace(/'/g, '&apos;'))">💬</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">Sin pagos.</td></tr>`; 
+          } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">Error offline.</td></tr>`; } 
+      }
+
       async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId) || proyecto.pagos.find(p => p._id.startsWith('temp')); if (!pago) return showToast('No encontrado.', 'error'); await generarReciboPDF(proyecto, pago); } catch(e) { showToast('Error.', 'error'); } }
       function compartirPagoPorWhatsApp(pagoString) { const pago = JSON.parse(pagoString); const mensaje = `Confirmación de pago FiaRecords:\n\n*Fecha:* ${new Date(pago.fecha).toLocaleDateString()}\n*Monto:* $${pago.monto.toFixed(2)} MXN\n*Método:* ${pago.metodo}\n\n¡Gracias!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
       async function eliminarPago(proyectoId, pagoId) { if (!confirm('¿Eliminar pago? Afectará el saldo.')) return; try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPagos(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
@@ -1606,10 +1518,6 @@
           pos.w = parseInt(document.getElementById('slider-firma-w').value);
           pos.offsetX = parseInt(document.getElementById('slider-firma-offsetX').value);
           pos.offsetY = parseInt(document.getElementById('slider-firma-offsetY').value);
-          
-          document.getElementById('val-firma-w').textContent = pos.w;
-          document.getElementById('val-firma-offsetX').textContent = pos.offsetX;
-          document.getElementById('val-firma-offsetY').textContent = pos.offsetY;
       }
       async function revertirADefecto() {
           const docType = document.getElementById('doc-type-selector').value;
@@ -1686,7 +1594,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, syncNow: OfflineManager.syncNow, mostrarSeccion };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarNombreProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
     });
   </script>
 
