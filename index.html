@@ -1389,26 +1389,54 @@
           } catch (e) { document.getElementById(listId).innerHTML = `<li>Error al cargar.</li>`; } 
       }
       
-      async function cargarPapelera() { 
-          const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; 
-          for (const endpoint of endpoints) { 
-              const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
-              try { 
-                  // FETCH WITH CACHE FALLBACK LOGIC INTEGRATED IN fetchAPI
-                  const data = await fetchAPI(`/api/${endpoint}/papelera/all`); 
-                  document.getElementById(listId).innerHTML = data.length ? data.map(item => {
-                      let name = item.nombre || item.username || item.nombreProyecto || 'Sin nombre';
-                      return `<li class="list-item">
-                        <span>${escapeHTML(name)}</span>
-                        <div class="list-item-actions">
-                            <button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button>
-                            <button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button>
-                        </div>
-                      </li>`;
-                  }).join('') : `<li>Vacía.</li>`; 
-              } catch (e) { document.getElementById(listId).innerHTML = `<li>Error.</li>`; } 
-          } 
-      }
+      // REEMPLAZAR EN INDEX.HTML
+
+async function cargarPapelera() { 
+    const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; 
+    for (const endpoint of endpoints) { 
+        const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
+        try { 
+            const data = await fetchAPI(`/api/${endpoint}/papelera/all`); 
+            
+            document.getElementById(listId).innerHTML = data.length ? data.map(item => {
+                let displayName = 'Sin nombre';
+
+                // Lógica especial para Proyectos
+                if (endpoint === 'proyectos') {
+                   // 1. Si tiene nombre de proyecto
+                   if(item.nombreProyecto) {
+                       displayName = item.nombreProyecto;
+                   } 
+                   // 2. Si NO tiene nombre proyecto, usamos el nombre del Artista
+                   else if(item.artista && item.artista.nombre) {
+                       displayName = `Proyecto de ${item.artista.nombre}`;
+                   }
+                   // 3. Fallback
+                   else {
+                       displayName = 'Proyecto sin título';
+                   }
+                   // Agregamos el total para diferenciar
+                   displayName += ` ($${(item.total||0).toFixed(2)})`;
+                } 
+                else if (endpoint === 'usuarios') {
+                   displayName = item.username;
+                }
+                else {
+                   // Para Artistas y Servicios
+                   displayName = item.nombre || item.nombreArtistico || 'Item sin nombre';
+                }
+
+                return `<li class="list-item">
+                  <span>${escapeHTML(displayName)}</span>
+                  <div class="list-item-actions">
+                      <button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button>
+                      <button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button>
+                  </div>
+                </li>`;
+            }).join('') : `<li>Vacía.</li>`; 
+        } catch (e) { document.getElementById(listId).innerHTML = `<li>Error.</li>`; } 
+    } 
+}
       
       function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
       async function saveItem(e, type) { 

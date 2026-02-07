@@ -1,31 +1,32 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js (BACKEND ACTUALIZADO CON PAPELERA)
+// ARCHIVO: routes/proyectos.js (CORREGIDO PARA DATOS ANTIGUOS)
 // ==========================================
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Proyecto = require('../models/Proyecto');
 
-// NOTA IMPORTANTE: Asegúrate de que en tu modelo 'Proyecto.js' 
-// hayas agregado el campo: isDeleted: { type: Boolean, default: false }
+// --- RUTAS GET PRINCIPALES ---
 
-// --- RUTAS GET PRINCIPALES (Filtrando isDeleted: false) ---
-
-// 1. Obtener todos los activos (No en papelera)
+// 1. Obtener todos (Activos + Antiguos sin campo isDeleted)
 router.get('/', async (req, res) => {
     try {
-        const proyectos = await Proyecto.find({ isDeleted: false }).populate('artista').sort({ fecha: 1 });
+        // CAMBIO CLAVE: { $ne: true } significa "Que no sea verdadero"
+        // Esto incluye 'false' y también los que no tienen el campo (viejos)
+        const proyectos = await Proyecto.find({ isDeleted: { $ne: true } })
+                                        .populate('artista')
+                                        .sort({ fecha: 1 });
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. Obtener agenda (activos, no cancelados y no borrados)
+// 2. Obtener agenda
 router.get('/agenda', async (req, res) => {
     try {
         const proyectos = await Proyecto.find({ 
             estatus: { $ne: 'Cancelado' },
             proceso: { $ne: 'Completo' },
-            isDeleted: false 
+            isDeleted: { $ne: true } // Muestra activos y viejos
         }).populate('artista');
         
         const eventos = proyectos.map(p => ({
@@ -46,27 +47,37 @@ router.get('/agenda', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Cotizaciones (No borradas)
+// 3. Cotizaciones
 router.get('/cotizaciones', async (req, res) => {
     try {
-        const cotizaciones = await Proyecto.find({ estatus: 'Cotizacion', isDeleted: false }).populate('artista');
+        const cotizaciones = await Proyecto.find({ 
+            estatus: 'Cotizacion', 
+            isDeleted: { $ne: true } 
+        }).populate('artista');
         res.json(cotizaciones);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Completados (No borrados)
+// 4. Completados
 router.get('/completos', async (req, res) => {
     try {
-        const completos = await Proyecto.find({ proceso: 'Completo', isDeleted: false }).populate('artista').sort({ fecha: -1 });
+        const completos = await Proyecto.find({ 
+            proceso: 'Completo', 
+            isDeleted: { $ne: true } 
+        }).populate('artista').sort({ fecha: -1 });
         res.json(completos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Pagos Globales (Solo de proyectos no borrados)
+// 5. Pagos Globales
 router.get('/pagos/todos', async (req, res) => {
     try {
-        // Filtramos también aquí para que no salgan pagos de proyectos en la papelera
-        const proyectos = await Proyecto.find({ "pagos.0": { $exists: true }, isDeleted: false }).populate('artista');
+        // Filtramos para no traer pagos de proyectos borrados
+        const proyectos = await Proyecto.find({ 
+            "pagos.0": { $exists: true }, 
+            isDeleted: { $ne: true } 
+        }).populate('artista');
+        
         let todosPagos = [];
         proyectos.forEach(p => {
             p.pagos.forEach(pago => {
@@ -92,26 +103,27 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Por Artista (No borrados)
+// 6. Por Artista
 router.get('/por-artista/:id', async (req, res) => {
     try {
-        const proyectos = await Proyecto.find({ artista: req.params.id, isDeleted: false }).populate('artista').sort({ fecha: -1 });
+        const proyectos = await Proyecto.find({ 
+            artista: req.params.id, 
+            isDeleted: { $ne: true } 
+        }).populate('artista').sort({ fecha: -1 });
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- RUTAS ESPECÍFICAS DE LA PAPELERA (NUEVAS) ---
+// --- RUTAS DE PAPELERA ---
 
-// A. Obtener Papelera (Proyectos Borrados)
 router.get('/papelera/all', async (req, res) => {
     try {
-        // Buscamos solo los que tienen isDeleted: true
+        // Aquí SI buscamos explícitamente los borrados (true)
         const proyectos = await Proyecto.find({ isDeleted: true }).populate('artista');
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// B. Restaurar Proyecto (Sacar de papelera)
 router.put('/:id/restaurar', async (req, res) => {
     try {
         await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false });
@@ -119,7 +131,6 @@ router.put('/:id/restaurar', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// C. Eliminar Permanente (Destruir de la BD)
 router.delete('/:id/permanente', async (req, res) => {
     try {
         await Proyecto.findByIdAndDelete(req.params.id);
@@ -127,7 +138,6 @@ router.delete('/:id/permanente', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// D. Vaciar Papelera de Proyectos
 router.delete('/papelera/vaciar', async (req, res) => {
     try {
         await Proyecto.deleteMany({ isDeleted: true });
@@ -151,7 +161,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
-        // Aseguramos que isDeleted sea false al crear
+        // Al crear uno nuevo, le ponemos isDeleted: false explícitamente
         const datos = { ...req.body, isDeleted: false };
         const nuevo = new Proyecto(datos);
         const guardado = await nuevo.save();
@@ -237,10 +247,10 @@ router.put('/:id/documentos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 16. Eliminar (AHORA ES SOFT DELETE - Mover a Papelera)
+// 16. Eliminar (SOFT DELETE)
 router.delete('/:id', async (req, res) => {
     try {
-        // CAMBIO PRINCIPAL: En lugar de findByIdAndDelete, usamos update para marcar isDeleted
+        // Marcamos como borrado en lugar de eliminar
         await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
     } catch (e) { res.status(500).json({ error: e.message }); }
