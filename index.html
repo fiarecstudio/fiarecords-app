@@ -873,11 +873,12 @@
 
       // --- CONFIGURACIÓN GOOGLE DRIVE (¡COMPLETAR!) ---
       const GAP_CONFIG = {
-          apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk', // <--- PEGAR API KEY DE GOOGLE CLOUD
-          clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com', // <--- PEGAR CLIENT ID DE GOOGLE CLOUD
+          apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk', 
+          clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com', 
           discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
           scope: 'https://www.googleapis.com/auth/drive.file' 
       };
+      
       let tokenClient;
       let gapiInited = false;
       let gisInited = false;
@@ -1023,6 +1024,7 @@
                         if(url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
                         if(url.includes('/estatus')) localCache.proyectos[idx].estatus = body.estatus;
                         if(url.includes('/total')) localCache.proyectos[idx].total = body.total;
+                        if(url.includes('enlace-entrega')) localCache.proyectos[idx].enlaceEntrega = body.enlace;
                     }
                 } else if (options.method === 'DELETE') {
                     const idTarget = url.split('/').pop();
@@ -1101,8 +1103,6 @@
                   const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
-                  
-                  // --- DINAMIC FAVICON UPDATE ---
                   const favicon = document.getElementById('dynamic-favicon');
                   if(favicon) favicon.href = logoSrc;
               }
@@ -1143,13 +1143,11 @@
       if(typeof google !== 'undefined') initializeGisClient();
 
       async function subirADrive() {
-          if(GAP_CONFIG.apiKey === 'TU_API_KEY_AQUI') return showToast('Error: Configura tu API KEY en el código.', 'error');
+          if(GAP_CONFIG.apiKey.includes('TU_API')) return showToast('Error: Configura tu API KEY en el código.', 'error');
           
-          // Intentar inicializar si no se hizo antes
           if (!gapiInited && typeof gapi !== 'undefined') initializeGapiClient();
           if (!gisInited && typeof google !== 'undefined') initializeGisClient();
 
-          // Pequeña espera para asegurar carga
           if (!gapiInited || !gisInited) {
              await new Promise(r => setTimeout(r, 1000));
              if (!gapiInited || !gisInited) return showToast('Las librerías de Google no han cargado. Revisa tu conexión.', 'error');
@@ -1215,15 +1213,26 @@
                     resource: { role: 'reader', type: 'anyone' }
                 });
 
-                // 4. Finalizar
-                // Usamos webViewLink si existe, sino webContentLink, sino un fallback
+                // 4. Finalizar y Guardar Automáticamente
                 const finalLink = uploadedFile.webViewLink || uploadedFile.webContentLink || `https://drive.google.com/file/d/${uploadedFile.id}/view`;
                 
                 document.getElementById('delivery-link-input').value = finalLink;
                 statusDiv.textContent = `✅ Subido: ${file.name}`;
                 statusDiv.style.color = 'var(--success-color)';
-                showToast('Archivo subido y enlace generado.', 'success');
-                btnText.textContent = '📤 Subir y Obtener Link';
+                btnText.textContent = '📤 Subir Otro';
+
+                // AUTO-SAVE LINK TO DB
+                const projectId = document.getElementById('delivery-project-id').value;
+                await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
+                    method: 'PUT', 
+                    body: JSON.stringify({ enlace: finalLink }) 
+                });
+                
+                // Update Local Cache
+                const cachedProj = localCache.proyectos.find(p => p._id === projectId);
+                if(cachedProj) cachedProj.enlaceEntrega = finalLink;
+
+                showToast('¡Archivo subido y enlace guardado!', 'success');
 
             } catch (err) {
                 console.error(err);
@@ -1234,7 +1243,7 @@
           };
 
           if (gapi.client.getToken() === null) {
-            tokenClient.requestAccessToken({prompt: 'consent'});
+            tokenClient.requestAccessToken({prompt: ''}); // Try silent first
           } else {
             tokenClient.requestAccessToken({prompt: ''});
           }
@@ -1417,30 +1426,7 @@
           }
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-      
-      // --- CARGAR HISTORIAL (CON BOTÓN DE DRIVE ☁️) ---
-      async function cargarHistorial() { 
-          const tablaBody = document.getElementById('tablaHistorialBody'); 
-          tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; 
-          try { 
-              historialCacheados = await fetchAPI('/api/proyectos/completos'); 
-              tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { 
-                  const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; 
-                  return `<tr>
-                    <td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td>
-                    <td>$${p.total.toFixed(2)}</td>
-                    <td>$${(p.montoPagado || 0).toFixed(2)}</td>
-                    <td>${new Date(p.fecha).toLocaleDateString()}</td>
-                    <td class="table-actions">
-                        <button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>
-                        <button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button>
-                        <button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button>
-                        <button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
-                    </td>
-                  </tr>`; 
-              }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; 
-          } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } 
-      }
+      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
       
       // --- FUNCION DE ELIMINAR PROYECTO ---
       async function eliminarProyecto(id, desdeCotizaciones = false) { 
@@ -1454,12 +1440,10 @@
                   cargarHistorial();
               } else if (document.getElementById('vista-artista').classList.contains('active')) {
                    // Si estamos en la vista de artista, recargamos esa vista
-                   // Necesitamos el ID del artista actual, lo podemos sacar del DOM
                    const nombreActual = document.getElementById('vista-artista-nombre').textContent;
-                   // Simplemente volvemos atrás o recargamos si tenemos el ID guardado
-                   // Como fallback simple, volvemos a gestion de artistas
-                   showToast('Proyecto eliminado. Regresando...', 'info');
-                   mostrarSeccion('gestion-artistas');
+                   // Re-buscar ID en caché para recargar
+                   const art = localCache.artistas.find(a => a.nombre === nombreActual);
+                   if(art) mostrarVistaArtista(art._id, nombreActual, '');
               } else {
                   // Si estamos en Flujo de Trabajo
                   const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim();
@@ -1714,7 +1698,7 @@
       
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
-      // --- MOSTRAR VISTA ARTISTA (CON EDICIÓN ✏️, ELIMINAR 🗑️ Y DRIVE ☁️) ---
+      // --- MOSTRAR VISTA ARTISTA CON BOTÓN DRIVE ☁️, EDITAR ✏️ y BORRAR 🗑️ ---
       async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
