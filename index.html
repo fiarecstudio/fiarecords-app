@@ -861,9 +861,9 @@
     </div>
   </div>
   
-  <!-- SCRIPTS GOOGLE NECESARIOS -->
-  <script async defer src="https://apis.google.com/js/api.js"></script>
-  <script async defer src="https://accounts.google.com/gsi/client"></script>
+  <!-- SCRIPTS GOOGLE AL FINAL DEL BODY -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -1119,7 +1119,7 @@
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
       // --- GOOGLE DRIVE LOGIC ---
-      function gapiLoaded() {
+      function initializeGapiClient() {
         gapi.load('client', async () => {
           await gapi.client.init({
             apiKey: GAP_CONFIG.apiKey,
@@ -1128,18 +1128,32 @@
           gapiInited = true;
         });
       }
-      function gisLoaded() {
+
+      function initializeGisClient() {
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: GAP_CONFIG.clientId,
           scope: GAP_CONFIG.scope,
-          callback: '', // defined later
+          callback: '', 
         });
         gisInited = true;
       }
       
+      // Iniciar carga de scripts si ya estan disponibles
+      if(typeof gapi !== 'undefined') initializeGapiClient();
+      if(typeof google !== 'undefined') initializeGisClient();
+
       async function subirADrive() {
-          if(GAP_CONFIG.apiKey === 'TU_API_KEY_AQUI') return showToast('Configura API KEY en código.', 'error');
-          if (!gapiInited || !gisInited) return showToast('Google API cargando...', 'warning');
+          if(GAP_CONFIG.apiKey === 'TU_API_KEY_AQUI') return showToast('Error: Configura tu API KEY en el código.', 'error');
+          
+          // Intentar inicializar si no se hizo antes
+          if (!gapiInited && typeof gapi !== 'undefined') initializeGapiClient();
+          if (!gisInited && typeof google !== 'undefined') initializeGisClient();
+
+          // Pequeña espera para asegurar carga
+          if (!gapiInited || !gisInited) {
+             await new Promise(r => setTimeout(r, 1000));
+             if (!gapiInited || !gisInited) return showToast('Las librerías de Google no han cargado. Revisa tu conexión.', 'error');
+          }
 
           const fileInput = document.getElementById('drive-file-input');
           if (fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'error');
@@ -1190,6 +1204,8 @@
                     headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
                     body: form
                 });
+                
+                if (!uploadResp.ok) throw new Error('Fallo en la subida');
                 const uploadedFile = await uploadResp.json();
                 
                 // 3. Hacer público (Lectura)
@@ -1200,7 +1216,10 @@
                 });
 
                 // 4. Finalizar
-                document.getElementById('delivery-link-input').value = uploadedFile.webViewLink;
+                // Usamos webViewLink si existe, sino webContentLink, sino un fallback
+                const finalLink = uploadedFile.webViewLink || uploadedFile.webContentLink || `https://drive.google.com/file/d/${uploadedFile.id}/view`;
+                
+                document.getElementById('delivery-link-input').value = finalLink;
                 statusDiv.textContent = `✅ Subido: ${file.name}`;
                 statusDiv.style.color = 'var(--success-color)';
                 showToast('Archivo subido y enlace generado.', 'success');
@@ -1220,11 +1239,6 @@
             tokenClient.requestAccessToken({prompt: ''});
           }
       }
-      
-      // INICIAR GOOGLE LIBS
-      if(typeof gapi !== 'undefined') gapiLoaded();
-      if(typeof google !== 'undefined') gisLoaded();
-      // ----------------------------
 
       (async function init() { 
         await loadPublicLogo();
@@ -1700,7 +1714,7 @@
       
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
-      // --- MOSTRAR VISTA ARTISTA (CON EDICIÓN ✏️ Y ELIMINAR 🗑️) ---
+      // --- MOSTRAR VISTA ARTISTA (CON EDICIÓN ✏️, ELIMINAR 🗑️ Y DRIVE ☁️) ---
       async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
@@ -1722,6 +1736,7 @@
                         <td>$${p.total.toFixed(2)}</td>
                         <td>$${(p.montoPagado||0).toFixed(2)}</td>
                         <td class="table-actions">
+                            <button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>
                             <button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>
                             <button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
                             <button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
