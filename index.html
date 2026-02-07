@@ -669,7 +669,8 @@
                    <div class="form-group"><h3>Servicios <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('servicios')">Vaciar</button></h3><ul id="papeleraServicios"></ul></div>
                    <div class="form-group"><h3>Artistas <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('artistas')">Vaciar</button></h3><ul id="papeleraArtistas"></ul></div>
                  </div>
-                 <h3>Usuarios <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('usuarios')">Vaciar</button></h3><ul id="papeleraUsuarios"></ul>
+                 <h3>Proyectos <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('proyectos')">Vaciar</button></h3><ul id="papeleraProyectos"></ul>
+                 <h3 style="margin-top: 1.5rem;">Usuarios <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('usuarios')">Vaciar</button></h3><ul id="papeleraUsuarios"></ul>
               </div>
             </section>
             
@@ -905,7 +906,7 @@
 
       // 1. INICIALIZAR CACHÉ
       let localCache = {
-          artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []), // Safely init as array
+          artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []), 
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
@@ -952,8 +953,7 @@
           },
           updateIndicator: () => {
               const queue = OfflineManager.getQueue();
-              const isOnline = navigator.onLine;
-              if (isOnline) {
+              if (navigator.onLine) {
                   if (queue.length > 0) {
                       DOMElements.connectionStatus.className = 'connection-status status-syncing';
                       DOMElements.connectionText.textContent = `Sincronizando (${queue.length})`;
@@ -1007,15 +1007,17 @@
                  if(url.includes('/artistas')) return localCache.artistas;
                  if(url.includes('/servicios')) return localCache.servicios;
                  if(url.includes('/proyectos')) {
-                     if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion');
-                     if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado');
-                     if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado').map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
-                     return localCache.proyectos;
+                     // FILTROS
+                     if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
+                     if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
+                     if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
+                     if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true); // TRASH LOGIC
+                     return localCache.proyectos.filter(p => !p.deleted);
                  }
                  if(url.includes('/pagos')) return localCache.pagos;
                  if(url.includes('/dashboard/stats')) {
-                     const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').length;
-                     const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado||0)) > 0 && p.estatus !== 'Cancelado').length;
+                     const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado' && !p.deleted).length;
+                     const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado||0)) > 0 && p.estatus !== 'Cancelado' && !p.deleted).length;
                      const now = new Date();
                      const ingresosMes = localCache.pagos.filter(p => { const d = new Date(p.fecha); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).reduce((sum, p) => sum + p.monto, 0);
                      return { ingresosMes, proyectosActivos: activos, proyectosPorCobrar: porCobrar, monthlyIncome: [] };
@@ -1029,26 +1031,36 @@
             
             if (url.includes('/proyectos')) {
                 if (options.method === 'POST') {
-                    const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [] };
+                    const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [], deleted: false };
                     if(nuevoProyecto.artista && typeof nuevoProyecto.artista === 'string') {
                         const art = localCache.artistas.find(a => a._id === nuevoProyecto.artista);
                         if(art) nuevoProyecto.artista = art;
                     }
                     localCache.proyectos.push(nuevoProyecto);
                 } else if (options.method === 'PUT') {
+                    // Update Logic
                     let idTarget = url.split('/').pop(); 
                     if(['estatus', 'proceso', 'nombre', 'enlace-entrega', 'fecha', 'total'].includes(idTarget)) { const parts = url.split('/'); idTarget = parts[parts.length - 2]; }
                     const idx = localCache.proyectos.findIndex(p => p._id === idTarget);
                     if(idx !== -1) {
                         localCache.proyectos[idx] = { ...localCache.proyectos[idx], ...body };
+                        if(url.includes('/restaurar')) localCache.proyectos[idx].deleted = false;
                         if(url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
                         if(url.includes('/estatus')) localCache.proyectos[idx].estatus = body.estatus;
                         if(url.includes('/total')) localCache.proyectos[idx].total = body.total;
                         if(url.includes('enlace-entrega')) localCache.proyectos[idx].enlaceEntrega = body.enlace;
                     }
                 } else if (options.method === 'DELETE') {
-                    const idTarget = url.split('/').pop();
-                    localCache.proyectos = localCache.proyectos.filter(p => p._id !== idTarget);
+                    let idTarget = url.split('/').pop();
+                    if(url.includes('/permanente')) {
+                        // Permanent delete
+                        idTarget = url.split('/')[3];
+                        localCache.proyectos = localCache.proyectos.filter(p => p._id !== idTarget);
+                    } else {
+                        // Soft delete (Recycle Bin)
+                        const idx = localCache.proyectos.findIndex(p => p._id === idTarget);
+                        if(idx !== -1) localCache.proyectos[idx].deleted = true;
+                    }
                 }
                 localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
             }
@@ -1084,7 +1096,7 @@
             
             if (!options.method || options.method === 'GET') {
                 if(url.includes('/artistas')) { 
-                    localCache.artistas = Array.isArray(data) ? data : []; // SAFE ARRAY CHECK
+                    localCache.artistas = Array.isArray(data) ? data : []; 
                     localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
                 }
                 if(url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
@@ -1197,18 +1209,31 @@
                 // 1. Crear o Buscar carpeta
                 let folderId;
                 const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`;
-                const folderResp = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+                const folderResp = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name, webViewLink)' });
                 
                 if (folderResp.result.files && folderResp.result.files.length > 0) {
                     folderId = folderResp.result.files[0].id;
                 } else {
                     const createResp = await gapi.client.drive.files.create({
-                        resource: { name: folderName, mimeType: 'application/vnd.google-apps.folder' }
+                        resource: { name: folderName, mimeType: 'application/vnd.google-apps.folder' },
+                        fields: 'id'
                     });
                     folderId = createResp.result.id;
                 }
 
-                // 2. Subir Archivo
+                // 2. OBTENER LINK DE LA CARPETA Y HACERLA PÚBLICA
+                const folderLinkResp = await gapi.client.drive.files.get({
+                    fileId: folderId,
+                    fields: 'webViewLink'
+                });
+                const folderLink = folderLinkResp.result.webViewLink;
+
+                await gapi.client.drive.permissions.create({
+                    fileId: folderId,
+                    resource: { role: 'reader', type: 'anyone' }
+                });
+
+                // 3. Subir Archivo
                 btnText.textContent = 'Subiendo... (Espere)';
                 const metadata = {
                     name: file.name,
@@ -1220,8 +1245,7 @@
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', file);
 
-                const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink';
-                
+                const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
                 const uploadResp = await fetch(uploadUrl, {
                     method: 'POST',
                     headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
@@ -1229,20 +1253,10 @@
                 });
                 
                 if (!uploadResp.ok) throw new Error('Fallo en la subida');
-                const uploadedFile = await uploadResp.json();
                 
-                // 3. Hacer público (Lectura)
-                btnText.textContent = 'Generando enlace...';
-                await gapi.client.drive.permissions.create({
-                    fileId: uploadedFile.id,
-                    resource: { role: 'reader', type: 'anyone' }
-                });
-
-                // 4. Finalizar y Guardar Automáticamente
-                const finalLink = uploadedFile.webViewLink || uploadedFile.webContentLink || `https://drive.google.com/file/d/${uploadedFile.id}/view`;
-                
-                document.getElementById('delivery-link-input').value = finalLink;
-                statusDiv.textContent = `✅ Subido: ${file.name}`;
+                // 4. Finalizar con LINK DE CARPETA
+                document.getElementById('delivery-link-input').value = folderLink;
+                statusDiv.textContent = `✅ Subido en Carpeta Pública`;
                 statusDiv.style.color = 'var(--success-color)';
                 btnText.textContent = '📤 Subir Otro';
 
@@ -1250,14 +1264,14 @@
                 const projectId = document.getElementById('delivery-project-id').value;
                 await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                     method: 'PUT', 
-                    body: JSON.stringify({ enlace: finalLink }) 
+                    body: JSON.stringify({ enlace: folderLink }) 
                 });
                 
                 // Update Local Cache
                 const cachedProj = localCache.proyectos.find(p => p._id === projectId);
-                if(cachedProj) cachedProj.enlaceEntrega = finalLink;
+                if(cachedProj) cachedProj.enlaceEntrega = folderLink;
 
-                showToast('¡Archivo subido y enlace guardado!', 'success');
+                showToast('¡Archivo subido! Link de Carpeta guardado.', 'success');
 
             } catch (err) {
                 console.error(err);
@@ -1365,7 +1379,27 @@
               }).join('') : `<li>No hay elementos.</li>`; 
           } catch (e) { document.getElementById(listId).innerHTML = `<li>Error al cargar.</li>`; } 
       }
-      async function cargarPapelera() { const endpoints = ['servicios', 'artistas', 'usuarios']; for (const endpoint of endpoints) { const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; try { const data = await fetchAPI(`/api/${endpoint}/papelera/all`); document.getElementById(listId).innerHTML = data.length ? data.map(item => `<li class="list-item"><span>${escapeHTML(item.nombre || item.username)}</span><div class="list-item-actions"><button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button><button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button></div></li>`).join('') : `<li>Vacía.</li>`; } catch (e) { document.getElementById(listId).innerHTML = `<li>Error.</li>`; } } }
+      
+      async function cargarPapelera() { 
+          const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; 
+          for (const endpoint of endpoints) { 
+              const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
+              try { 
+                  const data = await fetchAPI(`/api/${endpoint}/papelera/all`); 
+                  document.getElementById(listId).innerHTML = data.length ? data.map(item => {
+                      let name = item.nombre || item.username || item.nombreProyecto || 'Sin nombre';
+                      return `<li class="list-item">
+                        <span>${escapeHTML(name)}</span>
+                        <div class="list-item-actions">
+                            <button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button>
+                            <button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button>
+                        </div>
+                      </li>`;
+                  }).join('') : `<li>Vacía.</li>`; 
+              } catch (e) { document.getElementById(listId).innerHTML = `<li>Error.</li>`; } 
+          } 
+      }
+      
       function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
       async function saveItem(e, type) { 
           e.preventDefault(); 
@@ -1451,7 +1485,7 @@
           }
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
+      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
       
       // --- FUNCION DE ELIMINAR PROYECTO ---
       async function eliminarProyecto(id, desdeCotizaciones = false) { 
