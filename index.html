@@ -891,6 +891,7 @@
       let isInitialized = false; 
       let proyectoActual = {}; 
       let logoBase64 = null;
+      let preseleccionArtistaId = null; // VARIABLE CLAVE PARA RECORDAR SELECCIÓN
 
       // --- CONFIGURACIÓN GOOGLE DRIVE (¡COMPLETAR!) ---
       const GAP_CONFIG = {
@@ -1107,16 +1108,21 @@
             }
             return data; 
         } catch(e) {
-            if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+            if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('404')) {
                 OfflineManager.updateIndicator(); 
                 if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
                       const tempId = `temp_${Date.now()}`;
                       OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                       return { ok: true, offline: true, _id: tempId };
                 }
+                // FALLBACK CACHE LOGIC
                 if(url.includes('/artistas')) return localCache.artistas;
                 if(url.includes('/servicios')) return localCache.servicios;
-                if(url.includes('/proyectos')) return localCache.proyectos;
+                if(url.includes('/proyectos')) {
+                    // TRASH FALLBACK
+                    if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
+                    return localCache.proyectos;
+                }
             }
             throw e;
         } finally { hideLoader(); }
@@ -1221,17 +1227,20 @@
                     folderId = createResp.result.id;
                 }
 
-                // 2. OBTENER LINK DE LA CARPETA Y HACERLA PÚBLICA
+                // 2. OBTENER LINK DE LA CARPETA Y HACERLA PÚBLICA (FIXED LOGIC)
+                
+                // Primero hacemos publica la carpeta
+                await gapi.client.drive.permissions.create({
+                    fileId: folderId,
+                    resource: { role: 'reader', type: 'anyone' }
+                });
+
+                // Luego obtenemos el link
                 const folderLinkResp = await gapi.client.drive.files.get({
                     fileId: folderId,
                     fields: 'webViewLink'
                 });
                 const folderLink = folderLinkResp.result.webViewLink;
-
-                await gapi.client.drive.permissions.create({
-                    fileId: folderId,
-                    resource: { role: 'reader', type: 'anyone' }
-                });
 
                 // 3. Subir Archivo
                 btnText.textContent = 'Subiendo... (Espere)';
@@ -1385,6 +1394,7 @@
           for (const endpoint of endpoints) { 
               const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
               try { 
+                  // FETCH WITH CACHE FALLBACK LOGIC INTEGRATED IN fetchAPI
                   const data = await fetchAPI(`/api/${endpoint}/papelera/all`); 
                   document.getElementById(listId).innerHTML = data.length ? data.map(item => {
                       let name = item.nombre || item.username || item.nombreProyecto || 'Sin nombre';
@@ -1520,7 +1530,27 @@
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
       
-      async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (currentValue) select.value = currentValue; } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
+      async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
+          const select = document.getElementById(selectId); 
+          try { 
+              const data = await fetchAPI(url); 
+              select.innerHTML = ''; 
+              if (addPublicoGeneral) { 
+                  const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); 
+              } 
+              data.forEach(item => { 
+                  const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); 
+              }); 
+              
+              // --- FIX: SELECCIONAR ARTISTA SI VIENE DE VISTA ARTISTA ---
+              if (selectId === 'proyectoArtista' && preseleccionArtistaId) {
+                  select.value = preseleccionArtistaId;
+                  preseleccionArtistaId = null; // Limpiar para que no afecte futuros usos
+              } else if (currentValue) {
+                  select.value = currentValue; 
+              }
+          } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } 
+      }
       const cargarOpcionesParaProyecto = () => { cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); }
       const cargarOpcionesParaProyectoManual = () => { cargarOpcionesParaSelect('/api/artistas', 'manualProyectoArtista', '_id', item => item.nombreArtistico || item.nombre, false); flatpickr("#manualFechaProyecto", { defaultDate: "today", locale: "es" }); };
       function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
@@ -1818,23 +1848,9 @@
       // --- NUEVAS FUNCIONES PARA VISTA ARTISTA ---
       
       function nuevoProyectoParaArtista(idArtista, nombreArtista) {
+          preseleccionArtistaId = idArtista; // GUARDAR ID EN VARIABLE GLOBAL
           mostrarSeccion('registrar-proyecto');
-          // Pequeño timeout para asegurar que la sección cargó y el select existe
-          setTimeout(() => {
-              const select = document.getElementById('proyectoArtista');
-              if(select) {
-                  select.value = idArtista;
-                  // Si no está en la lista (raro), forzamos
-                  if(select.value !== idArtista) {
-                      const opt = document.createElement('option');
-                      opt.value = idArtista;
-                      opt.text = nombreArtista;
-                      opt.selected = true;
-                      select.add(opt);
-                  }
-                  showToast(`Nuevo proyecto para: ${nombreArtista}`, 'info');
-              }
-          }, 100);
+          showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info');
       }
 
       function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
