@@ -759,6 +759,26 @@
     <button class="fab-btn" onclick="app.mostrarSeccion('registrar-proyecto')">+</button>
   </div>
 
+  <!-- MODAL EDITAR ARTISTA -->
+  <div id="edit-artist-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Editar Artista</h2>
+            <button class="modal-close" onclick="document.getElementById('edit-artist-modal').style.display='none'">×</button>
+        </div>
+        <form id="formEditArtistFromView" onsubmit="app.guardarEdicionArtista(event)">
+            <input type="hidden" id="editArtistId">
+            <label>Nombre Real</label><input type="text" id="editArtistNombre" required>
+            <label>Nombre Artístico</label><input type="text" id="editArtistNombreArtístico">
+            <div class="form-row">
+                <div class="form-group"><label>Teléfono</label><input type="tel" id="editArtistTelefono"></div>
+                <div class="form-group"><label>Correo</label><input type="email" id="editArtistCorreo"></div>
+            </div>
+            <button type="submit" style="width:100%;">Guardar Cambios</button>
+        </form>
+    </div>
+  </div>
+
   <div id="document-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -885,7 +905,7 @@
 
       // 1. INICIALIZAR CACHÉ
       let localCache = {
-          artistas: JSON.parse(localStorage.getItem('cache_artistas') || '[]'),
+          artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []), // Safely init as array
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
@@ -1063,7 +1083,10 @@
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
             
             if (!options.method || options.method === 'GET') {
-                if(url.includes('/artistas')) { localCache.artistas = data; localStorage.setItem('cache_artistas', JSON.stringify(data)); }
+                if(url.includes('/artistas')) { 
+                    localCache.artistas = Array.isArray(data) ? data : []; // SAFE ARRAY CHECK
+                    localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
+                }
                 if(url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
                 if(url.includes('/proyectos') && !url.includes('agenda')) { 
                     if(Array.isArray(data) && url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); }
@@ -1103,6 +1126,8 @@
                   const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
+                  
+                  // --- DINAMIC FAVICON UPDATE ---
                   const favicon = document.getElementById('dynamic-favicon');
                   if(favicon) favicon.href = logoSrc;
               }
@@ -1441,12 +1466,21 @@
               } else if (document.getElementById('vista-artista').classList.contains('active')) {
                    // Si estamos en la vista de artista, recargamos esa vista
                    const nombreActual = document.getElementById('vista-artista-nombre').textContent;
-                   // Re-buscar ID en caché para recargar
+                   
+                   // SAFE FIX: Check if array exists
+                   if (!Array.isArray(localCache.artistas)) {
+                       localCache.artistas = await fetchAPI('/api/artistas');
+                   }
+                   
                    const art = localCache.artistas.find(a => a.nombre === nombreActual);
-                   if(art) mostrarVistaArtista(art._id, nombreActual, '');
+                   if(art) {
+                       mostrarVistaArtista(art._id, nombreActual, '');
+                   } else {
+                       // Fallback si no encuentra al artista en cache
+                       mostrarSeccion('gestion-artistas');
+                   }
               } else {
-                  // Si estamos en Flujo de Trabajo
-                  const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim();
+                  const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos';
                   filtrarFlujo(filtroActual);
               }
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
@@ -1698,7 +1732,7 @@
       
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
-      // --- MOSTRAR VISTA ARTISTA CON BOTÓN DRIVE ☁️, EDITAR ✏️ y BORRAR 🗑️ ---
+      // --- MOSTRAR VISTA ARTISTA CON NUEVAS FUNCIONES ---
       async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
@@ -1709,7 +1743,19 @@
                   fetchAPI('/api/proyectos/pagos/todos'),
                   fetchAPI(`/api/artistas/${artistaId}`)
               ]);
-              let html = `<div class="card" style="margin-bottom: 2rem;"><p><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p><strong>Teléfono:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p></div>`;
+              
+              let html = `<div class="card" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                  <div>
+                      <p style="font-size: 1.1em;"><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
+                      <p style="color:var(--text-color-light);"><strong>Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p>
+                      <p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
+                  </div>
+                  <div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
+                      <button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico||'')}', '${escapeHTML(artistaInfo.telefono||'')}', '${escapeHTML(artistaInfo.correo||'')}')">✏️ Editar Datos</button>
+                      <button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button>
+                  </div>
+              </div>`;
+              
               html += '<h3>Proyectos</h3>'; 
               if(proyectos.length) { 
                   html += '<div class="table-responsive"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Acciones</th></tr></thead><tbody>'; 
@@ -1728,12 +1774,69 @@
                       </tr>`; 
                   }); 
                   html += '</tbody></table></div>'; 
-              } else { html += '<p>Sin proyectos.</p>'; } 
+              } else { html += '<p>Sin proyectos registrados para este artista.</p>'; } 
               contenido.innerHTML = html; 
               mostrarSeccion('vista-artista'); 
           } catch(e) { contenido.innerHTML = '<p>Error historial.</p>'; } 
       }
       async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
+      
+      // --- NUEVAS FUNCIONES PARA VISTA ARTISTA ---
+      
+      function nuevoProyectoParaArtista(idArtista, nombreArtista) {
+          mostrarSeccion('registrar-proyecto');
+          // Pequeño timeout para asegurar que la sección cargó y el select existe
+          setTimeout(() => {
+              const select = document.getElementById('proyectoArtista');
+              if(select) {
+                  select.value = idArtista;
+                  // Si no está en la lista (raro), forzamos
+                  if(select.value !== idArtista) {
+                      const opt = document.createElement('option');
+                      opt.value = idArtista;
+                      opt.text = nombreArtista;
+                      opt.selected = true;
+                      select.add(opt);
+                  }
+                  showToast(`Nuevo proyecto para: ${nombreArtista}`, 'info');
+              }
+          }, 100);
+      }
+
+      function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
+          const m = document.getElementById('edit-artist-modal');
+          document.getElementById('editArtistId').value = id;
+          document.getElementById('editArtistNombre').value = nombre;
+          document.getElementById('editArtistNombreArtístico').value = artistico;
+          document.getElementById('editArtistTelefono').value = tel;
+          document.getElementById('editArtistCorreo').value = mail;
+          m.style.display = 'flex';
+      }
+
+      async function guardarEdicionArtista(e) {
+          e.preventDefault();
+          const id = document.getElementById('editArtistId').value;
+          const body = {
+              nombre: document.getElementById('editArtistNombre').value,
+              nombreArtistico: document.getElementById('editArtistNombreArtístico').value,
+              telefono: document.getElementById('editArtistTelefono').value,
+              correo: document.getElementById('editArtistCorreo').value
+          };
+          
+          try {
+              await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+              showToast('Datos actualizados.', 'success');
+              document.getElementById('edit-artist-modal').style.display = 'none';
+              // Recargar la vista
+              mostrarVistaArtista(id, body.nombre, body.nombreArtistico);
+              // Actualizar caché
+              const idx = localCache.artistas.findIndex(a => a._id === id);
+              if(idx !== -1) localCache.artistas[idx] = { ...localCache.artistas[idx], ...body };
+          } catch(err) {
+              showToast('Error al guardar.', 'error');
+          }
+      }
+
       function setupCustomization(payload) { if (payload.role === 'admin') { DOMElements.appLogo.addEventListener('click', () => DOMElements.logoInput.click()); DOMElements.logoInput.addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error`, 'error'); } }); } }
       
       async function cargarConfiguracion() { try { if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); const draggablePreview = document.getElementById('firma-draggable-preview'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } firmaPreview.src = draggablePreview.src = firmaSrc; 
@@ -1832,10 +1935,16 @@
                    filtrarFlujo(filtro); 
               } else if (document.getElementById('vista-artista').classList.contains('active')) {
                    const nombreActual = document.getElementById('vista-artista-nombre').textContent;
-                   const artistaId = proyecto.artista ? proyecto.artista._id : proyecto.artista; 
-                   // Como no tenemos el ID fácilmente en el DOM header, hacemos un refresh visual rápido o recargamos la sección
-                   // Lo más fácil es recargar la vista actual con el ID del proyecto
-                   if(artistaId) mostrarVistaArtista(artistaId, nombreActual, '');
+                   
+                   // SAFE FIX: Check if array exists
+                   if (!Array.isArray(localCache.artistas)) {
+                       localCache.artistas = await fetchAPI('/api/artistas');
+                   }
+                   
+                   const art = localCache.artistas.find(a => a.nombre === nombreActual);
+                   if(art) {
+                       mostrarVistaArtista(art._id, nombreActual, '');
+                   }
               }
           } catch (e) { showToast(`Error al editar`, 'error'); }
       }
@@ -1868,7 +1977,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista };
     });
   </script>
 
