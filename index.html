@@ -838,22 +838,49 @@
       <input type="hidden" id="delivery-project-id">
       <input type="hidden" id="delivery-artist-name">
       <input type="hidden" id="delivery-project-name">
+      
+      <!-- GOOGLE DRIVE INTEGRATION UI -->
+      <div style="margin-bottom: 1.5rem; padding: 1rem; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--secondary-button-bg);">
+        <h4 style="margin-bottom:0.5rem;">Subir a Google Drive</h4>
+        <input type="file" id="drive-file-input" style="margin-bottom: 0.5rem;">
+        <button id="btn-upload-drive" onclick="app.subirADrive()" class="btn-primary" style="width:100%; display:flex; justify-content:center; gap:0.5rem;">
+           <span id="drive-btn-text">📤 Subir y Obtener Link</span>
+        </button>
+        <div id="drive-status" style="font-size: 0.8em; margin-top: 0.5rem; color: var(--text-color-light);"></div>
+      </div>
+      <!-- END GOOGLE DRIVE INTEGRATION UI -->
+
       <div class="form-group">
         <label>Enlace de Descarga (Drive/WeTransfer)</label>
         <input type="url" id="delivery-link-input" placeholder="https://...">
       </div>
       <div class="form-actions">
-        <button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar</button>
+        <button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar Enlace</button>
         <button onclick="app.sendDeliveryByWhatsapp()" style="background-color: #25D366; color: white;">Enviar WhatsApp</button>
       </div>
     </div>
   </div>
   
+  <!-- SCRIPTS GOOGLE NECESARIOS -->
+  <script async defer src="https://apis.google.com/js/api.js"></script>
+  <script async defer src="https://accounts.google.com/gsi/client"></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let isInitialized = false; 
       let proyectoActual = {}; 
       let logoBase64 = null;
+
+      // --- CONFIGURACIÓN GOOGLE DRIVE (¡COMPLETAR!) ---
+      const GAP_CONFIG = {
+          apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk', // <--- PEGAR API KEY DE GOOGLE CLOUD
+          clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com', // <--- PEGAR CLIENT ID DE GOOGLE CLOUD
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+          scope: 'https://www.googleapis.com/auth/drive.file' 
+      };
+      let tokenClient;
+      let gapiInited = false;
+      let gisInited = false;
 
       // 1. INICIALIZAR CACHÉ
       let localCache = {
@@ -1091,6 +1118,114 @@
       }
       function applyTheme(theme) { document.body.classList.toggle('dark-mode', theme === 'dark'); document.getElementById('theme-switch').checked = (theme === 'dark'); localStorage.setItem('theme', theme); }
       
+      // --- GOOGLE DRIVE LOGIC ---
+      function gapiLoaded() {
+        gapi.load('client', async () => {
+          await gapi.client.init({
+            apiKey: GAP_CONFIG.apiKey,
+            discoveryDocs: GAP_CONFIG.discoveryDocs,
+          });
+          gapiInited = true;
+        });
+      }
+      function gisLoaded() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GAP_CONFIG.clientId,
+          scope: GAP_CONFIG.scope,
+          callback: '', // defined later
+        });
+        gisInited = true;
+      }
+      
+      async function subirADrive() {
+          if(GAP_CONFIG.apiKey === 'TU_API_KEY_AQUI') return showToast('Configura API KEY en código.', 'error');
+          if (!gapiInited || !gisInited) return showToast('Google API cargando...', 'warning');
+
+          const fileInput = document.getElementById('drive-file-input');
+          if (fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'error');
+          const file = fileInput.files[0];
+          
+          const statusDiv = document.getElementById('drive-status');
+          const btnText = document.getElementById('drive-btn-text');
+
+          tokenClient.callback = async (resp) => {
+            if (resp.error) throw resp;
+            
+            try {
+                btnText.textContent = 'Creando Carpeta...';
+                const artistName = document.getElementById('delivery-artist-name').value || 'SinArtista';
+                const projName = document.getElementById('delivery-project-name').value || 'SinProyecto';
+                const folderName = `FiaRecords - ${artistName} - ${projName}`;
+
+                // 1. Crear o Buscar carpeta
+                let folderId;
+                const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`;
+                const folderResp = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+                
+                if (folderResp.result.files && folderResp.result.files.length > 0) {
+                    folderId = folderResp.result.files[0].id;
+                } else {
+                    const createResp = await gapi.client.drive.files.create({
+                        resource: { name: folderName, mimeType: 'application/vnd.google-apps.folder' }
+                    });
+                    folderId = createResp.result.id;
+                }
+
+                // 2. Subir Archivo
+                btnText.textContent = 'Subiendo... (Espere)';
+                const metadata = {
+                    name: file.name,
+                    parents: [folderId]
+                };
+                
+                const accessToken = gapi.client.getToken().access_token;
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', file);
+
+                const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink';
+                
+                const uploadResp = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                    body: form
+                });
+                const uploadedFile = await uploadResp.json();
+                
+                // 3. Hacer público (Lectura)
+                btnText.textContent = 'Generando enlace...';
+                await gapi.client.drive.permissions.create({
+                    fileId: uploadedFile.id,
+                    resource: { role: 'reader', type: 'anyone' }
+                });
+
+                // 4. Finalizar
+                document.getElementById('delivery-link-input').value = uploadedFile.webViewLink;
+                statusDiv.textContent = `✅ Subido: ${file.name}`;
+                statusDiv.style.color = 'var(--success-color)';
+                showToast('Archivo subido y enlace generado.', 'success');
+                btnText.textContent = '📤 Subir y Obtener Link';
+
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = `Error: ${err.message || 'Desconocido'}`;
+                statusDiv.style.color = 'var(--danger-color)';
+                btnText.textContent = '📤 Reintentar';
+            }
+          };
+
+          if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({prompt: 'consent'});
+          } else {
+            tokenClient.requestAccessToken({prompt: ''});
+          }
+      }
+      
+      // INICIAR GOOGLE LIBS
+      if(typeof gapi !== 'undefined') gapiLoaded();
+      if(typeof google !== 'undefined') gisLoaded();
+      // ----------------------------
+
       (async function init() { 
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000); 
@@ -1616,6 +1751,8 @@
           modal.querySelector('#delivery-project-name').value = projectName;
           const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
           modal.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : '';
+          document.getElementById('drive-status').textContent = '';
+          document.getElementById('drive-file-input').value = '';
           modal.style.display = 'flex';
       }
       function closeDeliveryModal() { document.getElementById('delivery-modal').style.display = 'none'; }
@@ -1694,7 +1831,7 @@
         setupMobileMenu();
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos };
     });
   </script>
 
