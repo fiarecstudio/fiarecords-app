@@ -1549,7 +1549,17 @@
               if(proyectos.length) { 
                   html += '<div class="table-responsive"><table style="margin-bottom: 2rem; width: 100%;"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Acciones</th></tr></thead><tbody>'; 
                   proyectos.forEach(p => { 
-                      html += `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado||0).toFixed(2)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.generarCotizacionPDF('${p._id}')">📄</button></td></tr>`; 
+                      html += `<tr>
+                        <td>${new Date(p.fecha).toLocaleDateString()}</td>
+                        <td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td>
+                        <td>$${p.total.toFixed(2)}</td>
+                        <td>$${(p.montoPagado||0).toFixed(2)}</td>
+                        <td class="table-actions">
+                            <button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>
+                            <button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
+                            <button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
+                        </td>
+                      </tr>`; 
                   }); 
                   html += '</tbody></table></div>'; 
               } else { html += '<p>Sin proyectos.</p>'; } 
