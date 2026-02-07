@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: models/Proyecto.js
+// ARCHIVO: models/Proyecto.js (MODIFICADO CON isDeleted)
 // ==========================================
 const mongoose = require('mongoose');
 
@@ -34,9 +34,11 @@ const ProyectoSchema = new mongoose.Schema({
     pagos: [PagoSchema],
     createdAt: { type: Date, default: Date.now },
     detallesContrato: { type: Object, default: {} },
-    detallesDistribucion: { type: Object, default: {} }
+    detallesDistribucion: { type: Object, default: {} },
+    
+    // --- CAMPO NUEVO PARA LA PAPELERA ---
+    isDeleted: { type: Boolean, default: false } 
 });
 
-// ESTA LÍNEA ES LA QUE ARREGLA EL ERROR "OVERWRITE MODEL":
 // Verifica si el modelo ya existe antes de crearlo.
 module.exports = mongoose.models.Proyecto || mongoose.model('Proyecto', ProyectoSchema);
