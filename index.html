@@ -1403,7 +1403,30 @@
           }
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-      async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
+      
+      // --- CARGAR HISTORIAL (CON BOTÓN DE DRIVE ☁️) ---
+      async function cargarHistorial() { 
+          const tablaBody = document.getElementById('tablaHistorialBody'); 
+          tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; 
+          try { 
+              historialCacheados = await fetchAPI('/api/proyectos/completos'); 
+              tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { 
+                  const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; 
+                  return `<tr>
+                    <td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td>
+                    <td>$${p.total.toFixed(2)}</td>
+                    <td>$${(p.montoPagado || 0).toFixed(2)}</td>
+                    <td>${new Date(p.fecha).toLocaleDateString()}</td>
+                    <td class="table-actions">
+                        <button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>
+                        <button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button>
+                        <button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button>
+                        <button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
+                    </td>
+                  </tr>`; 
+              }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; 
+          } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } 
+      }
       
       // --- FUNCION DE ELIMINAR PROYECTO ---
       async function eliminarProyecto(id, desdeCotizaciones = false) { 
@@ -1415,6 +1438,14 @@
                   cargarCotizaciones(); 
               } else if (document.getElementById('historial-proyectos').classList.contains('active')) {
                   cargarHistorial();
+              } else if (document.getElementById('vista-artista').classList.contains('active')) {
+                   // Si estamos en la vista de artista, recargamos esa vista
+                   // Necesitamos el ID del artista actual, lo podemos sacar del DOM
+                   const nombreActual = document.getElementById('vista-artista-nombre').textContent;
+                   // Simplemente volvemos atrás o recargamos si tenemos el ID guardado
+                   // Como fallback simple, volvemos a gestion de artistas
+                   showToast('Proyecto eliminado. Regresando...', 'info');
+                   mostrarSeccion('gestion-artistas');
               } else {
                   // Si estamos en Flujo de Trabajo
                   const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim();
@@ -1669,6 +1700,7 @@
       
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
+      // --- MOSTRAR VISTA ARTISTA (CON EDICIÓN ✏️ Y ELIMINAR 🗑️) ---
       async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
@@ -1770,12 +1802,12 @@
           window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
       }
       
-      // --- NUEVA FUNCIÓN PARA EDITAR INFO RAPIDA ---
+      // --- FUNCIÓN PARA EDITAR INFO RAPIDA (Canción, Precio, etc.) ---
       async function editarInfoProyecto(id) {
           const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
           if (!proyecto) return;
           
-          const nuevoNombre = prompt('Editar nombre:', proyecto.nombreProyecto || '');
+          const nuevoNombre = prompt('Editar Nombre del Proyecto/Canción:', proyecto.nombreProyecto || '');
           if (nuevoNombre === null) return;
           
           const nuevoTotalStr = prompt('Editar Precio Total ($):', proyecto.total || 0);
@@ -1788,19 +1820,25 @@
                  proyecto.nombreProyecto = nuevoNombre.trim(); 
               }
               if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) {
-                  // Asumimos que existe un endpoint o reutilizamos logica, en este caso simulamos o creamos el endpoint si tu backend lo soporta.
-                  // Si no tienes endpoint especifico de total, habría que enviar todo el objeto, pero intentaré usar un update parcial si tu backend es flexible.
-                  // NOTA: Para este ejemplo asumo que tu backend acepta PUT /api/proyectos/:id para actualizar campos generales.
+                  // Asumimos que existe un endpoint o reutilizamos logica
                   await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) });
                   proyecto.total = nuevoTotal;
               }
               
-              showToast('Actualizado.', 'success'); 
+              showToast('Proyecto actualizado.', 'success'); 
+              
+              // Recargar vistas si es necesario
               if(document.getElementById('flujo-trabajo').classList.contains('active')) {
                    const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim();
                    filtrarFlujo(filtro); 
+              } else if (document.getElementById('vista-artista').classList.contains('active')) {
+                   const nombreActual = document.getElementById('vista-artista-nombre').textContent;
+                   const artistaId = proyecto.artista ? proyecto.artista._id : proyecto.artista; 
+                   // Como no tenemos el ID fácilmente en el DOM header, hacemos un refresh visual rápido o recargamos la sección
+                   // Lo más fácil es recargar la vista actual con el ID del proyecto
+                   if(artistaId) mostrarVistaArtista(artistaId, nombreActual, '');
               }
-          } catch (e) { showToast(`Error`, 'error'); }
+          } catch (e) { showToast(`Error al editar`, 'error'); }
       }
 
       function setupMobileMenu() {
