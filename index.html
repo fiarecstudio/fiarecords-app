@@ -1569,7 +1569,7 @@ async function cargarPapelera() {
       
       function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
       
-      // --- LOGICA MODIFICADA PARA GUARDAR ROLES Y PERMISOS ---
+      // --- LOGICA MODIFICADA PARA GUARDAR ROLES Y PERMISOS (CORREGIDA) ---
       async function saveItem(e, type) { 
           e.preventDefault(); 
           const form = e.target; 
@@ -1579,19 +1579,22 @@ async function cargarPapelera() {
           if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; } 
           else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } 
           else if (type === 'usuarios') { 
-              // Leer permisos del checkbox grid
+              // --- CORRECCIÓN CRÍTICA AQUI ---
+              const userVal = document.getElementById('usernameUsuario').value;
+              const roleVal = document.getElementById('roleUsuario').value;
+              const passVal = document.getElementById('passwordUsuario').value;
+
               const checkboxes = document.querySelectorAll('input[name="user_permisos"]:checked');
               const permisos = Array.from(checkboxes).map(c => c.value);
               
               body = { 
-                  username: form.usernameUsuario.value, 
-                  role: form.roleUsuario.value, 
+                  username: userVal, 
+                  role: roleVal, 
                   permisos: permisos 
               }; 
               
-              const password = form.passwordUsuario.value; 
-              if (!id && !password) { showToast('Contraseña obligatoria.', 'error'); return; } 
-              if (password) body.password = password; 
+              if (!id && !passVal) { showToast('Contraseña obligatoria para usuarios nuevos.', 'error'); return; } 
+              if (passVal) body.password = passVal; 
           } 
           
           const method = id ? 'PUT' : 'POST'; const url = `/api/${type}/${id || ''}`; 
@@ -1615,9 +1618,11 @@ async function cargarPapelera() {
               else if (endpoint === 'artistas') { form.idArtista.value = item._id; form.nombreArtista.value = item.nombre; form.nombreArtisticoArtista.value = item.nombreArtistico || ''; form.telefonoArtista.value = item.telefono || ''; form.correoArtista.value = item.correo || ''; } 
               else if (endpoint === 'usuarios') { 
                   form.idUsuario.value = item._id; 
-                  form.usernameUsuario.value = item.username; 
-                  form.roleUsuario.value = item.role; 
-                  // Marcar checkboxes
+                  // CORRECCIÓN EDITAR USUARIOS
+                  document.getElementById('usernameUsuario').value = item.username; 
+                  document.getElementById('roleUsuario').value = item.role; 
+                  document.getElementById('passwordUsuario').value = ''; // Reset password field
+                  
                   const userPerms = item.permisos || [];
                   document.querySelectorAll('input[name="user_permisos"]').forEach(chk => {
                       chk.checked = userPerms.includes(chk.value);
