@@ -222,6 +222,13 @@
     .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: var(--primary-gradient); color: white; border: none; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5); display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; transition: transform 0.2s; }
     .fab-btn:active { transform: scale(0.9); }
 
+    /* MODO CLIENTE (Estilos Especiales) */
+    body.client-mode .sidebar { display: none !important; }
+    body.client-mode #hamburger-menu { display: none !important; }
+    body.client-mode .search-box { display: none !important; }
+    body.client-mode .fab-container { display: none !important; }
+    body.client-mode .main-header { justify-content: center; }
+    
     /* RESPONSIVE LOGIC MEJORADO (Horizontal y Vertical) */
     @media (max-width: 768px) {
       body { overflow: auto; height: auto; } /* En movil si permitimos scroll del body a veces es mejor */
@@ -977,7 +984,7 @@
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
-          historial: [],      
+          historial: [],       
           pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
           usuarios: []
       };
@@ -1079,6 +1086,11 @@
                      if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
                      if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
                      if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true); // TRASH LOGIC
+                     // FIX CLIENTE: Allow filtering by artist ID
+                     if(url.includes('por-artista')) {
+                         const artId = url.split('/').pop();
+                         return localCache.proyectos.filter(p => !p.deleted && (p.artista && p.artista._id === artId));
+                     }
                      return localCache.proyectos.filter(p => !p.deleted);
                  }
                  if(url.includes('/pagos')) return localCache.pagos;
@@ -1380,27 +1392,53 @@
         } else { showLogin(); } 
       })();
 
-      // --- AQUI ESTA LA CORRECCION PRINCIPAL (showApp) ---
+      // --- CORRECCIÓN PRINCIPAL (showApp) PARA CLIENTES ---
       async function showApp(payload) { 
         if (!configCache) await loadInitialConfig();
         DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
+
+        const role = payload.role ? payload.role.toLowerCase() : '';
+
+        // --- MODO CLIENTE (Aislamiento Total) ---
+        if (role === 'cliente') {
+            document.body.classList.add('client-mode'); // CSS oculta Sidebar, Search, FAB
+            
+            // Buscar Artista asociado
+            const artistas = await fetchAPI('/api/artistas');
+            const myArtist = artistas.find(a => 
+                a.nombre.toLowerCase().trim() === payload.username.toLowerCase().trim() ||
+                (a.nombreArtistico && a.nombreArtistico.toLowerCase().trim() === payload.username.toLowerCase().trim())
+            );
+
+            DOMElements.loginContainer.style.display = 'none'; 
+            DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
+            document.body.style.opacity = '1';
+            document.body.style.visibility = 'visible';
+
+            if (myArtist) {
+                // Forzar Vista de Artista en modo "Solo Lectura"
+                mostrarVistaArtista(myArtist._id, myArtist.nombre, myArtist.nombreArtistico, true);
+            } else {
+                // Mostrar Error Limpio
+                document.querySelector('main').innerHTML = `
+                    <div class="card" style="border-left: 4px solid var(--warning-color); text-align: center;">
+                        <h2>⚠️ Atención</h2>
+                        <p>No encontramos un perfil de Artista vinculado a tu usuario "<strong>${payload.username}</strong>".</p>
+                        <p>Por favor, contacta al estudio para que corrijan el nombre de tu Artista.</p>
+                        <button onclick="localStorage.removeItem('token'); location.reload();" class="btn-secondary" style="margin-top:1rem;">Salir</button>
+                    </div>`;
+            }
+            return; // Detener carga normal
+        }
         
-        // 1. RENDERIZAR SIDEBAR PRIMERO (Para tener los botones listos)
+        // --- MODO STAFF NORMAL ---
         renderSidebar(payload);
 
-        // 2. ACTIVAR EVENT LISTENERS PRIMERO (Para que funcionen los clics incluso si es cliente)
+        // Activar Listeners
         if (!isInitialized) { 
             initAppEventListeners(payload); 
             isInitialized = true; 
         } 
-
-        // 3. LOGICA ESPECIFICA DE CLIENTE
-        if (payload.role && payload.role.toLowerCase() === 'cliente') {
-             mostrarVistaCliente(payload.username);
-             DOMElements.loginContainer.style.display = 'none'; 
-             DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
-             return; 
-        }
 
         DOMElements.loginContainer.style.display = 'none'; 
         DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
@@ -1416,17 +1454,17 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- AQUI ESTA LA CORRECCION DEL SIDEBAR (renderSidebar) ---
+      // --- CORRECCIÓN SIDEBAR (Diseñador) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
           const p = user.permisos || []; 
           
           const role = user.role ? user.role.toLowerCase() : '';
           
-          const isAdmin = role === 'admin' || p.includes('all');
-          const isIngeniero = role === 'ingeniero' || role === 'productor';
-          const isDisenador = role === 'diseñador' || role === 'disenador';
-          const isCliente = role === 'cliente';
+          const isAdmin = role.includes('admin') || p.includes('all');
+          const isIngeniero = role.includes('ingeniero') || role.includes('productor');
+          // FIX: Aceptar cualquier variación de diseñador
+          const isDisenador = role.includes('diseñador') || role.includes('disenador'); 
 
           const canAccess = (permKey) => {
               if (isAdmin) return true;
@@ -1435,13 +1473,9 @@
               if (isIngeniero) {
                   return ['dashboard', 'agenda', 'flujo-trabajo', 'finanzas', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'].includes(permKey);
               }
-              // --- PERMISOS DEFECTO DISEÑADOR ---
+              // PERMISOS DISEÑADOR
               if (isDisenador) {
                   return ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'].includes(permKey);
-              }
-              // --- PERMISOS DEFECTO CLIENTE ---
-              if (isCliente) {
-                  return ['dashboard', 'cotizaciones', 'pagos', 'historial-proyectos'].includes(permKey);
               }
               return false;
           };
@@ -1484,24 +1518,6 @@
           document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
               link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
           });
-      }
-
-      function mostrarVistaCliente(username) {
-          // Ocultar botones de admin
-          const btnNuevo = document.getElementById('btn-nuevo-proyecto-sidebar');
-          if(btnNuevo) btnNuevo.style.display = 'none';
-          
-          // Buscar ID Artista
-          fetchAPI('/api/artistas').then(artistas => {
-              const artista = artistas.find(a => a.nombre.toLowerCase() === username.toLowerCase());
-              if (artista) {
-                  mostrarVistaArtista(artista._id, artista.nombre, '');
-              } else {
-                  showToast('No tienes perfil de artista asociado.', 'error');
-              }
-          });
-          document.body.style.opacity = '1';
-          document.body.style.visibility = 'visible';
       }
 
       function showLogin() { localStorage.removeItem('token'); DOMElements.loginContainer.style.display = 'block'; DOMElements.appWrapper.style.display = 'none'; document.body.style.opacity = '1'; document.body.style.visibility = 'visible'; }
@@ -1955,7 +1971,7 @@
           try { 
               const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
               const { jsPDF } = window.jspdf; const pdf = new jsPDF(); 
-               
+                
               pdf.setFillColor(0, 0, 0);
               pdf.rect(14, 15, 40, 15, 'F');
               if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
@@ -1992,7 +2008,7 @@
         
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
-      async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
+      async function mostrarVistaArtista(artistaId, nombre, nombreArtistico, isClientView = false) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
           contenido.innerHTML = '<p>Cargando...</p>'; 
@@ -2008,12 +2024,16 @@
                       <p style="font-size: 1.1em;"><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
                       <p style="color:var(--text-color-light);"><strong>Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p>
                       <p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
-                  </div>
-                  <div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
+                  </div>`;
+
+              // Ocultar acciones si es Cliente
+              if(!isClientView) {
+                 html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
                       <button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico||'')}', '${escapeHTML(artistaInfo.telefono||'')}', '${escapeHTML(artistaInfo.correo||'')}')">✏️ Editar Datos</button>
                       <button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button>
-                  </div>
-              </div>`;
+                  </div>`;
+              }
+              html += `</div>`;
               
               html += '<h3>Proyectos</h3>'; 
               if(proyectos.length) { 
@@ -2026,17 +2046,21 @@
                         <td>$${(p.montoPagado||0).toFixed(2)}</td>
                         <td class="table-actions">
                             <button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>
-                            <button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>
-                            <button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
-                            <button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
-                        </td>
-                      </tr>`; 
+                            <button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
+                      
+                      // Solo admin/staff puede editar/borrar
+                      if(!isClientView) {
+                          html += `<button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
+                                   <button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>`;
+                      }
+                      html += `</td></tr>`; 
                   }); 
                   html += '</tbody></table></div>'; 
-              } else { html += '<p>Sin proyectos registrados para este artista.</p>'; } 
+              } else { html += '<p>Sin proyectos registrados.</p>'; } 
+              
               contenido.innerHTML = html; 
               mostrarSeccion('vista-artista'); 
-          } catch(e) { contenido.innerHTML = '<p>Error historial.</p>'; } 
+          } catch(e) { contenido.innerHTML = '<p>Error cargando historial.</p>'; console.error(e); } 
       }
       async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
         
@@ -2259,7 +2283,7 @@
         }
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo() };
     });
   </script>
 
