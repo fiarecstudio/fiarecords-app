@@ -6,11 +6,15 @@ const UsuarioSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    // AQUÍ ESTÁ LA CORRECCIÓN:
-    // Agregamos 'Diseñador' y 'Cliente' tal como salen en tu menú.
-    // Mantenemos 'admin' e 'ingeniero' (minúsculas) por compatibilidad y agregamos las versiones con Mayúscula.
-    enum: ['ingeniero', 'admin', 'Ingeniero', 'Admin', 'Cliente', 'Diseñador'], 
-    default: 'ingeniero' 
+    // ESTA LISTA DEBE COINCIDIR EXACTAMENTE CON TU MENÚ
+    // Agregamos versiones con Mayúscula y minúscula para evitar errores
+    enum: [
+        'ingeniero', 'Ingeniero', 
+        'admin', 'Admin', 
+        'cliente', 'Cliente', 
+        'diseñador', 'Diseñador'
+    ], 
+    default: 'Ingeniero' 
   },
   isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
