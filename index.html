@@ -1087,7 +1087,7 @@
                      if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
                      if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true); // TRASH LOGIC
                      // FIX CLIENTE: Allow filtering by artist ID
-                     if(url.includes('por-artista')) {
+                     if(url.includes('/por-artista')) {
                          const artId = url.split('/').pop();
                          return localCache.proyectos.filter(p => !p.deleted && (p.artista && p.artista._id === artId));
                      }
@@ -1402,6 +1402,16 @@
         // --- MODO CLIENTE (Aislamiento Total) ---
         if (role === 'cliente') {
             document.body.classList.add('client-mode'); // CSS oculta Sidebar, Search, FAB
+            
+            // --- CORRECCIÓN BOTÓN LOGOUT CLIENTE ---
+            const headerActions = document.querySelector('.header-actions');
+            const logoutBtn = document.createElement('button');
+            logoutBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"></path></svg> Cerrar Sesión';
+            logoutBtn.className = 'btn-eliminar';
+            logoutBtn.style.marginLeft = '10px';
+            logoutBtn.onclick = () => { localStorage.removeItem('token'); location.reload(); };
+            headerActions.appendChild(logoutBtn);
+            // ----------------------------------------
             
             // Buscar Artista asociado
             const artistas = await fetchAPI('/api/artistas');
@@ -2044,9 +2054,18 @@
                         <td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td>
                         <td>$${p.total.toFixed(2)}</td>
                         <td>$${(p.montoPagado||0).toFixed(2)}</td>
-                        <td class="table-actions">
-                            <button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>
-                            <button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
+                        <td class="table-actions">`;
+                      
+                      // --- CORRECCIÓN: OCULTAR BOTÓN UPLOAD PARA CLIENTES ---
+                      if (!isClientView) {
+                          // Admin/Staff ve botón de subir
+                          html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`;
+                      } else if (p.enlaceEntrega) {
+                          // Cliente solo ve botón descargar si existe enlace
+                          html += `<a href="${p.enlaceEntrega}" target="_blank" class="btn-primary" style="text-decoration:none; padding: 0.5rem; display:inline-flex; align-items:center; width:auto; height:auto; font-size: 0.8em;">📂 Descargar</a>`;
+                      }
+
+                      html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
                       
                       // Solo admin/staff puede editar/borrar
                       if(!isClientView) {
