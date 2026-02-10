@@ -1504,16 +1504,23 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
+      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos + Admin Bypass) ---
       function renderSidebar(user) {
           console.log("Generando menú para:", user.username, "Rol:", user.role, "Permisos:", user.permisos);
           const navContainer = document.getElementById('sidebar-nav-container');
+          
           const userPerms = Array.isArray(user.permisos) ? user.permisos : [];
+          
+          // REGLA CLAVE: Si el rol contiene "admin" (sin importar mayúsculas), tiene acceso total.
+          // Si no es admin, depende 100% de las casillas marcadas.
+          const isSuperAdmin = user.role && user.role.toLowerCase().includes('admin');
 
-          // Logic: strictly check inclusion in the array
-          const canAccess = (permKey) => userPerms.includes(permKey);
+          const canAccess = (permKey) => {
+              if (isSuperAdmin) return true; 
+              return userPerms.includes(permKey);
+          };
 
-          // Build groups
+          // Construcción de grupos
           let htmlProyectos = '';
           if (canAccess('dashboard')) htmlProyectos += '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>';
           if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>';
@@ -1521,7 +1528,7 @@
           if (canAccess('finanzas')) htmlProyectos += '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>';
           if (canAccess('historial-proyectos')) htmlProyectos += '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>';
           if (canAccess('finanzas') || canAccess('pagos')) htmlProyectos += '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>';
-          // Manual registration usually for staff with agenda access
+          // Registro manual suele requerir acceso de staff/agenda
           if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>';
 
           let htmlGestion = '';
@@ -1535,7 +1542,7 @@
               htmlSistema += '<li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>';
           }
 
-          // Assemble final HTML
+          // Ensamblar HTML final (ocultando grupos vacíos)
           let finalHtml = '';
           if (htmlProyectos) finalHtml += `<details class="nav-group" open><summary>Proyectos</summary><ul>${htmlProyectos}</ul></details>`;
           if (htmlGestion) finalHtml += `<details class="nav-group" open><summary>Gestión</summary><ul>${htmlGestion}</ul></details>`;
@@ -1545,7 +1552,7 @@
 
           navContainer.innerHTML = finalHtml;
 
-          // Re-attach listeners
+          // Re-conectar listeners
           document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
               link.addEventListener('click', (e) => {
                   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
