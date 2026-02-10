@@ -1,3 +1,17 @@
+Entendido. Para lograr que los permisos sean **estrictos** (es decir, que la casilla mande sobre el nombre del rol), debemos modificar la función `renderSidebar`.
+
+Actualmente, el código dice: *"Si se llama Ingeniero, dale acceso a la agenda aunque no tenga el permiso"*.
+Vamos a cambiarlo para que diga: *"Solo dale acceso si tiene el permiso explícito (o si es el Super Admin)"*.
+
+Aquí tienes el código completo con esa lógica corregida.
+
+### Cambios realizados:
+1.  **Función `renderSidebar` simplificada:** Ya no le importan los nombres "Ingeniero" o "Diseñador". Ahora solo mira si la casilla específica está marcada en la lista de permisos del usuario.
+2.  **Lógica del Formulario:** Mantuve la función que "auto-selecciona" las casillas cuando escribes el rol, pero ahora funciona solo como una **plantilla**. Si escribes "Ingeniero", se marcan las casillas, pero si luego desmarcas "Agenda" y guardas, el usuario **perderá el acceso a la agenda** inmediatamente, aunque su rol siga diciendo "Ingeniero".
+
+Copia y pega este código completo:
+
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1504,61 +1518,58 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos + Admin Bypass) ---
+      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
       function renderSidebar(user) {
-          console.log("Generando menú para:", user.username, "Rol:", user.role, "Permisos:", user.permisos);
           const navContainer = document.getElementById('sidebar-nav-container');
+          const p = user.permisos || []; 
+          const role = user.role ? user.role.toLowerCase() : '';
           
-          const userPerms = Array.isArray(user.permisos) ? user.permisos : [];
-          
-          // REGLA CLAVE: Si el rol contiene "admin" (sin importar mayúsculas), tiene acceso total.
-          // Si no es admin, depende 100% de las casillas marcadas.
-          const isSuperAdmin = user.role && user.role.toLowerCase().includes('admin');
+          // Solo el "admin" string explícito tiene pase libre
+          // Los demás, dependen 100% de las casillas marcadas
+          const isSuperAdmin = role === 'admin';
 
           const canAccess = (permKey) => {
-              if (isSuperAdmin) return true; 
-              return userPerms.includes(permKey);
+              if (isSuperAdmin) return true;
+              return p.includes(permKey);
           };
-
-          // Construcción de grupos
-          let htmlProyectos = '';
-          if (canAccess('dashboard')) htmlProyectos += '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>';
-          if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>';
-          if (canAccess('flujo-trabajo')) htmlProyectos += '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>';
-          if (canAccess('finanzas')) htmlProyectos += '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>';
-          if (canAccess('historial-proyectos')) htmlProyectos += '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>';
-          if (canAccess('finanzas') || canAccess('pagos')) htmlProyectos += '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>';
-          // Registro manual suele requerir acceso de staff/agenda
-          if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>';
-
-          let htmlGestion = '';
-          if (canAccess('gestion-artistas')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>';
-          if (canAccess('gestion-servicios')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>';
-          if (canAccess('gestion-usuarios')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>';
-
-          let htmlSistema = '';
-          if (canAccess('configuracion')) {
-              htmlSistema += '<li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>';
-              htmlSistema += '<li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>';
-          }
-
-          // Ensamblar HTML final (ocultando grupos vacíos)
-          let finalHtml = '';
-          if (htmlProyectos) finalHtml += `<details class="nav-group" open><summary>Proyectos</summary><ul>${htmlProyectos}</ul></details>`;
-          if (htmlGestion) finalHtml += `<details class="nav-group" open><summary>Gestión</summary><ul>${htmlGestion}</ul></details>`;
-          if (htmlSistema) finalHtml += `<details class="nav-group"><summary>Sistema</summary><ul>${htmlSistema}</ul></details>`;
-
-          if (finalHtml === '') finalHtml = '<p style="padding:1rem; color:var(--text-color-light); font-size:0.8em; text-align:center;">Sin accesos disponibles.</p>';
-
-          navContainer.innerHTML = finalHtml;
-
-          // Re-conectar listeners
+          
+          let html = `
+            <details class="nav-group" open>
+              <summary>Proyectos</summary>
+              <ul>
+                ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
+                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
+                ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
+                ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
+                ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
+                ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
+                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
+              </ul>
+            </details>
+            
+            <details class="nav-group" open>
+              <summary>Gestión</summary>
+              <ul>
+                ${canAccess('gestion-artistas') ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
+                ${canAccess('gestion-servicios') ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
+                ${canAccess('gestion-usuarios') ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
+              </ul>
+            </details>
+            
+            ${canAccess('configuracion') ? `
+            <details class="nav-group">
+              <summary>Sistema</summary>
+              <ul>
+                <li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>
+                <li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>
+              </ul>
+            </details>` : ''}
+          `;
+          navContainer.innerHTML = html;
+          
+          // Re-conectar listeners a los nuevos elementos
           document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
-              link.addEventListener('click', (e) => {
-                  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
-                  e.currentTarget.classList.add('active-link');
-                  mostrarSeccion(e.currentTarget.dataset.seccion);
-              });
+              link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
           });
       }
 
@@ -2426,3 +2437,4 @@
   </script>
 </body>
 </html>
+```
