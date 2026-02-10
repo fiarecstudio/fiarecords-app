@@ -1507,16 +1507,18 @@
       // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
-          const p = user.permisos || []; 
-          const role = user.role ? user.role.toLowerCase() : '';
           
-          // Solo el "admin" string explícito tiene pase libre
-          // Los demás, dependen 100% de las casillas marcadas
+          // Obtenemos los permisos desde el objeto usuario
+          // Si el usuario no tiene array de permisos definido, devolvemos array vacío
+          const userPerms = Array.isArray(user.permisos) ? user.permisos : [];
+          
+          const role = user.role ? user.role.toLowerCase() : '';
           const isSuperAdmin = role === 'admin';
 
+          // Esta función ahora solo mira el array de permisos
           const canAccess = (permKey) => {
-              if (isSuperAdmin) return true;
-              return p.includes(permKey);
+              if (isSuperAdmin) return true; // El admin supremo siempre ve todo
+              return userPerms.includes(permKey);
           };
           
           let html = `
@@ -1528,7 +1530,7 @@
                 ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
                 ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
                 ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
-                ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
+                ${(canAccess('finanzas') || canAccess('pagos')) ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
                 ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
               </ul>
             </details>
