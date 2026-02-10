@@ -64,6 +64,7 @@
       --secondary-button-hover-bg: #e2e8f0;
 
       /* Kanban Tags */
+      --proceso-Solicitud: #64748b; /* Nuevo color para solicitud */
       --proceso-Agendado: #3b82f6; 
       --proceso-Grabacion: #8b5cf6; 
       --proceso-Edicion: #ec4899; 
@@ -856,6 +857,34 @@
     </div>
   </div>
 
+  <!-- MODAL SOLICITUD DE CITA (NUEVO) -->
+  <div id="request-appointment-modal" class="modal-overlay">
+      <div class="modal-content">
+          <div class="modal-header">
+              <h2>Solicitar Cita / Proyecto</h2>
+              <button class="modal-close" onclick="app.cerrarModalSolicitud()">×</button>
+          </div>
+          <p style="font-size:0.9em; margin-bottom:1rem; color:var(--text-color-light);">
+              Envía una solicitud al estudio. Te confirmaremos la fecha pronto.
+          </p>
+          <form onsubmit="app.enviarSolicitud(event)">
+              <label>¿Qué servicio necesitas?</label>
+              <select id="req-service" required></select>
+
+              <label>Fecha deseada (Sugerida)</label>
+              <input type="text" id="req-date" required>
+              
+              <label>Hora deseada (Aprox)</label>
+              <input type="time" id="req-time">
+
+              <label>Comentarios adicionales</label>
+              <textarea id="req-comments" rows="3" placeholder="Ej: Es para grabar voces de 2 canciones..."></textarea>
+
+              <button type="submit" style="width:100%; margin-top:1rem;">Enviar Solicitud</button>
+          </form>
+      </div>
+  </div>
+
   <div id="document-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1405,11 +1434,22 @@
             
             // --- CORRECCIÓN BOTÓN LOGOUT CLIENTE ---
             const headerActions = document.querySelector('.header-actions');
+            
+            // Eliminar botón previo si existe para evitar duplicados
+            const existingBtn = document.getElementById('btn-client-logout');
+            if(existingBtn) existingBtn.remove();
+            
             const logoutBtn = document.createElement('button');
-            logoutBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"></path></svg> Cerrar Sesión';
+            logoutBtn.id = 'btn-client-logout';
             logoutBtn.className = 'btn-eliminar';
-            logoutBtn.style.marginLeft = '10px';
+            logoutBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"></path></svg> Salir';
+            logoutBtn.style.display = 'flex';
+            logoutBtn.style.alignItems = 'center';
+            logoutBtn.style.gap = '0.5rem';
+            logoutBtn.style.padding = '0.5rem 1rem';
             logoutBtn.onclick = () => { localStorage.removeItem('token'); location.reload(); };
+            
+            // Insertar al final
             headerActions.appendChild(logoutBtn);
             // ----------------------------------------
             
@@ -1694,7 +1734,10 @@
       }
 
       async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; const claseTd = esArtistaRegistrado ? 'clickable-artist' : ''; const eventoDblClick = esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''; return `<tr><td class="${claseTd}" ${eventoDblClick}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">✓</button><button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">Sin cotizaciones.</td></tr>`; } catch(e) { tablaBody.innerHTML = `<tr><td colspan="4">Error offline.</td></tr>`; } }
-      const procesos = ['Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
+      
+      // --- MODIFICADO: Agregada columna "Solicitud" ---
+      const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
+      
       async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if(!filtros.innerHTML) { filtros.innerHTML = `<button class="btn-secondary active" onclick="app.filtrarFlujo('Todos')">Todos</button>` + procesos.filter(p=>p!=='Completo').map(p => `<button class="btn-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join(''); try { localCache.proyectos = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch(e) { console.error("Error flujo:", e); } }
       function filtrarFlujo(filtro) { 
           document.querySelectorAll('#filtrosFlujo button').forEach(b => { b.classList.remove('active'); b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); }); 
@@ -2036,11 +2079,15 @@
                       <p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                   </div>`;
 
-              // Ocultar acciones si es Cliente
               if(!isClientView) {
                  html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
                       <button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico||'')}', '${escapeHTML(artistaInfo.telefono||'')}', '${escapeHTML(artistaInfo.correo||'')}')">✏️ Editar Datos</button>
                       <button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button>
+                  </div>`;
+              } else {
+                  // --- BOTÓN SOLICITAR CITA PARA CLIENTES ---
+                  html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
+                      <button class="btn-primary" onclick="app.abrirModalSolicitud('${artistaInfo._id}')">📅 Solicitar Cita / Proyecto</button>
                   </div>`;
               }
               html += `</div>`;
@@ -2056,18 +2103,15 @@
                         <td>$${(p.montoPagado||0).toFixed(2)}</td>
                         <td class="table-actions">`;
                       
-                      // --- CORRECCIÓN: OCULTAR BOTÓN UPLOAD PARA CLIENTES ---
+                      // Ocultar botón upload para clientes
                       if (!isClientView) {
-                          // Admin/Staff ve botón de subir
                           html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`;
                       } else if (p.enlaceEntrega) {
-                          // Cliente solo ve botón descargar si existe enlace
                           html += `<a href="${p.enlaceEntrega}" target="_blank" class="btn-primary" style="text-decoration:none; padding: 0.5rem; display:inline-flex; align-items:center; width:auto; height:auto; font-size: 0.8em;">📂 Descargar</a>`;
                       }
 
                       html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
                       
-                      // Solo admin/staff puede editar/borrar
                       if(!isClientView) {
                           html += `<button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
                                    <button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>`;
@@ -2081,6 +2125,79 @@
               mostrarSeccion('vista-artista'); 
           } catch(e) { contenido.innerHTML = '<p>Error cargando historial.</p>'; console.error(e); } 
       }
+
+      // --- FUNCIONES NUEVAS PARA SOLICITUD DE CLIENTE ---
+      let solicitudArtistaId = null;
+
+      async function abrirModalSolicitud(artistaId) {
+          solicitudArtistaId = artistaId;
+          const modal = document.getElementById('request-appointment-modal');
+          const select = document.getElementById('req-service');
+          
+          // Cargar servicios en el select
+          try {
+              if (localCache.servicios.length === 0) {
+                  const servicios = await fetchAPI('/api/servicios');
+                  localCache.servicios = servicios;
+              }
+              select.innerHTML = localCache.servicios.map(s => `<option value="${s._id}" data-precio="${s.precio}" data-nombre="${s.nombre}">${s.nombre} (Aprox $${s.precio})</option>`).join('');
+          } catch(e) { console.error(e); }
+
+          flatpickr("#req-date", { minDate: "today", locale: "es" });
+          modal.style.display = 'flex';
+      }
+
+      function cerrarModalSolicitud() {
+          document.getElementById('request-appointment-modal').style.display = 'none';
+      }
+
+      async function enviarSolicitud(e) {
+          e.preventDefault();
+          const select = document.getElementById('req-service');
+          const option = select.options[select.selectedIndex];
+          const serviceId = select.value;
+          const serviceName = option.dataset.nombre;
+          const price = parseFloat(option.dataset.precio);
+          
+          const dateStr = document.getElementById('req-date')._flatpickr.selectedDates[0];
+          const timeStr = document.getElementById('req-time').value;
+          const comments = document.getElementById('req-comments').value;
+
+          if(!dateStr) return showToast('Selecciona una fecha', 'error');
+
+          let finalDate = new Date(dateStr);
+          if (timeStr) {
+              const [h, m] = timeStr.split(':');
+              finalDate.setHours(h);
+              finalDate.setMinutes(m);
+          }
+
+          const nuevoProyecto = {
+              artista: solicitudArtistaId,
+              nombreProyecto: `Solicitud: ${serviceName}`,
+              items: [{ servicio: serviceId, nombre: serviceName + (comments ? ` (${comments})` : ''), unidades: 1, precioUnitario: price }],
+              total: price,
+              descuento: 0,
+              estatus: 'Solicitud', // Estado visible
+              metodoPago: 'Pendiente',
+              fecha: finalDate.toISOString(),
+              prioridad: 'Normal',
+              proceso: 'Solicitud', // Para que caiga en la primera columna del Kanban Admin
+              esAlbum: false
+          };
+
+          try {
+              await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(nuevoProyecto) });
+              showToast('¡Solicitud enviada! Te contactaremos pronto.', 'success');
+              cerrarModalSolicitud();
+              // Recargar vista cliente
+              const nombreHeader = document.getElementById('vista-artista-nombre').textContent;
+              mostrarVistaArtista(solicitudArtistaId, nombreHeader, '', true);
+          } catch(err) {
+              showToast('Error al enviar solicitud.', 'error');
+          }
+      }
+
       async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
         
       function nuevoProyectoParaArtista(idArtista, nombreArtista) {
@@ -2302,7 +2419,7 @@
         }
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo() };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud };
     });
   </script>
 
