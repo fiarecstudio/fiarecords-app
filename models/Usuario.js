@@ -4,18 +4,22 @@ const bcrypt = require('bcryptjs');
 const UsuarioSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, trim: true },
   password: { type: String, required: true },
+  
+  // 1. Guardamos el rol. El "lowercase: true" forzará a que se guarde en minúsculas siempre.
   role: { 
     type: String, 
-    // ESTA LISTA DEBE COINCIDIR EXACTAMENTE CON TU MENÚ
-    // Agregamos versiones con Mayúscula y minúscula para evitar errores
-    enum: [
-        'ingeniero', 'Ingeniero', 
-        'admin', 'Admin', 
-        'cliente', 'Cliente', 
-        'diseñador', 'Diseñador'
-    ], 
-    default: 'Ingeniero' 
+    enum: ['ingeniero', 'admin', 'cliente', 'diseñador'], 
+    default: 'ingeniero',
+    lowercase: true, // ESTO ARREGLA EL PROBLEMA DE "Admin" vs "admin"
+    trim: true
   },
+
+  // 2. AQUÍ ESTABA EL ERROR: Faltaba este campo para guardar los checkboxes
+  permisos: { 
+    type: mongoose.Schema.Types.Mixed, // Permite guardar un objeto con los true/false de los checkboxes
+    default: {} 
+  },
+
   isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
