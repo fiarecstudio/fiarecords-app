@@ -977,7 +977,7 @@
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
-          historial: [],     
+          historial: [],      
           pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
           usuarios: []
       };
@@ -1380,26 +1380,30 @@
         } else { showLogin(); } 
       })();
 
+      // --- AQUI ESTA LA CORRECCION PRINCIPAL (showApp) ---
       async function showApp(payload) { 
         if (!configCache) await loadInitialConfig();
         DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
         
-        // --- LOGICA ROLES Y PERMISOS ---
-        // Renderizar menu ANTES de inicializar listeners
+        // 1. RENDERIZAR SIDEBAR PRIMERO (Para tener los botones listos)
         renderSidebar(payload);
 
-        // Vista Cliente Exclusiva
+        // 2. ACTIVAR EVENT LISTENERS PRIMERO (Para que funcionen los clics incluso si es cliente)
+        if (!isInitialized) { 
+            initAppEventListeners(payload); 
+            isInitialized = true; 
+        } 
+
+        // 3. LOGICA ESPECIFICA DE CLIENTE
         if (payload.role && payload.role.toLowerCase() === 'cliente') {
              mostrarVistaCliente(payload.username);
              DOMElements.loginContainer.style.display = 'none'; 
              DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
-             return;
+             return; 
         }
 
         DOMElements.loginContainer.style.display = 'none'; 
         DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
-        
-        if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; } 
         
         const hashSection = location.hash.replace('#', '');
         mostrarSeccion(hashSection || 'dashboard', false);
@@ -1412,50 +1416,51 @@
         document.body.style.visibility = 'visible'; 
       }
 
+      // --- AQUI ESTA LA CORRECCION DEL SIDEBAR (renderSidebar) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
-          const p = user.permisos || [];
+          const p = user.permisos || []; 
           
-          // --- CORRECCIÓN CRÍTICA: Validar también por ROL explícito ---
-          // Si el usuario "Ingeniero" se creó antes de la actualización de permisos, el array 'p' estará vacío.
-          // Aquí aseguramos que el rol tenga acceso aunque el array esté vacío.
           const role = user.role ? user.role.toLowerCase() : '';
           
           const isAdmin = role === 'admin' || p.includes('all');
-          const isIngeniero = role === 'ingeniero' || role === 'productor'; // Alias comunes
+          const isIngeniero = role === 'ingeniero' || role === 'productor';
           const isDisenador = role === 'diseñador' || role === 'disenador';
-          
-          // Helper para saber si tiene permiso o es el rol adecuado
+          const isCliente = role === 'cliente';
+
           const canAccess = (permKey) => {
               if (isAdmin) return true;
-              if (p.includes(permKey)) return true;
+              if (p.includes(permKey)) return true; 
               
-              // Fallback por Rol si no hay permisos específicos
               if (isIngeniero) {
                   return ['dashboard', 'agenda', 'flujo-trabajo', 'finanzas', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'].includes(permKey);
               }
+              // --- PERMISOS DEFECTO DISEÑADOR ---
               if (isDisenador) {
-                  return ['agenda', 'flujo-trabajo'].includes(permKey);
+                  return ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'].includes(permKey);
+              }
+              // --- PERMISOS DEFECTO CLIENTE ---
+              if (isCliente) {
+                  return ['dashboard', 'cotizaciones', 'pagos', 'historial-proyectos'].includes(permKey);
               }
               return false;
           };
           
-          // Generar HTML del menú basado en permisos o roles
           let html = `
             <details class="nav-group" open>
               <summary>Proyectos</summary>
               <ul>
-                ${canAccess('dashboard') ? '<li><a class="nav-link active-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
+                ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
                 ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
                 ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
                 ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
                 ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
-                ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
+                ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
                 ${(isAdmin || isIngeniero) ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
               </ul>
             </details>
             
-            <details class="nav-group">
+            <details class="nav-group" open>
               <summary>Gestión</summary>
               <ul>
                 ${canAccess('gestion-artistas') ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
@@ -1485,7 +1490,6 @@
           // Ocultar botones de admin
           const btnNuevo = document.getElementById('btn-nuevo-proyecto-sidebar');
           if(btnNuevo) btnNuevo.style.display = 'none';
-          document.getElementById('sidebar-nav-container').innerHTML = ''; // Limpiar menu
           
           // Buscar ID Artista
           fetchAPI('/api/artistas').then(artistas => {
@@ -1579,7 +1583,6 @@
         
       function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
         
-      // --- LOGICA MODIFICADA PARA GUARDAR ROLES Y PERMISOS (CORREGIDA) ---
       async function saveItem(e, type) { 
           e.preventDefault(); 
           const form = e.target; 
@@ -1589,7 +1592,6 @@
           if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; } 
           else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } 
           else if (type === 'usuarios') { 
-              // --- CORRECCIÓN CRÍTICA AQUI ---
               const userVal = document.getElementById('usernameUsuario').value;
               const roleVal = document.getElementById('roleUsuario').value;
               const passVal = document.getElementById('passwordUsuario').value;
@@ -1628,17 +1630,12 @@
               else if (endpoint === 'artistas') { form.idArtista.value = item._id; form.nombreArtista.value = item.nombre; form.nombreArtisticoArtista.value = item.nombreArtistico || ''; form.telefonoArtista.value = item.telefono || ''; form.correoArtista.value = item.correo || ''; } 
               else if (endpoint === 'usuarios') { 
                   form.idUsuario.value = item._id; 
-                  // CORRECCIÓN EDITAR USUARIOS
                   document.getElementById('usernameUsuario').value = item.username; 
                   document.getElementById('roleUsuario').value = item.role; 
-                  document.getElementById('passwordUsuario').value = ''; // Reset password field
+                  document.getElementById('passwordUsuario').value = ''; 
                   
-                  // --- CORRECCIÓN: CARGAR CHECKBOXES PALOMIADOS ---
-                  // Primero limpiar
                   document.querySelectorAll('input[name="user_permisos"]').forEach(chk => chk.checked = false);
-                  
                   const userPerms = item.permisos || [];
-                  // Solo si es un arreglo iteramos
                   if(Array.isArray(userPerms)) {
                       document.querySelectorAll('input[name="user_permisos"]').forEach(chk => {
                           if (userPerms.includes(chk.value)) {
@@ -1649,7 +1646,6 @@
               } 
               
               form.querySelector('button[type="submit"]').textContent = 'Actualizar'; 
-              // Mostrar sección para editar
               mostrarSeccion(`gestion-${endpoint}`);
           } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
       }
@@ -1688,7 +1684,6 @@
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li>${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
                 
-                // --- BOTONES PARA ELIMINAR Y EDITAR AÑADIDOS AQUI ---
                 card.innerHTML = `<div class="project-card-header">
                                         <span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
                                         <div style="display:flex;gap:4px;">
@@ -1712,7 +1707,6 @@
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
         
-      // --- FUNCION DE ELIMINAR PROYECTO ---
       async function eliminarProyecto(id, desdeCotizaciones = false) { 
           if (!confirm('¿Mover a papelera? Desaparecerá del flujo.')) return; 
           try { 
@@ -1723,19 +1717,14 @@
               } else if (document.getElementById('historial-proyectos').classList.contains('active')) {
                   cargarHistorial();
               } else if (document.getElementById('vista-artista').classList.contains('active')) {
-                    // Si estamos en la vista de artista, recargamos esa vista
                     const nombreActual = document.getElementById('vista-artista-nombre').textContent;
-                    
-                    // SAFE FIX: Check if array exists
                     if (!Array.isArray(localCache.artistas)) {
                         localCache.artistas = await fetchAPI('/api/artistas');
                     }
-                    
                     const art = localCache.artistas.find(a => a.nombre === nombreActual);
                     if(art) {
                         mostrarVistaArtista(art._id, nombreActual, '');
                     } else {
-                        // Fallback si no encuentra al artista en cache
                         mostrarSeccion('gestion-artistas');
                     }
               } else {
@@ -1757,10 +1746,9 @@
                   const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); 
               }); 
                 
-              // --- FIX: SELECCIONAR ARTISTA SI VIENE DE VISTA ARTISTA ---
               if (selectId === 'proyectoArtista' && preseleccionArtistaId) {
                   select.value = preseleccionArtistaId;
-                  preseleccionArtistaId = null; // Limpiar para que no afecte futuros usos
+                  preseleccionArtistaId = null; 
               } else if (currentValue) {
                   select.value = currentValue; 
               }
@@ -1910,7 +1898,6 @@
           const tabla = document.getElementById('tablaPendientesBody');
           tabla.innerHTML = '<tr><td colspan="5">Calculando...</td></tr>';
           
-          // Filtramos proyectos activos (no cancelados, no cotizaciones) que tengan deuda
           const pendientes = localCache.proyectos.filter(p => {
               const pagado = p.montoPagado || 0;
               return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion';
@@ -1969,11 +1956,9 @@
               const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
               const { jsPDF } = window.jspdf; const pdf = new jsPDF(); 
                
-              // --- FIX: Fondo Negro para Logo ---
               pdf.setFillColor(0, 0, 0);
               pdf.rect(14, 15, 40, 15, 'F');
               if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
-              // ----------------------------------
 
               pdf.setFontSize(9); pdf.text("FiaRecords Studio", 200, 20, { align: 'right' }); pdf.text("Juárez N.L.", 200, 25, { align: 'right' }); 
               pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 200, 50, { align: 'right' }); 
@@ -1987,11 +1972,9 @@
         try { 
           const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('Error pago.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; 
             
-          // --- FIX: Fondo Negro para Logo ---
           pdf.setFillColor(0, 0, 0);
           pdf.rect(14, 15, 40, 15, 'F');
           if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
-          // ----------------------------------
 
           pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Pago:', `$${pago.monto.toFixed(2)}`], ['Restante:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
         } catch (error) { showToast('Error recibo.', 'error'); }}
@@ -2000,18 +1983,15 @@
         try { 
           const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; 
             
-          // --- FIX: Fondo Negro para Logo ---
           pdf.setFillColor(0, 0, 0);
           pdf.rect(14, 15, 40, 15, 'F');
           if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
-          // ----------------------------------
 
           pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS', 105, 40, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 55); pdf.text(`Cliente: ${proyecto.artista.nombre}`, 14, 65); const terminos = `Servicios para el álbum "${c.nombreAlbum}". Pago total: $${proyecto.total}. Anticipo: $${c.pagoInicial}.`; pdf.text(terminos, 14, 80, { maxWidth: 180 }); const fileName = `Contrato.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); 
         } catch (e) { showToast("Error PDF", 'error'); }}
         
       async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [ ['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc] ] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); }}
 
-      // --- MOSTRAR VISTA ARTISTA CON NUEVAS FUNCIONES ---
       async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
           document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`; 
           const contenido = document.getElementById('vista-artista-contenido'); 
@@ -2060,10 +2040,8 @@
       }
       async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
         
-      // --- NUEVAS FUNCIONES PARA VISTA ARTISTA ---
-      
       function nuevoProyectoParaArtista(idArtista, nombreArtista) {
-          preseleccionArtistaId = idArtista; // GUARDAR ID EN VARIABLE GLOBAL
+          preseleccionArtistaId = idArtista; 
           mostrarSeccion('registrar-proyecto');
           showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info');
       }
@@ -2092,9 +2070,7 @@
               await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
               showToast('Datos actualizados.', 'success');
               document.getElementById('edit-artist-modal').style.display = 'none';
-              // Recargar la vista
               mostrarVistaArtista(id, body.nombre, body.nombreArtistico);
-              // Actualizar caché
               const idx = localCache.artistas.findIndex(a => a._id === id);
               if(idx !== -1) localCache.artistas[idx] = { ...localCache.artistas[idx], ...body };
           } catch(err) {
@@ -2169,7 +2145,6 @@
           window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
       }
         
-      // --- FUNCIÓN PARA EDITAR INFO RAPIDA (Canción, Precio, etc.) ---
       async function editarInfoProyecto(id) {
           const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
           if (!proyecto) return;
@@ -2187,21 +2162,18 @@
                  proyecto.nombreProyecto = nuevoNombre.trim(); 
               }
               if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) {
-                  // Asumimos que existe un endpoint o reutilizamos logica
                   await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) });
                   proyecto.total = nuevoTotal;
               }
               
               showToast('Proyecto actualizado.', 'success'); 
               
-              // Recargar vistas si es necesario
               if(document.getElementById('flujo-trabajo').classList.contains('active')) {
                     const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim();
                     filtrarFlujo(filtro); 
               } else if (document.getElementById('vista-artista').classList.contains('active')) {
                     const nombreActual = document.getElementById('vista-artista-nombre').textContent;
                     
-                    // SAFE FIX: Check if array exists
                     if (!Array.isArray(localCache.artistas)) {
                         localCache.artistas = await fetchAPI('/api/artistas');
                     }
@@ -2228,8 +2200,6 @@
         flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });
         
-        // --- DELEGACIÓN DE EVENTOS PARA EL MENU (FIX) ---
-        // En lugar de añadir listeners a elementos que pueden no existir, usamos el contenedor.
         const sidebarNav = document.getElementById('sidebar-nav-container');
         if(sidebarNav) {
             sidebarNav.addEventListener('click', (e) => {
@@ -2240,8 +2210,6 @@
             });
         }
         
-        // --- FIX BOTÓN NUEVO PROYECTO ---
-        // Nos aseguramos de que el boton tenga el listener
         const btnNuevo = document.getElementById('btn-nuevo-proyecto-sidebar');
         if (btnNuevo) {
             btnNuevo.addEventListener('click', (e) => {
@@ -2263,7 +2231,7 @@
         setupCustomization(payload);
         setupMobileMenu();
 
-        // --- NUEVO: LISTENER PARA AUTO-SELECCION DE PERMISOS POR ROL ---
+        // --- LISTENER PARA AUTO-SELECCION DE PERMISOS POR ROL ---
         const roleInput = document.getElementById('roleUsuario');
         if(roleInput) {
             roleInput.addEventListener('input', (e) => {
@@ -2276,11 +2244,12 @@
                 } else if (val.includes('ingeniero')) {
                     toCheck = ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'];
                 } else if (val.includes('diseñador')) {
-                    toCheck = ['flujo-trabajo', 'agenda'];
+                    toCheck = ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'];
+                } else if (val.includes('cliente')) {
+                    toCheck = ['dashboard', 'cotizaciones', 'pagos', 'historial-proyectos'];
                 }
 
                 if(toCheck.length > 0) {
-                    // Limpiamos y seleccionamos solo lo nuevo
                       perms.forEach(p => p.checked = false);
                       perms.forEach(p => {
                           if(toCheck.includes(p.value)) p.checked = true;
@@ -2288,7 +2257,6 @@
                 }
             });
         }
-        // --- FIN NUEVO LISTENER ---
       }
 
       window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista };
