@@ -1504,14 +1504,27 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
+      // --- CORRECCIÓN SIDEBAR (Con Permisos por Defecto) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
-          const p = user.permisos || []; 
-          const role = user.role ? user.role.toLowerCase() : '';
           
-          // Solo el "admin" string explícito tiene pase libre
-          // Los demás, dependen 100% de las casillas marcadas
+          let p = user.permisos || []; 
+          const role = user.role ? user.role.toLowerCase() : '';
+
+          // FIX: SI NO HAY PERMISOS GUARDADOS, ASIGNAR POR DEFECTO SEGÚN ROL
+          if (role !== 'admin' && p.length === 0) {
+              if (role.includes('ingeniero') || role.includes('productor')) {
+                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'];
+              } else if (role.includes('diseñador') || role.includes('visual')) {
+                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'];
+              } else if (role.includes('finanzas') || role.includes('contador')) {
+                  p = ['dashboard', 'finanzas', 'cotizaciones', 'pagos', 'historial-proyectos'];
+              } else {
+                  // Fallback mínimo para roles desconocidos
+                  p = ['dashboard'];
+              }
+          }
+          
           const isSuperAdmin = role === 'admin';
 
           const canAccess = (permKey) => {
@@ -1526,7 +1539,7 @@
                 ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
                 ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
                 ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
-                ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
+                ${canAccess('finanzas') || canAccess('cotizaciones') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
                 ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
                 ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
                 ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
@@ -2406,6 +2419,74 @@
                 }
             });
         }
+      }
+
+      // --- CORRECCIÓN SIDEBAR (Con Permisos por Defecto) ---
+      function renderSidebar(user) {
+          const navContainer = document.getElementById('sidebar-nav-container');
+          
+          let p = user.permisos || []; 
+          const role = user.role ? user.role.toLowerCase() : '';
+
+          // FIX: SI NO HAY PERMISOS GUARDADOS, ASIGNAR POR DEFECTO SEGÚN ROL
+          if (role !== 'admin' && p.length === 0) {
+              if (role.includes('ingeniero') || role.includes('productor')) {
+                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'];
+              } else if (role.includes('diseñador') || role.includes('visual')) {
+                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'];
+              } else if (role.includes('finanzas') || role.includes('contador')) {
+                  p = ['dashboard', 'finanzas', 'cotizaciones', 'pagos', 'historial-proyectos'];
+              } else {
+                  // Fallback mínimo para roles desconocidos
+                  p = ['dashboard'];
+              }
+          }
+          
+          const isSuperAdmin = role === 'admin';
+
+          const canAccess = (permKey) => {
+              if (isSuperAdmin) return true;
+              return p.includes(permKey);
+          };
+          
+          let html = `
+            <details class="nav-group" open>
+              <summary>Proyectos</summary>
+              <ul>
+                ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
+                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
+                ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
+                ${canAccess('finanzas') || canAccess('cotizaciones') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
+                ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
+                ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
+                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
+              </ul>
+            </details>
+            
+            <details class="nav-group" open>
+              <summary>Gestión</summary>
+              <ul>
+                ${canAccess('gestion-artistas') ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
+                ${canAccess('gestion-servicios') ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
+                ${canAccess('gestion-usuarios') ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
+              </ul>
+            </details>
+            
+            ${canAccess('configuracion') ? `
+            <details class="nav-group">
+              <summary>Sistema</summary>
+              <ul>
+                <li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>
+                <li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>
+              </ul>
+            </details>` : ''}
+          `;
+          navContainer.innerHTML = html;
+          
+          // Re-conectar listeners a los nuevos elementos
+          document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
+              link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
+          });
       }
 
       window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud };
