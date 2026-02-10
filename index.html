@@ -64,7 +64,7 @@
       --secondary-button-hover-bg: #e2e8f0;
 
       /* Kanban Tags */
-      --proceso-Solicitud: #64748b; /* Nuevo color para solicitud */
+      --proceso-Solicitud: #64748b;
       --proceso-Agendado: #3b82f6; 
       --proceso-Grabacion: #8b5cf6; 
       --proceso-Edicion: #ec4899; 
@@ -1504,30 +1504,19 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- CORRECCIÓN SIDEBAR (Diseñador) ---
+      // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
           const p = user.permisos || []; 
-          
           const role = user.role ? user.role.toLowerCase() : '';
           
-          const isAdmin = role.includes('admin') || p.includes('all');
-          const isIngeniero = role.includes('ingeniero') || role.includes('productor');
-          // FIX: Aceptar cualquier variación de diseñador
-          const isDisenador = role.includes('diseñador') || role.includes('disenador'); 
+          // Solo el "admin" string explícito tiene pase libre
+          // Los demás, dependen 100% de las casillas marcadas
+          const isSuperAdmin = role === 'admin';
 
           const canAccess = (permKey) => {
-              if (isAdmin) return true;
-              if (p.includes(permKey)) return true; 
-              
-              if (isIngeniero) {
-                  return ['dashboard', 'agenda', 'flujo-trabajo', 'finanzas', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'].includes(permKey);
-              }
-              // PERMISOS DISEÑADOR
-              if (isDisenador) {
-                  return ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'].includes(permKey);
-              }
-              return false;
+              if (isSuperAdmin) return true;
+              return p.includes(permKey);
           };
           
           let html = `
@@ -1540,7 +1529,7 @@
                 ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
                 ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
                 ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
-                ${(isAdmin || isIngeniero) ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
+                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
               </ul>
             </details>
             
