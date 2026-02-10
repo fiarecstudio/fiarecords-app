@@ -275,7 +275,7 @@
     form input:focus, form select:focus, form textarea:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: var(--card-background); }
       
     .password-wrapper { position: relative; }
-    #toggle-password { position: absolute; right: 1rem; top: 35%; cursor: pointer; opacity: 0.6; user-select: none; }
+    #toggle-password, #toggle-password-reg { position: absolute; right: 1rem; top: 35%; cursor: pointer; opacity: 0.6; user-select: none; }
       
     button { cursor: pointer; border-radius: 10px; border: none; padding: 0.75rem 1.5rem; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; letter-spacing: 0.3px; }
     button:active { transform: scale(0.97); }
@@ -383,6 +383,9 @@
     .list-item:hover { transform: translateX(5px); border-color: var(--primary-color); }
 
     #login-container { max-width: 400px; margin: 10vh auto; padding: 3rem; }
+    .auth-links { margin-top: 1.5rem; text-align: center; font-size: 0.9rem; }
+    .auth-links a { color: var(--primary-color); text-decoration: none; font-weight: 500; cursor: pointer; margin: 0 0.5rem; }
+    .auth-links a:hover { text-decoration: underline; }
 
     /* CHECKBOX PERMISSIONS (NUEVO) */
     .permissions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; background: var(--secondary-button-bg); padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); }
@@ -393,23 +396,66 @@
 <body>
   <div id="loader-overlay"><div class="spinner"></div></div>
 
+  <!-- LOGIN / REGISTER / RECOVERY CONTAINER -->
   <div id="login-container" class="card">
     <div style="text-align: center; margin-bottom: 2rem;">
       <img id="login-logo" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
-      <h3 style="margin-top:1rem; color:var(--text-color-light);">Iniciar Sesión</h3>
     </div>
-    <form id="login-form">
-      <div><label for="username">Usuario</label><input type="text" id="username" required></div>
-      <div>
-        <label for="password">Contraseña</label>
-        <div class="password-wrapper">
-          <input type="password" id="password" required>
-          <span id="toggle-password">👁️</span>
+
+    <!-- 1. LOGIN FORM -->
+    <div id="login-view">
+        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Iniciar Sesión</h3>
+        <form id="login-form">
+          <div><label for="username">Usuario</label><input type="text" id="username" required></div>
+          <div>
+            <label for="password">Contraseña</label>
+            <div class="password-wrapper">
+              <input type="password" id="password" required>
+              <span id="toggle-password">👁️</span>
+            </div>
+          </div>
+          <button type="submit" style="width:100%; margin-top:1rem;">Entrar al Estudio</button>
+        </form>
+        <div class="auth-links">
+            <a onclick="app.toggleAuth('register')">Crear Cuenta</a> | <a onclick="app.toggleAuth('recover')">¿Olvidaste tu contraseña?</a>
         </div>
-      </div>
-      <button type="submit" style="width:100%; margin-top:1rem;">Entrar al Estudio</button>
-      <p id="login-error" style="color: var(--danger-color); text-align: center; margin-top: 1rem; font-size: 0.9rem;"></p>
-    </form>
+    </div>
+
+    <!-- 2. REGISTER FORM -->
+    <div id="register-view" style="display:none;">
+        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Crear Cuenta de Artista</h3>
+        <form id="register-form" onsubmit="app.registerUser(event)">
+            <div><label>Nombre de Usuario</label><input type="text" id="reg-username" required></div>
+            <div><label>Correo Electrónico</label><input type="email" id="reg-email" required></div>
+            <div><label>Nombre Artístico (o Real)</label><input type="text" id="reg-artistname" required></div>
+            <div>
+                <label>Contraseña</label>
+                <div class="password-wrapper">
+                    <input type="password" id="reg-password" required>
+                    <span id="toggle-password-reg">👁️</span>
+                </div>
+            </div>
+            <button type="submit" style="width:100%; margin-top:1rem;">Registrarse</button>
+        </form>
+        <div class="auth-links">
+            <a onclick="app.toggleAuth('login')">← Volver al Login</a>
+        </div>
+    </div>
+
+    <!-- 3. RECOVERY FORM -->
+    <div id="recover-view" style="display:none;">
+        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Recuperar Contraseña</h3>
+        <p style="font-size:0.85em; text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Ingresa tu correo para restablecer tu acceso.</p>
+        <form id="recover-form" onsubmit="app.recoverPassword(event)">
+            <div><label>Correo Electrónico</label><input type="email" id="rec-email" required></div>
+            <button type="submit" style="width:100%; margin-top:1rem;">Enviar Enlace</button>
+        </form>
+        <div class="auth-links">
+            <a onclick="app.toggleAuth('login')">← Volver al Login</a>
+        </div>
+    </div>
+
+    <p id="login-error" style="color: var(--danger-color); text-align: center; margin-top: 1rem; font-size: 0.9rem;"></p>
   </div>
     
   <div id="app-wrapper">
@@ -1573,7 +1619,73 @@
       }
 
       function showLogin() { localStorage.removeItem('token'); DOMElements.loginContainer.style.display = 'block'; DOMElements.appWrapper.style.display = 'none'; document.body.style.opacity = '1'; document.body.style.visibility = 'visible'; }
-        
+      
+      // --- NUEVAS FUNCIONES DE AUTH ---
+      function toggleAuth(view) {
+          const login = document.getElementById('login-view');
+          const register = document.getElementById('register-view');
+          const recover = document.getElementById('recover-view');
+          
+          login.style.display = 'none';
+          register.style.display = 'none';
+          recover.style.display = 'none';
+          
+          if(view === 'register') register.style.display = 'block';
+          else if(view === 'recover') recover.style.display = 'block';
+          else login.style.display = 'block';
+          
+          document.getElementById('login-error').textContent = '';
+      }
+
+      async function registerUser(e) {
+          e.preventDefault();
+          const username = document.getElementById('reg-username').value;
+          const email = document.getElementById('reg-email').value;
+          const password = document.getElementById('reg-password').value;
+          const nombreArtistico = document.getElementById('reg-artistname').value;
+          
+          showLoader();
+          try {
+              const res = await fetch(`${API_URL}/auth/register`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  // Se envía createArtist: true para que el backend cree la entidad artista
+                  body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) 
+              });
+              
+              const data = await res.json();
+              if(!res.ok) throw new Error(data.error || 'Error al registrarse');
+              
+              showToast('¡Cuenta creada! Inicia sesión.', 'success');
+              toggleAuth('login');
+              document.getElementById('username').value = username;
+          } catch(err) {
+              document.getElementById('login-error').textContent = err.message;
+          } finally { hideLoader(); }
+      }
+
+      async function recoverPassword(e) {
+          e.preventDefault();
+          const email = document.getElementById('rec-email').value;
+          
+          showLoader();
+          try {
+              const res = await fetch(`${API_URL}/auth/forgot-password`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email })
+              });
+              
+              const data = await res.json();
+              if(!res.ok) throw new Error(data.error || 'Error al solicitar recuperación');
+              
+              showToast('Correo de recuperación enviado.', 'success');
+              toggleAuth('login');
+          } catch(err) {
+              document.getElementById('login-error').textContent = err.message;
+          } finally { hideLoader(); }
+      }
+
       document.getElementById('login-form').addEventListener('submit', async (e) => { 
         e.preventDefault(); 
         if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
@@ -1737,7 +1849,6 @@
 
       async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; const claseTd = esArtistaRegistrado ? 'clickable-artist' : ''; const eventoDblClick = esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''; return `<tr><td class="${claseTd}" ${eventoDblClick}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">✓</button><button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">Sin cotizaciones.</td></tr>`; } catch(e) { tablaBody.innerHTML = `<tr><td colspan="4">Error offline.</td></tr>`; } }
       
-      // --- MODIFICADO: Agregada columna "Solicitud" ---
       const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
       
       async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if(!filtros.innerHTML) { filtros.innerHTML = `<button class="btn-secondary active" onclick="app.filtrarFlujo('Todos')">Todos</button>` + procesos.filter(p=>p!=='Completo').map(p => `<button class="btn-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join(''); try { localCache.proyectos = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch(e) { console.error("Error flujo:", e); } }
@@ -2041,13 +2152,25 @@
       }
       async function generarReciboPDF(proyecto, pagoEspecifico) { 
         try { 
-          const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || proyecto.pagos[proyecto.pagos.length - 1]; if (!pago) return showToast('Error pago.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; 
+          const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : null); 
+          
+          if (!pago) {
+               // Si no hay un pago especifico, generar un "recibo general" si esta pagado
+               if (proyecto.montoPagado > 0) {
+                   // Crear objeto de pago dummy para visualizar el total
+                   const dummyPago = { monto: proyecto.montoPagado };
+                   return generarReciboPDF(proyecto, dummyPago);
+               }
+               return showToast('Sin pagos registrados.', 'error');
+          }
+
+          const saldoRestante = proyecto.total - proyecto.montoPagado; 
             
           pdf.setFillColor(0, 0, 0);
           pdf.rect(14, 15, 40, 15, 'F');
           if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
 
-          pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Pago:', `$${pago.monto.toFixed(2)}`], ['Restante:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
+          pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto Recibo:', `$${pago.monto.toFixed(2)}`], ['Restante Total:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
         } catch (error) { showToast('Error recibo.', 'error'); }}
 
       async function generarContratoPDF(proyectoIdOrObject) { 
@@ -2108,8 +2231,15 @@
                       // Ocultar botón upload para clientes
                       if (!isClientView) {
                           html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`;
-                      } else if (p.enlaceEntrega) {
-                          html += `<a href="${p.enlaceEntrega}" target="_blank" class="btn-primary" style="text-decoration:none; padding: 0.5rem; display:inline-flex; align-items:center; width:auto; height:auto; font-size: 0.8em;">📂 Descargar</a>`;
+                      } else {
+                          // Vista Cliente: Mostrar Link si existe y Botón Recibo si pagó
+                          if(p.enlaceEntrega) {
+                             html += `<a href="${p.enlaceEntrega}" target="_blank" class="btn-primary" style="text-decoration:none; padding: 0.5rem; display:inline-flex; align-items:center; width:auto; height:auto; font-size: 0.8em; margin-right:4px;">📂 Descargar</a>`;
+                          }
+                          // Botón Recibo para Clientes
+                          if(p.montoPagado > 0) {
+                              html += `<button class="btn-secondary" title="Descargar Recibo" onclick="app.generarReciboPDF('${p._id}')">📄 Recibo</button>`;
+                          }
                       }
 
                       html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
@@ -2389,7 +2519,12 @@
         document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual'));
         document.getElementById('firma-input').addEventListener('change', subirFirma);
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
+        
+        // Toggle Passwords
         document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
+        const toggleReg = document.getElementById('toggle-password-reg');
+        if(toggleReg) toggleReg.addEventListener('click', (e) => { const passwordInput = document.getElementById('reg-password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
+
         setupCustomization(payload);
         setupMobileMenu();
 
@@ -2421,14 +2556,12 @@
         }
       }
 
-      // --- CORRECCIÓN SIDEBAR (Con Permisos por Defecto) ---
       function renderSidebar(user) {
           const navContainer = document.getElementById('sidebar-nav-container');
           
           let p = user.permisos || []; 
           const role = user.role ? user.role.toLowerCase() : '';
 
-          // FIX: SI NO HAY PERMISOS GUARDADOS, ASIGNAR POR DEFECTO SEGÚN ROL
           if (role !== 'admin' && p.length === 0) {
               if (role.includes('ingeniero') || role.includes('productor')) {
                   p = ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'];
@@ -2437,7 +2570,6 @@
               } else if (role.includes('finanzas') || role.includes('contador')) {
                   p = ['dashboard', 'finanzas', 'cotizaciones', 'pagos', 'historial-proyectos'];
               } else {
-                  // Fallback mínimo para roles desconocidos
                   p = ['dashboard'];
               }
           }
@@ -2482,14 +2614,12 @@
             </details>` : ''}
           `;
           navContainer.innerHTML = html;
-          
-          // Re-conectar listeners a los nuevos elementos
           document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
               link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
           });
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF };
     });
   </script>
 
