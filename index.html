@@ -98,7 +98,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
-     
+      
     /* --- MEJORA LAYOUT PC (Sin Scroll Global) --- */
     body { 
         font-family: 'Inter', sans-serif; 
@@ -110,13 +110,13 @@
         width: 100vw;
         overflow: hidden; /* Oculta scroll del body en PC */
     }
-     
+      
     h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; }
 
     /* LOGOS */
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; transition: all 0.3s; }
     body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
-     
+      
     /* LOADER */
     #loader-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
     .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite; }
@@ -131,7 +131,7 @@
 
     /* LAYOUT PRINCIPAL (FLEXBOX) */
     #app-wrapper { display: flex; height: 100vh; overflow: hidden; }
-     
+      
     .main-content { 
         flex: 1; 
         display: flex; 
@@ -140,7 +140,7 @@
         overflow: hidden; 
         position: relative; 
     }
-     
+      
     .main-header { 
         display: flex; 
         align-items: center; 
@@ -151,7 +151,7 @@
         position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); 
         flex-shrink: 0; /* Evita que el header se aplaste */
     }
-     
+      
     .search-box { position: relative; margin: 0 1.5rem; flex: 1; max-width: 500px; }
     .search-box input { width: 100%; padding: 0.7rem 1.4rem; border-radius: 50px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color-dark); margin-bottom: 0; transition: all 0.2s ease; font-size: 0.95rem; }
     .search-box input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); background: var(--card-background); }
@@ -168,13 +168,13 @@
         overflow-x: hidden;
     }
     @media (min-width: 768px) { main { padding: 2.5rem; } }
-     
+      
     /* Scrollbar Personalizado */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-color-light); }
-     
+      
     section { display: none; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
     section.active { display: block; }
     @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -197,16 +197,16 @@
     .sidebar-header { text-align: center; margin-bottom: 2rem; flex-shrink: 0; }
     .sidebar-nav { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; overflow-y: auto; padding-right: 5px; }
     .sidebar-footer { margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 1rem; }
-     
+      
     #btn-nuevo-proyecto-sidebar { background: var(--primary-gradient); color: white; text-align: center; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); border: none; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
     #btn-nuevo-proyecto-sidebar:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4); }
-     
+      
     .nav-group summary { list-style: none; padding: 0.75rem 0.8rem; font-weight: 700; color: var(--text-color-light); cursor: pointer; position: relative; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px; transition: color 0.2s; }
     .nav-group summary:hover { color: var(--primary-color); }
     .nav-group summary::before { content: '›'; display: inline-block; width: 15px; transition: transform 0.2s; color: var(--primary-color); font-size: 1.2em; line-height: 0; vertical-align: middle; margin-right: 5px; }
     .nav-group[open] > summary::before { transform: rotate(90deg); }
     .nav-group ul { list-style: none; padding-left: 0.5rem; margin-top: 0.2rem; }
-     
+      
     .nav-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 10px; text-decoration: none; color: var(--text-color-light); font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 0.95rem; }
     .nav-link:hover { background-color: var(--secondary-button-bg); color: var(--text-color-dark); }
     .nav-link.active-link { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); font-weight: 600; }
@@ -214,7 +214,7 @@
     #hamburger-menu, #btn-enviar-datos-bancarios { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; border-radius: 8px; transition: background 0.2s; }
     #hamburger-menu:hover, #btn-enviar-datos-bancarios:hover { background-color: var(--secondary-button-bg); }
     #hamburger-menu svg, #btn-enviar-datos-bancarios svg { width: 24px; height: 24px; stroke: var(--text-color-dark); }
-     
+      
     #sidebar-overlay { display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.6); z-index: 998; backdrop-filter: blur(4px); transition: opacity 0.3s; }
 
     /* FAB (Floating Action Button) MOVIL */
@@ -242,7 +242,7 @@
       /* Ocultar botón grande en sidebar móvil para usar FAB */
       #btn-nuevo-proyecto-sidebar { display: none; }
     }
-     
+      
     /* Manejo específico para landscape en móviles */
     @media (max-width: 900px) and (orientation: landscape) {
         .sidebar { width: 300px; }
@@ -254,35 +254,35 @@
       #hamburger-menu { display: none; }
       #btn-enviar-datos-bancarios { display: block; }
     }
-     
+      
     /* COMPONENTES UI */
     .card { background-color: var(--card-background); border-radius: 16px; padding: 2rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); transition: box-shadow 0.3s ease, transform 0.3s ease; }
     .card:hover { box-shadow: var(--shadow-md); }
-     
+      
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .card-header h2 { font-size: 1.4rem; font-weight: 700; color: var(--text-color-dark); margin: 0; }
-     
+      
     form label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; color: var(--text-color-light); }
     form input, form select, form textarea { width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1.25rem; background-color: var(--input-bg); color: var(--text-color-dark); transition: all 0.3s; font-family: inherit; }
     form input:focus, form select:focus, form textarea:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: var(--card-background); }
-     
+      
     .password-wrapper { position: relative; }
     #toggle-password { position: absolute; right: 1rem; top: 35%; cursor: pointer; opacity: 0.6; user-select: none; }
-     
+      
     button { cursor: pointer; border-radius: 10px; border: none; padding: 0.75rem 1.5rem; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; letter-spacing: 0.3px; }
     button:active { transform: scale(0.97); }
-     
+      
     button[type="submit"], .btn-primary { background: var(--primary-gradient); color: white; box-shadow: 0 4px 10px -2px rgba(99, 102, 241, 0.4); }
     button[type="submit"]:hover, .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 15px -2px rgba(99, 102, 241, 0.5); }
-     
+      
     .btn-eliminar, .btn-vaciar { background: var(--danger-gradient); color: white !important; }
-     
+      
     .btn-secondary { background-color: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
     .btn-secondary:hover { background-color: var(--secondary-button-hover-bg); border-color: var(--text-color-light); }
     .btn-secondary.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
-     
+      
     .btn-restaurar, .btn-aprobar { background: var(--success-gradient); color: white; }
-     
+      
     .table-actions button, .list-item-actions button { padding: 0.5rem; width: 36px; height: 36px; border-radius: 8px; margin: 0 2px; }
 
     /* DASHBOARD KPIS */
@@ -305,7 +305,7 @@
     .kanban-board { display: flex; overflow-x: auto; gap: 1.5rem; padding-bottom: 1rem; align-items: flex-start; scroll-snap-type: x mandatory; }
     .kanban-column { min-width: 300px; max-width: 300px; background-color: var(--secondary-button-bg); border-radius: 16px; padding: 1rem; border: 1px solid var(--border-color); scroll-snap-align: start; }
     .kanban-column h3 { text-align: center; margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color); font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; color: var(--text-color-light); }
-     
+      
     .project-card { background: var(--card-background); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: var(--shadow-sm); border-left: 4px solid; transition: transform 0.2s, box-shadow 0.2s; cursor: grab; }
     .project-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); }
     .project-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
@@ -329,7 +329,7 @@
         #tablaPagosBody td:nth-of-type(2):before { content: "Proyecto:"; }
         #tablaPagosBody td:nth-of-type(3):before { content: "Monto:"; }
         #tablaPagosBody td:nth-of-type(4):before { content: "Método:"; }
-         
+          
         #tablaPendientesBody td:nth-of-type(1):before { content: "Proyecto:"; }
         #tablaPendientesBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaPendientesBody td:nth-of-type(3):before { content: "Pagado:"; }
@@ -339,7 +339,7 @@
         #tablaHistorialBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaHistorialBody td:nth-of-type(3):before { content: "Pagado:"; }
         #tablaHistorialBody td:nth-of-type(4):before { content: "Fecha:"; }
-         
+          
         .kanban-board { flex-direction: column; overflow-x: hidden; }
         .kanban-column { max-width: 100%; width: 100%; }
     }
@@ -349,7 +349,7 @@
     .modal-content { background: var(--card-background); padding: 2rem; border-radius: 20px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-     
+      
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
     .modal-close { font-size: 2rem; cursor: pointer; background: none; border: none; color: var(--text-color-light); line-height: 1; padding: 0; transition: color 0.2s; }
     .modal-close:hover { color: var(--danger-color); }
@@ -357,7 +357,7 @@
     /* UTILS */
     .clickable-artist { cursor: pointer; font-weight: 600; color: var(--primary-color); }
     .clickable-artist:hover { text-decoration: underline; }
-     
+      
     .theme-toggle-container { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem; }
     .theme-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
     .theme-switch input { opacity: 0; width: 0; height: 0; }
@@ -406,7 +406,7 @@
    
   <div id="app-wrapper">
     <div id="sidebar-overlay"></div>
-     
+      
     <nav class="sidebar">
       <div class="sidebar-header"><img id="app-logo" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo"></div>
        
@@ -534,7 +534,7 @@
                         <button class="btn-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial de Transacciones</button>
                     </div>
                 </div>
-                 
+                  
                 <div id="vista-pagos-pendientes">
                     <h3 style="margin-bottom: 1rem; color: var(--warning-color);">Proyectos con Saldo Pendiente</h3>
                     <div class="table-responsive">
@@ -566,7 +566,7 @@
                     <select id="proyectoArtista"><option value="publico_general">Público General</option></select>
                     <button type="button" id="btnNuevoArtista" title="Registrar nuevo artista" class="btn-primary" style="padding: 0.75rem 1rem;">+</button>
                   </div>
-               
+                
                   <div id="nuevoArtistaContainer" style="display: none; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
                     <label>Nombre del Nuevo Artista</label>
                     <div class="form-row" style="align-items: center; gap: 0.5rem;">
@@ -578,7 +578,7 @@
                   <div class="form-row">
                     <div class="form-group"><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div>
                   </div>
-                   
+                    
                   <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     <input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-bottom: 0;">
                     <label for="esAlbum" style="margin-bottom: 0; cursor: pointer;">Es un Disco/EP Completo</label>
@@ -586,27 +586,27 @@
 
                   <hr style="margin: 1.5rem 0; border: none; border-top: 1px dashed var(--border-color);">
                   <h3>Añadir Servicios</h3>
-                   
+                    
                   <div class="form-row">
                     <div class="form-group" style="flex: 2;"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div>
                     <div class="form-group"><label for="proyectoUnidades">Cant.</label><input type="number" id="proyectoUnidades" min="1" value="1"></div>
                   </div>
                   <button type="button" id="btnAgregarAProyecto" class="btn-secondary" style="width:100%; border-style: dashed;">+ Agregar Servicio</button>
-                   
+                    
                   <ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul>
-               
+                
                   <div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
                       <div class="form-row" style="justify-content: flex-end; align-items: center; margin-bottom: 0.5rem;">
                           <label style="margin-right: 1rem; margin-bottom: 0;">Descuento ($):</label>
                           <input type="number" id="proyectoDescuento" min="0" step="0.01" placeholder="0.00" style="width: 150px; margin-bottom: 0;">
                       </div>
                       <div class="info-row"><label style="margin:0;">Total a Pagar:</label><span id="totalAPagar">$0.00</span></div>
-                       
+                        
                       <div class="form-row">
                           <div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div>
                           <div class="form-group"><label for="horaProyecto">Hora</label><input type="time" id="horaProyecto"></div>
                       </div>
-                       
+                        
                       <div class="form-actions" style="display: flex; gap: 1rem; margin-top: 1rem;">
                         <button id="btnGenerarCotizacion" class="btn-secondary" style="flex:1;">Generar PDF Cotización</button>
                         <button id="btnEnviarAFlujo" class="btn-primary" style="flex:1;">Guardar y Agendar</button>
@@ -697,7 +697,7 @@
                     <div class="form-group"><label>Usuario</label><input type="text" id="usernameUsuario" placeholder="Usuario" required /></div>
                     <div class="form-group"><label>Contraseña</label><input type="password" id="passwordUsuario" placeholder="Vacío si no cambia" /></div>
                   </div>
-                   
+                    
                   <label>Nombre del Rol (Escribe el nombre: ej. Diseñador, Cliente, Admin)</label>
                   <input type="text" id="roleUsuario" list="roles-sugeridos" placeholder="Escribe el rol..." required style="margin-bottom:0.5rem;">
                   <datalist id="roles-sugeridos">
@@ -741,7 +741,7 @@
             <section id="configuracion">
               <div class="card">
                 <div class="card-header"><h2>Configuración del Sistema</h2></div>
-                 
+                  
                 <div class="info-row">
                   <div>
                     <h3>Firma Digital</h3>
@@ -753,7 +753,7 @@
                       <button onclick="document.getElementById('firma-input').click()" class="btn-secondary" style="font-size: 0.8em; padding: 0.4rem 1rem;">Cambiar</button>
                   </div>
                 </div>
-                 
+                  
                 <div style="margin: 2rem 0; padding: 1rem; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--secondary-button-bg);">
                     <h4>Prueba de Google Drive</h4>
                     <p style="font-size:0.85em;">Verifica que la API esté conectada y puedas subir archivos.</p>
@@ -788,31 +788,31 @@
                             <label><input type="radio" name="hAlign" value="right" onchange="app.actualizarPosicionFirma()"> Der</label>
                         </div>
                     </div>
-                     
+                      
                     <div style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 12px;">
                         <h4>Ajuste Fino (Offset)</h4>
                         <label>Eje X: <span id="val-firma-offsetX">0</span></label>
                         <input type="range" id="slider-firma-offsetX" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()">
-                         
+                          
                         <label>Eje Y: <span id="val-firma-offsetY">0</span></label>
                         <input type="range" id="slider-firma-offsetY" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()">
-                         
+                          
                         <label>Tamaño (Ancho): <span id="val-firma-w">0</span></label>
                         <input type="range" id="slider-firma-w" min="10" max="150" value="50" oninput="app.actualizarPosicionFirma()">
                         <input type="hidden" id="slider-firma-h" value="20"> </div>
                   </div>
-                   
+                    
                   <div style="margin-top: 1rem; display:flex; gap: 1rem;">
                     <button onclick="app.guardarAjustesFirma()" style="flex:2;">Guardar Ajustes PDF</button>
                     <button onclick="app.revertirADefecto()" class="btn-secondary" style="flex:1;">Reset</button>
                   </div>
-                   
+                    
                   <div id="firma-preview-container" style="display:none;"><img id="firma-draggable-preview" src=""></div>
                   <div style="display:none;"><span id="val-firma-h"></span><div id="template-cotizacion"></div><div id="template-recibo"></div><div id="template-contrato"><div id="contract-signature-block"><div class="signature-area-rep"></div></div></div><div id="template-distribucion"></div></div>
                 </div>
 
                 <hr style="margin: 2rem 0; border:none; border-top: 1px solid var(--border-color);">
-                 
+                  
                 <h3>Datos Bancarios</h3>
                 <form id="form-datos-bancarios">
                   <div class="form-row"><div class="form-group"><label>Banco</label><input type="text" id="banco" /></div><div class="form-group"><label>Titular</label><input type="text" id="titular" /></div></div>
@@ -1428,9 +1428,9 @@
               <ul>
                 ${(isAdmin || p.includes('dashboard')) ? '<li><a class="nav-link active-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
                 ${(isAdmin || p.includes('agenda')) ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
-                ${(isAdmin || p.includes('flujo')) ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
+                ${(isAdmin || p.includes('flujo-trabajo')) ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
                 ${(isAdmin || p.includes('finanzas')) ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
-                ${(isAdmin || p.includes('historial')) ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
+                ${(isAdmin || p.includes('historial-proyectos')) ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
                 ${(isAdmin || p.includes('finanzas')) ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
                 ${(isAdmin || p.includes('proyectos')) ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
               </ul>
@@ -1439,13 +1439,13 @@
             <details class="nav-group">
               <summary>Gestión</summary>
               <ul>
-                ${(isAdmin || p.includes('artistas')) ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
-                ${(isAdmin || p.includes('servicios')) ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
-                ${(isAdmin || p.includes('usuarios')) ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
+                ${(isAdmin || p.includes('gestion-artistas')) ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
+                ${(isAdmin || p.includes('gestion-servicios')) ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
+                ${(isAdmin || p.includes('gestion-usuarios')) ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
               </ul>
             </details>
             
-            ${(isAdmin || p.includes('config')) ? `
+            ${(isAdmin || p.includes('configuracion')) ? `
             <details class="nav-group">
               <summary>Sistema</summary>
               <ul>
@@ -2268,10 +2268,10 @@
 
                 if(toCheck.length > 0) {
                     // Limpiamos y seleccionamos solo lo nuevo
-                     perms.forEach(p => p.checked = false);
-                     perms.forEach(p => {
-                        if(toCheck.includes(p.value)) p.checked = true;
-                    });
+                      perms.forEach(p => p.checked = false);
+                      perms.forEach(p => {
+                         if(toCheck.includes(p.value)) p.checked = true;
+                     });
                 }
             });
         }
