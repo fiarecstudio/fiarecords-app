@@ -1506,58 +1506,52 @@
 
       // --- CORRECCIÓN SIDEBAR (Permisos Estrictos) ---
       function renderSidebar(user) {
+          console.log("Generando menú para:", user.username, "Rol:", user.role, "Permisos:", user.permisos);
           const navContainer = document.getElementById('sidebar-nav-container');
-          
-          // Obtenemos los permisos desde el objeto usuario
-          // Si el usuario no tiene array de permisos definido, devolvemos array vacío
           const userPerms = Array.isArray(user.permisos) ? user.permisos : [];
-          
-          const role = user.role ? user.role.toLowerCase() : '';
-          const isSuperAdmin = role === 'admin';
 
-          // Esta función ahora solo mira el array de permisos
-          const canAccess = (permKey) => {
-              if (isSuperAdmin) return true; // El admin supremo siempre ve todo
-              return userPerms.includes(permKey);
-          };
-          
-          let html = `
-            <details class="nav-group" open>
-              <summary>Proyectos</summary>
-              <ul>
-                ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
-                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
-                ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
-                ${canAccess('finanzas') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
-                ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
-                ${(canAccess('finanzas') || canAccess('pagos')) ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
-                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
-              </ul>
-            </details>
-            
-            <details class="nav-group" open>
-              <summary>Gestión</summary>
-              <ul>
-                ${canAccess('gestion-artistas') ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
-                ${canAccess('gestion-servicios') ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
-                ${canAccess('gestion-usuarios') ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
-              </ul>
-            </details>
-            
-            ${canAccess('configuracion') ? `
-            <details class="nav-group">
-              <summary>Sistema</summary>
-              <ul>
-                <li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>
-                <li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>
-              </ul>
-            </details>` : ''}
-          `;
-          navContainer.innerHTML = html;
-          
-          // Re-conectar listeners a los nuevos elementos
+          // Logic: strictly check inclusion in the array
+          const canAccess = (permKey) => userPerms.includes(permKey);
+
+          // Build groups
+          let htmlProyectos = '';
+          if (canAccess('dashboard')) htmlProyectos += '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>';
+          if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>';
+          if (canAccess('flujo-trabajo')) htmlProyectos += '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>';
+          if (canAccess('finanzas')) htmlProyectos += '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>';
+          if (canAccess('historial-proyectos')) htmlProyectos += '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>';
+          if (canAccess('finanzas') || canAccess('pagos')) htmlProyectos += '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>';
+          // Manual registration usually for staff with agenda access
+          if (canAccess('agenda')) htmlProyectos += '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>';
+
+          let htmlGestion = '';
+          if (canAccess('gestion-artistas')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>';
+          if (canAccess('gestion-servicios')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>';
+          if (canAccess('gestion-usuarios')) htmlGestion += '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>';
+
+          let htmlSistema = '';
+          if (canAccess('configuracion')) {
+              htmlSistema += '<li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>';
+              htmlSistema += '<li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>';
+          }
+
+          // Assemble final HTML
+          let finalHtml = '';
+          if (htmlProyectos) finalHtml += `<details class="nav-group" open><summary>Proyectos</summary><ul>${htmlProyectos}</ul></details>`;
+          if (htmlGestion) finalHtml += `<details class="nav-group" open><summary>Gestión</summary><ul>${htmlGestion}</ul></details>`;
+          if (htmlSistema) finalHtml += `<details class="nav-group"><summary>Sistema</summary><ul>${htmlSistema}</ul></details>`;
+
+          if (finalHtml === '') finalHtml = '<p style="padding:1rem; color:var(--text-color-light); font-size:0.8em; text-align:center;">Sin accesos disponibles.</p>';
+
+          navContainer.innerHTML = finalHtml;
+
+          // Re-attach listeners
           document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
-              link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
+              link.addEventListener('click', (e) => {
+                  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
+                  e.currentTarget.classList.add('active-link');
+                  mostrarSeccion(e.currentTarget.dataset.seccion);
+              });
           });
       }
 
