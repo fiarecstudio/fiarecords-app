@@ -1,5 +1,5 @@
 // ==================================================================
-//               SERVER.JS - CORREGIDO PARA PWA
+//             SERVER.JS - CORREGIDO (RUTA AUTH ARREGLADA)
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
@@ -15,7 +15,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- 1. Definición de Rutas de la API ---
-app.use('/auth', require('./routes/auth'));
+// AQUI ESTABA EL ERROR: Se agregó '/api' al principio para coincidir con el frontend
+app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
 app.use('/api/proyectos', require('./routes/proyectos'));
@@ -42,6 +43,7 @@ app.get('/manifest.json', (req, res) => {
 // --- 3. Ruta Catch-All (Manejador Final) ---
 app.use((req, res, next) => {
     // Si la petición NO es para la API y NO es el service worker, envía el index.html
+    // Nota: aquí también ajustamos para que ignore /api/auth correctamente
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth')) {
         return res.sendFile(path.resolve(__dirname, 'index.html'));
     }
