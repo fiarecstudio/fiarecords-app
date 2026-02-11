@@ -150,7 +150,7 @@
         background-color: var(--card-background); 
         border-bottom: 1px solid var(--border-color); 
         position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); 
-        flex-shrink: 0; /* Evita que el header se aplaste */
+        flex-shrink: 0; 
     }
       
     .search-box { position: relative; margin: 0 1.5rem; flex: 1; max-width: 500px; }
@@ -232,7 +232,7 @@
     
     /* RESPONSIVE LOGIC MEJORADO (Horizontal y Vertical) */
     @media (max-width: 768px) {
-      body { overflow: auto; height: auto; } /* En movil si permitimos scroll del body a veces es mejor */
+      body { overflow: auto; height: auto; } /* En movil si permitimos scroll del body */
       #app-wrapper { display: block; height: auto; overflow: visible; }
       #hamburger-menu, #btn-enviar-datos-bancarios { display: block; }
       .fab-container { display: block; }
@@ -396,13 +396,11 @@
 <body>
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <!-- LOGIN / REGISTER / RECOVERY CONTAINER -->
   <div id="login-container" class="card">
     <div style="text-align: center; margin-bottom: 2rem;">
       <img id="login-logo" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
     </div>
 
-    <!-- 1. LOGIN FORM -->
     <div id="login-view">
         <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Iniciar Sesión</h3>
         <form id="login-form">
@@ -421,7 +419,6 @@
         </div>
     </div>
 
-    <!-- 2. REGISTER FORM -->
     <div id="register-view" style="display:none;">
         <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Crear Cuenta de Artista</h3>
         <form id="register-form" onsubmit="app.registerUser(event)">
@@ -442,7 +439,6 @@
         </div>
     </div>
 
-    <!-- 3. RECOVERY FORM -->
     <div id="recover-view" style="display:none;">
         <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Recuperar Contraseña</h3>
         <p style="font-size:0.85em; text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Ingresa tu correo para restablecer tu acceso.</p>
@@ -903,7 +899,6 @@
     </div>
   </div>
 
-  <!-- MODAL SOLICITUD DE CITA (NUEVO) -->
   <div id="request-appointment-modal" class="modal-overlay">
       <div class="modal-content">
           <div class="modal-header">
@@ -1059,7 +1054,7 @@
           servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
           proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
           cotizaciones: [],
-          historial: [],       
+          historial: [],        
           pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
           usuarios: []
       };
@@ -1550,74 +1545,6 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      // --- CORRECCIÓN SIDEBAR (Con Permisos por Defecto) ---
-      function renderSidebar(user) {
-          const navContainer = document.getElementById('sidebar-nav-container');
-          
-          let p = user.permisos || []; 
-          const role = user.role ? user.role.toLowerCase() : '';
-
-          // FIX: SI NO HAY PERMISOS GUARDADOS, ASIGNAR POR DEFECTO SEGÚN ROL
-          if (role !== 'admin' && p.length === 0) {
-              if (role.includes('ingeniero') || role.includes('productor')) {
-                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos', 'gestion-artistas', 'gestion-servicios'];
-              } else if (role.includes('diseñador') || role.includes('visual')) {
-                  p = ['dashboard', 'agenda', 'flujo-trabajo', 'gestion-artistas'];
-              } else if (role.includes('finanzas') || role.includes('contador')) {
-                  p = ['dashboard', 'finanzas', 'cotizaciones', 'pagos', 'historial-proyectos'];
-              } else {
-                  // Fallback mínimo para roles desconocidos
-                  p = ['dashboard'];
-              }
-          }
-          
-          const isSuperAdmin = role === 'admin';
-
-          const canAccess = (permKey) => {
-              if (isSuperAdmin) return true;
-              return p.includes(permKey);
-          };
-          
-          let html = `
-            <details class="nav-group" open>
-              <summary>Proyectos</summary>
-              <ul>
-                ${canAccess('dashboard') ? '<li><a class="nav-link" data-seccion="dashboard"><span>Dashboard</span></a></li>' : ''}
-                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="agenda"><span>Agenda</span></a></li>' : ''}
-                ${canAccess('flujo-trabajo') ? '<li><a class="nav-link" data-seccion="flujo-trabajo"><span>Flujo de Trabajo</span></a></li>' : ''}
-                ${canAccess('finanzas') || canAccess('cotizaciones') ? '<li><a class="nav-link" data-seccion="cotizaciones"><span>Cotizaciones</span></a></li>' : ''}
-                ${canAccess('historial-proyectos') ? '<li><a class="nav-link" data-seccion="historial-proyectos"><span>Historial</span></a></li>' : ''}
-                ${canAccess('finanzas') || canAccess('pagos') ? '<li><a class="nav-link" data-seccion="pagos"><span>Pagos</span></a></li>' : ''}
-                ${canAccess('agenda') ? '<li><a class="nav-link" data-seccion="registro-manual"><span>Registro Manual</span></a></li>' : ''}
-              </ul>
-            </details>
-            
-            <details class="nav-group" open>
-              <summary>Gestión</summary>
-              <ul>
-                ${canAccess('gestion-artistas') ? '<li><a class="nav-link" data-seccion="gestion-artistas"><span>Artistas</span></a></li>' : ''}
-                ${canAccess('gestion-servicios') ? '<li><a class="nav-link" data-seccion="gestion-servicios"><span>Servicios</span></a></li>' : ''}
-                ${canAccess('gestion-usuarios') ? '<li><a class="nav-link" data-seccion="gestion-usuarios"><span>Usuarios</span></a></li>' : ''}
-              </ul>
-            </details>
-            
-            ${canAccess('configuracion') ? `
-            <details class="nav-group">
-              <summary>Sistema</summary>
-              <ul>
-                <li><a class="nav-link" data-seccion="configuracion"><span>Configuración</span></a></li>
-                <li><a class="nav-link" data-seccion="papelera-reciclaje"><span>Papelera</span></a></li>
-              </ul>
-            </details>` : ''}
-          `;
-          navContainer.innerHTML = html;
-          
-          // Re-conectar listeners a los nuevos elementos
-          document.querySelectorAll('.nav-link[data-seccion]').forEach(link => {
-              link.addEventListener('click', (e) => mostrarSeccion(e.currentTarget.dataset.seccion));
-          });
-      }
-
       function showLogin() { localStorage.removeItem('token'); DOMElements.loginContainer.style.display = 'block'; DOMElements.appWrapper.style.display = 'none'; document.body.style.opacity = '1'; document.body.style.visibility = 'visible'; }
       
       // --- NUEVAS FUNCIONES DE AUTH ---
@@ -1646,7 +1573,7 @@
           
           showLoader();
           try {
-              const res = await fetch(`${API_URL}/auth/register`, {
+              const res = await fetch(`${API_URL}/api/auth/register`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   // Se envía createArtist: true para que el backend cree la entidad artista
@@ -1670,7 +1597,7 @@
           
           showLoader();
           try {
-              const res = await fetch(`${API_URL}/auth/forgot-password`, {
+              const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ email })
@@ -1691,7 +1618,7 @@
         if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
         showLoader();
         try { 
-            const res = await fetch(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
+            const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error); 
             localStorage.setItem('token', data.token); 

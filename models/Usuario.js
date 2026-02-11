@@ -9,26 +9,31 @@ const UsuarioSchema = new mongoose.Schema({
         trim: true 
     },
     
+    email: {
+        type: String,
+        unique: true,
+        sparse: true, // Permite nulos, pero si hay texto debe ser único
+        trim: true,
+        lowercase: true
+    },
+
     password: { 
         type: String, 
         required: true 
     },
     
-    // --- AQUÍ ESTÁ LA SOLUCIÓN DEL ERROR ---
     role: { 
         type: String, 
-        // Lista completa de roles permitidos (en minúsculas)
         enum: ['ingeniero', 'admin', 'cliente', 'diseñador'], 
         default: 'cliente',
-        // Esto convierte automáticamente "Diseñador" -> "diseñador" antes de guardar
         lowercase: true, 
         trim: true
     },
 
-    // Configuración para guardar tus checkboxes
+    // Guardamos los permisos como un Array de Textos (ej: ['dashboard', 'agenda'])
     permisos: { 
-        type: mongoose.Schema.Types.Mixed, // Permite cualquier estructura de objeto
-        default: {} 
+        type: [String], 
+        default: [] 
     },
 
     isDeleted: { 
@@ -36,12 +41,11 @@ const UsuarioSchema = new mongoose.Schema({
         default: false 
     },
 }, { 
-    timestamps: true, // Crea automáticamente createdAt y updatedAt
-    minimize: false   // Importante: permite guardar objetos vacíos {} en permisos
+    timestamps: true 
 });
 
-// --- ENCRIPTADO DE CONTRASEÑA ---
-// Se ejecuta automáticamente antes de guardar un usuario nuevo o modificado
+// --- ENCRIPTADO AUTOMÁTICO ---
+// Se ejecuta antes de guardar (Crear o Editar)
 UsuarioSchema.pre('save', async function(next) {
     if (!this.isModified('password')) {
         return next();
@@ -56,8 +60,7 @@ UsuarioSchema.pre('save', async function(next) {
     }
 });
 
-// --- MÉTODO PARA EL LOGIN (Te servirá pronto) ---
-// Compara la contraseña que escribe el usuario con la encriptada en la BD
+// --- MÉTODO PARA VALIDAR CONTRASEÑA ---
 UsuarioSchema.methods.matchPassword = async function(enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };

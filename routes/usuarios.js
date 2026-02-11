@@ -1,94 +1,110 @@
 const express = require('express');
 const router = express.Router();
 const Usuario = require('../models/Usuario');
-const auth = require('../middleware/auth');
+const auth = require('../middleware/auth'); // Tu middleware de verificar token
 
+// 1. Proteger todas las rutas de este archivo
 router.use(auth);
 
-// Middleware Admin (Ahora es más flexible)
+// 2. Middleware exclusivo para Admin
 const adminOnly = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'Token inválido.' });
-  
-  // Como ahora guardamos todo en minúscula en el modelo, comparamos directo
-  if (req.user.role !== 'admin') { 
-      return res.status(403).json({ error: 'Acceso denegado.' }); 
-  }
-  next();
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Acceso denegado. Solo admins.' });
+    }
+    next();
 };
 
-router.use(adminOnly); 
+router.use(adminOnly);
 
-// GET: Usuarios
+// GET: Listar usuarios
 router.get('/', async (req, res) => { 
     try { 
-        const d = await Usuario.find({ isDeleted: false }).select('-password'); 
-        res.json(d); 
+        const usuarios = await Usuario.find({ isDeleted: false }).select('-password'); 
+        res.json(usuarios); 
     } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
+// GET: Un usuario
 router.get('/:id', async (req, res) => { 
     try { 
-        const d = await Usuario.findById(req.params.id).select('-password'); 
-        res.json(d); 
+        const u = await Usuario.findById(req.params.id).select('-password'); 
+        res.json(u); 
     } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-// POST: Crear Usuario
+// POST: Crear usuario (Desde Panel Admin)
 router.post('/', async (req, res) => { 
     try { 
-        const existe = await Usuario.findOne({ username: req.body.username });
-        if (existe) return res.status(400).json({ error: "El usuario ya existe." });
+        const { username, password, role, permisos, email } = req.body;
+        const existe = await Usuario.findOne({ username });
+        if (existe) return res.status(400).json({ error: "Usuario existente." });
 
-        // Mongoose se encargará de pasar el rol a minúscula gracias al cambio en el Modelo
-        const d = new Usuario(req.body); 
-        await d.save(); 
-        res.status(201).json(d); 
+        const nuevo = new Usuario({ username, password, role, permisos, email });
+        await nuevo.save();
+        
+        const respuesta = await Usuario.findById(nuevo._id).select('-password');
+        res.status(201).json(respuesta);
     } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-// PUT: Editar Usuario (CORREGIDO PARA GUARDAR PERMISOS)
+// PUT: Editar usuario
 router.put('/:id', async (req, res) => { 
     try { 
-        // 1. Extraemos "permisos" también
-        const { username, role, password, permisos } = req.body; 
-        
+        const { username, role, password, permisos, email } = req.body; 
         const user = await Usuario.findById(req.params.id);
-        if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+        if (!user) return res.status(404).json({ error: "No encontrado" });
 
-        // 2. Actualizamos los campos
         if (username) user.username = username;
-        if (role) user.role = role.toLowerCase(); // Aseguramos minúscula
-        if (password && password.trim() !== "") user.password = password;
-        
-        // 3. AQUÍ ESTA LA MAGIA: Guardamos los checkboxes
+        if (email) user.email = email;
+        if (role) user.role = role.toLowerCase();
         if (permisos) user.permisos = permisos;
 
-        await user.save(); 
-        
-        const userActualizado = await Usuario.findById(req.params.id).select('-password');
-        res.json(userActualizado); 
+        // Solo actualizamos password si escribieron algo nuevo
+        if (password && password.trim().length > 0) {
+            user.password = password; // El modelo lo encriptará al guardar
+        }
 
-    } catch(e){
-        console.error(e);
-        res.status(500).json({ error: e.message });
-    }
+        await user.save();
+        res.json(await Usuario.findById(user._id).select('-password'));
+    } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-// ... (El resto de las rutas DELETE, Papelera, etc. déjalas igual o pégalas de tu código anterior si no han cambiado) ...
+// DELETE: Papelera (Soft Delete)
 router.delete('/:id', async (req, res) => { 
-    try { await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: true }); res.status(204).send(); } catch(e){ res.status(500).json({ error: e.message }); }
+    try { 
+        await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: true }); 
+        res.status(204).send(); 
+    } catch(e){ res.status(500).json({ error: e.message }); }
 });
-router.get('/papelera/all', async (req, res) => { 
-    try { const d = await Usuario.find({ isDeleted: true }).select('-password'); res.json(d); } catch(e){ res.status(500).json({ error: e.message }); }
-});
-router.put('/:id/restaurar', async (req, res) => { 
-    try { await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: false }); res.status(204).send(); } catch(e){ res.status(500).json({ error: e.message }); }
-});
-router.delete('/:id/permanente', async (req, res) => { 
-    try { await Usuario.findByIdAndDelete(req.params.id); res.status(204).send(); } catch(e){ res.status(500).json({ error: e.message }); }
-});
+
+// RUTA EXTRA: Vaciar Papelera
 router.delete('/papelera/vaciar', async (req, res) => {
-    try { await Usuario.deleteMany({ isDeleted: true }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { await Usuario.deleteMany({ isDeleted: true }); res.status(204).send(); } 
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// RUTA EXTRA: Ver Papelera
+router.get('/papelera/all', async (req, res) => {
+    try { 
+        const eliminados = await Usuario.find({ isDeleted: true }).select('-password');
+        res.json(eliminados);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// RUTA EXTRA: Restaurar
+router.put('/:id/restaurar', async (req, res) => {
+    try { 
+        await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: false });
+        res.status(204).send();
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// RUTA EXTRA: Eliminar Permanente
+router.delete('/:id/permanente', async (req, res) => {
+    try { 
+        await Usuario.findByIdAndDelete(req.params.id);
+        res.status(204).send();
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
