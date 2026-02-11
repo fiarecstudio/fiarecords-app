@@ -40,6 +40,11 @@ const UsuarioSchema = new mongoose.Schema({
         type: Boolean, 
         default: false 
     },
+
+    // --- NUEVOS CAMPOS PARA RECUPERAR CONTRASEÑA ---
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
+
 }, { 
     timestamps: true 
 });
