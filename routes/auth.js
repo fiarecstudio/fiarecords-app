@@ -7,30 +7,26 @@ const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 
 // ============================================================
-// CONFIGURACIÓN DE CORREO (MODO "A PRUEBA DE FALLOS")
+// CONFIGURACIÓN DE CORREO CORREGIDA (SOLUCIÓN ERROR IPV6)
 // ============================================================
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Usar el servicio predefinido de Gmail facilita las cosas
+    host: 'smtp.gmail.com',   // Host explícito de Gmail
+    port: 465,                // Puerto seguro SSL
+    secure: true,             // Usar SSL
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-    }
+    },
+    // ESTA LÍNEA SOLUCIONA EL ERROR "ENETUNREACH":
+    family: 4,                // Fuerza a Node.js a usar IPv4 en lugar de IPv6
 });
-
-/* NOTA: Si el de arriba falla, probaremos esta configuración manual:
-   host: "smtp.googlemail.com", // Servidor alternativo de Google
-   port: 465,
-   secure: true,
-   auth: { ... },
-   tls: { rejectUnauthorized: false }
-*/
 
 // Verificación de conexión en los Logs
 transporter.verify((error, success) => {
     if (error) {
         console.error('❌ ERROR CRÍTICO AL CONECTAR CON GMAIL:', error);
     } else {
-        console.log('✅ CONEXIÓN EXITOSA CON GMAIL. Listo para enviar.');
+        console.log('✅ CONEXIÓN EXITOSA CON GMAIL (IPv4). Listo para enviar.');
     }
 });
 
@@ -95,7 +91,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ============================================================
-// 3. RECUPERAR CONTRASEÑA (CON LOGS DE DEPURACIÓN)
+// 3. RECUPERAR CONTRASEÑA
 // ============================================================
 router.post('/forgot-password', async (req, res) => {
     console.log("📩 Iniciando solicitud de recuperación...");
@@ -112,19 +108,29 @@ router.post('/forgot-password', async (req, res) => {
         // Generar Token
         const token = crypto.randomBytes(20).toString('hex');
         user.resetPasswordToken = token;
-        user.resetPasswordExpires = Date.now() + 3600000;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
         await user.save();
 
-        const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${token}`;
+        // Asegúrate de que FRONTEND_URL no tenga slash al final en tus env vars, o ajusta aquí
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
         const mailOptions = {
             from: '"Soporte Fia Records" <fiarec.studio@gmail.com>',
             to: user.email,
             subject: 'Recuperar Contraseña',
-            html: `<h3>Recupera tu acceso</h3><p>Da clic aquí para crear una nueva contraseña:</p><a href="${resetUrl}">Restablecer Contraseña</a>`
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h3>Recupera tu acceso</h3>
+                    <p>Has solicitado restablecer tu contraseña.</p>
+                    <p>Da clic en el siguiente enlace (válido por 1 hora):</p>
+                    <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Restablecer Contraseña</a>
+                    <p style="margin-top: 20px; font-size: 12px; color: #777;">Si no solicitaste esto, ignora este correo.</p>
+                </div>
+            `
         };
 
-        console.log("🚀 Intentando enviar correo a Gmail...");
+        console.log("🚀 Intentando enviar correo a Gmail (vía IPv4)...");
         
         // Enviar
         await transporter.sendMail(mailOptions);
@@ -134,7 +140,6 @@ router.post('/forgot-password', async (req, res) => {
 
     } catch (error) {
         console.error("❌ ERROR AL ENVIAR EL CORREO:", error);
-        // IMPORTANTE: Devolvemos el error exacto para verlo en el frontend si falla
         res.status(500).json({ error: 'Error enviando correo: ' + error.message });
     }
 });
@@ -155,10 +160,13 @@ router.post('/reset-password/:token', async (req, res) => {
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
-        await user.save();
+        await user.save(); // Aquí se ejecuta el pre-save del modelo para hashear el password
 
-        res.json({ message: 'Contraseña actualizada.' });
-    } catch (error) { res.status(500).json({ error: 'Error al restablecer.' }); }
+        res.json({ message: 'Contraseña actualizada correctamente.' });
+    } catch (error) { 
+        console.error(error);
+        res.status(500).json({ error: 'Error al restablecer la contraseña.' }); 
+    }
 });
 
 module.exports = router;
