@@ -1,20 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto'); // Necesario para tokens
-const nodemailer = require('nodemailer'); // Necesario para enviar correos
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 
 // ============================================================
-// CONFIGURACIÓN DEL CORREO (NODEMAILER)
+// CONFIGURACIÓN DEL CORREO (MODO SEGURO SSL)
 // ============================================================
+// Esta configuración es más compatible con servidores como Render
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // true para 465, false para otros puertos
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     }
+});
+
+// Verificación de conexión al iniciar (Te avisará en los logs de Render si conecta bien)
+transporter.verify().then(() => {
+    console.log('✅ Nodemailer: Listo para enviar correos');
+}).catch((error) => {
+    console.error('❌ Nodemailer Error:', error);
 });
 
 // ============================================================
@@ -102,33 +112,38 @@ router.post('/forgot-password', async (req, res) => {
     try {
         const { email } = req.body;
 
+        // 1. Verificar usuario
         const user = await Usuario.findOne({ email });
         if (!user) {
             return res.status(404).json({ error: 'No existe una cuenta con este correo.' });
         }
 
-        // Generar Token
+        // 2. Generar Token
         const token = crypto.randomBytes(20).toString('hex');
         
-        // Guardar Token en BD (1 hora de validez)
+        // 3. Guardar Token (1 hora)
         user.resetPasswordToken = token;
         user.resetPasswordExpires = Date.now() + 3600000;
         await user.save();
 
-        // Crear Link
+        // 4. Link
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
-        // Enviar Correo
+        // 5. Enviar Correo
         const mailOptions = {
             from: '"Soporte Fia Records" <fiarec.studio@gmail.com>',
             to: user.email,
             subject: 'Recuperación de Contraseña - Fia Records',
             html: `
-                <h3>Recuperación de Contraseña</h3>
-                <p>Hola ${user.username}, haz clic abajo para cambiar tu contraseña:</p>
-                <a href="${resetUrl}" style="background:#4F46E5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Cambiar Contraseña</a>
-                <p>El enlace expira en 1 hora.</p>
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #4F46E5;">Recuperación de Contraseña</h2>
+                    <p>Hola <strong>${user.username}</strong>,</p>
+                    <p>Has solicitado restablecer tu contraseña.</p>
+                    <a href="${resetUrl}" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 10px;">Restablecer Contraseña</a>
+                    <br><br>
+                    <p style="font-size: 12px; color: #777;">El enlace expira en 1 hora.</p>
+                </div>
             `
         };
 
@@ -138,7 +153,7 @@ router.post('/forgot-password', async (req, res) => {
 
     } catch (error) {
         console.error("Error enviando correo:", error);
-        res.status(500).json({ error: 'Error al enviar el correo.' });
+        res.status(500).json({ error: 'Error al enviar el correo. Revisa los logs del servidor.' });
     }
 });
 

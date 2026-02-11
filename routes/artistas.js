@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Artista = require('../models/Artista');
+const Usuario = require('../models/Usuario'); // <--- IMPORTANTE: Agregamos esto para poder editar el usuario
 const auth = require('../middleware/auth');
 
 router.use(auth);
@@ -39,18 +40,45 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// Actualizar un artista
+// ============================================================
+// ACTUALIZAR ARTISTA (Y SINCRONIZAR CON USUARIO)
+// ============================================================
 router.put('/:id', async (req, res) => {
     try {
         const { nombre, nombreArtistico, telefono, correo } = req.body;
-        const artista = await Artista.findByIdAndUpdate(req.params.id, 
-            { nombre, nombreArtistico, telefono, correo }, 
-            { new: true }
-        );
+        const artistaId = req.params.id;
+
+        // 1. Buscamos el artista primero (sin actualizar aún)
+        const artista = await Artista.findById(artistaId);
         if (!artista) return res.status(404).json({ error: 'Artista no encontrado' });
-        res.json(artista);
+
+        // 2. LOGICA DE SINCRONIZACIÓN:
+        // Si el artista tiene un usuario vinculado Y estamos cambiando el correo...
+        if (artista.usuarioId && correo && correo !== artista.correo) {
+            console.log(`Actualizando correo del usuario vinculado: ${artista.usuarioId}`);
+            
+            // Verificamos que el correo no esté ocupado por OTRO usuario
+            const emailOcupado = await Usuario.findOne({ email: correo, _id: { $ne: artista.usuarioId } });
+            if (emailOcupado) {
+                return res.status(400).json({ error: 'Este correo ya está siendo usado por otro usuario.' });
+            }
+
+            // Actualizamos el email en la colección de Usuarios
+            await Usuario.findByIdAndUpdate(artista.usuarioId, { email: correo });
+        }
+
+        // 3. Actualizamos los datos del Artista
+        // Usamos findByIdAndUpdate para aplicar los cambios finales
+        const artistaActualizado = await Artista.findByIdAndUpdate(artistaId, 
+            { nombre, nombreArtistico, telefono, correo }, 
+            { new: true } // Devuelve el dato actualizado
+        );
+
+        res.json(artistaActualizado);
+
     } catch (err) {
-        res.status(400).json({ error: 'Error al actualizar el artista' });
+        console.error(err);
+        res.status(400).json({ error: 'Error al actualizar el artista. Verifique los datos.' });
     }
 });
 
