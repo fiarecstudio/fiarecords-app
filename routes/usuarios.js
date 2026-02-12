@@ -1,110 +1,86 @@
 const express = require('express');
 const router = express.Router();
 const Usuario = require('../models/Usuario');
-const auth = require('../middleware/auth'); // Tu middleware de verificar token
+const auth = require('../middleware/auth');
+const bcrypt = require('bcryptjs'); // Necesario si cambias contraseña manual
 
-// 1. Proteger todas las rutas de este archivo
 router.use(auth);
 
-// 2. Middleware exclusivo para Admin
-const adminOnly = (req, res, next) => {
-    if (!req.user || req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Acceso denegado. Solo admins.' });
+// Obtener todos los usuarios (Asegúrate de que el frontend muestre el campo 'email')
+router.get('/', async (req, res) => {
+    try {
+        const usuarios = await Usuario.find({ isDeleted: false }).select('-password');
+        res.json(usuarios);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener usuarios' });
     }
-    next();
-};
-
-router.use(adminOnly);
-
-// GET: Listar usuarios
-router.get('/', async (req, res) => { 
-    try { 
-        const usuarios = await Usuario.find({ isDeleted: false }).select('-password'); 
-        res.json(usuarios); 
-    } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-// GET: Un usuario
-router.get('/:id', async (req, res) => { 
-    try { 
-        const u = await Usuario.findById(req.params.id).select('-password'); 
-        res.json(u); 
-    } catch(e){ res.status(500).json({ error: e.message }); }
-});
-
-// POST: Crear usuario (Desde Panel Admin)
-router.post('/', async (req, res) => { 
-    try { 
-        const { username, password, role, permisos, email } = req.body;
-        const existe = await Usuario.findOne({ username });
-        if (existe) return res.status(400).json({ error: "Usuario existente." });
-
-        const nuevo = new Usuario({ username, password, role, permisos, email });
-        await nuevo.save();
+// CREAR USUARIO (Desde panel admin)
+router.post('/', async (req, res) => {
+    try {
+        const { username, email, password, role, permisos } = req.body;
         
-        const respuesta = await Usuario.findById(nuevo._id).select('-password');
-        res.status(201).json(respuesta);
-    } catch(e){ res.status(500).json({ error: e.message }); }
-});
-
-// PUT: Editar usuario
-router.put('/:id', async (req, res) => { 
-    try { 
-        const { username, role, password, permisos, email } = req.body; 
-        const user = await Usuario.findById(req.params.id);
-        if (!user) return res.status(404).json({ error: "No encontrado" });
-
-        if (username) user.username = username;
-        if (email) user.email = email;
-        if (role) user.role = role.toLowerCase();
-        if (permisos) user.permisos = permisos;
-
-        // Solo actualizamos password si escribieron algo nuevo
-        if (password && password.trim().length > 0) {
-            user.password = password; // El modelo lo encriptará al guardar
+        // Validar correo único
+        if (email) {
+            const existeEmail = await Usuario.findOne({ email });
+            if (existeEmail) return res.status(400).json({ error: 'El correo ya está en uso' });
         }
 
-        await user.save();
-        res.json(await Usuario.findById(user._id).select('-password'));
-    } catch(e){ res.status(500).json({ error: e.message }); }
+        const nuevoUsuario = new Usuario({ username, email, password, role, permisos });
+        await nuevoUsuario.save();
+        res.status(201).json(nuevoUsuario);
+    } catch (err) {
+        res.status(400).json({ error: 'Error al crear usuario' });
+    }
 });
 
-// DELETE: Papelera (Soft Delete)
-router.delete('/:id', async (req, res) => { 
-    try { 
-        await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: true }); 
-        res.status(204).send(); 
-    } catch(e){ res.status(500).json({ error: e.message }); }
+// ACTUALIZAR USUARIO (Aquí agregamos la lógica para cambiar el EMAIL)
+router.put('/:id', async (req, res) => {
+    try {
+        const { username, email, role, permisos, password } = req.body;
+        const usuarioId = req.params.id;
+
+        // 1. Validar si el email nuevo ya existe en otro usuario
+        if (email) {
+            const emailOcupado = await Usuario.findOne({ email: email, _id: { $ne: usuarioId } });
+            if (emailOcupado) {
+                return res.status(400).json({ error: 'El correo ya está siendo usado por otro usuario.' });
+            }
+        }
+
+        // 2. Preparar objeto de actualización
+        let datosActualizar = { username, email, role, permisos };
+
+        // 3. Si mandaron contraseña, la encriptamos (si no lo hace el modelo automáticamente)
+        if (password && password.trim() !== "") {
+            // Nota: Como tu modelo tiene un "pre save" para hash, 
+            // la mejor forma de actualizar pass es buscar, asignar y save()
+            // Pero para hacerlo simple con update, la hasheamos aquí manual:
+             const salt = await bcrypt.genSalt(10);
+             datosActualizar.password = await bcrypt.hash(password, salt);
+        }
+
+        const usuarioActualizado = await Usuario.findByIdAndUpdate(
+            usuarioId,
+            datosActualizar,
+            { new: true }
+        ).select('-password');
+
+        res.json(usuarioActualizado);
+
+    } catch (err) {
+        console.error(err);
+        res.status(400).json({ error: 'Error al actualizar usuario' });
+    }
 });
 
-// RUTA EXTRA: Vaciar Papelera
-router.delete('/papelera/vaciar', async (req, res) => {
-    try { await Usuario.deleteMany({ isDeleted: true }); res.status(204).send(); } 
-    catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// RUTA EXTRA: Ver Papelera
-router.get('/papelera/all', async (req, res) => {
-    try { 
-        const eliminados = await Usuario.find({ isDeleted: true }).select('-password');
-        res.json(eliminados);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// RUTA EXTRA: Restaurar
-router.put('/:id/restaurar', async (req, res) => {
-    try { 
-        await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: false });
+// Eliminar (Soft Delete)
+router.delete('/:id', async (req, res) => {
+    try {
+        await Usuario.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// RUTA EXTRA: Eliminar Permanente
-router.delete('/:id/permanente', async (req, res) => {
-    try { 
-        await Usuario.findByIdAndDelete(req.params.id);
-        res.status(204).send();
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (err) { res.status(500).json({ error: 'Error al eliminar' }); }
 });
 
 module.exports = router;

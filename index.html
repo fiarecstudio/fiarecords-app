@@ -774,11 +774,23 @@
                 <div class="card-header"><h2>Gestión de Usuarios y Roles</h2></div>
                 <form id="formUsuarios">
                   <input type="hidden" id="idUsuario">
+                  
                   <div class="form-row">
-                    <div class="form-group"><label>Usuario</label><input type="text" id="usernameUsuario" placeholder="Usuario" required /></div>
-                    <div class="form-group"><label>Contraseña</label><input type="password" id="passwordUsuario" placeholder="Vacío si no cambia" /></div>
-                  </div>
+                    <div class="form-group">
+                        <label>Usuario</label>
+                        <input type="text" id="usernameUsuario" placeholder="Usuario" required />
+                    </div>
                     
+                    <div class="form-group">
+                        <label>Correo Electrónico</label>
+                        <input type="email" id="emailUsuario" placeholder="correo@ejemplo.com" />
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="passwordUsuario" placeholder="Vacío si no cambia" />
+                  </div>
                   <label>Nombre del Rol (Escribe el nombre: ej. Diseñador, Cliente, Admin)</label>
                   <input type="text" id="roleUsuario" list="roles-sugeridos" placeholder="Escribe el rol..." required style="margin-bottom:0.5rem;">
                   <datalist id="roles-sugeridos">
@@ -1399,7 +1411,7 @@
           const fileInput = document.getElementById('drive-file-input');
           if (fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'error');
           const file = fileInput.files[0];
-            
+           
           const statusDiv = document.getElementById('drive-status');
           const btnText = document.getElementById('drive-btn-text');
 
@@ -1790,6 +1802,7 @@
           else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } 
           else if (type === 'usuarios') { 
               const userVal = document.getElementById('usernameUsuario').value;
+              const emailVal = document.getElementById('emailUsuario').value; // CAMBIO REALIZADO AQUI
               const roleVal = document.getElementById('roleUsuario').value;
               const passVal = document.getElementById('passwordUsuario').value;
 
@@ -1798,6 +1811,7 @@
               
               body = { 
                   username: userVal, 
+                  email: emailVal, // CAMBIO REALIZADO AQUI
                   role: roleVal, 
                   permisos: permisos 
               }; 
@@ -1828,6 +1842,7 @@
               else if (endpoint === 'usuarios') { 
                   form.idUsuario.value = item._id; 
                   document.getElementById('usernameUsuario').value = item.username; 
+                  document.getElementById('emailUsuario').value = item.email || ''; // CAMBIO REALIZADO AQUI
                   document.getElementById('roleUsuario').value = item.role; 
                   document.getElementById('passwordUsuario').value = ''; 
                   
@@ -1889,16 +1904,16 @@
                                                 <button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
                                                 <button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
                                             </div>
-                                        </div>
-                                        <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
-                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
+                                    </div>
+                                    <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
                                             <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
                                             <div style="display:flex;gap:4px;align-items:center;">
                                                 <button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button>
                                                 <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button>
                                                 <select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
                                             </div>
-                                        </div>`; 
+                                    </div>`; 
                 document.getElementById(`columna-${p.proceso}`)?.appendChild(card); 
             });
           }
