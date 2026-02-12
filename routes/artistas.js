@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Artista = require('../models/Artista');
-const Usuario = require('../models/Usuario'); // Necesario para actualizar el login
+const Usuario = require('../models/Usuario'); // IMPORTANTE: Necesario para actualizar el login
 const auth = require('../middleware/auth');
 
 router.use(auth);
@@ -18,6 +18,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { nombre, nombreArtistico, telefono, correo } = req.body;
+        // Nota: Al crear aquí, aún no vinculamos usuario (eso se hace usualmente en el registro)
+        // O podrías crear el usuario aquí si fuera necesario.
         const nuevoArtista = new Artista({ nombre, nombreArtistico, telefono, correo });
         await nuevoArtista.save();
         res.status(201).json(nuevoArtista);
@@ -41,27 +43,35 @@ router.put('/:id', async (req, res) => {
         const { nombre, nombreArtistico, telefono, correo } = req.body;
         const artistaId = req.params.id;
 
-        // 1. Buscamos el artista actual
-        const artista = await Artista.findById(artistaId);
-        if (!artista) return res.status(404).json({ error: 'Artista no encontrado' });
+        // 1. Buscamos el artista actual para ver sus datos viejos
+        const artistaActual = await Artista.findById(artistaId);
+        if (!artistaActual) return res.status(404).json({ error: 'Artista no encontrado' });
 
-        // 2. Si tiene usuario vinculado y cambiamos el correo...
-        if (artista.usuarioId && correo && correo !== artista.correo) {
-            // Verificar si el correo ya existe en otro usuario
-            const emailOcupado = await Usuario.findOne({ email: correo, _id: { $ne: artista.usuarioId } });
+        // 2. LÓGICA DE SINCRONIZACIÓN
+        // Si el artista tiene un usuario vinculado Y estamos intentando cambiar el correo...
+        if (artistaActual.usuarioId && correo && correo !== artistaActual.correo) {
+            
+            // A. Verificar si el nuevo correo ya lo usa OTRO usuario
+            const emailOcupado = await Usuario.findOne({ 
+                email: correo, 
+                _id: { $ne: artistaActual.usuarioId } // Que no sea el mismo usuario
+            });
+
             if (emailOcupado) {
-                return res.status(400).json({ error: 'El correo ya está en uso por otro usuario.' });
+                return res.status(400).json({ error: 'El correo ya está en uso por otro usuario. No se puede actualizar.' });
             }
-            // Actualizar el Usuario (Login)
-            await Usuario.findByIdAndUpdate(artista.usuarioId, { email: correo });
-            console.log(`✅ Correo de usuario actualizado a: ${correo}`);
+
+            // B. Si está libre, actualizamos la tabla de USUARIOS (Login)
+            await Usuario.findByIdAndUpdate(artistaActual.usuarioId, { email: correo });
+            console.log(`✅ Login actualizado para el usuario: ${artistaActual.usuarioId} con correo: ${correo}`);
         }
 
-        // 3. Actualizamos el Artista
+        // 3. Actualizamos la tabla de ARTISTAS (Perfil visual)
         const artistaActualizado = await Artista.findByIdAndUpdate(artistaId, 
             { nombre, nombreArtistico, telefono, correo }, 
-            { new: true }
+            { new: true } // Devuelve el dato ya actualizado
         );
+        
         res.json(artistaActualizado);
 
     } catch (err) {
@@ -70,7 +80,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Soft Delete
+// Soft Delete (Papelera)
 router.delete('/:id', async (req, res) => {
     try {
         await Artista.findByIdAndUpdate(req.params.id, { isDeleted: true });
