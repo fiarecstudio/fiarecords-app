@@ -100,7 +100,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
       
-    /* --- MEJORA LAYOUT PC (Sin Scroll Global) --- */
+    /* --- MEJORA LAYOUT PC (Sin Scroll Global en App, Con Scroll en Login) --- */
     body { 
         font-family: 'Inter', sans-serif; 
         background-color: var(--background-color); 
@@ -109,14 +109,20 @@
         font-size: 15px; 
         height: 100vh; 
         width: 100vw;
-        overflow: hidden; /* Oculta scroll del body en PC */
+        overflow: hidden; /* Oculta scroll del body por defecto */
+    }
+
+    /* CORRECCION 3: Permitir scroll cuando estamos en Login/Registro */
+    body.auth-visible {
+        overflow-y: auto !important; 
+        height: auto !important;
+        min-height: 100vh;
     }
       
     h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; }
 
-    /* LOGOS */
+    /* LOGOS - CORRECCION 1: Eliminado filter: invert(1) para que se vea el logo original */
     #app-logo, #login-logo { max-width: 160px; max-height: 70px; object-fit: contain; transition: all 0.3s; }
-    body:not(.dark-mode) #app-logo, body:not(.dark-mode) #login-logo { filter: invert(1); }
       
     /* LOADER */
     #loader-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
@@ -157,7 +163,7 @@
     .search-box input { width: 100%; padding: 0.7rem 1.4rem; border-radius: 50px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color-dark); margin-bottom: 0; transition: all 0.2s ease; font-size: 0.95rem; }
     .search-box input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); background: var(--card-background); }
 
-    /* MAIN CON SCROLL INDEPENDIENTE - CORRECCIÓN FORMULARIO PC */
+    /* MAIN CON SCROLL INDEPENDIENTE */
     main { 
         padding: 1.5rem; 
         flex: 1; 
@@ -167,7 +173,7 @@
         box-sizing: border-box; 
         overflow-y: auto; 
         overflow-x: hidden;
-        padding-bottom: 5rem; /* AÑADIDO: Espacio extra al final para que no se corte el contenido */
+        padding-bottom: 6rem; /* Espacio extra */
     }
     @media (min-width: 768px) { main { padding: 2.5rem; padding-bottom: 6rem; } }
       
@@ -224,17 +230,17 @@
     .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: var(--primary-gradient); color: white; border: none; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5); display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; transition: transform 0.2s; }
     .fab-btn:active { transform: scale(0.9); }
 
-    /* CORRECCIÓN BOTÓN '+' EN MOVIL: OCULTAR CUANDO ESTÁ EN LOGIN/AUTH */
+    /* OCULTAR FAB EN LOGIN */
     body.auth-visible .fab-container { display: none !important; }
 
-    /* MODO CLIENTE (Estilos Especiales) */
+    /* MODO CLIENTE */
     body.client-mode .sidebar { display: none !important; }
     body.client-mode #hamburger-menu { display: none !important; }
     body.client-mode .search-box { display: none !important; }
     body.client-mode .fab-container { display: none !important; }
     body.client-mode .main-header { justify-content: center; }
     
-    /* RESPONSIVE LOGIC MEJORADO (Horizontal y Vertical) */
+    /* RESPONSIVE */
     @media (max-width: 768px) {
       body { overflow: auto; height: auto; } /* En movil si permitimos scroll del body */
       #app-wrapper { display: block; height: auto; overflow: visible; }
@@ -244,21 +250,19 @@
       .main-header { position: sticky; top:0; padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.8rem; }
       .search-box { display: block; width: 100%; max-width: none; margin: 0.5rem 0 0 0; order: 99; }
         
-      main { overflow: visible; } /* Resetear para que el contenido fluya en movil */
+      main { overflow: visible; } 
 
       .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); width: 85%; max-width: 300px; box-shadow: 10px 0 30px rgba(0,0,0,0.2); overflow-y: auto; }
       .sidebar.sidebar-visible { transform: translateX(0); }
       #sidebar-overlay.overlay-visible { display: block; }
       .connection-status span { display: none; } 
         
-      /* Ocultar botón grande en sidebar móvil para usar FAB */
       #btn-nuevo-proyecto-sidebar { display: none; }
     }
       
-    /* Manejo específico para landscape en móviles */
     @media (max-width: 900px) and (orientation: landscape) {
         .sidebar { width: 300px; }
-        .main-header { position: relative; } /* Evita que ocupe mucho espacio fijo en horizontal */
+        .main-header { position: relative; } 
         .modal-content { max-height: 85vh; }
     }
 
@@ -305,8 +309,8 @@
     .kpi-label { font-size: 0.85rem; color: var(--text-color-light); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
     .kpi-icon { font-size: 3rem; opacity: 0.1; color: var(--text-color-dark); position: absolute; right: 1rem; bottom: -0.5rem; transform: rotate(-10deg); }
 
-    /* TABLAS (Sticky Headers) */
-    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); max-height: 65vh; /* Altura Maxima */ }
+    /* TABLAS */
+    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); max-height: 65vh; }
     table { width: 100%; border-collapse: collapse; border-spacing: 0; }
     th { position: sticky; top: 0; z-index: 10; padding: 1.2rem 1rem; text-align: left; color: var(--text-color-light); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); background: var(--secondary-button-bg); white-space: nowrap; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
     td { padding: 1rem; vertical-align: middle; border-bottom: 1px solid var(--border-color); color: var(--text-color-dark); }
@@ -324,7 +328,7 @@
     .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; color: white; font-weight: 700; text-transform: uppercase; }
     .proceso-tag { padding: 3px 8px; border-radius: 6px; color: white; font-size: 0.7em; display: inline-block; margin-top: 8px; font-weight: 600; }
 
-    /* MÓVIL TABLAS CARD VIEW (Responsive para vertical y horizontal) */
+    /* MÓVIL TABLAS CARD VIEW */
     @media (max-width: 768px) {
         .table-responsive { max-height: none; }
         .table-responsive table, .table-responsive thead, .table-responsive tbody, .table-responsive th, .table-responsive td, .table-responsive tr { display: block; width: 100%; }
@@ -333,7 +337,7 @@
         .table-responsive td { border: none; border-bottom: 1px solid var(--border-color); position: relative; padding-left: 40% !important; padding-right: 0; text-align: right; white-space: normal; }
         .table-responsive td:last-child { border-bottom: none; display: flex; justify-content: flex-end; padding-left: 0 !important; gap: 0.5rem; flex-wrap: wrap;}
         .table-responsive td:before { position: absolute; top: 1rem; left: 0; width: 35%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 700; color: var(--text-color-light); font-size: 0.8em; text-transform: uppercase; }
-        /* Labels manuales para CSS content */
+        
         #tablaCotizacionesBody td:nth-of-type(1):before { content: "Artista:"; }
         #tablaCotizacionesBody td:nth-of-type(2):before { content: "Total:"; }
         #tablaCotizacionesBody td:nth-of-type(3):before { content: "Fecha:"; }
@@ -366,7 +370,7 @@
     .modal-close { font-size: 2rem; cursor: pointer; background: none; border: none; color: var(--text-color-light); line-height: 1; padding: 0; transition: color 0.2s; }
     .modal-close:hover { color: var(--danger-color); }
 
-    /* UTILS */
+    /* UTILS & LOGIN CORREGIDO (CORRECCION 3) */
     .clickable-artist { cursor: pointer; font-weight: 600; color: var(--primary-color); }
     .clickable-artist:hover { text-decoration: underline; }
       
@@ -386,12 +390,17 @@
     .list-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem; background-color: var(--card-background); border: 1px solid var(--border-color); transition: transform 0.2s; }
     .list-item:hover { transform: translateX(5px); border-color: var(--primary-color); }
 
-    #login-container { max-width: 400px; margin: 10vh auto; padding: 3rem; }
+    /* Ajuste para que login quepa en pantalla pequeña de laptop */
+    #login-container { 
+        max-width: 400px; 
+        margin: 5vh auto; /* Margen superior reducido */
+        padding: 2.5rem; 
+        width: 90%;
+    }
     .auth-links { margin-top: 1.5rem; text-align: center; font-size: 0.9rem; }
     .auth-links a { color: var(--primary-color); text-decoration: none; font-weight: 500; cursor: pointer; margin: 0 0.5rem; }
     .auth-links a:hover { text-decoration: underline; }
 
-    /* CHECKBOX PERMISSIONS (NUEVO) */
     .permissions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; background: var(--secondary-button-bg); padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); }
     .permission-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; }
     .permission-item input { width: auto; margin: 0; }
@@ -1161,8 +1170,13 @@
 
       window.app = { syncNow: OfflineManager.syncNow };
 
-      // 3. FETCH API
+      // 3. FETCH API MEJORADO (CORRECCION 2: Manejo de errores HTML y rutas)
       async function fetchAPI(url, options = {}) { 
+        // Forzar ruta absoluta para evitar errores en rutas anidadas como /reset-password/
+        if (!url.startsWith('/') && !url.startsWith('http')) {
+            url = '/' + url;
+        }
+
         const token = localStorage.getItem('token'); 
         if (!token && !url.includes('/auth/')) { showLogin(); throw new Error('No autenticado'); } 
         const headers = { 'Authorization': `Bearer ${token}` }; 
@@ -1173,12 +1187,10 @@
                  if(url.includes('/artistas')) return localCache.artistas;
                  if(url.includes('/servicios')) return localCache.servicios;
                  if(url.includes('/proyectos')) {
-                     // FILTROS
                      if(url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
                      if(url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
                      if(url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i=>i.nombre).join('\n') } }));
-                     if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true); // TRASH LOGIC
-                     // FIX CLIENTE: Allow filtering by artist ID
+                     if(url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
                      if(url.includes('/por-artista')) {
                          const artId = url.split('/').pop();
                          return localCache.proyectos.filter(p => !p.deleted && (p.artista && p.artista._id === artId));
@@ -1257,8 +1269,18 @@
         showLoader();
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
+            
+            // Detección de respuesta HTML (Error comun en SPA cuando falla la API)
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") === -1) {
+                const text = await res.text();
+                console.error("Respuesta no JSON:", text);
+                throw new Error("Error de conexión con el servidor (Ruta inválida o error 500).");
+            }
+
             if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); } 
             if (res.status === 204 || (options.method === 'DELETE' && res.ok)) return {ok: true}; 
+            
             const data = await res.json(); 
             if (!res.ok) throw new Error(data.error || 'Error del servidor'); 
              
@@ -1271,7 +1293,6 @@
                 if(url.includes('/proyectos') && !url.includes('agenda')) { 
                     if(Array.isArray(data) && url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); }
                 }
-                // --- CORRECCIÓN: Guardar caché de usuarios para que Editar funcione ---
                 if(url.includes('/usuarios')) { localCache.usuarios = data; }
                 
                 if(url.includes('/pagos/todos')) { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
@@ -1285,7 +1306,6 @@
                       OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                       return { ok: true, offline: true, _id: tempId };
                 }
-                // FALLBACK CACHE LOGIC
                 if(url.includes('/artistas')) return localCache.artistas;
                 if(url.includes('/servicios')) return localCache.servicios;
                 if(url.includes('/proyectos')) {
@@ -1313,8 +1333,7 @@
                   const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
                   DOMElements.loginLogo.src = logoSrc;
                   DOMElements.appLogo.src = logoSrc;
-                   
-                  // --- DINAMIC FAVICON UPDATE ---
+                  
                   const favicon = document.getElementById('dynamic-favicon');
                   if(favicon) favicon.href = logoSrc;
               }
@@ -1350,14 +1369,13 @@
         gisInited = true;
       }
         
-      // Iniciar carga de scripts si ya estan disponibles
       if(typeof gapi !== 'undefined') initializeGapiClient();
       if(typeof google !== 'undefined') initializeGisClient();
 
       async function findOrCreateFolder(name, parentId = null) {
           let query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
           if(parentId) query += ` and '${parentId}' in parents`;
-           
+            
           const res = await gapi.client.drive.files.list({ q: query, fields: 'files(id, name)' });
           if(res.result.files.length > 0) {
               return res.result.files[0].id;
@@ -1367,7 +1385,7 @@
                   'mimeType': 'application/vnd.google-apps.folder'
               };
               if(parentId) fileMetadata.parents = [parentId];
-               
+                
               const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
               return createRes.result.id;
           }
@@ -1382,7 +1400,7 @@
           const fileInput = document.getElementById('drive-file-input');
           if (fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'error');
           const file = fileInput.files[0];
-           
+            
           const statusDiv = document.getElementById('drive-status');
           const btnText = document.getElementById('drive-btn-text');
 
@@ -1394,28 +1412,23 @@
                 const artistName = document.getElementById('delivery-artist-name').value || 'SinArtista';
                 const projName = document.getElementById('delivery-project-name').value || 'SinProyecto';
                 
-                // 1. Crear o Buscar carpeta Artista
                 statusDiv.textContent = `Buscando carpeta: ${artistName}...`;
                 let artistFolderId = await findOrCreateFolder(artistName);
                 
-                // 2. Crear o Buscar carpeta Proyecto
                 statusDiv.textContent = `Buscando carpeta: ${projName}...`;
                 let projectFolderId = await findOrCreateFolder(projName, artistFolderId);
 
-                // 3. Compartir carpeta Proyecto
                 await gapi.client.drive.permissions.create({
                     fileId: projectFolderId,
                     resource: { role: 'reader', type: 'anyone' }
                 });
 
-                // Obtener Link
                 const folderLinkResp = await gapi.client.drive.files.get({
                     fileId: projectFolderId,
                     fields: 'webViewLink'
                 });
                 const folderLink = folderLinkResp.result.webViewLink;
 
-                // 4. Subir Archivo
                 btnText.textContent = 'Subiendo... (Espere)';
                 const metadata = {
                     name: file.name,
@@ -1436,20 +1449,17 @@
                 
                 if (!uploadResp.ok) throw new Error('Fallo en la subida');
                 
-                // 5. Finalizar
                 document.getElementById('delivery-link-input').value = folderLink;
                 statusDiv.textContent = `✅ Subido en ${artistName}/${projName}`;
                 statusDiv.style.color = 'var(--success-color)';
                 btnText.textContent = '📤 Subir Otro';
 
-                // Guardar link en BD
                 const projectId = document.getElementById('delivery-project-id').value;
                 await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                     method: 'PUT', 
                     body: JSON.stringify({ enlace: folderLink }) 
                 });
                 
-                // Update Local Cache
                 const cachedProj = localCache.proyectos.find(p => p._id === projectId);
                 if(cachedProj) cachedProj.enlaceEntrega = folderLink;
 
@@ -1471,15 +1481,15 @@
       }
 
       (async function init() { 
-        // --- 1. DETECTAR URL PARA RESET PASSWORD ---
+        // --- DETECTAR URL PARA RESET PASSWORD ---
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
-            const token = path.split('/').pop(); // Extraer token del final
+            const token = path.split('/').pop(); 
             if (token) {
                 showResetPasswordView(token);
                 document.body.style.opacity = '1';
                 document.body.style.visibility = 'visible';
-                return; // Detener carga normal de la app
+                return; 
             }
         }
 
@@ -1496,9 +1506,7 @@
         } else { showLogin(); } 
       })();
 
-      // --- CORRECCIÓN PRINCIPAL (showApp) PARA CLIENTES ---
       async function showApp(payload) { 
-        // Quitar clase auth-visible para que el FAB vuelva a aparecer (si no es cliente)
         document.body.classList.remove('auth-visible');
 
         if (!configCache) await loadInitialConfig();
@@ -1506,14 +1514,11 @@
 
         const role = payload.role ? payload.role.toLowerCase() : '';
 
-        // --- MODO CLIENTE (Aislamiento Total) ---
+        // --- MODO CLIENTE ---
         if (role === 'cliente') {
-            document.body.classList.add('client-mode'); // CSS oculta Sidebar, Search, FAB
+            document.body.classList.add('client-mode');
             
-            // --- CORRECCIÓN BOTÓN LOGOUT CLIENTE ---
             const headerActions = document.querySelector('.header-actions');
-            
-            // Eliminar botón previo si existe para evitar duplicados
             const existingBtn = document.getElementById('btn-client-logout');
             if(existingBtn) existingBtn.remove();
             
@@ -1527,11 +1532,8 @@
             logoutBtn.style.padding = '0.5rem 1rem';
             logoutBtn.onclick = () => { localStorage.removeItem('token'); location.reload(); };
             
-            // Insertar al final
             headerActions.appendChild(logoutBtn);
-            // ----------------------------------------
             
-            // Buscar Artista asociado
             const artistas = await fetchAPI('/api/artistas');
             const myArtist = artistas.find(a => 
                 a.nombre.toLowerCase().trim() === payload.username.toLowerCase().trim() ||
@@ -1544,10 +1546,8 @@
             document.body.style.visibility = 'visible';
 
             if (myArtist) {
-                // Forzar Vista de Artista en modo "Solo Lectura"
                 mostrarVistaArtista(myArtist._id, myArtist.nombre, myArtist.nombreArtistico, true);
             } else {
-                // Mostrar Error Limpio
                 document.querySelector('main').innerHTML = `
                     <div class="card" style="border-left: 4px solid var(--warning-color); text-align: center;">
                         <h2>⚠️ Atención</h2>
@@ -1556,13 +1556,12 @@
                         <button onclick="localStorage.removeItem('token'); location.reload();" class="btn-secondary" style="margin-top:1rem;">Salir</button>
                     </div>`;
             }
-            return; // Detener carga normal
+            return; 
         }
         
         // --- MODO STAFF NORMAL ---
         renderSidebar(payload);
 
-        // Activar Listeners
         if (!isInitialized) { 
             initAppEventListeners(payload); 
             isInitialized = true; 
@@ -1583,7 +1582,6 @@
       }
 
       function showLogin() { 
-          // Agregar clase para ocultar FAB en movil
           document.body.classList.add('auth-visible');
           
           localStorage.removeItem('token'); 
@@ -1613,9 +1611,8 @@
           document.getElementById('login-error').textContent = '';
       }
 
-      // Función Helper para Reset View
       function showResetPasswordView(token) {
-          document.body.classList.add('auth-visible'); // Asegurar ocultar FAB
+          document.body.classList.add('auth-visible');
           DOMElements.appWrapper.style.display = 'none';
           DOMElements.loginContainer.style.display = 'block';
           
@@ -1643,7 +1640,6 @@
 
               showToast('¡Contraseña actualizada!', 'success');
               
-              // Limpiar URL
               window.history.replaceState({}, document.title, "/");
               
               toggleAuth('login');
@@ -1664,7 +1660,6 @@
               const res = await fetch(`${API_URL}/api/auth/register`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  // Se envía createArtist: true para que el backend cree la entidad artista
                   body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) 
               });
               
@@ -1903,7 +1898,7 @@
       }
       async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
       async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
-        
+      
       async function eliminarProyecto(id, desdeCotizaciones = false) { 
           if (!confirm('¿Mover a papelera? Desaparecerá del flujo.')) return; 
           try { 
@@ -2172,7 +2167,6 @@
           if (!pago) {
                // Si no hay un pago especifico, generar un "recibo general" si esta pagado
                if (proyecto.montoPagado > 0) {
-                   // Crear objeto de pago dummy para visualizar el total
                    const dummyPago = { monto: proyecto.montoPagado };
                    return generarReciboPDF(proyecto, dummyPago);
                }
@@ -2225,7 +2219,6 @@
                       <button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button>
                   </div>`;
               } else {
-                  // --- BOTÓN SOLICITAR CITA PARA CLIENTES ---
                   html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
                       <button class="btn-primary" onclick="app.abrirModalSolicitud('${artistaInfo._id}')">📅 Solicitar Cita / Proyecto</button>
                   </div>`;
@@ -2243,15 +2236,12 @@
                         <td>$${(p.montoPagado||0).toFixed(2)}</td>
                         <td class="table-actions">`;
                       
-                      // Ocultar botón upload para clientes
                       if (!isClientView) {
                           html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`;
                       } else {
-                          // Vista Cliente: Mostrar Link si existe y Botón Recibo si pagó
                           if(p.enlaceEntrega) {
                              html += `<a href="${p.enlaceEntrega}" target="_blank" class="btn-primary" style="text-decoration:none; padding: 0.5rem; display:inline-flex; align-items:center; width:auto; height:auto; font-size: 0.8em; margin-right:4px;">📂 Descargar</a>`;
                           }
-                          // Botón Recibo para Clientes
                           if(p.montoPagado > 0) {
                               html += `<button class="btn-secondary" title="Descargar Recibo" onclick="app.generarReciboPDF('${p._id}')">📄 Recibo</button>`;
                           }
@@ -2281,7 +2271,6 @@
           const modal = document.getElementById('request-appointment-modal');
           const select = document.getElementById('req-service');
           
-          // Cargar servicios en el select
           try {
               if (localCache.servicios.length === 0) {
                   const servicios = await fetchAPI('/api/servicios');
@@ -2325,11 +2314,11 @@
               items: [{ servicio: serviceId, nombre: serviceName + (comments ? ` (${comments})` : ''), unidades: 1, precioUnitario: price }],
               total: price,
               descuento: 0,
-              estatus: 'Solicitud', // Estado visible
+              estatus: 'Solicitud', 
               metodoPago: 'Pendiente',
               fecha: finalDate.toISOString(),
               prioridad: 'Normal',
-              proceso: 'Solicitud', // Para que caiga en la primera columna del Kanban Admin
+              proceso: 'Solicitud', 
               esAlbum: false
           };
 
@@ -2337,7 +2326,6 @@
               await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(nuevoProyecto) });
               showToast('¡Solicitud enviada! Te contactaremos pronto.', 'success');
               cerrarModalSolicitud();
-              // Recargar vista cliente
               const nombreHeader = document.getElementById('vista-artista-nombre').textContent;
               mostrarVistaArtista(solicitudArtistaId, nombreHeader, '', true);
           } catch(err) {
@@ -2535,7 +2523,6 @@
         document.getElementById('firma-input').addEventListener('change', subirFirma);
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
         
-        // Toggle Passwords
         document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
         const toggleReg = document.getElementById('toggle-password-reg');
         if(toggleReg) toggleReg.addEventListener('click', (e) => { const passwordInput = document.getElementById('reg-password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
@@ -2543,7 +2530,6 @@
         setupCustomization(payload);
         setupMobileMenu();
 
-        // --- LISTENER PARA AUTO-SELECCION DE PERMISOS POR ROL ---
         const roleInput = document.getElementById('roleUsuario');
         if(roleInput) {
             roleInput.addEventListener('input', (e) => {
