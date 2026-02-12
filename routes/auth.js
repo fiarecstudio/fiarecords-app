@@ -7,26 +7,26 @@ const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 
 // ============================================================
-// CONFIGURACIÓN DE CORREO CORREGIDA (SOLUCIÓN ERROR IPV6)
+// CONFIGURACIÓN DE CORREO CON OAUTH2 (GMAIL API)
+// ESTO EVITA EL BLOQUEO DE PUERTOS DE RENDER
 // ============================================================
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',   // Host explícito de Gmail
-    port: 465,                // Puerto seguro SSL
-    secure: true,             // Usar SSL
+    service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    // ESTA LÍNEA SOLUCIONA EL ERROR "ENETUNREACH":
-    family: 4,                // Fuerza a Node.js a usar IPv4 en lugar de IPv6
+        type: 'OAuth2',
+        user: 'fiarec.studio@gmail.com', // Tu correo exacto
+        clientId: process.env.GMAIL_CLIENT_ID,
+        clientSecret: process.env.GMAIL_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN
+    }
 });
 
-// Verificación de conexión en los Logs
+// Verificación de conexión
 transporter.verify((error, success) => {
     if (error) {
-        console.error('❌ ERROR CRÍTICO AL CONECTAR CON GMAIL:', error);
+        console.error('❌ Error de conexión SMTP (OAuth2):', error);
     } else {
-        console.log('✅ CONEXIÓN EXITOSA CON GMAIL (IPv4). Listo para enviar.');
+        console.log('✅ Servidor de correo listo (Vía Gmail API OAuth2)');
     }
 });
 
@@ -111,36 +111,37 @@ router.post('/forgot-password', async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
         await user.save();
 
-        // Asegúrate de que FRONTEND_URL no tenga slash al final en tus env vars, o ajusta aquí
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
         const mailOptions = {
             from: '"Soporte Fia Records" <fiarec.studio@gmail.com>',
             to: user.email,
-            subject: 'Recuperar Contraseña',
+            subject: 'Recuperar Contraseña - Fia Records',
             html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h3>Recupera tu acceso</h3>
-                    <p>Has solicitado restablecer tu contraseña.</p>
-                    <p>Da clic en el siguiente enlace (válido por 1 hora):</p>
-                    <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Restablecer Contraseña</a>
-                    <p style="margin-top: 20px; font-size: 12px; color: #777;">Si no solicitaste esto, ignora este correo.</p>
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+                    <h2 style="color: #333;">Recuperación de Contraseña</h2>
+                    <p>Hola,</p>
+                    <p>Has solicitado restablecer tu contraseña en Fia Records.</p>
+                    <p>Haz clic en el siguiente botón para continuar:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Restablecer Contraseña</a>
+                    </div>
+                    <p style="font-size: 12px; color: #777;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este mensaje.</p>
                 </div>
             `
         };
 
-        console.log("🚀 Intentando enviar correo a Gmail (vía IPv4)...");
+        console.log("🚀 Enviando correo con API Gmail OAuth2...");
         
-        // Enviar
         await transporter.sendMail(mailOptions);
         
-        console.log("✅ Correo enviado con éxito.");
+        console.log("✅ Correo enviado exitosamente.");
         res.json({ message: 'Correo enviado correctamente.' });
 
     } catch (error) {
-        console.error("❌ ERROR AL ENVIAR EL CORREO:", error);
-        res.status(500).json({ error: 'Error enviando correo: ' + error.message });
+        console.error("❌ ERROR AL ENVIAR CORREO:", error);
+        res.status(500).json({ error: 'Error enviando correo. Intenta más tarde.' });
     }
 });
 
@@ -160,7 +161,7 @@ router.post('/reset-password/:token', async (req, res) => {
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
-        await user.save(); // Aquí se ejecuta el pre-save del modelo para hashear el password
+        await user.save();
 
         res.json({ message: 'Contraseña actualizada correctamente.' });
     } catch (error) { 
