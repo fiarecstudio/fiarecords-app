@@ -174,26 +174,47 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // ============================================================
-// 4. RESET PASSWORD FINAL
+// 4. RESET PASSWORD FINAL (CORREGIDO / HÍBRIDO)
 // ============================================================
-router.post('/reset-password/:token', async (req, res) => {
+// El signo de interrogación en :token? significa que el parámetro es opcional en la URL
+// Esto soluciona el error 404 si el frontend envía a /reset-password sin nada más
+router.post('/reset-password/:token?', async (req, res) => {
     try {
+        // 1. Buscamos el token en la URL (params) O en el cuerpo (body)
+        const token = req.params.token || req.body.token;
         const { newPassword } = req.body;
+
+        // 2. Validación básica
+        if (!token) {
+            return res.status(400).json({ error: 'No se encontró el token de recuperación.' });
+        }
+
+        if (!newPassword || newPassword.trim().length === 0) {
+            return res.status(400).json({ error: 'La nueva contraseña es obligatoria.' });
+        }
+
+        // 3. Buscar usuario con ese token y que NO haya expirado ($gt: Date.now())
         const user = await Usuario.findOne({
-            resetPasswordToken: req.params.token,
+            resetPasswordToken: token,
             resetPasswordExpires: { $gt: Date.now() }
         });
 
-        if (!user) return res.status(400).json({ error: 'Token inválido o expirado.' });
+        if (!user) {
+            return res.status(400).json({ error: 'Token inválido o expirado. Solicita uno nuevo.' });
+        }
 
+        // 4. Actualizar contraseña y limpiar token
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
+        
         await user.save();
 
-        res.json({ message: 'Contraseña actualizada correctamente.' });
+        res.json({ message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+
     } catch (error) { 
-        res.status(500).json({ error: 'Error al restablecer la contraseña.' }); 
+        console.error("Error en reset-password:", error);
+        res.status(500).json({ error: 'Error interno al restablecer la contraseña.' }); 
     }
 });
 
