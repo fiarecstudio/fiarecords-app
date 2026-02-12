@@ -27,9 +27,7 @@ const createTransporter = async () => {
 
 // Función auxiliar para codificar caracteres especiales (Corrige la "ñ")
 const makeBody = (to, from, subject, message) => {
-    // Codificamos el asunto en Base64 para que Gmail acepte acentos y ñ
     const encodedSubject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
-
     const str = [
         `To: ${to}`,
         `From: ${from}`,
@@ -127,7 +125,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ============================================================
-// 3. RECUPERAR CONTRASEÑA
+// 3. RECUPERAR CONTRASEÑA (SOLICITUD)
 // ============================================================
 router.post('/forgot-password', async (req, res) => {
     console.log("📩 Iniciando solicitud de recuperación...");
@@ -143,7 +141,6 @@ router.post('/forgot-password', async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
         await user.save();
 
-        // IMPORTANTE: Aquí toma la URL de Render. Si no existe, usa localhost (que fallará en móvil)
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
@@ -174,48 +171,49 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // ============================================================
-// 4. RESET PASSWORD FINAL (CORREGIDO / HÍBRIDO)
+// 4. RESET PASSWORD FINAL (LÓGICA COMPARTIDA)
 // ============================================================
-// El signo de interrogación en :token? significa que el parámetro es opcional en la URL
-// Esto soluciona el error 404 si el frontend envía a /reset-password sin nada más
-router.post('/reset-password/:token?', async (req, res) => {
+
+// Función auxiliar para realizar el cambio de contraseña
+const procesarResetPassword = async (req, res, token) => {
     try {
-        // 1. Buscamos el token en la URL (params) O en el cuerpo (body)
-        const token = req.params.token || req.body.token;
         const { newPassword } = req.body;
 
-        // 2. Validación básica
         if (!token) {
-            return res.status(400).json({ error: 'No se encontró el token de recuperación.' });
+            return res.status(400).json({ error: 'Token no proporcionado.' });
         }
 
         if (!newPassword || newPassword.trim().length === 0) {
-            return res.status(400).json({ error: 'La nueva contraseña es obligatoria.' });
+            return res.status(400).json({ error: 'La contraseña es obligatoria.' });
         }
 
-        // 3. Buscar usuario con ese token y que NO haya expirado ($gt: Date.now())
         const user = await Usuario.findOne({
             resetPasswordToken: token,
             resetPasswordExpires: { $gt: Date.now() }
         });
 
-        if (!user) {
-            return res.status(400).json({ error: 'Token inválido o expirado. Solicita uno nuevo.' });
-        }
+        if (!user) return res.status(400).json({ error: 'Token inválido o expirado.' });
 
-        // 4. Actualizar contraseña y limpiar token
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
-        
         await user.save();
 
-        res.json({ message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
-
-    } catch (error) { 
-        console.error("Error en reset-password:", error);
-        res.status(500).json({ error: 'Error interno al restablecer la contraseña.' }); 
+        return res.json({ message: 'Contraseña actualizada correctamente.' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Error al restablecer contraseña.' });
     }
+};
+
+// RUTA A: Cuando el token viene en la URL (ej: /reset-password/abc12345)
+router.post('/reset-password/:token', async (req, res) => {
+    return procesarResetPassword(req, res, req.params.token);
+});
+
+// RUTA B: Cuando el token viene en el cuerpo (ej: /reset-password) <- ESTA ES LA QUE TE FALTABA
+router.post('/reset-password', async (req, res) => {
+    return procesarResetPassword(req, res, req.body.token);
 });
 
 module.exports = router;
