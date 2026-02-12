@@ -2,33 +2,69 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
+const { google } = require('googleapis'); // IMPORTANTE: Usamos la librería oficial
 
 // ============================================================
-// CONFIGURACIÓN DE CORREO CON OAUTH2 (GMAIL API)
-// ESTO EVITA EL BLOQUEO DE PUERTOS DE RENDER
+// CONFIGURACIÓN GMAIL API (HTTP PUERTO 443 - NO SMTP)
 // ============================================================
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        type: 'OAuth2',
-        user: 'fiarec.studio@gmail.com', // Tu correo exacto
-        clientId: process.env.GMAIL_CLIENT_ID,
-        clientSecret: process.env.GMAIL_CLIENT_SECRET,
-        refreshToken: process.env.GMAIL_REFRESH_TOKEN
-    }
-});
+const OAuth2 = google.auth.OAuth2;
 
-// Verificación de conexión
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('❌ Error de conexión SMTP (OAuth2):', error);
-    } else {
-        console.log('✅ Servidor de correo listo (Vía Gmail API OAuth2)');
+const createTransporter = async () => {
+    const oauth2Client = new OAuth2(
+        process.env.GMAIL_CLIENT_ID,
+        process.env.GMAIL_CLIENT_SECRET,
+        "https://developers.google.com/oauthplayground"
+    );
+
+    oauth2Client.setCredentials({
+        refresh_token: process.env.GMAIL_REFRESH_TOKEN
+    });
+
+    return oauth2Client;
+};
+
+// Función auxiliar para codificar el mensaje en formato compatible con Gmail
+const makeBody = (to, from, subject, message) => {
+    const str = [
+        `To: ${to}`,
+        `From: ${from}`,
+        `Subject: ${subject}`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=utf-8',
+        '',
+        message
+    ].join('\n');
+
+    return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+// Función de envío directo
+const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
+    try {
+        const authClient = await createTransporter();
+        const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+        const rawMessage = makeBody(
+            emailDestino,
+            `"Soporte Fia Records" <${process.env.EMAIL_USER}>`,
+            asunto,
+            htmlContent
+        );
+
+        await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw: rawMessage }
+        });
+        
+        console.log(`✅ Correo enviado a ${emailDestino} vía API (HTTPS)`);
+        return true;
+    } catch (error) {
+        console.error("❌ Error API Gmail:", error.message);
+        throw error;
     }
-});
+};
 
 // ============================================================
 // 1. REGISTRO
@@ -36,7 +72,6 @@ transporter.verify((error, success) => {
 router.post('/register', async (req, res) => {
     try {
         const { username, email, password, nombre, createArtist } = req.body;
-
         const userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
         if (userExists) return res.status(400).json({ error: 'Usuario o correo ya existe.' });
 
@@ -60,7 +95,6 @@ router.post('/register', async (req, res) => {
 
         const token = jwt.sign({ id: savedUser._id, role: savedUser.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
         res.status(201).json({ token });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al registrar.' });
@@ -91,7 +125,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ============================================================
-// 3. RECUPERAR CONTRASEÑA
+// 3. RECUPERAR CONTRASEÑA (SOLUCIÓN DEFINITIVA)
 // ============================================================
 router.post('/forgot-password', async (req, res) => {
     console.log("📩 Iniciando solicitud de recuperación...");
@@ -105,7 +139,6 @@ router.post('/forgot-password', async (req, res) => {
             return res.status(404).json({ error: 'No existe cuenta con este correo.' });
         }
 
-        // Generar Token
         const token = crypto.randomBytes(20).toString('hex');
         user.resetPasswordToken = token;
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
@@ -114,34 +147,30 @@ router.post('/forgot-password', async (req, res) => {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
-        const mailOptions = {
-            from: '"Soporte Fia Records" <fiarec.studio@gmail.com>',
-            to: user.email,
-            subject: 'Recuperar Contraseña - Fia Records',
-            html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
-                    <h2 style="color: #333;">Recuperación de Contraseña</h2>
-                    <p>Hola,</p>
-                    <p>Has solicitado restablecer tu contraseña en Fia Records.</p>
-                    <p>Haz clic en el siguiente botón para continuar:</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Restablecer Contraseña</a>
-                    </div>
-                    <p style="font-size: 12px; color: #777;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este mensaje.</p>
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+                <h2 style="color: #333;">Recuperación de Contraseña</h2>
+                <p>Hola,</p>
+                <p>Has solicitado restablecer tu contraseña en Fia Records.</p>
+                <div style="margin: 20px 0;">
+                    <a href="${resetUrl}" style="background-color: #2563EB; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                        Restablecer Contraseña
+                    </a>
                 </div>
-            `
-        };
+                <p style="font-size: 12px; color: #666;">Enlace válido por 1 hora.</p>
+            </div>
+        `;
 
-        console.log("🚀 Enviando correo con API Gmail OAuth2...");
+        console.log("🚀 Enviando correo vía Google API (HTTP)...");
         
-        await transporter.sendMail(mailOptions);
+        // AQUÍ USAMOS LA NUEVA FUNCIÓN QUE NO SE BLOQUEA
+        await enviarCorreoGmailAPI(user.email, "Restablecer Contraseña - Fia Records", htmlContent);
         
-        console.log("✅ Correo enviado exitosamente.");
         res.json({ message: 'Correo enviado correctamente.' });
 
     } catch (error) {
-        console.error("❌ ERROR AL ENVIAR CORREO:", error);
-        res.status(500).json({ error: 'Error enviando correo. Intenta más tarde.' });
+        console.error("❌ ERROR CRÍTICO AL ENVIAR:", error);
+        res.status(500).json({ error: 'Error al enviar el correo.' });
     }
 });
 
