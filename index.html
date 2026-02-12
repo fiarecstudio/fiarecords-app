@@ -157,7 +157,7 @@
     .search-box input { width: 100%; padding: 0.7rem 1.4rem; border-radius: 50px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color-dark); margin-bottom: 0; transition: all 0.2s ease; font-size: 0.95rem; }
     .search-box input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); background: var(--card-background); }
 
-    /* MAIN CON SCROLL INDEPENDIENTE */
+    /* MAIN CON SCROLL INDEPENDIENTE - CORRECCIÓN FORMULARIO PC */
     main { 
         padding: 1.5rem; 
         flex: 1; 
@@ -165,10 +165,11 @@
         max-width: 100%; 
         margin: 0 auto; 
         box-sizing: border-box; 
-        overflow-y: auto; /* Scroll AQUI */
+        overflow-y: auto; 
         overflow-x: hidden;
+        padding-bottom: 5rem; /* AÑADIDO: Espacio extra al final para que no se corte el contenido */
     }
-    @media (min-width: 768px) { main { padding: 2.5rem; } }
+    @media (min-width: 768px) { main { padding: 2.5rem; padding-bottom: 6rem; } }
       
     /* Scrollbar Personalizado */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -222,6 +223,9 @@
     .fab-container { position: fixed; bottom: 20px; right: 20px; z-index: 900; display: none; }
     .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: var(--primary-gradient); color: white; border: none; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5); display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; transition: transform 0.2s; }
     .fab-btn:active { transform: scale(0.9); }
+
+    /* CORRECCIÓN BOTÓN '+' EN MOVIL: OCULTAR CUANDO ESTÁ EN LOGIN/AUTH */
+    body.auth-visible .fab-container { display: none !important; }
 
     /* MODO CLIENTE (Estilos Especiales) */
     body.client-mode .sidebar { display: none !important; }
@@ -449,6 +453,24 @@
         <div class="auth-links">
             <a onclick="app.toggleAuth('login')">← Volver al Login</a>
         </div>
+    </div>
+
+    <div id="reset-password-view" style="display:none;">
+      <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Nueva Contraseña</h3>
+      <p style="font-size:0.85em; text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Introduce tu nueva contraseña.</p>
+      <form onsubmit="app.resetPassword(event)">
+          <input type="hidden" id="reset-token">
+          <div>
+              <label>Nueva Contraseña</label>
+              <div class="password-wrapper">
+                <input type="password" id="new-password" required>
+              </div>
+          </div>
+          <button type="submit" style="width:100%; margin-top:1rem;">Guardar Cambios</button>
+      </form>
+      <div class="auth-links">
+          <a onclick="app.toggleAuth('login')">Cancelar</a>
+      </div>
     </div>
 
     <p id="login-error" style="color: var(--danger-color); text-align: center; margin-top: 1rem; font-size: 0.9rem;"></p>
@@ -1142,7 +1164,7 @@
       // 3. FETCH API
       async function fetchAPI(url, options = {}) { 
         const token = localStorage.getItem('token'); 
-        if (!token) { showLogin(); throw new Error('No autenticado'); } 
+        if (!token && !url.includes('/auth/')) { showLogin(); throw new Error('No autenticado'); } 
         const headers = { 'Authorization': `Bearer ${token}` }; 
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; } 
         
@@ -1449,6 +1471,18 @@
       }
 
       (async function init() { 
+        // --- 1. DETECTAR URL PARA RESET PASSWORD ---
+        const path = window.location.pathname;
+        if (path.startsWith('/reset-password/')) {
+            const token = path.split('/').pop(); // Extraer token del final
+            if (token) {
+                showResetPasswordView(token);
+                document.body.style.opacity = '1';
+                document.body.style.visibility = 'visible';
+                return; // Detener carga normal de la app
+            }
+        }
+
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000); 
         applyTheme(localStorage.getItem('theme') || 'light'); 
@@ -1464,6 +1498,9 @@
 
       // --- CORRECCIÓN PRINCIPAL (showApp) PARA CLIENTES ---
       async function showApp(payload) { 
+        // Quitar clase auth-visible para que el FAB vuelva a aparecer (si no es cliente)
+        document.body.classList.remove('auth-visible');
+
         if (!configCache) await loadInitialConfig();
         DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
 
@@ -1545,23 +1582,74 @@
         document.body.style.visibility = 'visible'; 
       }
 
-      function showLogin() { localStorage.removeItem('token'); DOMElements.loginContainer.style.display = 'block'; DOMElements.appWrapper.style.display = 'none'; document.body.style.opacity = '1'; document.body.style.visibility = 'visible'; }
+      function showLogin() { 
+          // Agregar clase para ocultar FAB en movil
+          document.body.classList.add('auth-visible');
+          
+          localStorage.removeItem('token'); 
+          DOMElements.loginContainer.style.display = 'block'; 
+          DOMElements.appWrapper.style.display = 'none'; 
+          document.body.style.opacity = '1'; 
+          document.body.style.visibility = 'visible'; 
+      }
       
       // --- NUEVAS FUNCIONES DE AUTH ---
       function toggleAuth(view) {
           const login = document.getElementById('login-view');
           const register = document.getElementById('register-view');
           const recover = document.getElementById('recover-view');
+          const reset = document.getElementById('reset-password-view');
           
           login.style.display = 'none';
           register.style.display = 'none';
           recover.style.display = 'none';
+          reset.style.display = 'none';
           
           if(view === 'register') register.style.display = 'block';
           else if(view === 'recover') recover.style.display = 'block';
+          else if(view === 'reset') reset.style.display = 'block';
           else login.style.display = 'block';
           
           document.getElementById('login-error').textContent = '';
+      }
+
+      // Función Helper para Reset View
+      function showResetPasswordView(token) {
+          document.body.classList.add('auth-visible'); // Asegurar ocultar FAB
+          DOMElements.appWrapper.style.display = 'none';
+          DOMElements.loginContainer.style.display = 'block';
+          
+          document.getElementById('reset-token').value = token;
+          toggleAuth('reset');
+      }
+
+      async function resetPassword(e) {
+          e.preventDefault();
+          const token = document.getElementById('reset-token').value;
+          const password = document.getElementById('new-password').value;
+
+          if (!password) return showToast('Ingresa una contraseña', 'error');
+
+          showLoader();
+          try {
+              const res = await fetch(`${API_URL}/api/auth/reset-password`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token, password })
+              });
+
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'Error al restablecer');
+
+              showToast('¡Contraseña actualizada!', 'success');
+              
+              // Limpiar URL
+              window.history.replaceState({}, document.title, "/");
+              
+              toggleAuth('login');
+          } catch(err) {
+              document.getElementById('login-error').textContent = err.message;
+          } finally { hideLoader(); }
       }
 
       async function registerUser(e) {
@@ -2546,7 +2634,7 @@
           });
       }
 
-      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF };
+      window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword };
     });
   </script>
 
