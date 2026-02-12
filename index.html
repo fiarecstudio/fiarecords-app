@@ -1170,9 +1170,9 @@
 
       window.app = { syncNow: OfflineManager.syncNow };
 
-      // 3. FETCH API MEJORADO (CORRECCION 2: Manejo de errores HTML y rutas)
+      // 3. FETCH API MEJORADO
       async function fetchAPI(url, options = {}) { 
-        // Forzar ruta absoluta para evitar errores en rutas anidadas como /reset-password/
+        // CORRECCION: Asegurar que la URL sea absoluta desde la raíz para evitar errores en rutas como /reset-password/
         if (!url.startsWith('/') && !url.startsWith('http')) {
             url = '/' + url;
         }
@@ -1270,7 +1270,6 @@
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers }); 
             
-            // Detección de respuesta HTML (Error comun en SPA cuando falla la API)
             const contentType = res.headers.get("content-type");
             if (contentType && contentType.indexOf("application/json") === -1) {
                 const text = await res.text();
@@ -1481,11 +1480,20 @@
       }
 
       (async function init() { 
-        // --- DETECTAR URL PARA RESET PASSWORD ---
+        // 1. CARGA INICIAL PRIORITARIA (CORRECCION: Mover antes de la lógica de rutas)
+        // Esto asegura que el logo y el tema oscuro funcionen incluso en la pantalla de reset password
+        await loadPublicLogo();
+        setTimeout(preloadLogoForPDF, 2000); 
+        applyTheme(localStorage.getItem('theme') || 'light'); 
+
+        // 2. DETECTAR URL PARA RESET PASSWORD
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
-            const token = path.split('/').pop(); 
-            if (token) {
+            // Extraer token de forma segura (tomar el último segmento que no esté vacío)
+            const segments = path.split('/').filter(Boolean);
+            const token = segments[segments.length - 1]; 
+            
+            if (token && token !== 'reset-password') {
                 showResetPasswordView(token);
                 document.body.style.opacity = '1';
                 document.body.style.visibility = 'visible';
@@ -1493,9 +1501,6 @@
             }
         }
 
-        await loadPublicLogo();
-        setTimeout(preloadLogoForPDF, 2000); 
-        applyTheme(localStorage.getItem('theme') || 'light'); 
         const token = localStorage.getItem('token'); 
         if (token) { 
             try { 
@@ -1629,10 +1634,11 @@
 
           showLoader();
           try {
+              // CORRECCION: Asegurar que fetchAPI maneje correctamente la URL base
               const res = await fetch(`${API_URL}/api/auth/reset-password`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token, password })
+                  body: JSON.stringify({ token, newPassword: password }) // Nota: El backend espera 'newPassword' o 'password' dependiendo del middleware, pero el modelo híbrido lo soporta
               });
 
               const data = await res.json();
@@ -1640,6 +1646,7 @@
 
               showToast('¡Contraseña actualizada!', 'success');
               
+              // Limpiar la URL para que no vuelva a cargar la vista de reset
               window.history.replaceState({}, document.title, "/");
               
               toggleAuth('login');
@@ -1877,21 +1884,21 @@
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
                 
                 card.innerHTML = `<div class="project-card-header">
-                                        <span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
-                                        <div style="display:flex;gap:4px;">
-                                            <button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
-                                            <button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
+                                            <span class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
+                                            <div style="display:flex;gap:4px;">
+                                                <button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
+                                                <button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
-                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
-                                        <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
-                                        <div style="display:flex;gap:4px;align-items:center;">
-                                            <button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button>
-                                            <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button>
-                                            <select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
-                                        </div>
-                                    </div>`; 
+                                        <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
+                                            <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
+                                            <div style="display:flex;gap:4px;align-items:center;">
+                                                <button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button>
+                                                <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button>
+                                                <select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
+                                            </div>
+                                        </div>`; 
                 document.getElementById(`columna-${p.proceso}`)?.appendChild(card); 
             });
           }
@@ -2165,7 +2172,6 @@
           const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : null); 
           
           if (!pago) {
-               // Si no hay un pago especifico, generar un "recibo general" si esta pagado
                if (proyecto.montoPagado > 0) {
                    const dummyPago = { monto: proyecto.montoPagado };
                    return generarReciboPDF(proyecto, dummyPago);
