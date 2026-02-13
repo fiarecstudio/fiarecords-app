@@ -2,7 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let isInitialized = false; 
     let proyectoActual = {}; 
     let logoBase64 = null;
-    let preseleccionArtistaId = null; 
+    let preseleccionArtistaId = null;
+    
+    // --- CORRECCIÓN 1: Declarar variable globalmente para evitar ReferenceError ---
+    let historialCacheados = []; 
 
     // --- CONFIGURACIÓN GOOGLE DRIVE INTEGRADA ---
     const GAP_CONFIG = {
@@ -109,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. FETCH API MEJORADO
     async function fetchAPI(url, options = {}) { 
-      // CORRECCION: Asegurar que la URL sea absoluta desde la raíz para evitar errores en rutas como /reset-password/
       if (!url.startsWith('/') && !url.startsWith('http')) {
           url = '/' + url;
       }
@@ -417,16 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     (async function init() { 
-      // 1. CARGA INICIAL PRIORITARIA (CORRECCION: Mover antes de la lógica de rutas)
-      // Esto asegura que el logo y el tema oscuro funcionen incluso en la pantalla de reset password
       await loadPublicLogo();
       setTimeout(preloadLogoForPDF, 2000); 
       applyTheme(localStorage.getItem('theme') || 'light'); 
 
-      // 2. DETECTAR URL PARA RESET PASSWORD
       const path = window.location.pathname;
       if (path.startsWith('/reset-password/')) {
-          // Extraer token de forma segura (tomar el último segmento que no esté vacío)
           const segments = path.split('/').filter(Boolean);
           const token = segments[segments.length - 1]; 
           
@@ -533,7 +531,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.visibility = 'visible'; 
     }
     
-    // --- NUEVAS FUNCIONES DE AUTH ---
     function toggleAuth(view) {
         const login = document.getElementById('login-view');
         const register = document.getElementById('register-view');
@@ -571,21 +568,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showLoader();
         try {
-            // CORRECCION: Asegurar que fetchAPI maneje correctamente la URL base
             const res = await fetch(`${API_URL}/api/auth/reset-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, newPassword: password }) // Nota: El backend espera 'newPassword' o 'password' dependiendo del middleware, pero el modelo híbrido lo soporta
+                body: JSON.stringify({ token, newPassword: password })
             });
 
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al restablecer');
 
             showToast('¡Contraseña actualizada!', 'success');
-            
-            // Limpiar la URL para que no vuelva a cargar la vista de reset
             window.history.replaceState({}, document.title, "/");
-            
             toggleAuth('login');
         } catch(err) {
             document.getElementById('login-error').textContent = err.message;
@@ -644,8 +637,17 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault(); 
       if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
       showLoader();
-      try { 
-          const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
+      try {
+          // --- CORRECCIÓN 2: Obtener valores por ID correctamente ---
+          const u = document.getElementById('username').value;
+          const p = document.getElementById('password').value;
+          
+          const res = await fetch(`${API_URL}/api/auth/login`, { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify({ username: u, password: p }) 
+          }); 
+          
           const data = await res.json(); 
           if (!res.ok) throw new Error(data.error); 
           localStorage.setItem('token', data.token); 
@@ -715,61 +717,101 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
     }
       
-    function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
-      
-    async function saveItem(e, type) { 
-        e.preventDefault(); 
-        const form = e.target; 
-        const id = form.querySelector('input[type="hidden"]')?.value; 
-        let body; 
-          
-        if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; } 
-        else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } 
-        else if (type === 'usuarios') { 
-            const userVal = document.getElementById('usernameUsuario').value;
-            const emailVal = document.getElementById('emailUsuario').value; // CAMBIO REALIZADO AQUI
-            const roleVal = document.getElementById('roleUsuario').value;
-            const passVal = document.getElementById('passwordUsuario').value;
+    function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; }
+    
+    // --- CORRECCIÓN 3: Reemplazo completo de saveItem por guardarDesdeModal ---
+    // Esta función maneja el guardado usando los IDs del HTML correctamente
+    async function guardarDesdeModal(type) {
+        let id = '';
+        let body = {};
+
+        if (type === 'servicios') {
+            id = document.getElementById('modalIdServicio').value;
+            body = {
+                nombre: document.getElementById('modalNombreServicio').value,
+                precio: parseFloat(document.getElementById('modalPrecioServicio').value)
+            };
+        } else if (type === 'artistas') {
+            id = document.getElementById('modalIdArtista').value;
+            body = {
+                nombre: document.getElementById('modalNombreArtista').value,
+                nombreArtistico: document.getElementById('modalNombreArtistico').value,
+                telefono: document.getElementById('modalTelefonoArtista').value,
+                correo: document.getElementById('modalCorreoArtista').value
+            };
+        } else if (type === 'usuarios') {
+            id = document.getElementById('modalIdUsuario').value;
+            const userVal = document.getElementById('modalUsername').value;
+            const emailVal = document.getElementById('modalEmail').value;
+            const roleVal = document.getElementById('modalRole').value;
+            const passVal = document.getElementById('modalPassword').value;
 
             const checkboxes = document.querySelectorAll('input[name="user_permisos"]:checked');
             const permisos = Array.from(checkboxes).map(c => c.value);
             
-            body = { 
-                username: userVal, 
-                email: emailVal, // CAMBIO REALIZADO AQUI
-                role: roleVal, 
-                permisos: permisos 
-            }; 
+            body = {
+                username: userVal,
+                email: emailVal,
+                role: roleVal,
+                permisos: permisos
+            };
             
-            if (!id && !passVal) { showToast('Contraseña obligatoria para usuarios nuevos.', 'error'); return; } 
-            if (passVal) body.password = passVal; 
-        } 
-          
-        const method = id ? 'PUT' : 'POST'; const url = `/api/${type}/${id || ''}`; 
-        try { 
-            const res = await fetchAPI(url, { method, body: JSON.stringify(body) }); 
-            showToast(res.offline ? 'Guardado local.' : 'Guardado éxito.', res.offline ? 'warning' : 'success'); 
-            limpiarForm(form.id); mostrarSeccion(`gestion-${type}`); 
-        } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+            if (!id && !passVal) { return showToast('Contraseña obligatoria para usuarios nuevos.', 'error'); }
+            if (passVal) body.password = passVal;
+        }
+
+        const method = id ? 'PUT' : 'POST';
+        const url = `/api/${type}/${id || ''}`;
+        
+        try {
+            const res = await fetchAPI(url, { method, body: JSON.stringify(body) });
+            showToast(res.offline ? 'Guardado local.' : 'Guardado con éxito.', res.offline ? 'warning' : 'success');
+            
+            // Cerrar modal con Bootstrap
+            const modalEl = document.getElementById(`modal${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if(modal) modal.hide();
+            
+            mostrarSeccion(`gestion-${type}`);
+        } catch (error) {
+            showToast(`Error: ${error.message}`, 'error');
+        }
     }
       
     async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
       
     async function editarItem(id, endpoint) { 
         try { 
-            let item; if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id); else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id); else if (endpoint === 'usuarios') item = localCache.usuarios.find(i => i._id === id); 
+            let item; 
+            if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id); 
+            else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id); 
+            else if (endpoint === 'usuarios') item = localCache.usuarios.find(i => i._id === id); 
             
             if(!item) item = await fetchAPI(`/api/${endpoint}/${id}`); 
             
-            const form = document.getElementById(`form${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`); 
-            if (endpoint === 'servicios') { form.idServicio.value = item._id; form.nombreServicio.value = item.nombre; form.precioServicio.value = item.precio; } 
-            else if (endpoint === 'artistas') { form.idArtista.value = item._id; form.nombreArtista.value = item.nombre; form.nombreArtisticoArtista.value = item.nombreArtistico || ''; form.telefonoArtista.value = item.telefono || ''; form.correoArtista.value = item.correo || ''; } 
+            // Abrir modal con Bootstrap
+            const modalId = `modal${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
+            const modalEl = document.getElementById(modalId);
+            const modal = new bootstrap.Modal(modalEl);
+            
+            if (endpoint === 'servicios') { 
+                document.getElementById('modalIdServicio').value = item._id; 
+                document.getElementById('modalNombreServicio').value = item.nombre; 
+                document.getElementById('modalPrecioServicio').value = item.precio; 
+            } 
+            else if (endpoint === 'artistas') { 
+                document.getElementById('modalIdArtista').value = item._id; 
+                document.getElementById('modalNombreArtista').value = item.nombre; 
+                document.getElementById('modalNombreArtistico').value = item.nombreArtistico || ''; 
+                document.getElementById('modalTelefonoArtista').value = item.telefono || ''; 
+                document.getElementById('modalCorreoArtista').value = item.correo || ''; 
+            } 
             else if (endpoint === 'usuarios') { 
-                form.idUsuario.value = item._id; 
-                document.getElementById('usernameUsuario').value = item.username; 
-                document.getElementById('emailUsuario').value = item.email || ''; // CAMBIO REALIZADO AQUI
-                document.getElementById('roleUsuario').value = item.role; 
-                document.getElementById('passwordUsuario').value = ''; 
+                document.getElementById('modalIdUsuario').value = item._id; 
+                document.getElementById('modalUsername').value = item.username; 
+                document.getElementById('modalEmail').value = item.email || ''; 
+                document.getElementById('modalRole').value = item.role; 
+                document.getElementById('modalPassword').value = ''; 
                 
                 document.querySelectorAll('input[name="user_permisos"]').forEach(chk => chk.checked = false);
                 const userPerms = item.permisos || [];
@@ -782,10 +824,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } 
             
-            form.querySelector('button[type="submit"]').textContent = 'Actualizar'; 
-            mostrarSeccion(`gestion-${endpoint}`);
+            modal.show();
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
+
+    // Funcion auxiliar para abrir modal vacio (Crear nuevo)
+    window.app.abrirModalCrear = function(endpoint) {
+        const modalId = `modal${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
+        const modalEl = document.getElementById(modalId);
+        const formId = `formModal${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
+        
+        limpiarForm(formId);
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    };
+
     async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     async function eliminarPermanente(id, endpoint) { if (!confirm('¡Irreversible!')) return; try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     async function vaciarPapelera(endpoint) { if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
@@ -1460,7 +1513,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
-      ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); });
+
+      // --- CORRECCIÓN 4: Eliminados los listeners de form.submit porque se manejan via onclick en HTML
+      // (Se conserva la limpieza de botones 'LimpiarForm')
+      ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { 
+          // Ya no necesitamos addEventListener('submit') aquí
+          // document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); 
+      });
+
       document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
       document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
       document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
@@ -1566,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword };
+    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, guardarDesdeModal };
   });
 
   if ('serviceWorker' in navigator) {
