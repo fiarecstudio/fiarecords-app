@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let logoBase64 = null;
     let preseleccionArtistaId = null;
     
-    // --- CORRECCIÓN 1: Declarar variable globalmente para evitar ReferenceError ---
+    // --- VARIABLE GLOBAL IMPORTANTE (Evita errores al editar) ---
     let historialCacheados = []; 
 
     // --- CONFIGURACIÓN GOOGLE DRIVE INTEGRADA ---
@@ -638,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
       showLoader();
       try {
-          // --- CORRECCIÓN 2: Obtener valores por ID correctamente ---
+          // --- CORRECCIÓN: Obtener valores por ID correctamente ---
           const u = document.getElementById('username').value;
           const p = document.getElementById('password').value;
           
@@ -719,8 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
     function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; }
     
-    // --- CORRECCIÓN 3: Reemplazo completo de saveItem por guardarDesdeModal ---
-    // Esta función maneja el guardado usando los IDs del HTML correctamente
+    // --- FUNCIÓN GUARDAR DESDE MODAL (Sustituye a saveItem) ---
     async function guardarDesdeModal(type) {
         let id = '';
         let body = {};
@@ -767,7 +766,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetchAPI(url, { method, body: JSON.stringify(body) });
             showToast(res.offline ? 'Guardado local.' : 'Guardado con éxito.', res.offline ? 'warning' : 'success');
             
-            // Cerrar modal con Bootstrap
             const modalEl = document.getElementById(`modal${type.charAt(0).toUpperCase() + type.slice(1)}`);
             const modal = bootstrap.Modal.getInstance(modalEl);
             if(modal) modal.hide();
@@ -828,7 +826,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
 
-    // Funcion auxiliar para abrir modal vacio (Crear nuevo)
     window.app.abrirModalCrear = function(endpoint) {
         const modalId = `modal${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         const modalEl = document.getElementById(modalId);
@@ -1491,8 +1488,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function initAppEventListeners(payload) {
-      flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
-      window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });
+      // --- PROTECCIÓN: Verificar existencia de elementos antes de asignar eventos ---
+      
+      const fechaInput = document.getElementById("fechaProyecto");
+      if (fechaInput) {
+          flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
+      }
+
+      window.addEventListener('hashchange', () => { 
+          const section = location.hash.replace('#', ''); 
+          if (section) mostrarSeccion(section, false); 
+      });
       
       const sidebarNav = document.getElementById('sidebar-nav-container');
       if(sidebarNav) {
@@ -1512,26 +1518,64 @@ document.addEventListener('DOMContentLoaded', () => {
           });
       }
 
-      document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
+      const themeSwitch = document.getElementById('theme-switch');
+      if (themeSwitch) {
+          themeSwitch.addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
+      }
 
-      // --- CORRECCIÓN 4: Eliminados los listeners de form.submit porque se manejan via onclick en HTML
-      // (Se conserva la limpieza de botones 'LimpiarForm')
-      ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { 
-          // Ya no necesitamos addEventListener('submit') aquí
-          // document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); 
+      // Botones que pueden no existir dependiendo de la vista
+      const btnAgregar = document.getElementById('btnAgregarAProyecto');
+      if(btnAgregar) btnAgregar.addEventListener('click', agregarAProyecto);
+      
+      const btnCotizar = document.getElementById('btnGenerarCotizacion');
+      if(btnCotizar) btnCotizar.addEventListener('click', generarCotizacion);
+      
+      const btnFlujo = document.getElementById('btnEnviarAFlujo');
+      if(btnFlujo) btnFlujo.addEventListener('click', enviarAFlujoDirecto);
+
+      const btnNuevoArt = document.getElementById('btnNuevoArtista');
+      if(btnNuevoArt) btnNuevoArt.addEventListener('click', () => { 
+          const container = document.getElementById('nuevoArtistaContainer');
+          if(container) container.style.display = 'block'; 
       });
 
-      document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
-      document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
-      document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
-      document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; });
-      document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual'));
-      document.getElementById('firma-input').addEventListener('change', subirFirma);
-      document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
+      const btnGuardarArt = document.getElementById('btnGuardarNuevoArtista');
+      if(btnGuardarArt) btnGuardarArt.addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
+
+      const btnManualArt = document.getElementById('manualBtnNuevoArtista');
+      if(btnManualArt) btnManualArt.addEventListener('click', () => { 
+          // Corrección para usar modal
+          app.abrirModalCrear('artistas');
+      });
       
-      document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
+      const btnGuardarManualArt = document.getElementById('btnGuardarManualNuevoArtista');
+      if(btnGuardarManualArt) btnGuardarManualArt.addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual'));
+
+      const firmaInput = document.getElementById('firma-input');
+      if(firmaInput) firmaInput.addEventListener('change', subirFirma);
+      
+      const descInput = document.getElementById('proyectoDescuento');
+      if(descInput) descInput.addEventListener('input', mostrarProyectoActual);
+      
+      const togglePass = document.getElementById('toggle-password');
+      if(togglePass) {
+          togglePass.addEventListener('click', (e) => { 
+              const passwordInput = document.getElementById('password'); 
+              const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; 
+              passwordInput.setAttribute('type', type); 
+              e.currentTarget.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>'; 
+          });
+      }
+
       const toggleReg = document.getElementById('toggle-password-reg');
-      if(toggleReg) toggleReg.addEventListener('click', (e) => { const passwordInput = document.getElementById('reg-password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); e.target.textContent = type === 'password' ? '👁️' : '🙈'; });
+      if(toggleReg) {
+          toggleReg.addEventListener('click', (e) => { 
+              const passwordInput = document.getElementById('reg-password'); 
+              const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; 
+              passwordInput.setAttribute('type', type); 
+              e.currentTarget.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>'; 
+          });
+      }
 
       setupCustomization(payload);
       setupMobileMenu();
@@ -1626,7 +1670,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, guardarDesdeModal };
+    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, guardarDesdeModal, abrirModalCrear };
   });
 
   if ('serviceWorker' in navigator) {
