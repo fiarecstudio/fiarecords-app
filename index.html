@@ -3,217 +3,194 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-    
+  
   <title>Fia Records Estudio de Grabación</title>
-    
+  
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
-  <link rel="apple-touch-icon" href="icon-192.png">
-    
+  
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
-    
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
-  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-
-  <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client"></script>
 
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <div id="login-container" class="card">
-    <div style="text-align: center; margin-bottom: 2rem;">
-      <img id="login-logo" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
-    </div>
-
-    <div id="login-view">
-        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Iniciar Sesión</h3>
-        <form id="login-form">
-          <div><label for="username">Usuario</label><input type="text" id="username" required></div>
-          <div>
-            <label for="password">Contraseña</label>
-            <div class="password-wrapper">
-              <input type="password" id="password" required>
-              <span id="toggle-password">👁️</span>
-            </div>
-          </div>
-          <button type="submit" style="width:100%; margin-top:1rem;">Entrar al Estudio</button>
-        </form>
-        <div class="auth-links">
-            <a onclick="app.toggleAuth('register')">Crear Cuenta</a> | <a onclick="app.toggleAuth('recover')">¿Olvidaste tu contraseña?</a>
+  <div id="login-container" class="container d-flex flex-column align-items-center justify-content-center min-vh-100">
+    <div class="card p-4 shadow-lg" style="max-width: 400px; width: 100%;">
+        <div class="text-center mb-4">
+          <img id="login-logo" class="logo-dinamico img-fluid" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
         </div>
-    </div>
 
-    <div id="register-view" style="display:none;">
-        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Crear Cuenta de Artista</h3>
-        <form id="register-form" onsubmit="app.registerUser(event)">
-            <div><label>Nombre de Usuario</label><input type="text" id="reg-username" required></div>
-            <div><label>Correo Electrónico</label><input type="email" id="reg-email" required></div>
-            <div><label>Nombre Artístico (o Real)</label><input type="text" id="reg-artistname" required></div>
-            <div>
-                <label>Contraseña</label>
-                <div class="password-wrapper">
-                    <input type="password" id="reg-password" required>
-                    <span id="toggle-password-reg">👁️</span>
+        <div id="login-view">
+            <h3 class="text-center mb-3">Iniciar Sesión</h3>
+            <form id="login-form">
+              <div class="mb-3">
+                <label for="username" class="form-label">Usuario</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input type="text" id="username" class="form-control" required>
                 </div>
-            </div>
-            <button type="submit" style="width:100%; margin-top:1rem;">Registrarse</button>
-        </form>
-        <div class="auth-links">
-            <a onclick="app.toggleAuth('login')">← Volver al Login</a>
-        </div>
-    </div>
-
-    <div id="recover-view" style="display:none;">
-        <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Recuperar Contraseña</h3>
-        <p style="font-size:0.85em; text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Ingresa tu correo para restablecer tu acceso.</p>
-        <form id="recover-form" onsubmit="app.recoverPassword(event)">
-            <div><label>Correo Electrónico</label><input type="email" id="rec-email" required></div>
-            <button type="submit" style="width:100%; margin-top:1rem;">Enviar Enlace</button>
-        </form>
-        <div class="auth-links">
-            <a onclick="app.toggleAuth('login')">← Volver al Login</a>
-        </div>
-    </div>
-
-    <div id="reset-password-view" style="display:none;">
-      <h3 style="text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Nueva Contraseña</h3>
-      <p style="font-size:0.85em; text-align:center; margin-bottom:1rem; color:var(--text-color-light);">Introduce tu nueva contraseña.</p>
-      <form onsubmit="app.resetPassword(event)">
-          <input type="hidden" id="reset-token">
-          <div>
-              <label>Nueva Contraseña</label>
-              <div class="password-wrapper">
-                <input type="password" id="new-password" required>
               </div>
-          </div>
-          <button type="submit" style="width:100%; margin-top:1rem;">Guardar Cambios</button>
-      </form>
-      <div class="auth-links">
-          <a onclick="app.toggleAuth('login')">Cancelar</a>
-      </div>
-    </div>
+              <div class="mb-3">
+                <label for="password" class="form-label">Contraseña</label>
+                <div class="input-group">
+                  <input type="password" id="password" class="form-control" required>
+                  <span class="input-group-text" id="toggle-password" style="cursor:pointer;"><i class="bi bi-eye"></i></span>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100 mt-2">Entrar al Estudio</button>
+            </form>
+            <div class="text-center mt-3 small">
+                <a href="#" onclick="app.toggleAuth('register')">Crear Cuenta</a> | <a href="#" onclick="app.toggleAuth('recover')">¿Olvidaste contraseña?</a>
+            </div>
+        </div>
 
-    <p id="login-error" style="color: var(--danger-color); text-align: center; margin-top: 1rem; font-size: 0.9rem;"></p>
+        <div id="register-view" style="display:none;">
+            <h3 class="text-center mb-3">Crear Cuenta</h3>
+            <form id="register-form" onsubmit="app.registerUser(event)">
+                <div class="mb-2"><label>Usuario</label><input type="text" id="reg-username" class="form-control" required></div>
+                <div class="mb-2"><label>Email</label><input type="email" id="reg-email" class="form-control" required></div>
+                <div class="mb-2"><label>Nombre Artístico</label><input type="text" id="reg-artistname" class="form-control" required></div>
+                <div class="mb-3">
+                    <label>Contraseña</label>
+                    <div class="input-group">
+                        <input type="password" id="reg-password" class="form-control" required>
+                        <span class="input-group-text" id="toggle-password-reg" style="cursor:pointer;"><i class="bi bi-eye"></i></span>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Registrarse</button>
+            </form>
+            <div class="text-center mt-3"><a href="#" onclick="app.toggleAuth('login')">← Volver</a></div>
+        </div>
+
+        <div id="recover-view" style="display:none;">
+            <h3 class="text-center mb-3">Recuperar</h3>
+            <p class="small text-center">Ingresa tu correo para restablecer.</p>
+            <form id="recover-form" onsubmit="app.recoverPassword(event)">
+                <div class="mb-3"><input type="email" id="rec-email" class="form-control" placeholder="Correo" required></div>
+                <button type="submit" class="btn btn-primary w-100">Enviar Enlace</button>
+            </form>
+            <div class="text-center mt-3"><a href="#" onclick="app.toggleAuth('login')">← Volver</a></div>
+        </div>
+
+        <p id="login-error" class="text-danger text-center mt-3 small"></p>
+    </div>
   </div>
-    
-  <div id="app-wrapper">
-    <div id="sidebar-overlay"></div>
+  
+  <div id="app-wrapper" style="display: none;"> <nav class="sidebar">
+      <div class="sidebar-header">
+          <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
+      </div>
       
-    <nav class="sidebar">
-      <div class="sidebar-header"><img id="app-logo" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo"></div>
-        
-      <a id="btn-nuevo-proyecto-sidebar" class="nav-link" data-seccion="registrar-proyecto">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"></path></svg>
+      <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" onclick="app.mostrarSeccion('registrar-proyecto')">
+        <i class="bi bi-plus-circle me-2"></i>
         <span>Nuevo Proyecto</span>
       </a>
-        
+      
       <div class="sidebar-nav" id="sidebar-nav-container">
         </div>
-        
-      <div class="sidebar-footer">
-        <div id="customization-container" style="display: none;">
-          <p style="font-size: 0.8em; text-align: center; margin-bottom: 0.5rem; color: var(--text-color-light);">Clic en logo para cambiar</p>
-          <input type="file" id="logo-input" accept="image/*" style="display: none;">
-        </div>
-        <div class="theme-toggle-container">
-          <span style="font-size: 0.9em; font-weight: 500;">Modo Oscuro</span>
+      
+      <div class="sidebar-footer mt-auto">
+        <div class="theme-toggle-container d-flex justify-content-between align-items-center mb-3 px-2">
+          <span class="small"><i class="bi bi-moon"></i> Modo Oscuro</span>
           <label class="theme-switch">
             <input type="checkbox" id="theme-switch" />
             <span class="slider"></span>
           </label>
         </div>
-        <button id="logout-button" class="btn-eliminar" style="width: 100%;">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"></path></svg>
-          Salir
+        
+        <button id="logout-button" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2" onclick="app.cerrarSesionConfirmacion()">
+          <i class="bi bi-box-arrow-left"></i> Salir
         </button>
       </div>
     </nav>
 
     <div class="main-content">
-        <header class="main-header">
-            <button id="hamburger-menu">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                </svg>
+        <header class="main-header d-flex justify-content-between align-items-center p-3">
+            <button id="hamburger-menu" class="btn btn-light d-md-none">
+                <i class="bi bi-list fs-4"></i>
             </button>
-            <div id="welcome-user" style="font-weight: 700; font-size: 1.1rem;"></div>
+            
+            <div id="welcome-user" class="fw-bold fs-5"></div>
               
-            <div class="search-box">
-                <input type="text" id="globalSearch" placeholder="🔍 Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
+            <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="globalSearch" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
+                </div>
             </div>
               
-            <div class="header-actions">
+            <div class="header-actions d-flex align-items-center gap-2">
               <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
                   <div class="status-indicator-dot"></div>
-                  <span id="connection-text">En Línea</span>
+                  <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
               </div>
 
-              <button id="btn-enviar-datos-bancarios" title="Enviar Datos Bancarios" class="btn-secondary" style="padding: 0.6rem; border-radius: 50%;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-                </svg>
+              <button class="btn btn-outline-secondary rounded-circle p-2" title="Datos Bancarios" data-bs-toggle="modal" data-bs-target="#modalDatosBancarios">
+                <i class="bi bi-bank fs-5"></i>
               </button>
             </div>
         </header>
 
-        <main>
-            <section id="dashboard" class="active">
-                <div class="card-header">
-                  <h2>Resumen General</h2>
-                  <span style="font-size: 0.9em; color: var(--text-color-light);">Vista general del estudio</span>
-                </div>
+        <main class="p-3 p-md-4">
+            
+            <section id="dashboard" class="active section-view">
+                <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
-                    <div class="card kpi-card" style="border-color: var(--success-color);">
-                      <div class="kpi-content">
-                        <div class="kpi-value" id="kpi-ingresos-mes">$0.00</div>
-                        <div class="kpi-label">Ingresos del Mes</div>
+                    <div class="card kpi-card border-start border-4 border-success p-3">
+                      <div class="d-flex justify-content-between">
+                        <div>
+                            <h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3>
+                            <small class="text-muted">Ingresos del Mes</small>
+                        </div>
+                        <i class="bi bi-currency-dollar fs-1 text-success"></i>
                       </div>
-                      <div class="kpi-icon">💲</div>
                     </div>
-                    <div class="card kpi-card" style="border-color: var(--primary-color);">
-                      <div class="kpi-content">
-                        <div class="kpi-value" id="kpi-proyectos-activos">0</div>
-                        <div class="kpi-label">Proyectos Activos</div>
+                    <div class="card kpi-card border-start border-4 border-primary p-3">
+                      <div class="d-flex justify-content-between">
+                        <div>
+                            <h3 class="mb-0" id="kpi-proyectos-activos">0</h3>
+                            <small class="text-muted">Proyectos Activos</small>
+                        </div>
+                        <i class="bi bi-sliders fs-1 text-primary"></i>
                       </div>
-                      <div class="kpi-icon">🎚️</div>
                     </div>
-                    <div class="card kpi-card" style="border-color: var(--warning-color);">
-                      <div class="kpi-content">
-                        <div class="kpi-value" id="kpi-proyectos-por-cobrar">0</div>
-                        <div class="kpi-label">Proyectos por Cobrar</div>
+                    <div class="card kpi-card border-start border-4 border-warning p-3">
+                      <div class="d-flex justify-content-between">
+                        <div>
+                            <h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3>
+                            <small class="text-muted">Por Cobrar</small>
+                        </div>
+                        <i class="bi bi-hourglass-split fs-1 text-warning"></i>
                       </div>
-                      <div class="kpi-icon">⏳</div>
                     </div>
                 </div>
-                <div class="card" style="margin-top: 1rem;">
+                <div class="card mt-4 p-3 shadow-sm">
                     <h3>Tendencia de Ingresos</h3>
-                    <div style="height: 350px; position: relative;">
-                        <canvas id="incomeChart"></canvas>
-                    </div>
+                    <div style="height: 350px;"><canvas id="incomeChart"></canvas></div>
                 </div>
             </section>
 
-            <section id="agenda"><div class="card"><div id="calendario"></div></div></section>
+            <section id="agenda" class="section-view">
+                <div class="card p-3"><div id="calendario"></div></div>
+            </section>
 
-            <section id="cotizaciones">
+            <section id="cotizaciones" class="section-view">
               <div class="card">
                 <div class="card-header"><h2>Cotizaciones Pendientes</h2></div>
                 <div class="table-responsive">
-                  <table>
+                  <table class="table table-hover">
                     <thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead>
                     <tbody id="tablaCotizacionesBody"></tbody>
                   </table>
@@ -221,479 +198,257 @@
               </div>
             </section>
 
-            <section id="flujo-trabajo">
-              <div class="card" style="background: transparent; border: none; box-shadow: none; padding: 0;">
-                <div class="card-header" style="background: var(--card-background); padding: 1.5rem; border-radius: 16px; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);">
-                  <h2>Flujo de Trabajo</h2>
-                  <div class="filter-buttons" id="filtrosFlujo" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+            <section id="flujo-trabajo" class="section-view">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>Flujo de Trabajo</h2>
+                    <div id="filtrosFlujo"></div>
                 </div>
                 <div class="kanban-board" id="kanbanBoard"></div>
-              </div>
             </section>
 
-            <section id="pagos">
+            <section id="pagos" class="section-view">
               <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h2>Gestión de Pagos</h2>
-                    <div class="filter-buttons">
-                        <button class="btn-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes de Cobro</button>
-                        <button class="btn-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial de Transacciones</button>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial</button>
                     </div>
                 </div>
-                  
-                <div id="vista-pagos-pendientes">
-                    <h3 style="margin-bottom: 1rem; color: var(--warning-color);">Proyectos con Saldo Pendiente</h3>
-                    <div class="table-responsive">
-                      <table>
-                        <thead><tr><th>Proyecto/Artista</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
-                        <tbody id="tablaPendientesBody"></tbody>
-                      </table>
-                    </div>
-                </div>
-
-                <div id="vista-pagos-historial" style="display:none;">
-                    <h3 style="margin-bottom: 1rem;">Historial Completo</h3>
-                    <div class="table-responsive">
-                      <table>
-                        <thead><tr><th>Fecha</th><th>Artista / Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
-                        <tbody id="tablaPagosBody"></tbody>
-                      </table>
-                    </div>
-                </div>
-              </div>
-            </section>
-
-            <section id="registrar-proyecto">
-              <div class="card" style="max-width: 800px; margin: auto;">
-                <div class="card-header"><h2>Nuevo Proyecto / Cotización</h2></div>
-                <form id="formProyecto" onsubmit="return false;">
-                  <label for="proyectoArtista">Artista/Cliente</label>
-                  <div id="artista-selector-container" style="display: flex; gap: 0.5rem;">
-                    <select id="proyectoArtista"><option value="publico_general">Público General</option></select>
-                    <button type="button" id="btnNuevoArtista" title="Registrar nuevo artista" class="btn-primary" style="padding: 0.75rem 1rem;">+</button>
-                  </div>
                 
-                  <div id="nuevoArtistaContainer" style="display: none; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
-                    <label>Nombre del Nuevo Artista</label>
-                    <div class="form-row" style="align-items: center; gap: 0.5rem;">
-                      <input type="text" id="nombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;">
-                      <button type="button" id="btnGuardarNuevoArtista" class="btn-secondary" style="margin-bottom: 0; padding: 0.75rem;">Guardar</button>
+                <div class="card-body">
+                    <div id="vista-pagos-pendientes">
+                        <h4 class="text-warning"><i class="bi bi-exclamation-circle"></i> Saldos Pendientes</h4>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
+                                <tbody id="tablaPendientesBody"></tbody>
+                            </table>
+                        </div>
                     </div>
-                  </div>
 
-                  <div class="form-row">
-                    <div class="form-group"><label for="nombreProyecto">Nombre del Proyecto (Opcional)</label><input type="text" id="nombreProyecto" /></div>
-                  </div>
-                    
-                  <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="checkbox" id="esAlbum" name="esAlbum" style="width: auto; margin-bottom: 0;">
-                    <label for="esAlbum" style="margin-bottom: 0; cursor: pointer;">Es un Disco/EP Completo</label>
-                  </div>
-
-                  <hr style="margin: 1.5rem 0; border: none; border-top: 1px dashed var(--border-color);">
-                  <h3>Añadir Servicios</h3>
-                    
-                  <div class="form-row">
-                    <div class="form-group" style="flex: 2;"><label for="proyectoServicio">Servicio</label><select id="proyectoServicio"></select></div>
-                    <div class="form-group"><label for="proyectoUnidades">Cant.</label><input type="number" id="proyectoUnidades" min="1" value="1"></div>
-                  </div>
-                  <button type="button" id="btnAgregarAProyecto" class="btn-secondary" style="width:100%; border-style: dashed;">+ Agregar Servicio</button>
-                    
-                  <ul id="listaProyectoActual" style="list-style: none; padding: 0; margin-top: 1.5rem;"></ul>
-                
-                  <div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                      <div class="form-row" style="justify-content: flex-end; align-items: center; margin-bottom: 0.5rem;">
-                          <label style="margin-right: 1rem; margin-bottom: 0;">Descuento ($):</label>
-                          <input type="number" id="proyectoDescuento" min="0" step="0.01" placeholder="0.00" style="width: 150px; margin-bottom: 0;">
-                      </div>
-                      <div class="info-row"><label style="margin:0;">Total a Pagar:</label><span id="totalAPagar">$0.00</span></div>
-                        
-                      <div class="form-row">
-                          <div class="form-group"><label for="fechaProyecto">Fecha de Inicio</label><input type="text" id="fechaProyecto"></div>
-                          <div class="form-group"><label for="horaProyecto">Hora</label><input type="time" id="horaProyecto"></div>
-                      </div>
-                        
-                      <div class="form-actions" style="display: flex; gap: 1rem; margin-top: 1rem;">
-                        <button id="btnGenerarCotizacion" class="btn-secondary" style="flex:1;">Generar PDF Cotización</button>
-                        <button id="btnEnviarAFlujo" class="btn-primary" style="flex:1;">Guardar y Agendar</button>
-                      </div>
-                  </div>
-                </form>
-              </div>
-            </section>
-
-            <section id="registro-manual">
-              <div class="card" style="max-width: 800px; margin: auto;">
-                <div class="card-header"><h2>Registro Manual Rápido</h2><p style="font-size: 0.9em; color: var(--text-color-light);">Para proyectos pasados o sin costo.</p></div>
-                <form id="formProyectoManual" onsubmit="return false;">
-                  <label for="manualProyectoArtista">Artista/Cliente</label>
-                  <div id="manual-artista-selector-container" style="display: flex; gap: 0.5rem;">
-                    <select id="manualProyectoArtista" required></select>
-                    <button type="button" id="manualBtnNuevoArtista" class="btn-primary" style="padding: 0.75rem 1rem;">+</button>
-                  </div>
-                  <div id="manualNuevoArtistaContainer" style="display: none; background: var(--secondary-button-bg); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-                    <label>Nombre del Nuevo Artista</label>
-                    <div class="form-row" style="align-items: center; gap: 0.5rem;">
-                      <input type="text" id="manualNombreNuevoArtista" placeholder="Nombre del artista" style="margin-bottom: 0;">
-                      <button type="button" id="btnGuardarManualNuevoArtista" class="btn-secondary" style="margin-bottom: 0; padding: 0.75rem;">Guardar</button>
+                    <div id="vista-pagos-historial" style="display:none;">
+                        <h4>Historial Completo</h4>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Fecha</th><th>Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
+                                <tbody id="tablaPagosBody"></tbody>
+                            </table>
+                        </div>
                     </div>
-                  </div>
-                  <label for="manualNombreProyecto">Nombre del Proyecto</label><input type="text" id="manualNombreProyecto" required />
-                  <label for="manualFechaProyecto">Fecha Original</label><input type="text" id="manualFechaProyecto" required />
-                  <label for="manualDescripcion">Descripción</label><textarea id="manualDescripcion" rows="3"></textarea>
-                  <button type="button" onclick="app.guardarProyectoManual()" style="width: 100%;">Guardar Histórico</button>
-                </form>
-              </div>
-            </section>
-
-            <section id="historial-proyectos">
-              <div class="card">
-                <div class="card-header"><h2>Proyectos Completados</h2></div>
-                <div class="table-responsive">
-                  <table>
-                    <thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead>
-                    <tbody id="tablaHistorialBody"></tbody>
-                  </table>
                 </div>
               </div>
             </section>
 
-            <section id="vista-artista"><div class="card"><div class="card-header"><h2 id="vista-artista-nombre"></h2></div><div id="vista-artista-contenido"></div></div></section>
+            <section id="registrar-proyecto" class="section-view">
+              <div class="card" style="max-width: 800px; margin: auto;">
+                <div class="card-header bg-primary text-white"><h2><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2></div>
+                <div class="card-body">
+                    <form id="formProyecto" onsubmit="return false;">
+                        <label>Artista/Cliente</label>
+                        <div class="d-flex gap-2 mb-3">
+                            <select id="proyectoArtista" class="form-select"><option value="publico_general">Público General</option></select>
+                            <button type="button" id="btnNuevoArtista" class="btn btn-secondary"><i class="bi bi-person-plus"></i></button>
+                        </div>
+                        
+                        <div id="nuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display: none;">
+                            <label>Nombre Nuevo Artista</label>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="nombreNuevoArtista" class="form-control" placeholder="Nombre">
+                                <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success">Guardar</button>
+                            </div>
+                        </div>
 
-            <section id="gestion-servicios">
-              <div class="card">
-                <div class="card-header"><h2>Gestión de Servicios</h2></div>
-                <form id="formServicios">
-                  <input type="hidden" id="idServicio">
-                  <div class="form-row">
-                    <div class="form-group"><input type="text" id="nombreServicio" placeholder="Nombre Servicio" required /></div>
-                    <div class="form-group"><input type="number" step="0.01" id="precioServicio" placeholder="Precio ($)" required /></div>
-                  </div>
-                  <div class="form-actions"><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormServicios">Limpiar</button></div>
-                </form>
-                <h3 style="margin-top: 2rem;">Listado</h3><ul id="listaServicios"></ul>
+                        <div class="mb-3">
+                            <label>Nombre Proyecto (Opcional)</label>
+                            <input type="text" id="nombreProyecto" class="form-control">
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="esAlbum">
+                            <label class="form-check-label" for="esAlbum">Es un Disco/EP Completo</label>
+                        </div>
+
+                        <hr>
+                        <h5>Servicios</h5>
+                        <div class="row g-2 mb-3">
+                            <div class="col-8"><select id="proyectoServicio" class="form-select"></select></div>
+                            <div class="col-2"><input type="number" id="proyectoUnidades" class="form-control" value="1" min="1"></div>
+                            <div class="col-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100"><i class="bi bi-plus"></i></button></div>
+                        </div>
+                        <ul id="listaProyectoActual" class="list-group mb-3"></ul>
+
+                        <div class="d-flex justify-content-end align-items-center mb-3">
+                            <label class="me-2">Descuento ($):</label>
+                            <input type="number" id="proyectoDescuento" class="form-control" style="width: 100px;">
+                        </div>
+                        <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><label>Fecha Inicio</label><input type="text" id="fechaProyecto" class="form-control"></div>
+                            <div class="col-6"><label>Hora</label><input type="time" id="horaProyecto" class="form-control"></div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1"><i class="bi bi-file-text"></i> Cotizar</button>
+                            <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1"><i class="bi bi-check-circle"></i> Agendar</button>
+                        </div>
+                    </form>
+                </div>
               </div>
             </section>
 
-            <section id="gestion-artistas">
+            <section id="gestion-artistas" class="section-view">
               <div class="card">
                 <div class="card-header"><h2>Gestión de Artistas</h2></div>
-                <form id="formArtistas">
-                  <input type="hidden" id="idArtista">
-                  <div class="form-row">
-                    <div class="form-group"><label>Nombre Real</label><input type="text" id="nombreArtista" required /></div>
-                    <div class="form-group"><label>Nombre Artístico</label><input type="text" id="nombreArtisticoArtista" /></div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group"><label>Teléfono</label><input type="tel" id="telefonoArtista" /></div>
-                    <div class="form-group"><label>Correo</label><input type="email" id="correoArtista" /></div>
-                  </div>
-                  <div class="form-actions"><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormArtistas">Limpiar</button></div>
-                </form>
-                <h3 style="margin-top: 2rem;">Directorio</h3><ul id="listaArtistas"></ul>
+                <div class="card-body">
+                  <form id="formArtistas" class="mb-4">
+                    <input type="hidden" id="idArtista">
+                    <div class="row g-2">
+                        <div class="col-md-6"><input type="text" id="nombreArtista" class="form-control" placeholder="Nombre Real" required></div>
+                        <div class="col-md-6"><input type="text" id="nombreArtisticoArtista" class="form-control" placeholder="Nombre Artístico"></div>
+                        <div class="col-md-6"><input type="tel" id="telefonoArtista" class="form-control" placeholder="Teléfono"></div>
+                        <div class="col-md-6"><input type="email" id="correoArtista" class="form-control" placeholder="Correo"></div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                        <button type="button" class="btn btn-secondary" id="btnLimpiarFormArtistas">Limpiar</button>
+                    </div>
+                  </form>
+                  <h3>Directorio</h3>
+                  <ul id="listaArtistas" class="list-group"></ul>
+                </div>
               </div>
             </section>
 
-            <section id="gestion-usuarios">
+            <section id="configuracion" class="section-view">
               <div class="card">
-                <div class="card-header"><h2>Gestión de Usuarios y Roles</h2></div>
-                <form id="formUsuarios">
-                  <input type="hidden" id="idUsuario">
-                  
-                  <div class="form-row">
-                    <div class="form-group">
-                        <label>Usuario</label>
-                        <input type="text" id="usernameUsuario" placeholder="Usuario" required />
+                <div class="card-header"><h2>Configuración</h2></div>
+                <div class="card-body">
+                    <h5>Firma Digital</h5>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded">
+                        <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Cambiar</button>
+                        <input type="file" id="firma-input" hidden accept="image/*">
                     </div>
                     
-                    <div class="form-group">
-                        <label>Correo Electrónico</label>
-                        <input type="email" id="emailUsuario" placeholder="correo@ejemplo.com" />
+                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info mb-3"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
+
+                    <div style="display:none;">
+                         <div id="template-cotizacion"></div>
+                         <div id="template-recibo"></div>
+                         <div id="template-contrato"></div>
                     </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Contraseña</label>
-                    <input type="password" id="passwordUsuario" placeholder="Vacío si no cambia" />
-                  </div>
-                  <label>Nombre del Rol (Escribe el nombre: ej. Diseñador, Cliente, Admin)</label>
-                  <input type="text" id="roleUsuario" list="roles-sugeridos" placeholder="Escribe el rol..." required style="margin-bottom:0.5rem;">
-                  <datalist id="roles-sugeridos">
-                      <option value="Admin">Acceso Total</option>
-                      <option value="Ingeniero">Estudio</option>
-                      <option value="Cliente">Solo sus archivos</option>
-                      <option value="Diseñador">Archivos y Flujo</option>
-                  </datalist>
-
-                  <label style="margin-top:1rem; display:block; font-weight:600;">Permisos de Acceso:</label>
-                  <div class="permissions-grid">
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="dashboard"> Dashboard</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="agenda"> Agenda</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="flujo-trabajo"> Flujo Trabajo</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="finanzas"> Finanzas (Cot/Pagos)</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="historial-proyectos"> Historial</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios (Admin)</label>
-                      <label class="permission-item"><input type="checkbox" name="user_permisos" value="configuracion"> Configuración</label>
-                  </div>
-
-                  <div class="form-actions"><button type="submit">Guardar</button><button type="button" class="btn-secondary" id="btnLimpiarFormUsuarios">Limpiar</button></div>
-                </form>
-                <h3 style="margin-top: 2rem;">Equipo</h3><ul id="listaUsuarios"></ul>
+                </div>
               </div>
             </section>
 
-            <section id="papelera-reciclaje">
-              <div class="card">
-                  <h2>Papelera de Reciclaje</h2>
-                  <div class="form-row">
-                    <div class="form-group"><h3>Servicios <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('servicios')">Vaciar</button></h3><ul id="papeleraServicios"></ul></div>
-                    <div class="form-group"><h3>Artistas <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('artistas')">Vaciar</button></h3><ul id="papeleraArtistas"></ul></div>
-                  </div>
-                  <h3>Proyectos <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('proyectos')">Vaciar</button></h3><ul id="papeleraProyectos"></ul>
-                  <h3 style="margin-top: 1.5rem;">Usuarios <button class="btn-vaciar" style="padding: 0.3rem 0.6rem; font-size:0.7em;" onclick="app.vaciarPapelera('usuarios')">Vaciar</button></h3><ul id="papeleraUsuarios"></ul>
-              </div>
-            </section>
-              
-            <section id="configuracion">
-              <div class="card">
-                <div class="card-header"><h2>Configuración del Sistema</h2></div>
-                  
-                <div class="info-row">
-                  <div>
-                    <h3>Firma Digital</h3>
-                    <p style="font-size: 0.9em; opacity: 0.8;">Esta firma aparecerá en Cotizaciones y Recibos.</p>
-                  </div>
-                  <div style="text-align: center;">
-                      <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" alt="Firma" style="border: 1px dashed var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; background: white;">
-                      <input type="file" id="firma-input" accept="image/png" style="display: none;">
-                      <button onclick="document.getElementById('firma-input').click()" class="btn-secondary" style="font-size: 0.8em; padding: 0.4rem 1rem;">Cambiar</button>
-                  </div>
-                </div>
-                  
-                <div style="margin: 2rem 0; padding: 1rem; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--secondary-button-bg);">
-                    <h4>Prueba de Google Drive</h4>
-                    <p style="font-size:0.85em;">Verifica que la API esté conectada y puedas subir archivos.</p>
-                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba Conexión')" class="btn-secondary">Abrir Modal de Subida</button>
-                </div>
-
-                <hr style="margin: 2rem 0; border:none; border-top: 1px solid var(--border-color);">
-
-                <h3>Ajuste de Posición en PDF</h3>
-                <div id="config-layout">
-                  <label for="doc-type-selector">Documento:</label>
-                  <select id="doc-type-selector" onchange="app.cargarAjustesParaDocumento(this.value)" style="margin-bottom: 1.5rem;">
-                    <option value="cotizacion">Cotización</option>
-                    <option value="recibo">Recibo de Pago</option>
-                    <option value="contrato">Contrato</option>
-                    <option value="distribucion">Hoja Distribución</option>
-                  </select>
-
-                  <div class="grid-container">
-                    <div style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 12px;">
-                        <h4>Alineación</h4>
-                        <div style="margin: 1rem 0;">
-                            <strong>Vertical:</strong> 
-                            <label><input type="radio" name="vAlign" value="top" onchange="app.actualizarPosicionFirma()"> Top</label>
-                            <label><input type="radio" name="vAlign" value="middle" onchange="app.actualizarPosicionFirma()"> Mid</label>
-                            <label><input type="radio" name="vAlign" value="bottom" onchange="app.actualizarPosicionFirma()"> Bot</label>
-                        </div>
-                        <div style="margin: 1rem 0;">
-                            <strong>Horizontal:</strong>
-                            <label><input type="radio" name="hAlign" value="left" onchange="app.actualizarPosicionFirma()"> Izq</label>
-                            <label><input type="radio" name="hAlign" value="center" onchange="app.actualizarPosicionFirma()"> Cen</label>
-                            <label><input type="radio" name="hAlign" value="right" onchange="app.actualizarPosicionFirma()"> Der</label>
-                        </div>
-                    </div>
-                      
-                    <div style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 12px;">
-                        <h4>Ajuste Fino (Offset)</h4>
-                        <label>Eje X: <span id="val-firma-offsetX">0</span></label>
-                        <input type="range" id="slider-firma-offsetX" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()">
-                          
-                        <label>Eje Y: <span id="val-firma-offsetY">0</span></label>
-                        <input type="range" id="slider-firma-offsetY" min="-50" max="50" value="0" oninput="app.actualizarPosicionFirma()">
-                          
-                        <label>Tamaño (Ancho): <span id="val-firma-w">0</span></label>
-                        <input type="range" id="slider-firma-w" min="10" max="150" value="50" oninput="app.actualizarPosicionFirma()">
-                        <input type="hidden" id="slider-firma-h" value="20"> </div>
-                  </div>
-                    
-                  <div style="margin-top: 1rem; display:flex; gap: 1rem;">
-                    <button onclick="app.guardarAjustesFirma()" style="flex:2;">Guardar Ajustes PDF</button>
-                    <button onclick="app.revertirADefecto()" class="btn-secondary" style="flex:1;">Reset</button>
-                  </div>
-                    
-                  <div id="firma-preview-container" style="display:none;"><img id="firma-draggable-preview" src=""></div>
-                  <div style="display:none;"><span id="val-firma-h"></span><div id="template-cotizacion"></div><div id="template-recibo"></div><div id="template-contrato"><div id="contract-signature-block"><div class="signature-area-rep"></div></div></div><div id="template-distribucion"></div></div>
-                </div>
-
-                <hr style="margin: 2rem 0; border:none; border-top: 1px solid var(--border-color);">
-                  
-                <h3>Datos Bancarios</h3>
-                <form id="form-datos-bancarios">
-                  <div class="form-row"><div class="form-group"><label>Banco</label><input type="text" id="banco" /></div><div class="form-group"><label>Titular</label><input type="text" id="titular" /></div></div>
-                  <div class="form-row"><div class="form-group"><label>Tarjeta</label><input type="text" id="tarjeta" /></div><div class="form-group"><label>CLABE</label><input type="text" id="clabe" /></div></div>
-                  <button type="button" onclick="app.guardarDatosBancarios()">Guardar Datos</button>
-                </form>
-              </div>
-            </section>
+            <section id="registro-manual" class="section-view"><div class="card"><div class="card-header"><h2>Histórico</h2></div><div class="card-body"><form id="formProyectoManual">...</form></div></div></section>
+            <section id="historial-proyectos" class="section-view"><div class="card"><div class="card-header"><h2>Historial</h2></div><div class="card-body"><table class="table"><tbody id="tablaHistorialBody"></tbody></table></div></div></section>
+            <section id="gestion-servicios" class="section-view"><div class="card"><div class="card-header"><h2>Servicios</h2></div><div class="card-body"><ul id="listaServicios"></ul></div></div></section>
+            <section id="gestion-usuarios" class="section-view"><div class="card"><div class="card-header"><h2>Usuarios</h2></div><div class="card-body"><ul id="listaUsuarios"></ul></div></div></section>
 
         </main>
     </div>
   </div>
 
-  <div class="fab-container">
-    <button class="fab-btn" onclick="app.mostrarSeccion('registrar-proyecto')">+</button>
-  </div>
-
-  <div id="edit-artist-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Editar Artista</h2>
-            <button class="modal-close" onclick="document.getElementById('edit-artist-modal').style.display='none'">×</button>
-        </div>
-        <form id="formEditArtistFromView" onsubmit="app.guardarEdicionArtista(event)">
-            <input type="hidden" id="editArtistId">
-            <label>Nombre Real</label><input type="text" id="editArtistNombre" required>
-            <label>Nombre Artístico</label><input type="text" id="editArtistNombreArtístico">
-            <div class="form-row">
-                <div class="form-group"><label>Teléfono</label><input type="tel" id="editArtistTelefono"></div>
-                <div class="form-group"><label>Correo</label><input type="email" id="editArtistCorreo"></div>
-            </div>
-            <button type="submit" style="width:100%;">Guardar Cambios</button>
-        </form>
-    </div>
-  </div>
-
-  <div id="request-appointment-modal" class="modal-overlay">
+  <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
-          <div class="modal-header">
-              <h2>Solicitar Cita / Proyecto</h2>
-              <button class="modal-close" onclick="app.cerrarModalSolicitud()">×</button>
-          </div>
-          <p style="font-size:0.9em; margin-bottom:1rem; color:var(--text-color-light);">
-              Envía una solicitud al estudio. Te confirmaremos la fecha pronto.
-          </p>
-          <form onsubmit="app.enviarSolicitud(event)">
-              <label>¿Qué servicio necesitas?</label>
-              <select id="req-service" required></select>
-
-              <label>Fecha deseada (Sugerida)</label>
-              <input type="text" id="req-date" required>
-              
-              <label>Hora deseada (Aprox)</label>
-              <input type="time" id="req-time">
-
-              <label>Comentarios adicionales</label>
-              <textarea id="req-comments" rows="3" placeholder="Ej: Es para grabar voces de 2 canciones..."></textarea>
-
-              <button type="submit" style="width:100%; margin-top:1rem;">Enviar Solicitud</button>
-          </form>
-      </div>
-  </div>
-
-  <div id="document-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title">Generar Documentos</h2>
-        <button class="modal-close" onclick="app.closeDocumentsModal()">×</button>
-      </div>
-      <input type="hidden" id="modal-project-id">
-      <div class="filter-buttons" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
-          <button id="btn-show-contrato" class="btn-secondary active" onclick="app.showDocumentSection('contrato')">Contrato</button>
-          <button id="btn-show-distribucion" class="btn-secondary" onclick="app.showDocumentSection('distribucion')">Distribución</button>
-      </div>
-      <div id="section-contrato" class="document-section active" style="display:none;">
-        <h3 style="margin-bottom:1rem;">Datos del Contrato</h3>
-        <label>Nombre Álbum/EP</label><input type="text" id="contrato-nombre-album">
-        <div class="form-row">
-            <div class="form-group"><label>Canciones</label><input type="number" id="contrato-canciones"></div>
-            <div class="form-group"><label>Duración</label><input type="text" id="contrato-duracion" placeholder="Ej: 2 Semanas"></div>
-        </div>
-        <div class="form-row">
-            <div class="form-group"><label>Pago Inicial</label><input type="number" id="contrato-pago-inicial" oninput="app.calcularSaldoContrato()"></div>
-            <div class="form-group"><label>Saldo Restante</label><input type="number" id="contrato-pago-final" readonly></div>
-        </div>
-        <button onclick="app.saveAndGenerateContract()" style="width: 100%;">Generar Contrato PDF</button>
-      </div>
-      <div id="section-distribucion" class="document-section" style="display:none;">
-        <h3>Datos de Distribución</h3>
-        <label>Título Lanzamiento</label><input type="text" id="dist-titulo">
-        <label>Fecha Lanzamiento</label><input type="text" id="dist-fecha">
-        <label>UPC/EAN</label><input type="text" id="dist-upc">
-        <hr style="margin: 1rem 0;">
-        <h4>Tracks</h4>
-        <div id="dist-tracks-container"></div>
-        <button onclick="app.addTrackField()" class="btn-secondary" style="width: 100%; margin-bottom: 1rem;">+ Añadir Track</button>
-        <button onclick="app.saveAndGenerateDistribution()" style="width: 100%;">Generar PDF</button>
-      </div>
-    </div>
-  </div>
-    
-  <div id="event-modal" class="modal-overlay">
-    <div class="modal-content">
         <div class="modal-header">
-            <h2 id="modal-event-title">Detalles</h2>
-            <button class="modal-close" onclick="app.closeEventModal()">×</button>
+          <h5 class="modal-title">Editar Artista</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-        <input type="hidden" id="modal-event-id">
-        <div style="background: var(--secondary-button-bg); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
-            <p><strong>Fecha:</strong> <span id="modal-event-date"></span></p>
-            <p><strong>Total:</strong> <span id="modal-event-total"></span></p>
-            <p><strong>Estado:</strong> <span id="modal-event-status"></span></p>
-            <p><strong>Proceso:</strong> <span id="modal-event-process"></span></p>
-        </div>
-        <h4>Servicios:</h4>
-        <ul id="modal-event-services" style="list-style-position: inside; padding-left: 0; color: var(--text-color-light);"></ul>
-          
-        <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-            <h4 style="margin-bottom: 0.5rem;">Reprogramar</h4>
-            <div class="form-row">
-                <div class="form-group"><input type="text" id="edit-event-date"></div>
-                <div class="form-group"><input type="time" id="edit-event-time"></div>
+        <div class="modal-body">
+          <form id="formEditArtistFromView" onsubmit="app.guardarEdicionArtista(event)">
+            <input type="hidden" id="editArtistId">
+            <div class="mb-2"><label>Nombre Real</label><input type="text" id="editArtistNombre" class="form-control" required></div>
+            <div class="mb-2"><label>Nombre Artístico</label><input type="text" id="editArtistNombreArtístico" class="form-control"></div>
+            <div class="row g-2">
+                <div class="col-6"><label>Teléfono</label><input type="tel" id="editArtistTelefono" class="form-control"></div>
+                <div class="col-6"><label>Correo</label><input type="email" id="editArtistCorreo" class="form-control"></div>
             </div>
-            <button onclick="app.actualizarHorarioProyecto()" class="btn-secondary" style="width: 100%;">Actualizar Horario</button>
+            <button type="submit" class="btn btn-primary w-100 mt-3">Guardar Cambios</button>
+          </form>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="form-actions" style="margin-top: 1.5rem; flex-direction: column;">
-            <button id="btn-go-to-workflow" class="btn-primary" onclick="">Ir al Tablero</button>
-            <button id="btn-go-to-artist" class="btn-secondary" onclick="">Ver Historial Artista</button>
+  <div class="modal fade" id="modalDatosBancarios" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-credit-card"></i> Datos Bancarios</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-    </div>
-  </div>
-    
-  <div id="delivery-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Entrega de Material</h2>
-        <button class="modal-close" onclick="app.closeDeliveryModal()">×</button>
-      </div>
-      <input type="hidden" id="delivery-project-id">
-      <input type="hidden" id="delivery-artist-name">
-      <input type="hidden" id="delivery-project-name">
-        
-      <div style="margin-bottom: 1.5rem; padding: 1rem; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--secondary-button-bg);">
-        <h4 style="margin-bottom:0.5rem;">Subir a Google Drive (Jerárquico)</h4>
-        <p style="font-size:0.8em; color:var(--text-color-light);">Se creará: <strong>/Artista/Proyecto/Archivo</strong></p>
-        <input type="file" id="drive-file-input" style="margin-bottom: 0.5rem; width:100%;">
-        <button id="btn-upload-drive" onclick="app.subirADrive()" class="btn-primary" style="width:100%; display:flex; justify-content:center; gap:0.5rem;">
-           <span id="drive-btn-text">📤 Subir y Obtener Link</span>
-        </button>
-        <div id="drive-status" style="font-size: 0.8em; margin-top: 0.5rem; color: var(--text-color-light);"></div>
-      </div>
-      <div class="form-group">
-        <label>Enlace de Descarga (Drive/WeTransfer)</label>
-        <input type="url" id="delivery-link-input" placeholder="https://...">
-      </div>
-      <div class="form-actions">
-        <button class="btn-secondary" onclick="app.saveDeliveryLink()">Guardar Enlace</button>
-        <button onclick="app.sendDeliveryByWhatsapp()" style="background-color: #25D366; color: white;">Enviar WhatsApp</button>
+        <div class="modal-body">
+          <form id="form-datos-bancarios">
+             <div class="mb-3">
+                 <label>Banco</label>
+                 <input type="text" id="banco" class="form-control" placeholder="Ej: BBVA">
+             </div>
+             <div class="mb-3">
+                 <label>Titular</label>
+                 <input type="text" id="titular" class="form-control">
+             </div>
+             <div class="row g-2">
+                 <div class="col-6"><label>Tarjeta</label><input type="text" id="tarjeta" class="form-control"></div>
+                 <div class="col-6"><label>CLABE</label><input type="text" id="clabe" class="form-control"></div>
+             </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-success" onclick="app.guardarDatosBancariosConfirmacion()">Guardar Datos</button>
+        </div>
       </div>
     </div>
   </div>
-    
+
+  <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Entrega de Material</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+           <input type="hidden" id="delivery-project-id">
+           <input type="hidden" id="delivery-artist-name">
+           
+           <div class="alert alert-light border">
+               <h6><i class="bi bi-google"></i> Google Drive</h6>
+               <input type="file" id="drive-file-input" class="form-control mb-2">
+               <button id="btn-upload-drive" onclick="app.subirADrive()" class="btn btn-primary w-100">Subir y Obtener Link</button>
+               <div id="drive-status" class="small mt-2"></div>
+           </div>
+           
+           <label>Enlace Externo</label>
+           <input type="url" id="delivery-link-input" class="form-control mb-3" placeholder="https://...">
+           
+           <div class="d-flex gap-2">
+               <button class="btn btn-secondary flex-grow-1" onclick="app.saveDeliveryLink()">Guardar</button>
+               <button onclick="app.sendDeliveryByWhatsapp()" class="btn btn-success flex-grow-1"><i class="bi bi-whatsapp"></i> WhatsApp</button>
+           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+
   <script src="script.js"></script>
 </body>
 </html>
