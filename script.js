@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let logoBase64 = null;
     let preseleccionArtistaId = null;
     
-    // --- VARIABLE GLOBAL IMPORTANTE (Evita errores al editar) ---
+    // Variable global para evitar errores al editar desde el Dashboard
     let historialCacheados = []; 
 
     // --- CONFIGURACIÓN GOOGLE DRIVE INTEGRADA ---
@@ -638,7 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
       showLoader();
       try {
-          // --- CORRECCIÓN: Obtener valores por ID correctamente ---
           const u = document.getElementById('username').value;
           const p = document.getElementById('password').value;
           
@@ -719,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
     function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if(idInput) idInput.value = ''; }
     
-    // --- FUNCIÓN GUARDAR DESDE MODAL (Sustituye a saveItem) ---
+    // --- FUNCIÓN GUARDAR DESDE MODAL ---
     async function guardarDesdeModal(type) {
         let id = '';
         let body = {};
@@ -810,16 +809,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('modalEmail').value = item.email || ''; 
                 document.getElementById('modalRole').value = item.role; 
                 document.getElementById('modalPassword').value = ''; 
-                
-                document.querySelectorAll('input[name="user_permisos"]').forEach(chk => chk.checked = false);
-                const userPerms = item.permisos || [];
-                if(Array.isArray(userPerms)) {
-                    document.querySelectorAll('input[name="user_permisos"]').forEach(chk => {
-                        if (userPerms.includes(chk.value)) {
-                            chk.checked = true;
-                        }
-                    });
-                }
             } 
             
             modal.show();
@@ -835,6 +824,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
     };
+
+    // --- NUEVA FUNCIÓN PARA MOSTRAR DATOS BANCARIOS ---
+    function mostrarDatosBancariosPublicos() {
+        if(!configCache || !configCache.datosBancarios) {
+            return showToast('No hay datos bancarios registrados aún.', 'info');
+        }
+        
+        const db = configCache.datosBancarios;
+        Swal.fire({
+            title: 'Datos Bancarios',
+            html: `
+                <div style="text-align:left;">
+                    <p><strong>Banco:</strong> ${escapeHTML(db.banco)}</p>
+                    <p><strong>Titular:</strong> ${escapeHTML(db.titular)}</p>
+                    <p><strong>Tarjeta:</strong> ${escapeHTML(db.tarjeta)}</p>
+                    <p><strong>CLABE:</strong> ${escapeHTML(db.clabe)}</p>
+                </div>
+            `,
+            confirmButtonText: 'Copiar',
+            showCancelButton: true,
+            cancelButtonText: 'Cerrar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const texto = `Banco: ${db.banco}\nTitular: ${db.titular}\nTarjeta: ${db.tarjeta}\nCLABE: ${db.clabe}`;
+                navigator.clipboard.writeText(texto).then(() => {
+                    showToast('Copiado al portapapeles', 'success');
+                });
+            }
+        });
+    }
 
     async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     async function eliminarPermanente(id, endpoint) { if (!confirm('¡Irreversible!')) return; try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
@@ -894,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if(proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-    async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"`:''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
+    async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista?'clickable-artist':''}" ${p.artista?`ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch(error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
       
     async function eliminarProyecto(id, desdeCotizaciones = false) { 
         if (!confirm('¿Mover a papelera? Desaparecerá del flujo.')) return; 
@@ -1518,6 +1537,12 @@ document.addEventListener('DOMContentLoaded', () => {
           });
       }
 
+      // --- ASIGNAR EVENTO AL BOTÓN DE DATOS BANCARIOS ---
+      const btnBanco = document.getElementById('btn-enviar-datos-bancarios');
+      if(btnBanco) {
+          btnBanco.addEventListener('click', mostrarDatosBancariosPublicos);
+      }
+
       const themeSwitch = document.getElementById('theme-switch');
       if (themeSwitch) {
           themeSwitch.addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
@@ -1544,7 +1569,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const btnManualArt = document.getElementById('manualBtnNuevoArtista');
       if(btnManualArt) btnManualArt.addEventListener('click', () => { 
-          // Corrección para usar modal
           app.abrirModalCrear('artistas');
       });
       
@@ -1670,7 +1694,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, guardarDesdeModal, abrirModalCrear };
+    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, goToProjectInWorkflow, goToArtistFromModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), abrirModalSolicitud, cerrarModalSolicitud, enviarSolicitud, toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, guardarDesdeModal, abrirModalCrear, mostrarDatosBancariosPublicos };
   });
 
   if ('serviceWorker' in navigator) {

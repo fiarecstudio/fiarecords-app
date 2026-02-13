@@ -65,6 +65,13 @@ body.dark-mode {
   --fc-border-color: #334155;
 }
 
+/* --- LOGO DINÁMICO --- */
+/* Invierte colores del logo en modo oscuro (Negro -> Blanco) */
+body.dark-mode #app-logo, 
+body.dark-mode #login-logo {
+    filter: brightness(0) invert(1);
+}
+
 /* OVERRIDES BOOTSTRAP MODAL DARK MODE */
 body.dark-mode .modal-content {
     background-color: var(--card-background);
@@ -345,6 +352,7 @@ tbody tr:hover { background-color: var(--secondary-button-bg); }
   
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
 .modal-close { font-size: 2rem; cursor: pointer; background: none; border: none; color: var(--text-color-light); line-height: 1; padding: 0; transition: color 0.2s; }
+.modal-close { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; }
 .modal-close:hover { color: var(--danger-color); }
 
 /* UTILS & LOGIN */
