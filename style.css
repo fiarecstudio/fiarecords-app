@@ -2,7 +2,7 @@
    1. VARIABLES & RESET
    ========================================= */
 :root {
-  /* Paleta de Colores (Coincide con Bootstrap pero con tus gradientes) */
+  /* Paleta de Colores */
   --primary-color: #6366f1; 
   --primary-hover: #4f46e5;
   --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
@@ -26,6 +26,7 @@
     
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   
   --secondary-button-bg: #f1f5f9; 
   --secondary-button-text: #475569; 
@@ -70,31 +71,29 @@ body {
     background-color: var(--background-color); 
     color: var(--text-color-dark); 
     font-size: 15px; 
-    overflow-x: hidden; /* Previene scroll horizontal */
+    overflow-x: hidden; 
     transition: background-color 0.3s, color 0.3s;
 }
 
 h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; color: var(--text-color-dark); }
 
 /* =========================================
-   2. SOLUCIÓN AL LOGO (Inversión de color)
+   2. SOLUCIÓN AL LOGO
    ========================================= */
 .logo-dinamico {
     max-width: 160px;
     max-height: 70px;
     object-fit: contain;
     transition: all 0.3s;
-    /* MODO CLARO: Invertimos el logo (si es blanco original) para que sea negro */
     filter: invert(1) grayscale(100%) brightness(0); 
 }
 
 body.dark-mode .logo-dinamico {
-    /* MODO OSCURO: Quitamos el filtro para que se vea blanco original */
     filter: none;
 }
 
 /* =========================================
-   3. BOOTSTRAP OVERRIDES (Mejoras visuales)
+   3. BOOTSTRAP OVERRIDES
    ========================================= */
 
 /* Inputs y Selects */
@@ -111,25 +110,24 @@ body.dark-mode .logo-dinamico {
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
     color: var(--text-color-dark);
 }
-/* Input Group Text (Iconos al lado de inputs) */
 .input-group-text {
     background-color: var(--secondary-button-bg);
     border-color: var(--border-color);
     color: var(--text-color-light);
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
 }
 
-/* Botones (Usando tus gradientes sobre las clases de Bootstrap) */
+/* Botones */
 .btn { border-radius: 10px; font-weight: 600; padding: 0.6rem 1.2rem; transition: all 0.2s; border: none; }
-.btn-primary { background: var(--primary-gradient); border: none; }
+.btn-primary { background: var(--primary-gradient); border: none; color: white; }
 .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
-.btn-success { background: var(--success-gradient); border: none; }
-.btn-danger { background: var(--danger-gradient); border: none; }
+.btn-success { background: var(--success-gradient); border: none; color: white; }
+.btn-danger { background: var(--danger-gradient); border: none; color: white; }
 .btn-secondary, .btn-light { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
-.btn-secondary:hover { background: var(--secondary-button-hover-bg); color: var(--text-color-dark); }
-.btn-outline-secondary { border-color: var(--border-color); color: var(--text-color-light); }
-.btn-outline-secondary:hover { background: var(--secondary-button-bg); color: var(--text-color-dark); border-color: var(--text-color-dark); }
+.btn-secondary:hover { background: var(--secondary-button-hover-bg); color: var(--text-color-dark); border-color: var(--text-color-light); }
 
-/* Modales Bootstrap (Adaptados a tu tema) */
+/* Modales */
 .modal-content {
     background-color: var(--card-background);
     color: var(--text-color-dark);
@@ -139,22 +137,22 @@ body.dark-mode .logo-dinamico {
 }
 .modal-header { border-bottom: 1px solid var(--border-color); }
 .modal-footer { border-top: 1px solid var(--border-color); }
-/* Botón cerrar modal */
 .btn-close { filter: var(--bs-btn-close-filter); }
 body.dark-mode .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
-/* Tablas Bootstrap */
+/* Tablas */
 .table { --bs-table-bg: transparent; --bs-table-color: var(--text-color-dark); --bs-table-border-color: var(--border-color); }
 .table-hover tbody tr:hover { background-color: var(--secondary-button-bg); }
 .table thead th { background-color: var(--secondary-button-bg); color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid var(--border-color); }
+.table td { vertical-align: middle; }
 
-/* SweetAlert2 Dark Mode Override */
+/* SweetAlert2 Dark Mode */
 body.dark-mode div.swal2-popup {
     background: var(--card-background) !important;
     color: var(--text-color-dark) !important;
     border: 1px solid var(--border-color);
 }
-body.dark-mode div.swal2-title, body.dark-mode div.swal2-content { color: var(--text-color-dark) !important; }
+body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode div.swal2-html-container { color: var(--text-color-dark) !important; }
 
 /* =========================================
    4. LAYOUT & SIDEBAR
@@ -176,7 +174,7 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content { color: var(--
 .sidebar-header { text-align: center; margin-bottom: 2rem; }
 .sidebar-nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
 
-/* Links del Sidebar */
+/* Links Sidebar */
 .nav-link-sidebar {
     display: flex; align-items: center; gap: 0.8rem;
     padding: 0.8rem 1rem;
@@ -188,13 +186,13 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content { color: var(--
     cursor: pointer;
 }
 .nav-link-sidebar:hover { background-color: var(--secondary-button-bg); color: var(--text-color-dark); }
-.nav-link-sidebar.active { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); font-weight: 700; }
+.nav-link-sidebar.active { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); font-weight: 700; border-left: 3px solid var(--primary-color); }
 .nav-link-sidebar i { font-size: 1.1rem; }
 
 /* Main Content */
-.main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
-.main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); }
-main { flex: 1; overflow-y: auto; padding-bottom: 5rem; }
+.main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); }
+.main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); padding: 1rem; display: flex; align-items: center; justify-content: space-between;}
+main { flex: 1; overflow-y: auto; padding: 2rem; }
 
 /* =========================================
    5. COMPONENTES ESPECÍFICOS
@@ -205,17 +203,20 @@ main { flex: 1; overflow-y: auto; padding-bottom: 5rem; }
     border: 1px solid var(--border-color);
     border-radius: 16px;
     box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
 }
 
 /* KPI Cards */
-.grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
-.kpi-card { position: relative; overflow: hidden; }
+.grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center;}
 
 /* Kanban */
-.kanban-board { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; min-height: 400px; }
-.kanban-column { min-width: 280px; width: 280px; background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; border: 1px solid var(--border-color); }
-.project-card { background: var(--card-background); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; transition: transform 0.2s; }
-.project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.kanban-board { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; min-height: 400px; align-items: flex-start; }
+.kanban-column { min-width: 300px; width: 300px; background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; border: 1px solid var(--border-color); flex-shrink: 0; }
+.kanban-column h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; text-align: center; opacity: 0.8; }
+.project-card { background: var(--card-background); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; transition: transform 0.2s; position: relative; }
+.project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); z-index: 10; }
 
 /* Loader */
 #loader-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
@@ -223,39 +224,61 @@ main { flex: 1; overflow-y: auto; padding-bottom: 5rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Login Container */
-#login-container { min-height: 100vh; padding: 20px; }
+#login-container { min-height: 100vh; padding: 20px; display: flex; align-items: center; justify-content: center; background: var(--background-color); }
+.login-card { width: 100%; max-width: 400px; padding: 2rem; }
 body.auth-visible { overflow-y: auto !important; }
 
 /* =========================================
    6. RESPONSIVE (MÓVIL)
    ========================================= */
 @media (max-width: 768px) {
-    /* Sidebar Oculto por defecto */
     .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 85%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.2); transition: left 0.3s ease; }
     .sidebar.show { left: 0; }
     
-    /* Overlay para cerrar menú clickeando afuera */
     #sidebar-overlay { 
         display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px);
     }
     #sidebar-overlay.show { display: block; }
 
-    /* Ajustes Header */
-    .search-box { display: none; } /* Ocultar búsqueda en header móvil si no cabe */
+    .search-box { display: none; }
+    main { padding: 1rem; }
     
     /* Tablas responsivas tipo tarjeta */
     .table-responsive thead { display: none; }
-    .table-responsive tr { display: block; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background: var(--card-background); }
-    .table-responsive td { display: flex; justify-content: space-between; padding: 0.5rem 0; border: none; border-bottom: 1px dashed var(--border-color); }
-    .table-responsive td:last-child { border-bottom: none; justify-content: flex-end; gap: 0.5rem; }
-    .table-responsive td:before { content: attr(data-label); font-weight: 700; color: var(--text-color-light); font-size: 0.85em; }
+    .table-responsive tr { display: block; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
+    .table-responsive td { display: flex; justify-content: space-between; padding: 0.5rem 0; border: none; border-bottom: 1px dashed var(--border-color); align-items: center; }
+    .table-responsive td:last-child { border-bottom: none; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
 }
 
-/* Switch Theme Toggle */
-.theme-toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--secondary-button-bg); border-radius: 8px; }
+/* Switch Theme */
+.theme-toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--secondary-button-bg); border-radius: 8px; margin-top: auto; }
 .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
 .theme-switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 34px; transition: .4s; }
 .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; border-radius: 50%; transition: .4s; }
 input:checked + .slider { background-color: var(--primary-color); }
 input:checked + .slider:before { transform: translateX(20px); }
+
+/* =========================================
+   7. LÓGICA DE SECCIONES (SPA) - ¡LO MÁS IMPORTANTE!
+   ========================================= */
+/* Ocultamos TODAS las secciones dentro del main por defecto */
+main > section {
+    display: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Mostramos SOLO la sección que tenga la clase .active */
+main > section.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
