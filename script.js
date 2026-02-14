@@ -295,12 +295,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({ prompt: '' }); } else { tokenClient.requestAccessToken({ prompt: '' }); }
     }
 
-    // --- INICIALIZACIÓN ---
+    // --- INICIALIZACIÓN PRINCIPAL (ARREGLADA) ---
     (async function init() {
+        // 1. CARGA INICIAL DE ESTILOS Y LOGO
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
         
+        // 2. CONFIGURAR LISTENERS DE LOGIN (¡ESTO FALTABA!)
+        setupAuthListeners();
+
+        // 3. REVISAR URL (RESET PASSWORD)
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
              const token = path.split('/').pop();
@@ -308,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
         }
 
+        // 4. REVISAR TOKEN EXISTENTE
         const token = localStorage.getItem('token');
         if (token) {
             try {
@@ -317,6 +323,43 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { showLogin(); }
         } else { showLogin(); }
     })();
+
+    // --- CONFIGURACIÓN DE LISTENERS AUTH (NUEVA FUNCIÓN) ---
+    function setupAuthListeners() {
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
+            showLoader();
+            try {
+                const userVal = document.getElementById('username').value;
+                const passVal = document.getElementById('password').value;
+                
+                // MODO DEMO: Si no hay backend, simula login
+                // if (userVal === 'admin' && passVal === 'admin') { ... }
+
+                const res = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: userVal, password: passVal })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+                
+                localStorage.setItem('token', data.token);
+                await showApp(JSON.parse(atob(data.token.split('.')[1])));
+            } catch (error) {
+                document.getElementById('login-error').textContent = error.message;
+            } finally {
+                hideLoader();
+            }
+        });
+        
+        document.getElementById('register-form').addEventListener('submit', registerUser);
+        document.getElementById('recover-form').addEventListener('submit', recoverPassword);
+        document.getElementById('reset-form').addEventListener('submit', resetPassword);
+        document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); });
+    }
 
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
@@ -335,6 +378,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              mostrarSeccion(hashSection || 'dashboard', false);
         }
+        
+        // Asegurar que la app sea visible
+        document.body.style.opacity = '1';
+        document.body.style.visibility = 'visible';
     }
 
     function showLogin() {
@@ -342,9 +389,12 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem('token');
         DOMElements.loginContainer.style.display = ''; 
         DOMElements.appWrapper.style.display = '';
+        
+        document.body.style.opacity = '1';
+        document.body.style.visibility = 'visible';
     }
 
-    // --- AUTH ---
+    // --- AUTH LOGIC ---
     function cerrarSesionConfirmacion() {
         Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir' })
         .then((result) => { if (result.isConfirmed) showLogin(); });
@@ -487,7 +537,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function limpiarForm(formId) { document.getElementById(formId).reset(); }
 
-    // Función genérica para CREAR (los forms de la vista principal)
     async function saveItem(e, type) {
         e.preventDefault();
         const form = e.target;
@@ -886,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupCustomization(payload);
         setupMobileMenu();
         const logoutBtn = document.getElementById('logout-button'); if (logoutBtn) { logoutBtn.replaceWith(logoutBtn.cloneNode(true)); document.getElementById('logout-button').addEventListener('click', cerrarSesionConfirmacion); }
-        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); } showLoader(); try { const userVal = document.getElementById('username').value; const passVal = document.getElementById('password').value; const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); localStorage.setItem('token', data.token); await showApp(JSON.parse(atob(data.token.split('.')[1]))); } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); } });
+        // NOTA: El listener del login ya no está aquí, está en setupAuthListeners() para que funcione antes de loguearse.
     }
 
     function setupCustomization(payload) { if (payload.role === 'admin') { if (DOMElements.appLogo && DOMElements.logoInput) { DOMElements.appLogo.style.cursor = 'pointer'; DOMElements.appLogo.onclick = () => DOMElements.logoInput.click(); DOMElements.logoInput.onchange = async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error al subir logo`, 'error'); } }; } } }
