@@ -57,7 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Mapeo de tipos para SweetAlert
         let iconType = type;
         if(type === 'info') iconType = 'info';
         
@@ -170,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
           const tempId = body._id || `temp_${Date.now()}`;
             
           if (url.includes('/proyectos')) {
-              // (Lógica de caché optimista mantenida igual que tu original)
               if (options.method === 'POST') {
                   const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [], deleted: false };
                   if(nuevoProyecto.artista && typeof nuevoProyecto.artista === 'string') { const art = localCache.artistas.find(a => a._id === nuevoProyecto.artista); if(art) nuevoProyecto.artista = art; }
@@ -226,7 +224,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                     return { ok: true, offline: true, _id: tempId };
               }
-              // Fallbacks de caché
               if(url.includes('/artistas')) return localCache.artistas;
               if(url.includes('/servicios')) return localCache.servicios;
               if(url.includes('/proyectos')) { return localCache.proyectos; }
@@ -242,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('section.active ul li').forEach(li => { const text = li.innerText.toLowerCase(); li.style.display = text.includes(query) ? 'flex' : 'none'; });
     }
 
-    // --- LÓGICA LOGO ---
     async function loadPublicLogo() {
         try {
             const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
@@ -278,8 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(typeof gapi !== 'undefined') initializeGapiClient();
     if(typeof google !== 'undefined') initializeGisClient();
 
-    // (Funciones Drive: findOrCreateFolder, subirADrive - Modificado para Modal Bootstrap abajo)
-    // Se incluye findOrCreateFolder igual
     async function findOrCreateFolder(name, parentId = null) {
         let query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
         if(parentId) query += ` and '${parentId}' in parents`;
@@ -333,7 +327,6 @@ document.addEventListener('DOMContentLoaded', () => {
               btnText.textContent = '📤 Subir Otro';
 
               const projectId = document.getElementById('delivery-project-id').value;
-              // Guardar automáticamente el link si es válido
               await saveDeliveryLink();
               showToast('¡Archivo subido! Link guardado.', 'success');
 
@@ -404,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible'; 
     }
     
-    // --- AUTH LOGIC (CON SWEETALERT) ---
+    // --- AUTH LOGIC ---
     function cerrarSesionConfirmacion() {
         Swal.fire({
             title: '¿Cerrar Sesión?',
@@ -507,7 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active')); 
       
       const seccionActiva = document.getElementById(id); 
-      // Buscar enlace con data-seccion="id"
       const links = document.querySelectorAll(`.nav-link-sidebar`);
       links.forEach(l => {
           if(l.dataset.seccion === id) l.classList.add('active');
@@ -550,7 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { displayName = `${item.nombre || 'Sin Nombre'} - $${item.precio.toFixed(2)}`; }
                 const clickHandler = makeClickable ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
                 
-                // Editar ahora llama a la nueva función de Modal o carga formulario
                 let editAction = `app.editarItem('${item._id}', '${endpoint}')`;
                 if(endpoint === 'artistas') {
                      editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico||'')}', '${escapeHTML(item.telefono||'')}', '${escapeHTML(item.correo||'')}')`;
@@ -609,7 +600,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
       
     async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-      
+    
+    // --- FUNCIONES QUE FALTABAN Y CAUSABAN EL ERROR ---
+    async function restaurarItem(id, endpoint) { 
+        try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+    }
+    
+    async function eliminarPermanente(id, endpoint) { 
+        if (!confirm('¡Irreversible!')) return; 
+        try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+    }
+    
+    async function vaciarPapelera(endpoint) {
+        if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+    }
+    // ----------------------------------------------------
+
     async function editarItem(id, endpoint) { 
         try { 
             let item; if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id); else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id); else if (endpoint === 'usuarios') item = localCache.usuarios.find(i => i._id === id); 
@@ -632,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
 
-    // --- MODAL DATOS BANCARIOS (NUEVO) ---
+    // --- MODAL DATOS BANCARIOS ---
     async function guardarDatosBancariosConfirmacion() {
         const datosBancarios = { 
             banco: document.getElementById('banco').value, 
@@ -644,7 +650,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios }) }); 
             configCache.datosBancarios = datosBancarios;
             
-            // Cerrar Modal Bootstrap
             const modalEl = document.getElementById('modalDatosBancarios');
             const modal = bootstrap.Modal.getInstance(modalEl);
             if(modal) modal.hide();
@@ -1192,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // EXPORTS
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, guardarDatosBancariosConfirmacion };
+    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, guardarDatosBancariosConfirmacion, eliminarPermanente };
   });
 
   if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('sw.js').then(function(registration) { console.log('SW OK'); }, function(err) { console.log('SW Fail'); }); }); }
