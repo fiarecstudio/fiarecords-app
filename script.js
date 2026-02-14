@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- VARIABLES GLOBALES ---
     let isInitialized = false;
     let proyectoActual = {};
     let logoBase64 = null;
@@ -16,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gapiInited = false;
     let gisInited = false;
 
-    // 1. INICIALIZAR CACHÉ
+    // --- CACHÉ LOCAL ---
     let localCache = {
         artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
         servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
@@ -31,12 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let configCache = null;
     let chartInstance = null;
 
-    // --- URL INTELIGENTE ---
+    // --- URL API (Local vs Producción) ---
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
         : '';
 
-    // Referencias al DOM
+    // --- REFERENCIAS DOM ---
     const DOMElements = {
         loginContainer: document.getElementById('login-container'),
         appWrapper: document.getElementById('app-wrapper'),
@@ -51,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
-    // --- UTILS (TOASTS) ---
+    // --- UTILIDADES (TOASTS, LOADER, ETC) ---
     function showToast(message, type = 'success') {
         const Toast = Swal.mixin({
             toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
@@ -65,8 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
-    function showLoader() { document.getElementById('loader-overlay').style.display = 'flex'; }
-    function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
+    function showLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'flex'; }
+    function hideLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'none'; }
     
     async function preloadLogoForPDF() {
         if(!DOMElements.appLogo) return;
@@ -80,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.warn("No se pudo precargar logo"); }
     }
 
-    // 2. OFFLINE MANAGER
+    // --- OFFLINE MANAGER ---
     const OfflineManager = {
         QUEUE_KEY: 'fia_offline_queue',
         getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
@@ -123,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
             if (newQueue.length === 0) {
                 showToast('Sincronización completada', 'success');
+                // Recargar datos clave tras sincronizar
                 await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios')]);
                 const currentHash = location.hash.replace('#', '');
                 if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
@@ -134,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.app = { syncNow: OfflineManager.syncNow };
 
-    // 3. FETCH API
+    // --- FETCH API CORE ---
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
         const token = localStorage.getItem('token');
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // GET Offline Cache
+        // GET Offline Cache Logic
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url.includes('/artistas')) return localCache.artistas;
@@ -160,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // POST/PUT/DELETE Offline Cache Optimista
+        // POST/PUT/DELETE Offline Queue Logic
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -177,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // Actualizar caché
+            // Actualizar Caché Local si es GET
             if (!options.method || options.method === 'GET') {
                 if (url.includes('/artistas')) { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
                 if (url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
@@ -191,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally { hideLoader(); }
     }
 
-    // --- UTILS ---
+    // --- FUNCIONES AUXILIARES ---
     function filtrarTablas(query) {
         query = query.toLowerCase();
         document.querySelectorAll('section.active tbody tr').forEach(row => { const text = row.innerText.toLowerCase(); row.style.display = text.includes(query) ? '' : 'none'; });
@@ -229,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-    // --- GOOGLE DRIVE LOGIC ---
+    // --- GOOGLE DRIVE INTEGRATION ---
     function initializeGapiClient() { gapi.load('client', async () => { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs, }); gapiInited = true; }); }
     function initializeGisClient() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '', }); gisInited = true; }
     if (typeof gapi !== 'undefined') initializeGapiClient();
@@ -295,17 +297,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({ prompt: '' }); } else { tokenClient.requestAccessToken({ prompt: '' }); }
     }
 
-    // --- INICIALIZACIÓN PRINCIPAL (ARREGLADA) ---
+    // --- INICIALIZACIÓN ---
     (async function init() {
-        // 1. CARGA INICIAL DE ESTILOS Y LOGO
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
         
-        // 2. CONFIGURAR LISTENERS DE LOGIN (¡ESTO FALTABA!)
+        // Setup Login Listeners Inmediatamente
         setupAuthListeners();
 
-        // 3. REVISAR URL (RESET PASSWORD)
+        // Check password reset token
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
              const token = path.split('/').pop();
@@ -313,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
         }
 
-        // 4. REVISAR TOKEN EXISTENTE
+        // Check Auth Token
         const token = localStorage.getItem('token');
         if (token) {
             try {
@@ -324,8 +325,51 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- CONFIGURACIÓN DE LISTENERS AUTH (NUEVA FUNCIÓN) ---
+    // --- MANEJO DE VISTAS (LOGIN VS APP) ---
+    async function showApp(payload) {
+        document.body.classList.remove('auth-visible');
+        if (!configCache) await loadInitialConfig();
+        if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
+        
+        // 1. Renderizar Sidebar
+        renderSidebar(payload);
+        
+        // 2. Inicializar Eventos de la App (incluyendo Logout)
+        if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
+
+        // 3. Mostrar Contenedor
+        DOMElements.loginContainer.style.display = ''; 
+        DOMElements.appWrapper.style.display = ''; 
+
+        // 4. Navegar a la sección correcta
+        const hashSection = location.hash.replace('#', '');
+        if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
+             mostrarSeccion('vista-artista', false);
+        } else {
+             mostrarSeccion(hashSection || 'dashboard', false);
+        }
+
+        // Asegurar visibilidad
+        document.body.style.opacity = '1';
+        document.body.style.visibility = 'visible';
+    }
+
+    function showLogin() {
+        document.body.classList.add('auth-visible');
+        localStorage.removeItem('token');
+        
+        // Reset Views
+        DOMElements.loginContainer.style.display = ''; 
+        DOMElements.appWrapper.style.display = '';
+        toggleAuth('login');
+        
+        document.body.style.opacity = '1';
+        document.body.style.visibility = 'visible';
+    }
+
+    // --- AUTH LISTENERS & LOGIC ---
     function setupAuthListeners() {
+        // Login Form
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
@@ -333,19 +377,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const userVal = document.getElementById('username').value;
                 const passVal = document.getElementById('password').value;
-                
-                // MODO DEMO: Si no hay backend, simula login
-                // if (userVal === 'admin' && passVal === 'admin') { ... }
-
                 const res = await fetch(`${API_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: userVal, password: passVal })
                 });
-                
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
-                
                 localStorage.setItem('token', data.token);
                 await showApp(JSON.parse(atob(data.token.split('.')[1])));
             } catch (error) {
@@ -358,45 +396,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('register-form').addEventListener('submit', registerUser);
         document.getElementById('recover-form').addEventListener('submit', recoverPassword);
         document.getElementById('reset-form').addEventListener('submit', resetPassword);
-        document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); });
+        
+        // Toggle Password Visibility
+        document.getElementById('toggle-password').addEventListener('click', () => {
+             const passwordInput = document.getElementById('password');
+             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+             passwordInput.setAttribute('type', type);
+        });
     }
 
-    async function showApp(payload) {
-        document.body.classList.remove('auth-visible');
-        if (!configCache) await loadInitialConfig();
-        if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
-        
-        renderSidebar(payload);
-        if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
-
-        DOMElements.loginContainer.style.display = ''; 
-        DOMElements.appWrapper.style.display = ''; 
-
-        const hashSection = location.hash.replace('#', '');
-        if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
-             mostrarSeccion('vista-artista', false);
-        } else {
-             mostrarSeccion(hashSection || 'dashboard', false);
-        }
-        
-        // Asegurar que la app sea visible
-        document.body.style.opacity = '1';
-        document.body.style.visibility = 'visible';
-    }
-
-    function showLogin() {
-        document.body.classList.add('auth-visible');
-        localStorage.removeItem('token');
-        DOMElements.loginContainer.style.display = ''; 
-        DOMElements.appWrapper.style.display = '';
-        
-        document.body.style.opacity = '1';
-        document.body.style.visibility = 'visible';
-    }
-
-    // --- AUTH LOGIC ---
     function cerrarSesionConfirmacion() {
-        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir' })
+        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir', cancelButtonText: 'Cancelar' })
         .then((result) => { if (result.isConfirmed) showLogin(); });
     }
 
@@ -409,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-error').textContent = '';
     }
 
+    // --- RESET & REGISTER FUNCTIONS ---
     function showResetPasswordView(token) {
         document.body.classList.add('auth-visible');
         DOMElements.appWrapper.style.display = 'none';
@@ -416,7 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('reset-token').value = token;
         toggleAuth('reset');
     }
-
     async function resetPassword(e) {
         e.preventDefault();
         const token = document.getElementById('reset-token').value;
@@ -427,7 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAuth('login');
         } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
-
     async function registerUser(e) {
         e.preventDefault();
         const username = document.getElementById('reg-username').value;
@@ -440,7 +449,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAuth('login');
         } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
-
     async function recoverPassword(e) {
         e.preventDefault();
         const email = document.getElementById('rec-email').value;
@@ -453,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NAVEGACIÓN ---
     async function mostrarSeccion(id, updateHistory = true) {
+        // UI Clean up
         document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
         
@@ -464,6 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
             seccionActiva.classList.add('active');
             if (updateHistory) history.pushState(null, null, `#${id}`);
             
+            // Map actions to load data
             const loadDataActions = {
                 'dashboard': cargarDashboard,
                 'agenda': cargarAgenda,
@@ -479,11 +489,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 'papelera-reciclaje': cargarPapelera,
                 'configuracion': cargarConfiguracion
             };
+            // Trigger load data
             await loadDataActions[id]?.();
         }
     }
 
-    // --- RENDER LISTAS (MODIFICADO PARA MODALES) ---
+    // --- CRUD Y RENDER ---
     async function renderList(endpoint, makeClickable = false) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         try {
@@ -535,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function limpiarForm(formId) { document.getElementById(formId).reset(); }
+    function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
 
     async function saveItem(e, type) {
         e.preventDefault();
@@ -603,6 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
             showToast('Actualizado', 'success');
             bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide();
+            // Actualizar vista si estamos en ella
+            if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico);
             renderList('artistas', true);
         } catch (e) { showToast(e.message, 'error'); }
     }
@@ -712,7 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
-    // --- DASHBOARD ---
+    // --- DASHBOARD & CONFIG ---
     async function cargarDashboard() {
         try {
             const stats = await fetchAPI('/api/dashboard/stats');
@@ -726,8 +739,28 @@ document.addEventListener('DOMContentLoaded', () => {
             chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
         } catch (e) { console.error(e); }
     }
+    
+    async function cargarConfiguracion() {
+        try {
+            if (!configCache) await loadInitialConfig(); 
+            const firmaPreview = document.getElementById('firma-preview-img'); 
+            let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; 
+            if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } 
+            firmaPreview.src = firmaSrc;
+            const db = configCache.datosBancarios || {};
+            document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || '';
+            document.getElementById('doc-type-selector').value = 'cotizacion'; cargarAjustesParaDocumento('cotizacion');
+        } catch (e) { showToast('Error config.', 'error'); }
+    }
+    
+    // Config Firma PDF
+    function cargarAjustesParaDocumento(docType) { if (!configCache || !configCache.firmaPos || !configCache.firmaPos[docType]) return; const pos = configCache.firmaPos[docType]; document.querySelector(`input[name="vAlign"][value="${pos.vAlign}"]`).checked = true; document.getElementById('slider-firma-w').value = pos.w; actualizarPosicionFirma(); }
+    function actualizarPosicionFirma() { const docType = document.getElementById('doc-type-selector').value; const pos = configCache.firmaPos[docType]; pos.vAlign = document.querySelector('input[name="vAlign"]:checked').value; pos.w = parseInt(document.getElementById('slider-firma-w').value); }
+    async function guardarAjustesFirma() { if (!configCache) return; try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes PDF guardados!', 'success'); } catch (e) { showToast(`Error`, 'error'); } }
+    async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error`, 'error'); } }
+    function revertirADefecto() { if (!confirm('¿Restablecer configuración de PDF?')) return; configCache.firmaPos = { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } }; cargarAjustesParaDocumento(document.getElementById('doc-type-selector').value); showToast('Configuración restablecida (No guardada permanentemente).', 'info'); }
 
-    // --- LOGICA DE PROYECTOS, FLUJO, PAGOS Y DOCUMENTOS (SE MANTIENE IGUAL QUE ANTES) ---
+    // --- PROYECTOS, FLUJO Y PAGOS ---
     async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; return `<tr><td class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">✓</button><button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">Sin cotizaciones.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4">Error offline.</td></tr>`; } }
     
     const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
@@ -788,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try { await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) }); const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista'; await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, formPrefix !== 'manual'); const select = document.getElementById(selectId); select.selectedIndex = select.options.length - 1; document.getElementById(containerId).style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
 
-    // --- EVENTOS DE CALENDARIO Y MODAL CITA ---
+    // --- AGENDA Y EVENTOS ---
     function openEventModal(info) {
         const props = info.event.extendedProps;
         document.getElementById('modal-event-id').value = info.event.id;
@@ -835,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { calendarEl.innerHTML = '<p>Error agenda.</p>'; }
     }
 
-    // --- ACCIONES COMUNES ---
+    // --- ACCIONES GENERALES ---
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function aprobarCotizacion(id) { if (!confirm('¿Aprobar cotización?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error`, 'error'); } }
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Resumen FiaRecords:\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nContáctanos para confirmar.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error.', 'error'); } }
@@ -908,6 +941,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
 
+    async function editarInfoProyecto(id) { const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id); if (!proyecto) return; const nuevoNombre = prompt('Editar Nombre:', proyecto.nombreProyecto || ''); if (nuevoNombre === null) return; const nuevoTotalStr = prompt('Editar Precio ($):', proyecto.total || 0); if (nuevoTotalStr === null) return; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } }
+    function openDeliveryModal(projectId, artistName, projectName) { const modalEl = document.getElementById('delivery-modal'); modalEl.querySelector('#delivery-project-id').value = projectId; modalEl.querySelector('#delivery-artist-name').value = artistName; modalEl.querySelector('#delivery-project-name').value = projectName; const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); modalEl.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : ''; document.getElementById('drive-status').textContent = ''; document.getElementById('drive-file-input').value = ''; new bootstrap.Modal(modalEl).show(); }
+    function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
+    async function saveDeliveryLink() { const projectId = document.getElementById('delivery-project-id').value; const enlace = document.getElementById('delivery-link-input').value; try { await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success'); closeDeliveryModal(); } catch (e) { showToast(`Error`, 'error'); } }
+    function sendDeliveryByWhatsapp() { const link = document.getElementById('delivery-link-input').value; if (!link) return showToast('Falta el enlace.', 'error'); const artistName = document.getElementById('delivery-artist-name').value; const projectName = document.getElementById('delivery-project-name').value; const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
+
     // --- SETUP Y MENÚ ---
     function setupMobileMenu() {
         const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay');
@@ -930,12 +969,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio);
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario);
         
-        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto); document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('')); document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual')); document.getElementById('firma-input').addEventListener('change', subirFirma); document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual); document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); });
+        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto); document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('')); document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual')); document.getElementById('firma-input').addEventListener('change', subirFirma); document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
         
         setupCustomization(payload);
         setupMobileMenu();
-        const logoutBtn = document.getElementById('logout-button'); if (logoutBtn) { logoutBtn.replaceWith(logoutBtn.cloneNode(true)); document.getElementById('logout-button').addEventListener('click', cerrarSesionConfirmacion); }
-        // NOTA: El listener del login ya no está aquí, está en setupAuthListeners() para que funcione antes de loguearse.
+
+        // **FIX: Logout Listener Seguro**
+        const logoutBtn = document.getElementById('logout-button'); 
+        if (logoutBtn) { 
+            logoutBtn.onclick = cerrarSesionConfirmacion; 
+        }
     }
 
     function setupCustomization(payload) { if (payload.role === 'admin') { if (DOMElements.appLogo && DOMElements.logoInput) { DOMElements.appLogo.style.cursor = 'pointer'; DOMElements.appLogo.onclick = () => DOMElements.logoInput.click(); DOMElements.logoInput.onchange = async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error al subir logo`, 'error'); } }; } } }
@@ -952,12 +995,6 @@ document.addEventListener('DOMContentLoaded', () => {
         navContainer.innerHTML = html;
         document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { mostrarSeccion(e.currentTarget.dataset.seccion); } }); });
     }
-
-    async function editarInfoProyecto(id) { const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id); if (!proyecto) return; const nuevoNombre = prompt('Editar Nombre:', proyecto.nombreProyecto || ''); if (nuevoNombre === null) return; const nuevoTotalStr = prompt('Editar Precio ($):', proyecto.total || 0); if (nuevoTotalStr === null) return; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } }
-    function openDeliveryModal(projectId, artistName, projectName) { const modalEl = document.getElementById('delivery-modal'); modalEl.querySelector('#delivery-project-id').value = projectId; modalEl.querySelector('#delivery-artist-name').value = artistName; modalEl.querySelector('#delivery-project-name').value = projectName; const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); modalEl.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : ''; document.getElementById('drive-status').textContent = ''; document.getElementById('drive-file-input').value = ''; new bootstrap.Modal(modalEl).show(); }
-    function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
-    async function saveDeliveryLink() { const projectId = document.getElementById('delivery-project-id').value; const enlace = document.getElementById('delivery-link-input').value; try { await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success'); closeDeliveryModal(); } catch (e) { showToast(`Error`, 'error'); } }
-    function sendDeliveryByWhatsapp() { const link = document.getElementById('delivery-link-input').value; if (!link) return showToast('Falta el enlace.', 'error'); const artistName = document.getElementById('delivery-artist-name').value; const projectName = document.getElementById('delivery-project-name').value; const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
 
     // EXPORTS
     window.app = { eliminarItem, editarItem: (id, end) => console.log('Usar modales'), restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarDatosBancariosPDF, compartirDatosBancariosWhatsApp, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario, guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, eliminarPermanente };
