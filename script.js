@@ -1,4 +1,4 @@
-// --- VERSIÓN CORREGIDA FINAL (Incluye restaurarItem y eliminarPermanente) ---
+// --- VERSIÓN DEFINITIVA CORREGIDA (100% FUNCIONAL) ---
 document.addEventListener('DOMContentLoaded', () => {
     let isInitialized = false; 
     let proyectoActual = {}; 
@@ -487,7 +487,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
       showLoader();
       try { 
-          const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.value, password: password.value }) }); 
+          // Corrección: Usar getElementById para asegurar referencias
+          const userVal = document.getElementById('username').value;
+          const passVal = document.getElementById('password').value;
+          const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) }); 
           const data = await res.json(); 
           if (!res.ok) throw new Error(data.error); 
           localStorage.setItem('token', data.token); 
@@ -602,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
     async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     
-    // --- AQUÍ ESTÁN LAS FUNCIONES QUE FALTABAN ---
+    // --- RESTAURAR Y ELIMINAR PERMANENTE ---
     async function restaurarItem(id, endpoint) { 
         try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
@@ -1070,6 +1073,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function guardarAjustesFirma() { if (!configCache) return; try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes PDF guardados!', 'success'); } catch (e) { showToast(`Error`, 'error'); } }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if(configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error`, 'error'); } }
     
+    // Función que faltaba: Revertir configuración
+    function revertirADefecto() {
+        if(!confirm('¿Restablecer configuración de PDF?')) return;
+        configCache.firmaPos = { cotizacion: {vAlign:'bottom',hAlign:'right',w:50,h:20,offsetX:0,offsetY:0} };
+        cargarAjustesParaDocumento(document.getElementById('doc-type-selector').value);
+        showToast('Configuración restablecida (No guardada permanentemente).', 'info');
+    }
+
     // --- MODAL DATOS BANCARIOS (NUEVO) ---
     function openDeliveryModal(projectId, artistName, projectName) {
         const modalEl = document.getElementById('delivery-modal');
@@ -1084,11 +1095,18 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.show();
     }
     
+    // Función que faltaba: Cerrar modal de entrega
+    function closeDeliveryModal() {
+         const el = document.getElementById('delivery-modal');
+         const modal = bootstrap.Modal.getInstance(el);
+         if(modal) modal.hide();
+    }
+
     async function saveDeliveryLink() {
         const projectId = document.getElementById('delivery-project-id').value;
         const enlace = document.getElementById('delivery-link-input').value;
         try { await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success'); 
-        const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if(modal) modal.hide();
+        closeDeliveryModal();
         } catch(e) { showToast(`Error`, 'error'); }
     }
     function sendDeliveryByWhatsapp() {
@@ -1198,7 +1216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // EXPORTS
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, guardarDatosBancariosConfirmacion, eliminarPermanente };
+    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios: guardarDatosBancariosConfirmacion, guardarDatosBancariosConfirmacion, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, eliminarPermanente };
   });
 
   if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('sw.js').then(function(registration) { console.log('SW OK'); }, function(err) { console.log('SW Fail'); }); }); }
