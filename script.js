@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
     let currentCalendar = null; let configCache = null; let chartInstance = null; const API_URL = '';
     
-    // Referencias al DOM
+    // Referencias al DOM (MODIFICADA PARA INCLUIR logoInput)
     const DOMElements = { 
         loginContainer: document.getElementById('login-container'), 
         appWrapper: document.getElementById('app-wrapper'), 
@@ -39,7 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
         appLogo: document.getElementById('app-logo'), 
         loginLogo: document.getElementById('login-logo'), 
         connectionStatus: document.getElementById('connection-status'), 
-        connectionText: document.getElementById('connection-text') 
+        connectionText: document.getElementById('connection-text'),
+        logoInput: document.getElementById('logo-input') // <-- AGREGADO
     };
       
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
@@ -1060,7 +1061,33 @@ document.addEventListener('DOMContentLoaded', () => {
         mostrarVistaArtista(id, body.nombre, body.nombreArtistico); const idx = localCache.artistas.findIndex(a => a._id === id); if(idx !== -1) localCache.artistas[idx] = { ...localCache.artistas[idx], ...body }; } catch(err) { showToast('Error al guardar.', 'error'); }
     }
 
-    function setupCustomization(payload) { if (payload.role === 'admin') { DOMElements.appLogo.addEventListener('click', () => DOMElements.logoInput.click()); DOMElements.logoInput.addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error`, 'error'); } }); } }
+    function setupCustomization(payload) { 
+        if (payload.role === 'admin') { 
+            // NUEVO: Verificación de seguridad para evitar el error "undefined"
+            if (DOMElements.appLogo && DOMElements.logoInput) {
+                // Indicador visual de que es clickeable
+                DOMElements.appLogo.style.cursor = 'pointer'; 
+                
+                // Asignar el evento click
+                DOMElements.appLogo.onclick = () => DOMElements.logoInput.click();
+                
+                // Asignar el evento change al input
+                DOMElements.logoInput.onchange = async (event) => { 
+                    const file = event.target.files[0]; 
+                    if (!file) return; 
+                    const formData = new FormData(); 
+                    formData.append('logoFile', file); 
+                    try { 
+                        await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
+                        showToast('Logo guardado!', 'success'); 
+                        await loadPublicLogo(); 
+                    } catch (e) { 
+                        showToast(`Error al subir logo`, 'error'); 
+                    } 
+                }; 
+            }
+        } 
+    }
       
     async function cargarConfiguracion() { try { if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } firmaPreview.src = firmaSrc; 
     const db = configCache.datosBancarios || {};
