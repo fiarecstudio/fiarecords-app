@@ -28,11 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: []
     };
       
-   // --- CORRECCIÓN: URL INTELIGENTE ---
-// Detecta si estás en tu PC o en la web real
+ // --- ASEGÚRATE DE QUE ESTA LÍNEA EXISTA ---
+let currentCalendar = null; let configCache = null; let chartInstance = null; 
+
+// --- Y LUEGO ESTA ---
 const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:5000' 
-    : ''; // En producción usa la ruta relativa
+    : '';
     
     // Referencias al DOM (MODIFICADA PARA INCLUIR logoInput)
     const DOMElements = { 
