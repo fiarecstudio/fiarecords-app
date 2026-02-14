@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let configCache = null;
     let chartInstance = null;
 
-    // --- URL INTELIGENTE (LOCAL VS RENDER) ---
+    // --- URL INTELIGENTE ---
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
         : '';
@@ -51,21 +51,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
-    // --- UTILS (TOASTS CON SWEETALERT) ---
+    // --- UTILS (TOASTS) ---
     function showToast(message, type = 'success') {
         const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
             timerProgressBar: true,
             didOpen: (toast) => {
                 toast.addEventListener('mouseenter', Swal.stopTimer)
                 toast.addEventListener('mouseleave', Swal.resumeTimer)
             }
         });
-        let iconType = type === 'info' ? 'info' : type;
-        Toast.fire({ icon: iconType, title: message });
+        Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
     function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
@@ -73,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
     
     async function preloadLogoForPDF() {
+        if(!DOMElements.appLogo) return;
         const imgUrl = DOMElements.appLogo.src;
         try {
             const response = await fetch(imgUrl);
@@ -80,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = new FileReader();
             reader.onloadend = () => { logoBase64 = reader.result; };
             reader.readAsDataURL(blob);
-        } catch (e) { console.warn("No se pudo precargar logo para PDF offline"); }
+        } catch (e) { console.warn("No se pudo precargar logo"); }
     }
 
     // 2. OFFLINE MANAGER
@@ -145,103 +142,56 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // Lógica de Caché para GET Offline
+        // GET Offline Cache
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url.includes('/artistas')) return localCache.artistas;
                 if (url.includes('/servicios')) return localCache.servicios;
+                if (url.includes('/usuarios')) return localCache.usuarios;
                 if (url.includes('/proyectos')) {
                     if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
                     if (url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
                     if (url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i => i.nombre).join('\n') } }));
                     if (url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
-                    if (url.includes('/por-artista')) { const artId = url.split('/').pop(); return localCache.proyectos.filter(p => !p.deleted && (p.artista && p.artista._id === artId)); }
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
                 if (url.includes('/pagos')) return localCache.pagos;
-                if (url.includes('/dashboard/stats')) {
-                    const activos = localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado' && !p.deleted).length;
-                    const porCobrar = localCache.proyectos.filter(p => (p.total - (p.montoPagado || 0)) > 0 && p.estatus !== 'Cancelado' && !p.deleted).length;
-                    const now = new Date();
-                    const ingresosMes = localCache.pagos.filter(p => { const d = new Date(p.fecha); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).reduce((sum, p) => sum + p.monto, 0);
-                    return { ingresosMes, proyectosActivos: activos, proyectosPorCobrar: porCobrar, monthlyIncome: [] };
-                }
+                if (url.includes('/dashboard/stats')) return { ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
             }
         }
 
-        // Lógica para POST/PUT/DELETE Offline
+        // POST/PUT/DELETE Offline Cache Optimista
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-            const body = options.body ? JSON.parse(options.body) : {};
-            const tempId = body._id || `temp_${Date.now()}`;
-
-            // Actualización optimista del caché local
-            if (url.includes('/proyectos')) {
-                if (options.method === 'POST') {
-                    const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [], deleted: false };
-                    if (nuevoProyecto.artista && typeof nuevoProyecto.artista === 'string') { const art = localCache.artistas.find(a => a._id === nuevoProyecto.artista); if (art) nuevoProyecto.artista = art; }
-                    localCache.proyectos.push(nuevoProyecto);
-                } else if (options.method === 'PUT') {
-                    let idTarget = url.split('/').pop();
-                    if (['estatus', 'proceso', 'nombre', 'enlace-entrega', 'fecha', 'total'].includes(idTarget)) { const parts = url.split('/'); idTarget = parts[parts.length - 2]; }
-                    const idx = localCache.proyectos.findIndex(p => p._id === idTarget);
-                    if (idx !== -1) {
-                        localCache.proyectos[idx] = { ...localCache.proyectos[idx], ...body };
-                        if (url.includes('/restaurar')) localCache.proyectos[idx].deleted = false;
-                        if (url.includes('/proceso')) localCache.proyectos[idx].proceso = body.proceso;
-                        if (url.includes('/estatus')) localCache.proyectos[idx].estatus = body.estatus;
-                    }
-                } else if (options.method === 'DELETE') {
-                    let idTarget = url.split('/').pop();
-                    if (url.includes('/permanente')) { idTarget = url.split('/')[3]; localCache.proyectos = localCache.proyectos.filter(p => p._id !== idTarget); }
-                    else { const idx = localCache.proyectos.findIndex(p => p._id === idTarget); if (idx !== -1) localCache.proyectos[idx].deleted = true; }
-                }
-                localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
-            }
-            
-            // Si no hay red, encolar y retornar falso éxito
-            if (!navigator.onLine) {
+             if (!navigator.onLine) {
+                const tempId = `temp_${Date.now()}`;
                 OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                if (url.includes('/proyectos') && options.method === 'POST') { return { ...body, _id: tempId, offline: true }; }
-                return { ok: true, offline: true };
+                return { ok: true, offline: true, _id: tempId };
             }
         }
 
         showLoader();
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers });
-            const contentType = res.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") === -1) { throw new Error("Error de conexión con el servidor."); }
             if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); }
-            if (res.status === 204 || (options.method === 'DELETE' && res.ok)) return { ok: true };
-
+            if (res.status === 204) return { ok: true };
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // Actualizar caché con datos frescos del servidor
+            // Actualizar caché
             if (!options.method || options.method === 'GET') {
                 if (url.includes('/artistas')) { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
                 if (url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
-                if (url.includes('/proyectos') && !url.includes('agenda')) { if (Array.isArray(data) && url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); } }
                 if (url.includes('/usuarios')) { localCache.usuarios = data; }
+                if (url.includes('/proyectos') && !url.includes('agenda')) { if (Array.isArray(data) && url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); } }
                 if (url.includes('/pagos/todos')) { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
             }
             return data;
         } catch (e) {
-            if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('404')) {
-                OfflineManager.updateIndicator();
-                if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
-                    const tempId = `temp_${Date.now()}`;
-                    OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                    return { ok: true, offline: true, _id: tempId };
-                }
-                if (url.includes('/artistas')) return localCache.artistas;
-                if (url.includes('/servicios')) return localCache.servicios;
-                if (url.includes('/proyectos')) return localCache.proyectos;
-            }
             throw e;
         } finally { hideLoader(); }
     }
 
+    // --- UTILS ---
     function filtrarTablas(query) {
         query = query.toLowerCase();
         document.querySelectorAll('section.active tbody tr').forEach(row => { const text = row.innerText.toLowerCase(); row.style.display = text.includes(query) ? '' : 'none'; });
@@ -256,25 +206,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data && data.filePath) {
                 const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
-                DOMElements.loginLogo.src = logoSrc;
-                DOMElements.appLogo.src = logoSrc;
+                if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
+                if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
                 const favicon = document.getElementById('dynamic-favicon');
                 if (favicon) favicon.href = logoSrc;
             }
-        } catch (e) { console.warn("Offline: Usando logo cacheado"); }
+        } catch (e) { }
     }
 
     async function loadInitialConfig() {
         try {
             const config = await fetchAPI('/api/configuracion');
             configCache = config;
-            if (config.logoPath) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; }
+            if (config.logoPath && DOMElements.appLogo) { DOMElements.appLogo.src = config.logoPath + `?t=${new Date().getTime()}`; }
         } catch (e) { configCache = { firmaPos: { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } } }; }
     }
 
     function applyTheme(theme) {
         document.body.classList.toggle('dark-mode', theme === 'dark');
-        document.getElementById('theme-switch').checked = (theme === 'dark');
+        const switchEl = document.getElementById('theme-switch');
+        if(switchEl) switchEl.checked = (theme === 'dark');
         localStorage.setItem('theme', theme);
     }
 
@@ -288,19 +239,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
         if (parentId) query += ` and '${parentId}' in parents`;
         const res = await gapi.client.drive.files.list({ q: query, fields: 'files(id, name)' });
-        if (res.result.files.length > 0) { return res.result.files[0].id; }
-        else {
-            const fileMetadata = { 'name': name, 'mimeType': 'application/vnd.google-apps.folder' };
-            if (parentId) fileMetadata.parents = [parentId];
-            const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
-            return createRes.result.id;
-        }
+        if (res.result.files.length > 0) return res.result.files[0].id;
+        const fileMetadata = { 'name': name, 'mimeType': 'application/vnd.google-apps.folder' };
+        if (parentId) fileMetadata.parents = [parentId];
+        const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+        return createRes.result.id;
     }
 
     async function subirADrive() {
-        if (!gapiInited || !gisInited) { await new Promise(r => setTimeout(r, 1000)); if (!gapiInited || !gisInited) return showToast('Las librerías de Google no han cargado.', 'error'); }
+        if (!gapiInited || !gisInited) return showToast('Error: Librerías Google no cargadas', 'error');
+        
         const fileInput = document.getElementById('drive-file-input');
-        if (fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'error');
+        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo', 'warning');
+        
         const file = fileInput.files[0];
         const statusDiv = document.getElementById('drive-status');
         const btnText = document.getElementById('drive-btn-text');
@@ -308,67 +259,53 @@ document.addEventListener('DOMContentLoaded', () => {
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
             try {
-                btnText.textContent = 'Creando Carpeta...';
-                const artistName = document.getElementById('delivery-artist-name').value || 'SinArtista';
-                const projName = document.getElementById('delivery-project-name').value || 'SinProyecto';
+                btnText.textContent = 'Subiendo...';
+                const artistName = document.getElementById('delivery-artist-name').value || 'General';
+                const projName = document.getElementById('delivery-project-name').value || 'Proyecto';
 
-                statusDiv.textContent = `Buscando carpeta: ${artistName}...`;
+                statusDiv.textContent = `Creando carpetas...`;
                 let artistFolderId = await findOrCreateFolder(artistName);
-                statusDiv.textContent = `Buscando carpeta: ${projName}...`;
                 let projectFolderId = await findOrCreateFolder(projName, artistFolderId);
 
                 await gapi.client.drive.permissions.create({ fileId: projectFolderId, resource: { role: 'reader', type: 'anyone' } });
                 const folderLinkResp = await gapi.client.drive.files.get({ fileId: projectFolderId, fields: 'webViewLink' });
-                const folderLink = folderLinkResp.result.webViewLink;
-
-                btnText.textContent = 'Subiendo... (Espere)';
+                
                 const metadata = { name: file.name, parents: [projectFolderId] };
                 const accessToken = gapi.client.getToken().access_token;
                 const form = new FormData();
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', file);
+                
                 const uploadResp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form });
+                if (!uploadResp.ok) throw new Error('Error subida');
 
-                if (!uploadResp.ok) throw new Error('Fallo en la subida');
-
-                document.getElementById('delivery-link-input').value = folderLink;
-                statusDiv.textContent = `✅ Subido en ${artistName}/${projName}`;
-                statusDiv.style.color = 'var(--success-color)';
-                btnText.textContent = '📤 Subir Otro';
-
-                const projectId = document.getElementById('delivery-project-id').value;
+                document.getElementById('delivery-link-input').value = folderLinkResp.result.webViewLink;
+                statusDiv.textContent = '✅ Subido Exitosamente';
+                btnText.textContent = 'Subir Otro';
+                
                 await saveDeliveryLink();
-                showToast('¡Archivo subido! Link guardado.', 'success');
 
             } catch (err) {
                 console.error(err);
-                statusDiv.textContent = `Error: ${err.message || 'Desconocido'}`;
-                statusDiv.style.color = 'var(--danger-color)';
-                btnText.textContent = '📤 Reintentar';
+                statusDiv.textContent = 'Error al subir';
+                btnText.textContent = 'Reintentar';
             }
         };
 
         if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({ prompt: '' }); } else { tokenClient.requestAccessToken({ prompt: '' }); }
     }
 
-    // --- INICIO DE APLICACIÓN ---
+    // --- INICIALIZACIÓN ---
     (async function init() {
         await loadPublicLogo();
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
-
+        
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
-            const segments = path.split('/').filter(Boolean);
-            const token = segments[segments.length - 1];
-            if (token && token !== 'reset-password') {
-                showResetPasswordView(token);
-                // Forzar visibilidad para la vista de reset
-                document.body.classList.add('auth-visible'); 
-                document.body.style.opacity = '1'; 
-                document.body.style.visibility = 'visible';
-                return;
-            }
+             const token = path.split('/').pop();
+             if(token) showResetPasswordView(token);
+             return;
         }
 
         const token = localStorage.getItem('token');
@@ -381,95 +318,51 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- CORRECCIÓN CRÍTICA: SHOWAPP Y SHOWLOGIN ---
     async function showApp(payload) {
-        // 1. ELIMINAMOS LA CLASE DEL BODY PARA ACTIVAR EL CSS DE LA APP
         document.body.classList.remove('auth-visible');
-
         if (!configCache) await loadInitialConfig();
+        if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
-        DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
-        
-        // Renderizamos el menú
         renderSidebar(payload);
+        if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
-        if (!isInitialized) {
-            initAppEventListeners(payload);
-            isInitialized = true;
-        }
-
-        // 2. FORZAMOS ESTILOS (Seguridad extra, aunque el CSS ya lo hace)
         DOMElements.loginContainer.style.display = ''; 
         DOMElements.appWrapper.style.display = ''; 
 
         const hashSection = location.hash.replace('#', '');
-        
-        // Redirección inteligente según rol
         if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
-             mostrarSeccion('vista-artista', false); // Vista perfil para clientes
+             mostrarSeccion('vista-artista', false);
         } else {
              mostrarSeccion(hashSection || 'dashboard', false);
         }
-
-        OfflineManager.updateIndicator();
-        window.addEventListener('online', () => { OfflineManager.updateIndicator(); });
-        window.addEventListener('offline', () => { OfflineManager.updateIndicator(); });
-        
-        // Forzamos visibilidad final del body
-        document.body.style.opacity = '1'; 
-        document.body.style.visibility = 'visible';
     }
 
     function showLogin() {
-        // 1. AÑADIMOS LA CLASE AL BODY PARA ACTIVAR EL CSS DEL LOGIN
         document.body.classList.add('auth-visible');
-        
         localStorage.removeItem('token');
-        
-        // Forzamos estilos de fallback
         DOMElements.loginContainer.style.display = ''; 
         DOMElements.appWrapper.style.display = '';
-        
-        document.body.style.opacity = '1'; 
-        document.body.style.visibility = 'visible';
     }
 
-    // --- AUTH LOGIC ---
+    // --- AUTH ---
     function cerrarSesionConfirmacion() {
-        Swal.fire({
-            title: '¿Cerrar Sesión?',
-            text: "Tendrás que ingresar tus datos nuevamente.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#6366f1',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Sí, Salir',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                showLogin();
-            }
-        });
+        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir' })
+        .then((result) => { if (result.isConfirmed) showLogin(); });
     }
 
     function toggleAuth(view) {
-        const views = ['login-view', 'register-view', 'recover-view', 'reset-password-view'];
-        views.forEach(v => document.getElementById(v).style.display = 'none');
-
+        ['login-view', 'register-view', 'recover-view', 'reset-password-view'].forEach(v => document.getElementById(v).style.display = 'none');
         if (view === 'register') document.getElementById('register-view').style.display = 'block';
         else if (view === 'recover') document.getElementById('recover-view').style.display = 'block';
         else if (view === 'reset') document.getElementById('reset-password-view').style.display = 'block';
         else document.getElementById('login-view').style.display = 'block';
-
         document.getElementById('login-error').textContent = '';
     }
 
     function showResetPasswordView(token) {
-        // Forzamos modo auth
         document.body.classList.add('auth-visible');
         DOMElements.appWrapper.style.display = 'none';
         DOMElements.loginContainer.style.display = 'block';
-        
         document.getElementById('reset-token').value = token;
         toggleAuth('reset');
     }
@@ -478,16 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const token = document.getElementById('reset-token').value;
         const password = document.getElementById('new-password').value;
-        if (!password) return showToast('Ingresa una contraseña', 'error');
-        showLoader();
         try {
-            const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: password }) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Error');
+            await fetchAPI(`${API_URL}/api/auth/reset-password`, { method: 'POST', body: JSON.stringify({ token, newPassword: password }) });
             showToast('¡Contraseña actualizada!', 'success');
-            window.history.replaceState({}, document.title, "/");
             toggleAuth('login');
-        } catch (err) { document.getElementById('login-error').textContent = err.message; } finally { hideLoader(); }
+        } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
 
     async function registerUser(e) {
@@ -496,68 +384,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = document.getElementById('reg-email').value;
         const password = document.getElementById('reg-password').value;
         const nombreArtistico = document.getElementById('reg-artistname').value;
-        showLoader();
         try {
-            const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Error');
-            showToast('¡Cuenta creada! Inicia sesión.', 'success');
+            await fetchAPI(`${API_URL}/api/auth/register`, { method: 'POST', body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) });
+            showToast('¡Cuenta creada!', 'success');
             toggleAuth('login');
-            document.getElementById('username').value = username;
-        } catch (err) { document.getElementById('login-error').textContent = err.message; } finally { hideLoader(); }
+        } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
 
     async function recoverPassword(e) {
         e.preventDefault();
         const email = document.getElementById('rec-email').value;
-        showLoader();
         try {
-            const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Error');
-            showToast('Correo de recuperación enviado.', 'success');
+            await fetchAPI(`${API_URL}/api/auth/forgot-password`, { method: 'POST', body: JSON.stringify({ email }) });
+            showToast('Correo enviado.', 'success');
             toggleAuth('login');
-        } catch (err) { document.getElementById('login-error').textContent = err.message; } finally { hideLoader(); }
+        } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
 
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
-        showLoader();
-        try {
-            const userVal = document.getElementById('username').value;
-            const passVal = document.getElementById('password').value;
-            const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
-            localStorage.setItem('token', data.token);
-            await showApp(JSON.parse(atob(data.token.split('.')[1])));
-        } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
-    });
-
-    // --- NAVEGACIÓN Y SECCIONES (CORREGIDA PARA SPA) ---
+    // --- NAVEGACIÓN ---
     async function mostrarSeccion(id, updateHistory = true) {
-        // 1. Ocultar TODAS las secciones (quitar clase active)
         document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
-        // 2. Desactivar todos los links del sidebar
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
-
-        const seccionActiva = document.getElementById(id);
         
-        // Activar link del sidebar correspondiente
+        const seccionActiva = document.getElementById(id);
         const links = document.querySelectorAll(`.nav-link-sidebar`);
-        links.forEach(l => {
-            if (l.dataset.seccion === id) l.classList.add('active');
-        });
+        links.forEach(l => { if (l.dataset.seccion === id) l.classList.add('active'); });
 
         if (seccionActiva) {
-            // 3. Mostrar SOLO la sección deseada
             seccionActiva.classList.add('active');
-            
             if (updateHistory) history.pushState(null, null, `#${id}`);
-            const searchInput = document.getElementById('globalSearch');
-            if (searchInput) { searchInput.value = ''; }
-
+            
             const loadDataActions = {
                 'dashboard': cargarDashboard,
                 'agenda': cargarAgenda,
@@ -577,22 +433,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- CRUD Y RENDER ---
+    // --- RENDER LISTAS (MODIFICADO PARA MODALES) ---
     async function renderList(endpoint, makeClickable = false) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         try {
             const data = await fetchAPI(`/api/${endpoint}`);
-            document.getElementById(listId).innerHTML = data.length ? data.map(item => {
-                let displayName;
-                if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre} ${item.nombreArtistico ? `(${item.nombre})` : ''}`; }
-                else if (endpoint === 'usuarios') { displayName = `${item.username || 'Usuario'} (${item.role})`; }
-                else { displayName = `${item.nombre || 'Sin Nombre'} - $${item.precio.toFixed(2)}`; }
-                const clickHandler = makeClickable ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
+            const listEl = document.getElementById(listId);
+            if(!listEl) return;
 
-                let editAction = `app.editarItem('${item._id}', '${endpoint}')`;
-                if (endpoint === 'artistas') {
+            listEl.innerHTML = data.length ? data.map(item => {
+                let displayName;
+                let editAction = '';
+
+                if (endpoint === 'artistas') { 
+                    displayName = `${item.nombreArtistico || item.nombre}`;
                     editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`;
                 }
+                else if (endpoint === 'usuarios') { 
+                    displayName = `${item.username} (${item.role})`;
+                    const itemStr = JSON.stringify(item).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+                    editAction = `app.abrirModalEditarUsuario('${itemStr}')`;
+                }
+                else { // Servicios
+                    displayName = `${item.nombre} - $${item.precio.toFixed(2)}`;
+                    editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}')`;
+                }
+
+                const clickHandler = makeClickable ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
 
                 return `<li class="list-item" ${clickHandler} style="${makeClickable ? 'cursor:pointer;' : ''}">
                     <span>${escapeHTML(displayName)}</span>
@@ -601,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn-eliminar" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')">🗑️</button>
                     </div></li>`;
             }).join('') : `<li>No hay elementos.</li>`;
-        } catch (e) { document.getElementById(listId).innerHTML = `<li>Error al cargar.</li>`; }
+        } catch (e) { console.error(e); }
     }
 
     async function cargarPapelera() {
@@ -614,16 +481,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     let displayName = item.nombre || item.username || item.nombreProyecto || 'Item';
                     return `<li class="list-item"><span>${escapeHTML(displayName)}</span><div class="list-item-actions"><button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button><button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button></div></li>`;
                 }).join('') : `<li>Vacía.</li>`;
-            } catch (e) { document.getElementById(listId).innerHTML = `<li>Error.</li>`; }
+            } catch (e) { }
         }
     }
 
-    function limpiarForm(formId) { const form = document.getElementById(formId); form.reset(); const idInput = form.querySelector('input[type="hidden"]'); if (idInput) idInput.value = ''; form.querySelector('button[type="submit"]').textContent = 'Guardar'; }
+    function limpiarForm(formId) { document.getElementById(formId).reset(); }
 
+    // Función genérica para CREAR (los forms de la vista principal)
     async function saveItem(e, type) {
         e.preventDefault();
         const form = e.target;
-        const id = form.querySelector('input[type="hidden"]')?.value;
         let body;
         if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; }
         else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; }
@@ -632,84 +499,171 @@ document.addEventListener('DOMContentLoaded', () => {
             const emailVal = document.getElementById('emailUsuario').value;
             const roleVal = document.getElementById('roleUsuario').value;
             const passVal = document.getElementById('passwordUsuario').value;
-            const checkboxes = document.querySelectorAll('input[name="user_permisos"]:checked');
+            const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked');
             const permisos = Array.from(checkboxes).map(c => c.value);
-            body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos };
-            if (!id && !passVal) { showToast('Contraseña obligatoria para usuarios nuevos.', 'error'); return; }
-            if (passVal) body.password = passVal;
+            body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal };
+            if (!passVal) { showToast('Contraseña requerida', 'error'); return; }
         }
-        const method = id ? 'PUT' : 'POST'; const url = `/api/${type}/${id || ''}`;
         try {
-            const res = await fetchAPI(url, { method, body: JSON.stringify(body) });
-            showToast(res.offline ? 'Guardado local.' : 'Guardado éxito.', res.offline ? 'warning' : 'success');
-            limpiarForm(form.id); mostrarSeccion(`gestion-${type}`);
+            await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
+            showToast('Creado exitosamente', 'success');
+            limpiarForm(form.id);
+            renderList(type);
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
 
-    async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+    async function eliminarItem(id, endpoint) {
+        Swal.fire({
+             title: '¿Mover a papelera?', text: "Podrás restaurarlo después", icon: 'warning',
+             showCancelButton: true, confirmButtonText: 'Sí, borrar'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' });
+                    showToast('Movido a papelera', 'info');
+                    renderList(endpoint);
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
 
     async function restaurarItem(id, endpoint) {
-        try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+        try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
     }
-
     async function eliminarPermanente(id, endpoint) {
         if (!confirm('¡Irreversible!')) return;
-        try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+        try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
     }
 
-    async function vaciarPapelera(endpoint) {
-        if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
-    }
+    // --- MODALES DE EDICIÓN ---
 
-    async function editarItem(id, endpoint) {
+    // 1. ARTISTAS
+    function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
+        document.getElementById('editArtistId').value = id;
+        document.getElementById('editArtistNombre').value = nombre;
+        document.getElementById('editArtistNombreArtístico').value = artistico;
+        document.getElementById('editArtistTelefono').value = tel;
+        document.getElementById('editArtistCorreo').value = mail;
+        new bootstrap.Modal(document.getElementById('edit-artist-modal')).show();
+    }
+    async function guardarEdicionArtista(e) {
+        e.preventDefault();
+        const id = document.getElementById('editArtistId').value;
+        const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value };
         try {
-            let item; if (endpoint === 'artistas') item = localCache.artistas.find(i => i._id === id); else if (endpoint === 'servicios') item = localCache.servicios.find(i => i._id === id); else if (endpoint === 'usuarios') item = localCache.usuarios.find(i => i._id === id);
-            if (!item) item = await fetchAPI(`/api/${endpoint}/${id}`);
-
-            const form = document.getElementById(`form${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
-            if (endpoint === 'servicios') { form.idServicio.value = item._id; form.nombreServicio.value = item.nombre; form.precioServicio.value = item.precio; }
-            else if (endpoint === 'usuarios') {
-                form.idUsuario.value = item._id;
-                document.getElementById('usernameUsuario').value = item.username;
-                document.getElementById('emailUsuario').value = item.email || '';
-                document.getElementById('roleUsuario').value = item.role;
-                document.getElementById('passwordUsuario').value = '';
-                document.querySelectorAll('input[name="user_permisos"]').forEach(chk => chk.checked = false);
-                const userPerms = item.permisos || [];
-                if (Array.isArray(userPerms)) { document.querySelectorAll('input[name="user_permisos"]').forEach(chk => { if (userPerms.includes(chk.value)) { chk.checked = true; } }); }
-            }
-            form.querySelector('button[type="submit"]').textContent = 'Actualizar';
-            mostrarSeccion(`gestion-${endpoint}`);
-        } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+            await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('Actualizado', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide();
+            renderList('artistas', true);
+        } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // --- MODAL DATOS BANCARIOS ---
-    async function guardarDatosBancariosConfirmacion() {
-        const datosBancarios = {
+    // 2. SERVICIOS
+    function abrirModalEditarServicio(id, nombre, precio) {
+        document.getElementById('editServicioId').value = id;
+        document.getElementById('editServicioNombre').value = nombre;
+        document.getElementById('editServicioPrecio').value = precio;
+        new bootstrap.Modal(document.getElementById('modalEditarServicio')).show();
+    }
+    async function guardarEdicionServicio(e) {
+        e.preventDefault();
+        const id = document.getElementById('editServicioId').value;
+        const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value) };
+        try {
+            await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('Actualizado', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide();
+            renderList('servicios');
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // 3. USUARIOS
+    function abrirModalEditarUsuario(itemStr) {
+        const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
+        document.getElementById('editUsuarioId').value = item._id;
+        document.getElementById('editUsuarioName').value = item.username;
+        document.getElementById('editUsuarioEmail').value = item.email || '';
+        document.getElementById('editUsuarioRole').value = item.role;
+        document.getElementById('editUsuarioPass').value = '';
+        
+        document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false);
+        if (item.permisos && Array.isArray(item.permisos)) {
+            item.permisos.forEach(p => {
+                const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`);
+                if(chk) chk.checked = true;
+            });
+        }
+        new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show();
+    }
+    async function guardarEdicionUsuario(e) {
+        e.preventDefault();
+        const id = document.getElementById('editUsuarioId').value;
+        const pass = document.getElementById('editUsuarioPass').value;
+        const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked');
+        const permisos = Array.from(checkboxes).map(c => c.value);
+
+        const body = {
+            username: document.getElementById('editUsuarioName').value,
+            email: document.getElementById('editUsuarioEmail').value,
+            role: document.getElementById('editUsuarioRole').value,
+            permisos: permisos
+        };
+        if(pass) body.password = pass;
+
+        try {
+            await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('Usuario actualizado', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide();
+            renderList('usuarios');
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // --- DATOS BANCARIOS (GUARDAR, PDF, WHATS) ---
+    async function guardarDatosBancarios() {
+        const datos = {
             banco: document.getElementById('banco').value,
             titular: document.getElementById('titular').value,
             tarjeta: document.getElementById('tarjeta').value,
             clabe: document.getElementById('clabe').value
         };
         try {
-            await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios }) });
-            configCache.datosBancarios = datosBancarios;
-
-            const modalEl = document.getElementById('modalDatosBancarios');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
-
-            Swal.fire({
-                title: '¡Guardado!',
-                text: 'Datos bancarios actualizados.',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
-            });
-        } catch (e) { showToast(`Error`, 'error'); }
+            await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) });
+            configCache.datosBancarios = datos;
+            bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide();
+            Swal.fire({ icon: 'success', title: 'Guardado', timer: 1500, showConfirmButton: false });
+        } catch (e) { showToast('Error al guardar', 'error'); }
     }
 
-    // --- DASHBOARD & KANBAN ---
+    function generarDatosBancariosPDF() {
+        if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning');
+        const db = configCache.datosBancarios;
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF();
+        
+        pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); 
+        if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
+
+        pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' });
+        
+        const data = [
+            ['Banco:', db.banco || ''],
+            ['Titular:', db.titular || ''],
+            ['Tarjeta:', db.tarjeta || ''],
+            ['CLABE:', db.clabe || '']
+        ];
+        
+        pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } });
+        pdf.save("FiaRecords_DatosBancarios.pdf");
+    }
+
+    function compartirDatosBancariosWhatsApp() {
+        if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning');
+        const db = configCache.datosBancarios;
+        const msg = `*Datos Bancarios FiaRecords*\n\nBanco: ${db.banco}\nTitular: ${db.titular}\nTarjeta: ${db.tarjeta}\nCLABE: ${db.clabe}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    // --- DASHBOARD ---
     async function cargarDashboard() {
         try {
             const stats = await fetchAPI('/api/dashboard/stats');
@@ -721,13 +675,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const dataValues = stats.monthlyIncome || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
             chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
-        } catch (e) { console.error("Error dashboard:", e); }
+        } catch (e) { console.error(e); }
     }
 
+    // --- LOGICA DE PROYECTOS, FLUJO, PAGOS Y DOCUMENTOS (SE MANTIENE IGUAL QUE ANTES) ---
     async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; return `<tr><td class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">✓</button><button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">Sin cotizaciones.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4">Error offline.</td></tr>`; } }
-
+    
     const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
-
     async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') {
         const board = document.getElementById('kanbanBoard');
         const filtros = document.getElementById('filtrosFlujo');
@@ -735,67 +689,26 @@ document.addEventListener('DOMContentLoaded', () => {
         board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join('');
         try { localCache.proyectos = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error flujo:", e); }
     }
-
     function filtrarFlujo(filtro) {
         document.querySelectorAll('#filtrosFlujo button').forEach(b => { b.classList.remove('active'); b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); });
         const activeBtn = document.querySelector(`#filtrosFlujo button[onclick="app.filtrarFlujo('${filtro}')"]`);
         if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-secondary'); activeBtn.classList.add('btn-primary'); }
-
         document.querySelectorAll('.kanban-column').forEach(c => c.style.display = (filtro === 'Todos' || c.dataset.columna === filtro) ? 'block' : 'none');
         procesos.forEach(col => { if (document.getElementById(`columna-${col}`)) document.getElementById(`columna-${col}`).innerHTML = '' });
-
         if (localCache.proyectos) {
             localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').forEach(p => {
                 const card = document.createElement('div'); card.className = `project-card`; card.dataset.id = p._id; card.style.borderColor = `var(--proceso-${p.proceso})`;
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li>${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
-
-                card.innerHTML = `<div class="project-card-header">
-                                  <span class="${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span>
-                                  <div style="display:flex;gap:4px;">
-                                      <button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button>
-                                      <button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>
-                                  </div>
-                              </div>
-                              <div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div>
-                              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
-                                      <strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong>
-                                      <div style="display:flex;gap:4px;align-items:center;">
-                                          <button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button>
-                                          <button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button>
-                                          <select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
-                                      </div>
-                              </div>`;
+                card.innerHTML = `<div class="project-card-header"><span class="${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span><div style="display:flex;gap:4px;"><button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button><button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></div></div><div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);"><strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong><div style="display:flex;gap:4px;align-items:center;"><button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button><button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button><select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div></div>`;
                 document.getElementById(`columna-${p.proceso}`)?.appendChild(card);
             });
         }
     }
-
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if (proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch (error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
-
-    async function eliminarProyecto(id, desdeCotizaciones = false) {
-        if (!confirm('¿Mover a papelera? Desaparecerá del flujo.')) return;
-        try {
-            await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' });
-            showToast('Movido a papelera.', 'info');
-            if (desdeCotizaciones) { cargarCotizaciones(); }
-            else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); }
-            else { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); }
-        } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
-    }
-
-    async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) {
-        const select = document.getElementById(selectId);
-        try {
-            const data = await fetchAPI(url);
-            select.innerHTML = '';
-            if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); }
-            data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); });
-            if (selectId === 'proyectoArtista' && preseleccionArtistaId) { select.value = preseleccionArtistaId; preseleccionArtistaId = null; }
-            else if (currentValue) { select.value = currentValue; }
-        } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; }
-    }
+    async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover a papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+    async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (selectId === 'proyectoArtista' && preseleccionArtistaId) { select.value = preseleccionArtistaId; preseleccionArtistaId = null; } else if (currentValue) { select.value = currentValue; } } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
     const cargarOpcionesParaProyecto = () => { cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); }
     const cargarOpcionesParaProyectoManual = () => { cargarOpcionesParaSelect('/api/artistas', 'manualProyectoArtista', '_id', item => item.nombreArtistico || item.nombre, false); flatpickr("#manualFechaProyecto", { defaultDate: "today", locale: "es" }); };
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
@@ -821,14 +734,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast(nuevoProyecto.offline ? 'Guardado offline.' : 'Cotización guardada.', nuevoProyecto.offline ? 'warning' : 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('cotizaciones'); } }
     async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('Agendado.', 'success'); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('flujo-trabajo'); } }
     async function registrarNuevoArtistaDesdeFormulario(formPrefix) {
-        const inputId = formPrefix ? `${formPrefix}NombreNuevoArtista` : 'nombreNuevoArtista';
-        const containerId = formPrefix ? `${formPrefix}NuevoArtistaContainer` : 'nuevoArtistaContainer';
-        const nombreInput = document.getElementById(inputId); const nombre = nombreInput.value.trim();
+        const inputId = formPrefix ? `${formPrefix}NombreNuevoArtista` : 'nombreNuevoArtista'; const containerId = formPrefix ? `${formPrefix}NuevoArtistaContainer` : 'nuevoArtistaContainer'; const nombreInput = document.getElementById(inputId); const nombre = nombreInput.value.trim();
         if (!nombre) { showToast('Introduce un nombre.', 'error'); return; }
         try { await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) }); const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista'; await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, formPrefix !== 'manual'); const select = document.getElementById(selectId); select.selectedIndex = select.options.length - 1; document.getElementById(containerId).style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
 
-    // --- MODALES BOOTSTRAP (EVENTOS) ---
+    // --- EVENTOS DE CALENDARIO Y MODAL CITA ---
     function openEventModal(info) {
         const props = info.event.extendedProps;
         document.getElementById('modal-event-id').value = info.event.id;
@@ -841,16 +752,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const hours = String(info.event.start.getHours()).padStart(2, '0');
         const minutes = String(info.event.start.getMinutes()).padStart(2, '0');
         document.getElementById('edit-event-time').value = `${hours}:${minutes}`;
-
-        const modal = new bootstrap.Modal(document.getElementById('event-modal'));
-        modal.show();
+        new bootstrap.Modal(document.getElementById('event-modal')).show();
     }
-
-    async function cancelarCita(id) {
-        if (!confirm('¿Cancelar cita? Se liberará la fecha.')) return;
-        try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cancelada.', 'info'); closeEventModal(); app.cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) app.filtrarFlujo('Todos'); } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-    }
-
+    async function cancelarCita(id) { if (!confirm('¿Cancelar cita? Se liberará la fecha.')) return; try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cancelada.', 'info'); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); app.cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) app.filtrarFlujo('Todos'); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function actualizarHorarioProyecto() {
         const id = document.getElementById('modal-event-id').value;
         const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0];
@@ -858,16 +762,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!newDateInput) return showToast("Selecciona fecha", "error");
         let finalDate = new Date(newDateInput);
         if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); }
-        try { await app.cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Actualizado", "success"); closeEventModal(); app.cargarAgenda(); } catch (e) { showToast("Error", "error"); }
+        try { await app.cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); app.cargarAgenda(); } catch (e) { showToast("Error", "error"); }
     }
-
-    function closeEventModal() {
-        const el = document.getElementById('event-modal');
-        const modal = bootstrap.Modal.getInstance(el);
-        if (modal) modal.hide();
-    }
-
-    // --- AGENDA & CALENDAR ---
     async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
         if (currentCalendar) { currentCalendar.destroy(); }
@@ -890,11 +786,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { calendarEl.innerHTML = '<p>Error agenda.</p>'; }
     }
 
-    // --- PAGOS ---
+    // --- ACCIONES COMUNES ---
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function aprobarCotizacion(id) { if (!confirm('¿Aprobar cotización?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error`, 'error'); } }
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Resumen FiaRecords:\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nContáctanos para confirmar.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error.', 'error'); } }
-
     async function registrarPago(proyectoId, desdeHistorial = false) {
         const cache = desdeHistorial ? historialCacheados : localCache.proyectos;
         let proyecto = cache.find(p => p._id === proyectoId);
@@ -905,7 +800,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const monto = parseFloat(montoStr);
         if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error');
         const metodo = prompt('Método (Efectivo, Transferencia):', 'Efectivo'); if (!metodo) return;
-
         try {
             const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) });
             showToast(proyectoActualizado.offline ? 'Offline. Recibo local.' : '¡Pago registrado!', proyectoActualizado.offline ? 'info' : 'success');
@@ -916,82 +810,23 @@ document.addEventListener('DOMContentLoaded', () => {
             else { cargarFlujoDeTrabajo(); }
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
-
     async function cargarPagos() { mostrarSeccionPagos('pendientes', document.querySelector('#pagos .btn-group button.active') || document.querySelector('#pagos button')); }
-
     function mostrarSeccionPagos(vista, btn) {
         document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active'));
         if (btn) btn.classList.add('active');
-
-        if (vista === 'pendientes') {
-            document.getElementById('vista-pagos-pendientes').style.display = 'block';
-            document.getElementById('vista-pagos-historial').style.display = 'none';
-            cargarPagosPendientes();
-        } else {
-            document.getElementById('vista-pagos-pendientes').style.display = 'none';
-            document.getElementById('vista-pagos-historial').style.display = 'block';
-            cargarHistorialPagos();
-        }
+        if (vista === 'pendientes') { document.getElementById('vista-pagos-pendientes').style.display = 'block'; document.getElementById('vista-pagos-historial').style.display = 'none'; cargarPagosPendientes(); } else { document.getElementById('vista-pagos-pendientes').style.display = 'none'; document.getElementById('vista-pagos-historial').style.display = 'block'; cargarHistorialPagos(); }
     }
-
     async function cargarPagosPendientes() {
-        const tabla = document.getElementById('tablaPendientesBody');
-        tabla.innerHTML = '<tr><td colspan="5">Calculando...</td></tr>';
-
-        const pendientes = localCache.proyectos.filter(p => {
-            const pagado = p.montoPagado || 0;
-            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion';
-        });
-
+        const tabla = document.getElementById('tablaPendientesBody'); tabla.innerHTML = '<tr><td colspan="5">Calculando...</td></tr>';
+        const pendientes = localCache.proyectos.filter(p => { const pagado = p.montoPagado || 0; return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion'; });
         if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
-
-        tabla.innerHTML = pendientes.map(p => {
-            const deuda = p.total - (p.montoPagado || 0);
-            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General';
-            const proyectoNombre = p.nombreProyecto || 'Proyecto';
-            return `<tr>
-                <td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td>
-                <td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td>
-                <td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar 💵</button><button class="btn-secondary" onclick="app.compartirPorWhatsApp('${p._id}')">Recordar 💬</button></td>
-            </tr>`;
-        }).join('');
+        tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar 💵</button><button class="btn-secondary" onclick="app.compartirPorWhatsApp('${p._id}')">Recordar 💬</button></td></tr>`; }).join('');
     }
-
-    async function cargarHistorialPagos() {
-        const tablaBody = document.getElementById('tablaPagosBody');
-        tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`;
-        try {
-            const pagos = await fetchAPI('/api/proyectos/pagos/todos');
-            tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}).replace(/'/g, '&apos;'))">💬</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">Sin pagos.</td></tr>`;
-        } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">Error offline.</td></tr>`; }
-    }
-
+    async function cargarHistorialPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}).replace(/'/g, '&apos;'))">💬</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">Sin pagos.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">Error offline.</td></tr>`; } }
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId) || proyecto.pagos.find(p => p._id.startsWith('temp')); if (!pago) return showToast('No encontrado.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error.', 'error'); } }
     function compartirPagoPorWhatsApp(pagoString) { const pago = JSON.parse(pagoString); const mensaje = `Confirmación de pago FiaRecords:\n\n*Fecha:* ${new Date(pago.fecha).toLocaleDateString()}\n*Monto:* $${pago.monto.toFixed(2)} MXN\n*Método:* ${pago.metodo}\n\n¡Gracias!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
     async function eliminarPago(proyectoId, pagoId) { if (!confirm('¿Eliminar pago? Afectará el saldo.')) return; try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPagos(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-
-    // --- DOCUMENTOS ---
-    async function openDocumentsModal(proyectoId) {
-        const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
-        if (!proyecto) return showToast('No encontrado.', 'error');
-        document.getElementById('modal-project-id').value = proyectoId;
-        document.getElementById('modal-project-id').dataset.total = proyecto.total;
-        showDocumentSection('contrato');
-        const contrato = proyecto.detallesContrato || {};
-        document.getElementById('contrato-nombre-album').value = contrato.nombreAlbum || '';
-        document.getElementById('contrato-canciones').value = contrato.cantidadCanciones || '';
-        document.getElementById('contrato-duracion').value = contrato.duracion || '';
-        document.getElementById('contrato-pago-inicial').value = contrato.pagoInicial || '';
-        document.getElementById('contrato-pago-final').value = contrato.pagoFinal || '';
-        calcularSaldoContrato();
-        const dist = proyecto.detallesDistribucion || {};
-        document.getElementById('dist-titulo').value = dist.tituloLanzamiento || '';
-        // Lógica tracks...
-        const tracksContainer = document.getElementById('dist-tracks-container'); tracksContainer.innerHTML = ''; (dist.tracks && dist.tracks.length > 0 ? dist.tracks : [{ titulo: '', isrc: '' }]).forEach(track => addTrackField(track.titulo, track.isrc));
-        const modal = new bootstrap.Modal(document.getElementById('document-modal'));
-        modal.show();
-    }
-
+    async function openDocumentsModal(proyectoId) { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); if (!proyecto) return showToast('No encontrado.', 'error'); document.getElementById('modal-project-id').value = proyectoId; document.getElementById('modal-project-id').dataset.total = proyecto.total; showDocumentSection('contrato'); const contrato = proyecto.detallesContrato || {}; document.getElementById('contrato-nombre-album').value = contrato.nombreAlbum || ''; document.getElementById('contrato-canciones').value = contrato.cantidadCanciones || ''; document.getElementById('contrato-duracion').value = contrato.duracion || ''; document.getElementById('contrato-pago-inicial').value = contrato.pagoInicial || ''; document.getElementById('contrato-pago-final').value = contrato.pagoFinal || ''; calcularSaldoContrato(); const dist = proyecto.detallesDistribucion || {}; document.getElementById('dist-titulo').value = dist.tituloLanzamiento || ''; const tracksContainer = document.getElementById('dist-tracks-container'); tracksContainer.innerHTML = ''; (dist.tracks && dist.tracks.length > 0 ? dist.tracks : [{ titulo: '', isrc: '' }]).forEach(track => addTrackField(track.titulo, track.isrc)); new bootstrap.Modal(document.getElementById('document-modal')).show(); }
     function closeDocumentsModal() { const el = document.getElementById('document-modal'); const m = bootstrap.Modal.getInstance(el); if (m) m.hide(); }
     function showDocumentSection(sectionName) { document.querySelectorAll('.document-section').forEach(s => s.style.display = 'none'); document.getElementById(`section-${sectionName}`).style.display = 'block'; }
     function addTrackField(titulo = '', isrc = '') { const container = document.getElementById('dist-tracks-container'); const trackDiv = document.createElement('div'); trackDiv.className = 'input-group mb-2'; trackDiv.innerHTML = `<input type="text" class="form-control dist-track-titulo" placeholder="Título" value="${escapeHTML(titulo)}"><input type="text" class="form-control dist-track-isrc" placeholder="ISRC" value="${escapeHTML(isrc)}">`; container.appendChild(trackDiv); }
@@ -999,312 +834,84 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveAndGenerateContract() { const proyectoId = document.getElementById('modal-project-id').value; const data = { nombreAlbum: document.getElementById('contrato-nombre-album').value, cantidadCanciones: parseInt(document.getElementById('contrato-canciones').value), duracion: document.getElementById('contrato-duracion').value, pagoInicial: parseFloat(document.getElementById('contrato-pago-inicial').value), pagoFinal: parseFloat(document.getElementById('contrato-pago-final').value) }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'contrato', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarContratoPDF(proyectoCompleto); closeDocumentsModal(); }
     async function saveAndGenerateDistribution() { const proyectoId = document.getElementById('modal-project-id').value; const tracks = []; document.querySelectorAll('#dist-tracks-container .input-group').forEach(row => { const titulo = row.querySelector('.dist-track-titulo').value; const isrc = row.querySelector('.dist-track-isrc').value; if (titulo) tracks.push({ titulo, isrc }); }); const data = { tituloLanzamiento: document.getElementById('dist-titulo').value, upc: document.getElementById('dist-upc').value, tracks }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'distribucion', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarDistribucionPDF(proyectoCompleto); closeDocumentsModal(); }
 
-    // --- PDF GENERATION (JSPDF) ---
+    // --- PDF GENERATION ---
     function getFinalCoordinates(pos) { let baseX, baseY; switch (pos.vAlign) { case 'top': baseY = PDF_DIMENSIONS.MARGIN; break; case 'middle': baseY = (PDF_DIMENSIONS.HEIGHT / 2) - (pos.h / 2); break; default: baseY = PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN; } switch (pos.hAlign) { case 'left': baseX = PDF_DIMENSIONS.MARGIN; break; case 'center': baseX = (PDF_DIMENSIONS.WIDTH / 2) - (pos.w / 2); break; default: baseX = PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN; } let finalX = baseX + pos.offsetX; let finalY = baseY + pos.offsetY; finalX = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalX, PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN)); finalY = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalY, PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN)); return { x: finalX, y: finalY, w: pos.w, h: pos.h }; }
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : 'https://placehold.co/150x60?text=Firma'; try { const response = await fetch(firmaPath); if (!response.ok) throw new Error('.'); const firmaImg = await response.blob(); const reader = new FileReader(); reader.readAsDataURL(firmaImg); reader.onloadend = function () { try { const base64data = reader.result; const pos = getFinalCoordinates(configCache.firmaPos[docType]); if (docType === 'contrato') { pdf.line(PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 2, PDF_DIMENSIONS.MARGIN + 70, pos.y + pos.h + 2); pdf.text(proyecto.artista.nombre, PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 7); pdf.text('Firma del Cliente', PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 12); } pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7); pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12); } catch (e) { } finally { pdf.save(finalFileName); } } } catch (e) { pdf.save(finalFileName); } }
-
-    async function generarCotizacionPDF(proyectoIdOrObject) {
-        try {
-            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject;
-            const { jsPDF } = window.jspdf; const pdf = new jsPDF();
-
-            pdf.setFillColor(0, 0, 0);
-            pdf.rect(14, 15, 40, 15, 'F');
-            if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
-
-            pdf.setFontSize(9); pdf.text("FiaRecords Studio", 200, 20, { align: 'right' }); pdf.text("Juárez N.L.", 200, 25, { align: 'right' });
-            pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 200, 50, { align: 'right' });
-            const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]);
-            if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); }
-            pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' });
-            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto);
-        } catch (error) { showToast("Error PDF", 'error'); }
-    }
-    async function generarReciboPDF(proyecto, pagoEspecifico) {
-        try {
-            const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : null);
-
-            if (!pago) { if (proyecto.montoPagado > 0) { const dummyPago = { monto: proyecto.montoPagado }; return generarReciboPDF(proyecto, dummyPago); } return showToast('Sin pagos registrados.', 'error'); }
-
-            const saldoRestante = proyecto.total - proyecto.montoPagado;
-
-            pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
-
-            pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto Recibo:', `$${pago.monto.toFixed(2)}`], ['Restante Total:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto);
-        } catch (error) { showToast('Error recibo.', 'error'); }
-    }
-
-    async function generarContratoPDF(proyectoIdOrObject) {
-        try {
-            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato;
-            pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
-            pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS', 105, 40, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 55); pdf.text(`Cliente: ${proyecto.artista.nombre}`, 14, 65); const terminos = `Servicios para el álbum "${c.nombreAlbum}". Pago total: $${proyecto.total}. Anticipo: $${c.pagoInicial}.`; pdf.text(terminos, 14, 80, { maxWidth: 180 }); const fileName = `Contrato.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto);
-        } catch (e) { showToast("Error PDF", 'error'); }
-    }
-
+    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 200, 20, { align: 'right' }); pdf.text("Juárez N.L.", 200, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 200, 50, { align: 'right' }); const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error PDF", 'error'); } }
+    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : null); if (!pago) { if (proyecto.montoPagado > 0) { const dummyPago = { monto: proyecto.montoPagado }; return generarReciboPDF(proyecto, dummyPago); } return showToast('Sin pagos registrados.', 'error'); } const saldoRestante = proyecto.total - proyecto.montoPagado; pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto Recibo:', `$${pago.monto.toFixed(2)}`], ['Restante Total:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error recibo.', 'error'); } }
+    async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS', 105, 40, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 55); pdf.text(`Cliente: ${proyecto.artista.nombre}`, 14, 65); const terminos = `Servicios para el álbum "${c.nombreAlbum}". Pago total: $${proyecto.total}. Anticipo: $${c.pagoInicial}.`; pdf.text(terminos, 14, 80, { maxWidth: 180 }); const fileName = `Contrato.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); } }
     async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc]] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); } }
 
-    // --- VISTA ARTISTA ---
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico, isClientView = false) {
         document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`;
         const contenido = document.getElementById('vista-artista-contenido');
         contenido.innerHTML = '<p>Cargando...</p>';
         try {
             const [proyectos, todosPagos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI('/api/proyectos/pagos/todos'), fetchAPI(`/api/artistas/${artistaId}`)]);
-
-            let html = `<div class="card" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-                <div><p style="font-size: 1.1em;"><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p style="color:var(--text-color-light);"><strong>Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p><p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
-
-            if (!isClientView) {
-                html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')">✏️ Editar Datos</button>
-                    <button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button>
-                </div>`;
-            }
+            let html = `<div class="card" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;"><div><p style="font-size: 1.1em;"><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p style="color:var(--text-color-light);"><strong>Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p><p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
+            if (!isClientView) { html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;"><button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')">✏️ Editar Datos</button><button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button></div>`; }
             html += `</div><h3>Proyectos</h3>`;
-            if (proyectos.length) {
-                html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Acciones</th></tr></thead><tbody>';
-                proyectos.forEach(p => {
-                    html += `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td class="table-actions">`;
-                    if (!isClientView) { html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`; }
-                    html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`;
-                    if (!isClientView) { html += `<button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>`; }
-                    html += `</td></tr>`;
-                });
-                html += '</tbody></table></div>';
-            } else { html += '<p>Sin proyectos registrados.</p>'; }
-
+            if (proyectos.length) { html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Acciones</th></tr></thead><tbody>'; proyectos.forEach(p => { html += `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td class="table-actions">`; if (!isClientView) { html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`; } html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`; if (!isClientView) { html += `<button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>`; } html += `</td></tr>`; }); html += '</tbody></table></div>'; } else { html += '<p>Sin proyectos registrados.</p>'; }
             contenido.innerHTML = html;
             mostrarSeccion('vista-artista');
         } catch (e) { contenido.innerHTML = '<p>Error cargando historial.</p>'; console.error(e); }
     }
-
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
-
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
 
-    // --- MODAL EDITAR ARTISTA (NUEVO) ---
-    function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
-        document.getElementById('editArtistId').value = id;
-        document.getElementById('editArtistNombre').value = nombre;
-        document.getElementById('editArtistNombreArtístico').value = artistico;
-        document.getElementById('editArtistTelefono').value = tel;
-        document.getElementById('editArtistCorreo').value = mail;
-        const modal = new bootstrap.Modal(document.getElementById('edit-artist-modal'));
-        modal.show();
-    }
-
-    async function guardarEdicionArtista(e) {
-        e.preventDefault();
-        const id = document.getElementById('editArtistId').value;
-        const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value };
-        try {
-            await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Datos actualizados.', 'success');
-            const el = document.getElementById('edit-artist-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide();
-            mostrarVistaArtista(id, body.nombre, body.nombreArtistico); const idx = localCache.artistas.findIndex(a => a._id === id); if (idx !== -1) localCache.artistas[idx] = { ...localCache.artistas[idx], ...body };
-        } catch (err) { showToast('Error al guardar.', 'error'); }
-    }
-
-    function setupCustomization(payload) {
-        if (payload.role === 'admin') {
-            if (DOMElements.appLogo && DOMElements.logoInput) {
-                DOMElements.appLogo.style.cursor = 'pointer';
-                DOMElements.appLogo.onclick = () => DOMElements.logoInput.click();
-                DOMElements.logoInput.onchange = async (event) => {
-                    const file = event.target.files[0];
-                    if (!file) return;
-                    const formData = new FormData();
-                    formData.append('logoFile', file);
-                    try {
-                        await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true });
-                        showToast('Logo guardado!', 'success');
-                        await loadPublicLogo();
-                    } catch (e) {
-                        showToast(`Error al subir logo`, 'error');
-                    }
-                };
-            }
-        }
-    }
-
-    async function cargarConfiguracion() {
-        try {
-            if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } firmaPreview.src = firmaSrc;
-            const db = configCache.datosBancarios || {};
-            document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || '';
-            document.getElementById('doc-type-selector').value = 'cotizacion'; cargarAjustesParaDocumento('cotizacion');
-        } catch (e) { showToast('Error config.', 'error'); }
-    }
-
-    // (Funciones Ajustes PDF)
-    function cargarAjustesParaDocumento(docType) { if (!configCache || !configCache.firmaPos || !configCache.firmaPos[docType]) return; const pos = configCache.firmaPos[docType]; document.querySelector(`input[name="vAlign"][value="${pos.vAlign}"]`).checked = true; document.getElementById('slider-firma-w').value = pos.w; actualizarPosicionFirma(); }
-    function actualizarPosicionFirma() { const docType = document.getElementById('doc-type-selector').value; const pos = configCache.firmaPos[docType]; pos.vAlign = document.querySelector('input[name="vAlign"]:checked').value; pos.w = parseInt(document.getElementById('slider-firma-w').value); }
-    async function guardarAjustesFirma() { if (!configCache) return; try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes PDF guardados!', 'success'); } catch (e) { showToast(`Error`, 'error'); } }
-    async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error`, 'error'); } }
-
-    function revertirADefecto() {
-        if (!confirm('¿Restablecer configuración de PDF?')) return;
-        configCache.firmaPos = { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } };
-        cargarAjustesParaDocumento(document.getElementById('doc-type-selector').value);
-        showToast('Configuración restablecida (No guardada permanentemente).', 'info');
-    }
-
-    function openDeliveryModal(projectId, artistName, projectName) {
-        const modalEl = document.getElementById('delivery-modal');
-        modalEl.querySelector('#delivery-project-id').value = projectId;
-        modalEl.querySelector('#delivery-artist-name').value = artistName;
-        modalEl.querySelector('#delivery-project-name').value = projectName;
-        const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
-        modalEl.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : '';
-        document.getElementById('drive-status').textContent = '';
-        document.getElementById('drive-file-input').value = '';
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-    }
-
-    function closeDeliveryModal() {
-        const el = document.getElementById('delivery-modal');
-        const modal = bootstrap.Modal.getInstance(el);
-        if (modal) modal.hide();
-    }
-
-    async function saveDeliveryLink() {
-        const projectId = document.getElementById('delivery-project-id').value;
-        const enlace = document.getElementById('delivery-link-input').value;
-        try {
-            await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success');
-            closeDeliveryModal();
-        } catch (e) { showToast(`Error`, 'error'); }
-    }
-    function sendDeliveryByWhatsapp() {
-        const link = document.getElementById('delivery-link-input').value;
-        if (!link) return showToast('Falta el enlace.', 'error');
-        const artistName = document.getElementById('delivery-artist-name').value;
-        const projectName = document.getElementById('delivery-project-name').value;
-        const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
-    }
-
-    async function editarInfoProyecto(id) {
-        const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id);
-        if (!proyecto) return;
-        const nuevoNombre = prompt('Editar Nombre del Proyecto/Canción:', proyecto.nombreProyecto || '');
-        if (nuevoNombre === null) return;
-        const nuevoTotalStr = prompt('Editar Precio Total ($):', proyecto.total || 0);
-        if (nuevoTotalStr === null) return;
-        const nuevoTotal = parseFloat(nuevoTotalStr);
-
-        try {
-            if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); }
-            if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; }
-            showToast('Proyecto actualizado.', 'success');
-
-            if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtro); }
-            else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); }
-        } catch (e) { showToast(`Error al editar`, 'error'); }
-    }
-
-    // --- MENÚ MÓVIL AUTOMÁTICO ---
+    // --- SETUP Y MENÚ ---
     function setupMobileMenu() {
-        const hamburger = document.getElementById('hamburger-menu');
-        const sidebar = document.querySelector('.sidebar');
-        const overlay = document.getElementById('sidebar-overlay');
+        const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay');
         const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); };
-
-        if (hamburger) hamburger.addEventListener('click', toggleMenu);
-        if (overlay) overlay.addEventListener('click', toggleMenu);
-
-        // Cerrar al clickear opción
-        document.querySelectorAll('.nav-link-sidebar').forEach(link => {
-            link.addEventListener('click', () => {
-                if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); }
-            });
-        });
+        if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu);
+        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); });
     }
 
     function initAppEventListeners(payload) {
         flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });
-
-        const sidebarNav = document.getElementById('sidebar-nav-container');
-
-        const btnNuevo = document.getElementById('btn-nuevo-proyecto-sidebar');
-        if (btnNuevo) { btnNuevo.addEventListener('click', (e) => { e.preventDefault(); mostrarSeccion('registrar-proyecto'); }); }
-
+        
         document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
-        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); document.getElementById(`btnLimpiarForm${type}`).addEventListener('click', () => limpiarForm(`form${type}`)); });
-        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto);
-        document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; });
-        document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario(''));
-        document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; });
-        document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual'));
-        document.getElementById('firma-input').addEventListener('change', subirFirma);
-        document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
-
-        document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); });
-
+        
+        // Listeners Formularios Creación (Vistas)
+        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); });
+        
+        // Listeners Modales Edición
+        document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista);
+        document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio);
+        document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario);
+        
+        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto); document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('')); document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual')); document.getElementById('firma-input').addEventListener('change', subirFirma); document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual); document.getElementById('toggle-password').addEventListener('click', (e) => { const passwordInput = document.getElementById('password'); const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'; passwordInput.setAttribute('type', type); });
+        
         setupCustomization(payload);
         setupMobileMenu();
-
-        // Botón Salir con SweetAlert
-        const logoutBtn = document.getElementById('logout-button');
-        if (logoutBtn) {
-            logoutBtn.replaceWith(logoutBtn.cloneNode(true)); // Limpiar listeners viejos
-            document.getElementById('logout-button').addEventListener('click', cerrarSesionConfirmacion);
-        }
+        const logoutBtn = document.getElementById('logout-button'); if (logoutBtn) { logoutBtn.replaceWith(logoutBtn.cloneNode(true)); document.getElementById('logout-button').addEventListener('click', cerrarSesionConfirmacion); }
+        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); } showLoader(); try { const userVal = document.getElementById('username').value; const passVal = document.getElementById('password').value; const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); localStorage.setItem('token', data.token); await showApp(JSON.parse(atob(data.token.split('.')[1]))); } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); } });
     }
 
-    // --- RENDER SIDEBAR (MENÚ POR ROL) ---
+    function setupCustomization(payload) { if (payload.role === 'admin') { if (DOMElements.appLogo && DOMElements.logoInput) { DOMElements.appLogo.style.cursor = 'pointer'; DOMElements.appLogo.onclick = () => DOMElements.logoInput.click(); DOMElements.logoInput.onchange = async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error al subir logo`, 'error'); } }; } } }
+
     function renderSidebar(user) {
         const navContainer = document.getElementById('sidebar-nav-container');
-        let p = user.permisos || []; 
-        const role = user.role ? user.role.toLowerCase() : 'cliente';
-        
+        let p = user.permisos || []; const role = user.role ? user.role.toLowerCase() : 'cliente';
         let html = '';
-
-        // MENÚ PARA CLIENTES
-        if (role === 'cliente') {
-             html = `
-                <div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
-                   <a class="nav-link-sidebar" data-seccion="vista-artista" onclick="app.irAVistaArtista(null, '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
-                </div>
-             `;
-        } 
-        // MENÚ PARA ADMIN / STAFF
+        if (role === 'cliente') { html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar" data-seccion="vista-artista" onclick="app.irAVistaArtista(null, '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a></div>`; } 
         else {
-            if (role !== 'admin' && p.length === 0) { p = ['dashboard']; }
-            const isSuperAdmin = role === 'admin';
-            const canAccess = (permKey) => { if (isSuperAdmin) return true; return p.includes(permKey); };
-            
-            html = `
-              <div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
-                ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}
-                ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}
-                ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}
-                ${canAccess('finanzas') || canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}
-                ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}
-                ${canAccess('finanzas') || canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Pagos</a>' : ''}
-                ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="registro-manual"><i class="bi bi-pencil-square"></i> Registro Manual</a>' : ''}
-              </div>
-              <div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
-                ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}
-                ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}
-                ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}
-              </div>
-              ${canAccess('configuracion') ? `<div class="nav-group"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div><a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a><a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a></div>` : ''}
-            `;
+            if (role !== 'admin' && p.length === 0) { p = ['dashboard']; } const isSuperAdmin = role === 'admin'; const canAccess = (permKey) => { if (isSuperAdmin) return true; return p.includes(permKey); };
+            html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}${canAccess('finanzas') || canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}${canAccess('finanzas') || canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Pagos</a>' : ''}${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="registro-manual"><i class="bi bi-pencil-square"></i> Registro Manual</a>' : ''}</div><div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}</div>${canAccess('configuracion') ? `<div class="nav-group"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div><a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a><a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a></div>` : ''}`;
         }
-        
         navContainer.innerHTML = html;
-        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => {
-             if(!e.currentTarget.onclick) {
-                 mostrarSeccion(e.currentTarget.dataset.seccion);
-             }
-        }); });
+        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { mostrarSeccion(e.currentTarget.dataset.seccion); } }); });
     }
 
+    async function editarInfoProyecto(id) { const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id); if (!proyecto) return; const nuevoNombre = prompt('Editar Nombre:', proyecto.nombreProyecto || ''); if (nuevoNombre === null) return; const nuevoTotalStr = prompt('Editar Precio ($):', proyecto.total || 0); if (nuevoTotalStr === null) return; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } }
+    function openDeliveryModal(projectId, artistName, projectName) { const modalEl = document.getElementById('delivery-modal'); modalEl.querySelector('#delivery-project-id').value = projectId; modalEl.querySelector('#delivery-artist-name').value = artistName; modalEl.querySelector('#delivery-project-name').value = projectName; const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); modalEl.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : ''; document.getElementById('drive-status').textContent = ''; document.getElementById('drive-file-input').value = ''; new bootstrap.Modal(modalEl).show(); }
+    function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
+    async function saveDeliveryLink() { const projectId = document.getElementById('delivery-project-id').value; const enlace = document.getElementById('delivery-link-input').value; try { await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success'); closeDeliveryModal(); } catch (e) { showToast(`Error`, 'error'); } }
+    function sendDeliveryByWhatsapp() { const link = document.getElementById('delivery-link-input').value; if (!link) return showToast('Falta el enlace.', 'error'); const artistName = document.getElementById('delivery-artist-name').value; const projectName = document.getElementById('delivery-project-name').value; const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
+
     // EXPORTS
-    window.app = { eliminarItem, editarItem, restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios: guardarDatosBancariosConfirmacion, guardarDatosBancariosConfirmacion, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, guardarEdicionArtista, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, eliminarPermanente };
+    window.app = { eliminarItem, editarItem: (id, end) => console.log('Usar modales'), restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarDatosBancariosPDF, compartirDatosBancariosWhatsApp, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario, guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, eliminarPermanente };
 });
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').then(function (registration) { console.log('SW OK'); }, function (err) { console.log('SW Fail'); }); }); }

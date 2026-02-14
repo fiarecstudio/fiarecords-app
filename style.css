@@ -119,6 +119,28 @@ body.dark-mode .logo-dinamico {
     border-bottom-left-radius: 12px;
 }
 
+/* Checkboxes y Labels (Corrección Modo Oscuro) */
+.form-check-input {
+    background-color: var(--input-bg);
+    border-color: var(--border-color);
+}
+.form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+.form-check-label {
+    color: var(--text-color-dark) !important;
+}
+
+/* Contenedor de permisos (Corrección Modo Oscuro) */
+.permisos-container {
+    background-color: var(--input-bg) !important;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    color: var(--text-color-dark);
+}
+
 /* Botones */
 .btn { border-radius: 10px; font-weight: 600; padding: 0.6rem 1.2rem; transition: all 0.2s; border: none; }
 .btn-primary { background: var(--primary-gradient); border: none; color: white; }
@@ -211,18 +233,19 @@ main { flex: 1; overflow-y: auto; padding: 2rem; }
 }
 
 /* 2. Estado Autenticación (Login visible): App oculta */
+/* CORRECCIÓN: Pantalla completa, fondo sólido, centrado perfecto y Z-Index máximo */
 body.auth-visible #login-container {
-    display: flex !important; /* Se activa flex para centrar */
+    display: flex !important;
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: var(--background-color); /* Fondo sólido */
-    z-index: 9999; /* Por encima de todo */
+    background-color: var(--background-color);
+    z-index: 10000; /* Asegura que tape todo */
     align-items: center;
     justify-content: center;
-    overflow-y: auto; /* Permite scroll si la pantalla es muy pequeña verticalmente */
+    overflow-y: auto;
 }
 
 body.auth-visible #app-wrapper {
@@ -238,7 +261,7 @@ body.auth-visible #app-wrapper {
     border: 1px solid var(--border-color);
     border-radius: 20px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-    margin: auto; /* Centrado en flex container */
+    margin: auto;
 }
 
 /* =========================================

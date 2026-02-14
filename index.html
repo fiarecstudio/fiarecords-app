@@ -26,8 +26,8 @@
 
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <div id="login-container" class="container d-flex flex-column align-items-center justify-content-center min-vh-100">
-    <div class="card p-4 shadow-lg" style="max-width: 400px; width: 100%;">
+  <div id="login-container">
+    <div class="login-card">
         <div class="text-center mb-4">
           <img id="login-logo" class="logo-dinamico img-fluid" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
         </div>
@@ -101,12 +101,13 @@
     </div>
   </div>
   
-  <div id="app-wrapper" style="display: none;"> <nav class="sidebar">
+  <div id="app-wrapper" style="display: none;"> 
+    <nav class="sidebar">
       <div class="sidebar-header">
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
       </div>
       
-      <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" href="#">
+      <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" href="#" onclick="app.mostrarSeccion('registrar-proyecto')">
         <i class="bi bi-plus-circle me-2"></i>
         <span>Nuevo Proyecto</span>
       </a>
@@ -118,7 +119,7 @@
         <div class="theme-toggle-container mb-3 px-2">
           <span class="small"><i class="bi bi-moon"></i> Modo Oscuro</span>
           <label class="theme-switch">
-            <input type="checkbox" id="theme-switch" />
+            <input type="checkbox" id="theme-switch" onchange="document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', this.checked ? 'dark' : 'light')"/>
             <span class="slider"></span>
           </label>
         </div>
@@ -133,7 +134,7 @@
 
     <div class="main-content">
         <header class="main-header d-flex justify-content-between align-items-center p-3">
-            <button id="hamburger-menu" class="btn btn-light d-md-none">
+            <button id="hamburger-menu" class="btn btn-light d-md-none" onclick="document.querySelector('.sidebar').classList.toggle('show'); document.getElementById('sidebar-overlay').classList.toggle('show');">
                 <i class="bi bi-list fs-4"></i>
             </button>
             
@@ -217,8 +218,8 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h2>Gestión de Pagos</h2>
                     <div class="btn-group">
-                        <button class="btn btn-sm btn-outline-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial</button>
+                        <button class="btn btn-sm btn-outline-secondary active" onclick="document.getElementById('vista-pagos-pendientes').style.display='block'; document.getElementById('vista-pagos-historial').style.display='none';">Pendientes</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('vista-pagos-pendientes').style.display='none'; document.getElementById('vista-pagos-historial').style.display='block';">Historial</button>
                     </div>
                 </div>
                 
@@ -254,14 +255,14 @@
                         <label>Artista/Cliente</label>
                         <div class="d-flex gap-2 mb-3">
                             <select id="proyectoArtista" class="form-select"><option value="publico_general">Público General</option></select>
-                            <button type="button" id="btnNuevoArtista" class="btn btn-secondary"><i class="bi bi-person-plus"></i></button>
+                            <button type="button" id="btnNuevoArtista" class="btn btn-secondary" onclick="document.getElementById('nuevoArtistaContainer').style.display='block'"><i class="bi bi-person-plus"></i></button>
                         </div>
                         
                         <div id="nuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display: none;">
                             <label>Nombre Nuevo Artista</label>
                             <div class="d-flex gap-2">
                                 <input type="text" id="nombreNuevoArtista" class="form-control" placeholder="Nombre">
-                                <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success">Guardar</button>
+                                <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success" onclick="app.registrarNuevoArtistaDesdeFormulario()">Guardar</button>
                             </div>
                         </div>
 
@@ -280,7 +281,7 @@
                         <div class="row g-2 mb-3">
                             <div class="col-8"><select id="proyectoServicio" class="form-select"></select></div>
                             <div class="col-2"><input type="number" id="proyectoUnidades" class="form-control" value="1" min="1"></div>
-                            <div class="col-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100"><i class="bi bi-plus"></i></button></div>
+                            <div class="col-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100" onclick="app.agregarAProyecto()"><i class="bi bi-plus"></i></button></div>
                         </div>
                         <ul id="listaProyectoActual" class="list-group mb-3"></ul>
 
@@ -296,8 +297,8 @@
                         </div>
 
                         <div class="d-flex gap-2">
-                            <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1"><i class="bi bi-file-text"></i> Cotizar</button>
-                            <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1"><i class="bi bi-check-circle"></i> Agendar</button>
+                            <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Cotizar</button>
+                            <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1" onclick="app.enviarAFlujoDirecto()"><i class="bi bi-check-circle"></i> Agendar</button>
                         </div>
                     </form>
                 </div>
@@ -318,51 +319,12 @@
                     </div>
                     <div class="mt-2">
                         <button type="submit" class="btn btn-primary">Guardar</button>
-                        <button type="button" class="btn btn-secondary" id="btnLimpiarFormArtistas">Limpiar</button>
                     </div>
                   </form>
                   <h3>Directorio</h3>
                   <ul id="listaArtistas" class="list-group"></ul>
                 </div>
               </div>
-            </section>
-
-            <section id="registro-manual" class="section-view">
-                <div class="card">
-                    <div class="card-header"><h2>Registro Manual (Histórico)</h2></div>
-                    <div class="card-body">
-                        <form id="formProyectoManual">
-                            <div class="mb-3">
-                                <label>Artista</label>
-                                <div class="d-flex gap-2">
-                                    <select id="manualProyectoArtista" class="form-select"></select>
-                                    <button type="button" id="manualBtnNuevoArtista" class="btn btn-secondary"><i class="bi bi-person-plus"></i></button>
-                                </div>
-                            </div>
-                            <div id="manualNuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display:none;">
-                                <label>Nombre Nuevo Artista</label>
-                                <div class="d-flex gap-2">
-                                    <input type="text" id="manualNombreNuevoArtista" class="form-control">
-                                    <button type="button" id="btnGuardarManualNuevoArtista" class="btn btn-success">Guardar</button>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label>Nombre Proyecto</label>
-                                <input type="text" id="manualNombreProyecto" class="form-control" placeholder="Ej: Grabación de voz">
-                            </div>
-                            <div class="mb-3">
-                                <label>Fecha</label>
-                                <input type="text" id="manualFechaProyecto" class="form-control">
-                            </div>
-                            <div class="mb-3">
-                                <label>Descripción / Servicio</label>
-                                <input type="text" id="manualDescripcion" class="form-control" placeholder="Ej: Servicio de mezcla">
-                            </div>
-                            <button type="button" onclick="app.guardarProyectoManual()" class="btn btn-primary">Registrar Histórico</button>
-                        </form>
-                    </div>
-                </div>
             </section>
 
             <section id="historial-proyectos" class="section-view">
@@ -390,8 +352,7 @@
                                 <div class="col-md-4"><input type="number" id="precioServicio" class="form-control" placeholder="Precio" step="0.01" required></div>
                             </div>
                             <div class="mt-2">
-                                <button type="submit" class="btn btn-primary">Guardar</button>
-                                <button type="button" id="btnLimpiarFormServicios" class="btn btn-secondary">Limpiar</button>
+                                <button type="submit" class="btn btn-primary">Crear Nuevo</button>
                             </div>
                         </form>
                         <ul id="listaServicios" class="list-group"></ul>
@@ -411,31 +372,24 @@
                                 <div class="col-md-6">
                                     <select id="roleUsuario" class="form-select">
                                         <option value="admin">Admin</option>
-                                        <option value="productor">Productor/Ingeniero</option>
-                                        <option value="visual">Visual/Diseñador</option>
+                                        <option value="productor">Productor</option>
                                         <option value="cliente">Cliente</option>
                                     </select>
                                 </div>
-                                <div class="col-md-6"><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña (Vacío si no cambia)"></div>
+                                <div class="col-md-6"><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña"></div>
                             </div>
-                            <div class="mb-2 p-2 border rounded bg-light">
-                                <label class="fw-bold mb-2">Permisos:</label>
+                            <div class="mb-2 p-2 border rounded bg-light permisos-container">
+                                <label class="fw-bold mb-2">Permisos (Creación):</label>
                                 <div class="permissions-grid d-flex flex-wrap gap-3">
                                     <label><input type="checkbox" name="user_permisos" value="dashboard"> Dashboard</label>
                                     <label><input type="checkbox" name="user_permisos" value="agenda"> Agenda</label>
                                     <label><input type="checkbox" name="user_permisos" value="flujo-trabajo"> Flujo</label>
-                                    <label><input type="checkbox" name="user_permisos" value="finanzas"> Finanzas</label>
                                     <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotizaciones</label>
                                     <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
-                                    <label><input type="checkbox" name="user_permisos" value="historial-proyectos"> Historial</label>
-                                    <label><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
-                                    <label><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
                                     <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios</label>
-                                    <label><input type="checkbox" name="user_permisos" value="configuracion"> Configuración</label>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Guardar Usuario</button>
-                            <button type="button" id="btnLimpiarFormUsuarios" class="btn btn-secondary">Limpiar</button>
+                            <button type="submit" class="btn btn-primary">Crear Usuario</button>
                         </form>
                         <ul id="listaUsuarios" class="list-group"></ul>
                     </div>
@@ -448,8 +402,7 @@
                         <h2 id="vista-artista-nombre">Artista</h2>
                         <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccion('gestion-artistas')">← Volver</button>
                     </div>
-                    <div class="card-body" id="vista-artista-contenido">
-                        </div>
+                    <div class="card-body" id="vista-artista-contenido"></div>
                 </div>
             </section>
 
@@ -481,52 +434,8 @@
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
                         <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Cambiar Firma</button>
                         <input type="file" id="firma-input" hidden accept="image/*">
-                        <!-- AQUÍ SE AGREGA EL INPUT PARA EL LOGO QUE FALTABA -->
                         <input type="file" id="logo-input" hidden accept="image/*">
                     </div>
-                    
-                    <hr>
-                    
-                    <h5>Ajustes de PDF</h5>
-                    <div class="row g-3 align-items-center">
-                         <div class="col-md-4">
-                             <select id="doc-type-selector" class="form-select" onchange="app.cargarAjustesParaDocumento(this.value)">
-                                 <option value="cotizacion">Cotización</option>
-                                 <option value="recibo">Recibo</option>
-                                 <option value="contrato">Contrato</option>
-                                 <option value="distribucion">Distribución</option>
-                             </select>
-                         </div>
-                         <div class="col-md-8">
-                             <label>Alineación Vertical:</label>
-                             <div class="btn-group btn-group-sm" role="group">
-                                 <input type="radio" class="btn-check" name="vAlign" id="vTop" value="top" onchange="app.actualizarPosicionFirma()">
-                                 <label class="btn btn-outline-secondary" for="vTop">Arriba</label>
-                                 <input type="radio" class="btn-check" name="vAlign" id="vMiddle" value="middle" onchange="app.actualizarPosicionFirma()">
-                                 <label class="btn btn-outline-secondary" for="vMiddle">Medio</label>
-                                 <input type="radio" class="btn-check" name="vAlign" id="vBottom" value="bottom" checked onchange="app.actualizarPosicionFirma()">
-                                 <label class="btn btn-outline-secondary" for="vBottom">Abajo</label>
-                             </div>
-                         </div>
-                         
-                         <div class="col-12">
-                             <label>Tamaño (Ancho px):</label>
-                             <input type="range" class="form-range" id="slider-firma-w" min="20" max="100" value="50" oninput="app.actualizarPosicionFirma()">
-                         </div>
-                         
-                         <div style="display:none;">
-                             <input type="radio" name="hAlign" value="right" checked>
-                             <input type="number" id="slider-firma-offsetX" value="0">
-                             <input type="number" id="slider-firma-offsetY" value="0">
-                         </div>
-                    </div>
-                    
-                    <div class="mt-3">
-                        <button class="btn btn-primary" onclick="app.guardarAjustesFirma()">Guardar Ajustes PDF</button>
-                        <button class="btn btn-outline-danger" onclick="app.revertirADefecto()">Resetear</button>
-                    </div>
-                    
-                    <hr>
                     
                     <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info mb-3"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
                 </div>
@@ -542,10 +451,10 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Editar Artista</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <form id="formEditArtistFromView" onsubmit="app.guardarEdicionArtista(event)">
+          <form id="formEditarArtista" onsubmit="app.guardarEdicionArtista(event)">
             <input type="hidden" id="editArtistId">
             <div class="mb-2"><label>Nombre Real</label><input type="text" id="editArtistNombre" class="form-control" required></div>
             <div class="mb-2"><label>Nombre Artístico</label><input type="text" id="editArtistNombreArtístico" class="form-control"></div>
@@ -565,27 +474,24 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title"><i class="bi bi-credit-card"></i> Datos Bancarios</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <form id="form-datos-bancarios">
-             <div class="mb-3">
-                 <label>Banco</label>
-                 <input type="text" id="banco" class="form-control" placeholder="Ej: BBVA">
-             </div>
-             <div class="mb-3">
-                 <label>Titular</label>
-                 <input type="text" id="titular" class="form-control">
-             </div>
+             <div class="mb-3"><label>Banco</label><input type="text" id="banco" class="form-control"></div>
+             <div class="mb-3"><label>Titular</label><input type="text" id="titular" class="form-control"></div>
              <div class="row g-2">
                  <div class="col-6"><label>Tarjeta</label><input type="text" id="tarjeta" class="form-control"></div>
                  <div class="col-6"><label>CLABE</label><input type="text" id="clabe" class="form-control"></div>
              </div>
           </form>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-success" onclick="app.guardarDatosBancariosConfirmacion()">Guardar Datos</button>
+        <div class="modal-footer d-flex justify-content-between">
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-danger" onclick="app.generarDatosBancariosPDF()">📄 PDF</button>
+                <button type="button" class="btn btn-outline-success" onclick="app.compartirDatosBancariosWhatsApp()">💬 Whats</button>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="app.guardarDatosBancarios()">Guardar</button>
         </div>
       </div>
     </div>
@@ -596,23 +502,17 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Entrega de Material</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
            <input type="hidden" id="delivery-project-id">
-           <div class="mb-3">
-               <label>Artista</label>
-               <input type="text" id="delivery-artist-name" class="form-control" readonly>
-           </div>
-           <div class="mb-3">
-               <label>Proyecto</label>
-               <input type="text" id="delivery-project-name" class="form-control" readonly>
-           </div>
+           <div class="mb-3"><label>Artista</label><input type="text" id="delivery-artist-name" class="form-control" readonly></div>
+           <div class="mb-3"><label>Proyecto</label><input type="text" id="delivery-project-name" class="form-control" readonly></div>
            
            <div class="alert alert-light border">
                <h6><i class="bi bi-google"></i> Google Drive</h6>
                <input type="file" id="drive-file-input" class="form-control mb-2">
-               <button id="btn-upload-drive" onclick="app.subirADrive()" class="btn btn-primary w-100">
+               <button id="btn-drive-upload" class="btn btn-primary w-100">
                    <span id="drive-btn-text">Subir y Obtener Link</span>
                </button>
                <div id="drive-status" class="small mt-2 fw-bold"></div>
@@ -623,10 +523,66 @@
            
            <div class="d-flex gap-2">
                <button class="btn btn-secondary flex-grow-1" onclick="app.saveDeliveryLink()">Guardar Link</button>
-               <button onclick="app.sendDeliveryByWhatsapp()" class="btn btn-success flex-grow-1"><i class="bi bi-whatsapp"></i> WhatsApp</button>
            </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEditarServicio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ Editar Servicio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarServicio">
+                    <input type="hidden" id="editServicioId">
+                    <div class="mb-3"><label>Nombre</label><input type="text" class="form-control" id="editServicioNombre" required></div>
+                    <div class="mb-3"><label>Precio</label><input type="number" class="form-control" id="editServicioPrecio" required step="0.01"></div>
+                    <button type="submit" class="btn btn-primary w-100">Actualizar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">👤 Editar Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarUsuario">
+                    <input type="hidden" id="editUsuarioId">
+                    <div class="mb-3"><label>Usuario</label><input type="text" class="form-control" id="editUsuarioName" required></div>
+                    <div class="mb-3"><label>Email</label><input type="email" class="form-control" id="editUsuarioEmail"></div>
+                    <div class="mb-3"><label>Rol</label>
+                        <select class="form-select" id="editUsuarioRole">
+                            <option value="Cliente">Cliente</option>
+                            <option value="Staff">Staff</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="mb-3"><label>Contraseña (Opcional)</label><input type="password" class="form-control" id="editUsuarioPass"></div>
+                    <div class="mb-3 permisos-container" id="editUsuarioPermisosContainer">
+                         <label class="fw-bold d-block mb-2">Permisos:</label>
+                         <div class="d-flex flex-wrap gap-2">
+                            <label><input type="checkbox" value="dashboard"> Dash</label>
+                            <label><input type="checkbox" value="agenda"> Agenda</label>
+                            <label><input type="checkbox" value="flujo-trabajo"> Flujo</label>
+                            <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
+                            <label><input type="checkbox" value="pagos"> Pagos</label>
+                            <label><input type="checkbox" value="gestion-usuarios"> Users</label>
+                         </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Actualizar</button>
+                </form>
+            </div>
+        </div>
     </div>
   </div>
 
@@ -635,78 +591,25 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="modal-event-title">Detalle Evento</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
            <input type="hidden" id="modal-event-id">
            <div class="mb-3">
-               <strong>Fecha Actual:</strong> <span id="modal-event-date"></span><br>
+               <strong>Fecha:</strong> <span id="modal-event-date"></span><br>
                <strong>Estado:</strong> <span id="modal-event-status"></span><br>
-               <strong>Proceso:</strong> <span id="modal-event-process"></span><br>
                <strong>Total:</strong> <span id="modal-event-total"></span>
            </div>
-           <div class="mb-3">
-               <strong>Servicios:</strong>
-               <ul id="modal-event-services" class="ps-3 small"></ul>
-           </div>
+           <div class="mb-3"><strong>Servicios:</strong><ul id="modal-event-services" class="ps-3 small"></ul></div>
            <hr>
            <h6>Re-agendar</h6>
            <div class="d-flex gap-2 mb-3">
-               <input type="text" id="edit-event-date" class="form-control" placeholder="Nueva Fecha">
+               <input type="text" id="edit-event-date" class="form-control" placeholder="Fecha">
                <input type="time" id="edit-event-time" class="form-control">
            </div>
-           <button class="btn btn-sm btn-outline-primary w-100" onclick="app.actualizarHorarioProyecto()">Guardar Cambio Horario</button>
+           <button class="btn btn-sm btn-outline-primary w-100" onclick="app.actualizarHorarioProyecto()">Guardar Cambio</button>
            <hr>
-           <div class="d-flex gap-2">
-               <button class="btn btn-secondary flex-grow-1" id="btn-go-to-workflow">Ir al Flujo</button>
-               <button class="btn btn-secondary flex-grow-1" id="btn-go-to-artist">Ir al Artista</button>
-           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="document-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Generar Documentos</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="modal-project-id">
-            
-            <div class="btn-group w-100 mb-3 filter-buttons">
-                <button class="btn btn-outline-primary active" id="btn-show-contrato" onclick="app.showDocumentSection('contrato')">Contrato</button>
-                <button class="btn btn-outline-primary" id="btn-show-distribucion" onclick="app.showDocumentSection('distribucion')">Distribución</button>
-            </div>
-
-            <div id="section-contrato" class="document-section">
-                <div class="row g-2 mb-2">
-                    <div class="col-6"><label>Nombre Álbum</label><input type="text" id="contrato-nombre-album" class="form-control"></div>
-                    <div class="col-3"><label>Canciones</label><input type="number" id="contrato-canciones" class="form-control"></div>
-                    <div class="col-3"><label>Duración</label><input type="text" id="contrato-duracion" class="form-control" placeholder="Aprox"></div>
-                </div>
-                <div class="row g-2 mb-3">
-                    <div class="col-6"><label>Pago Inicial</label><input type="number" id="contrato-pago-inicial" class="form-control" oninput="app.calcularSaldoContrato()"></div>
-                    <div class="col-6"><label>Pago Final</label><input type="number" id="contrato-pago-final" class="form-control" readonly></div>
-                </div>
-                <button class="btn btn-primary w-100" onclick="app.saveAndGenerateContract()">Generar Contrato PDF</button>
-            </div>
-
-            <div id="section-distribucion" class="document-section" style="display:none;">
-                <div class="row g-2 mb-2">
-                    <div class="col-6"><label>Título Lanzamiento</label><input type="text" id="dist-titulo" class="form-control"></div>
-                    <div class="col-6"><label>Fecha Lanzamiento</label><input type="date" id="dist-fecha" class="form-control"></div>
-                </div>
-                <div class="mb-3"><label>UPC</label><input type="text" id="dist-upc" class="form-control"></div>
-                
-                <label>Tracks (Título / ISRC)</label>
-                <div id="dist-tracks-container" class="mb-2"></div>
-                <button class="btn btn-sm btn-secondary mb-3" onclick="app.addTrackField()">+ Agregar Track</button>
-                
-                <button class="btn btn-primary w-100" onclick="app.saveAndGenerateDistribution()">Generar Hoja Distribución</button>
-            </div>
+           <button class="btn btn-danger w-100" onclick="app.cancelarCita(document.getElementById('modal-event-id').value)">Cancelar Cita</button>
         </div>
       </div>
     </div>
