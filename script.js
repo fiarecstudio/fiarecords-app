@@ -28,9 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: []
     };
       
-    // Si tu servidor corre en el puerto 5000:
-let currentCalendar = null; let configCache = null; let chartInstance = null; 
-const API_URL = 'http://localhost:5000';
+   // --- CORRECCIÓN: URL INTELIGENTE ---
+// Detecta si estás en tu PC o en la web real
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000' 
+    : ''; // En producción usa la ruta relativa
     
     // Referencias al DOM (MODIFICADA PARA INCLUIR logoInput)
     const DOMElements = { 
