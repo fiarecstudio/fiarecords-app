@@ -28,7 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: []
     };
       
-    let currentCalendar = null; let configCache = null; let chartInstance = null; const API_URL = '';
+    let currentCalendar = null; let configCache = null; let chartInstance = null; 
+const API_URL = 'http://localhost:5000';
     
     // Referencias al DOM (MODIFICADA PARA INCLUIR logoInput)
     const DOMElements = { 
