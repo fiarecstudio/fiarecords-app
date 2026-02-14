@@ -376,16 +376,43 @@ const API_URL = (window.location.hostname === 'localhost' || window.location.hos
       } else { showLogin(); } 
     })();
 
-    async function showApp(payload) { 
-      document.body.classList.remove('auth-visible');
-      if (!configCache) await loadInitialConfig();
-      DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
-      renderSidebar(payload);
+   // --- CORRECCIÓN EN SCRIPT.JS ---
+async function showApp(payload) { 
+    // 1. OCULTADO AGRESIVO DEL LOGIN
+    const loginContainer = document.getElementById('login-container');
+    
+    // Quitamos la clase d-flex de Bootstrap para que deje de forzar la visualización
+    loginContainer.classList.remove('d-flex'); 
+    // Forzamos el ocultado con la propiedad de estilo directa
+    loginContainer.style.setProperty('display', 'none', 'important'); 
+    
+    // Mostramos la App
+    DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
+    
+    // 2. Renderizamos el saludo
+    DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`; 
+    renderSidebar(payload);
 
-      if (!isInitialized) { 
-          initAppEventListeners(payload); 
-          isInitialized = true; 
-      } 
+    if (!isInitialized) { 
+        initAppEventListeners(payload); 
+        isInitialized = true; 
+    } 
+
+    // 3. Configuración inicial (Try/Catch para evitar bloqueos)
+    try {
+        if (!configCache) await loadInitialConfig();
+    } catch (e) { console.warn("Config offline"); }
+
+    // 4. Navegación
+    const hashSection = location.hash.replace('#', '');
+    mostrarSeccion(hashSection || 'dashboard', false);
+    
+    OfflineManager.updateIndicator();
+    
+    // 5. Asegurar visibilidad final del body
+    document.body.style.opacity = '1'; 
+    document.body.style.visibility = 'visible'; 
+}
 
       DOMElements.loginContainer.style.display = 'none'; 
       DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex'; 
