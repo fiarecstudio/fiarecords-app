@@ -1,3 +1,4 @@
+// --- VERSIÓN CORREGIDA FINAL (Incluye restaurarItem y eliminarPermanente) ---
 document.addEventListener('DOMContentLoaded', () => {
     let isInitialized = false; 
     let proyectoActual = {}; 
@@ -601,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
     async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     
-    // --- FUNCIONES QUE FALTABAN Y CAUSABAN EL ERROR ---
+    // --- AQUÍ ESTÁN LAS FUNCIONES QUE FALTABAN ---
     async function restaurarItem(id, endpoint) { 
         try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
@@ -614,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function vaciarPapelera(endpoint) {
         if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
     }
-    // ----------------------------------------------------
+    // ---------------------------------------------
 
     async function editarItem(id, endpoint) { 
         try { 
