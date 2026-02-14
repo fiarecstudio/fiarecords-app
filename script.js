@@ -31,9 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let configCache = null;
     let chartInstance = null;
 
-    // --- 1. MODIFICACIÓN: URL INTELIGENTE (LOCAL VS RENDER) ---
-    // Si el navegador dice "localhost" o "127.0.0.1", usa el puerto 5000.
-    // Si no (estás en Render), usa ruta relativa '' para que use el dominio actual.
+    // --- URL INTELIGENTE (LOCAL VS RENDER) ---
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
         : '';
@@ -66,18 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 toast.addEventListener('mouseleave', Swal.resumeTimer)
             }
         });
-
-        let iconType = type;
-        if (type === 'info') iconType = 'info';
-
+        let iconType = type === 'info' ? 'info' : type;
         Toast.fire({ icon: iconType, title: message });
     }
 
     function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
     function showLoader() { document.getElementById('loader-overlay').style.display = 'flex'; }
     function hideLoader() { document.getElementById('loader-overlay').style.display = 'none'; }
-    async function imageExists(url) { try { const response = await fetch(url, { method: 'HEAD' }); return response.ok; } catch (e) { return false; } }
-
+    
     async function preloadLogoForPDF() {
         const imgUrl = DOMElements.appLogo.src;
         try {
@@ -134,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Sincronización completada', 'success');
                 await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios')]);
                 const currentHash = location.hash.replace('#', '');
-                if (currentHash) window.app.mostrarSeccion(currentHash, false);
+                if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
             }
             OfflineManager.updateIndicator();
         },
@@ -151,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // Lógica de Caché para GET Offline
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url.includes('/artistas')) return localCache.artistas;
@@ -174,10 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Lógica para POST/PUT/DELETE Offline
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
             const body = options.body ? JSON.parse(options.body) : {};
             const tempId = body._id || `temp_${Date.now()}`;
 
+            // Actualización optimista del caché local
             if (url.includes('/proyectos')) {
                 if (options.method === 'POST') {
                     const nuevoProyecto = { ...body, _id: tempId, createdAt: new Date().toISOString(), montoPagado: 0, pagos: [], deleted: false };
@@ -200,6 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 localStorage.setItem('cache_proyectos', JSON.stringify(localCache.proyectos));
             }
+            
+            // Si no hay red, encolar y retornar falso éxito
             if (!navigator.onLine) {
                 OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
                 if (url.includes('/proyectos') && options.method === 'POST') { return { ...body, _id: tempId, offline: true }; }
@@ -218,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
+            // Actualizar caché con datos frescos del servidor
             if (!options.method || options.method === 'GET') {
                 if (url.includes('/artistas')) { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
                 if (url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (url.includes('/artistas')) return localCache.artistas;
                 if (url.includes('/servicios')) return localCache.servicios;
-                if (url.includes('/proyectos')) { return localCache.proyectos; }
+                if (url.includes('/proyectos')) return localCache.proyectos;
             }
             throw e;
         } finally { hideLoader(); }
@@ -363,7 +363,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const token = segments[segments.length - 1];
             if (token && token !== 'reset-password') {
                 showResetPasswordView(token);
-                document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
+                // Forzar visibilidad para la vista de reset
+                document.body.classList.add('auth-visible'); 
+                document.body.style.opacity = '1'; 
+                document.body.style.visibility = 'visible';
                 return;
             }
         }
@@ -378,13 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- 2. MODIFICACIÓN: CORRECCIÓN showApp (Elimina Login) ---
+    // --- CORRECCIÓN CRÍTICA: SHOWAPP Y SHOWLOGIN ---
     async function showApp(payload) {
+        // 1. ELIMINAMOS LA CLASE DEL BODY PARA ACTIVAR EL CSS DE LA APP
         document.body.classList.remove('auth-visible');
+
         if (!configCache) await loadInitialConfig();
+        
         DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
-        // Generamos el menú antes de mostrar nada
+        // Renderizamos el menú
         renderSidebar(payload);
 
         if (!isInitialized) {
@@ -392,19 +398,15 @@ document.addEventListener('DOMContentLoaded', () => {
             isInitialized = true;
         }
 
-        // FORZAMOS LA OCULTACIÓN DEL LOGIN
-        DOMElements.loginContainer.style.display = 'none';
-        
-        // FORZAMOS QUE SE MUESTRE LA APP
-        DOMElements.appWrapper.style.display = window.innerWidth <= 768 ? 'block' : 'flex';
+        // 2. FORZAMOS ESTILOS (Seguridad extra, aunque el CSS ya lo hace)
+        DOMElements.loginContainer.style.display = ''; 
+        DOMElements.appWrapper.style.display = ''; 
 
         const hashSection = location.hash.replace('#', '');
         
-        // Si es cliente, redirigir a 'vista-artista' (su perfil) por defecto
+        // Redirección inteligente según rol
         if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
-             // Buscamos su ID de artista basado en su nombre (asumiendo que el nombre de usuario coincide o hay relación)
-             // Para simplificar, cargamos la vista general o una sección permitida
-             mostrarSeccion('cotizaciones', false); // O una sección 'mis-proyectos' si existiera
+             mostrarSeccion('vista-artista', false); // Vista perfil para clientes
         } else {
              mostrarSeccion(hashSection || 'dashboard', false);
         }
@@ -412,15 +414,24 @@ document.addEventListener('DOMContentLoaded', () => {
         OfflineManager.updateIndicator();
         window.addEventListener('online', () => { OfflineManager.updateIndicator(); });
         window.addEventListener('offline', () => { OfflineManager.updateIndicator(); });
-        document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
+        
+        // Forzamos visibilidad final del body
+        document.body.style.opacity = '1'; 
+        document.body.style.visibility = 'visible';
     }
 
     function showLogin() {
+        // 1. AÑADIMOS LA CLASE AL BODY PARA ACTIVAR EL CSS DEL LOGIN
         document.body.classList.add('auth-visible');
+        
         localStorage.removeItem('token');
-        DOMElements.loginContainer.style.display = 'block';
-        DOMElements.appWrapper.style.display = 'none';
-        document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
+        
+        // Forzamos estilos de fallback
+        DOMElements.loginContainer.style.display = ''; 
+        DOMElements.appWrapper.style.display = '';
+        
+        document.body.style.opacity = '1'; 
+        document.body.style.visibility = 'visible';
     }
 
     // --- AUTH LOGIC ---
@@ -454,9 +465,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showResetPasswordView(token) {
+        // Forzamos modo auth
         document.body.classList.add('auth-visible');
         DOMElements.appWrapper.style.display = 'none';
         DOMElements.loginContainer.style.display = 'block';
+        
         document.getElementById('reset-token').value = token;
         toggleAuth('reset');
     }
@@ -512,7 +525,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
         showLoader();
         try {
-            // Corrección: Usar getElementById para asegurar referencias
             const userVal = document.getElementById('username').value;
             const passVal = document.getElementById('password').value;
             const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) });
@@ -523,19 +535,25 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
     });
 
-    // --- NAVEGACIÓN Y SECCIONES ---
+    // --- NAVEGACIÓN Y SECCIONES (CORREGIDA PARA SPA) ---
     async function mostrarSeccion(id, updateHistory = true) {
+        // 1. Ocultar TODAS las secciones (quitar clase active)
         document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
+        // 2. Desactivar todos los links del sidebar
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
 
         const seccionActiva = document.getElementById(id);
+        
+        // Activar link del sidebar correspondiente
         const links = document.querySelectorAll(`.nav-link-sidebar`);
         links.forEach(l => {
             if (l.dataset.seccion === id) l.classList.add('active');
         });
 
         if (seccionActiva) {
+            // 3. Mostrar SOLO la sección deseada
             seccionActiva.classList.add('active');
+            
             if (updateHistory) history.pushState(null, null, `#${id}`);
             const searchInput = document.getElementById('globalSearch');
             if (searchInput) { searchInput.value = ''; }
@@ -630,7 +648,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function eliminarItem(id, endpoint) { if (!confirm(`¿Mover a la papelera?`)) return; try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); mostrarSeccion(`gestion-${endpoint}`); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
 
-    // --- RESTAURAR Y ELIMINAR PERMANENTE ---
     async function restaurarItem(id, endpoint) {
         try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
@@ -643,7 +660,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function vaciarPapelera(endpoint) {
         if (!confirm(`¿Vaciar ${endpoint}?`)) return; try { await fetchAPI(`/api/${endpoint}/papelera/vaciar`, { method: 'DELETE' }); showToast(`Vaciada.`, 'success'); cargarPapelera(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
-    // ---------------------------------------------
 
     async function editarItem(id, endpoint) {
         try {
@@ -1091,15 +1107,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupCustomization(payload) {
         if (payload.role === 'admin') {
-            // NUEVO: Verificación de seguridad para evitar el error "undefined"
             if (DOMElements.appLogo && DOMElements.logoInput) {
-                // Indicador visual de que es clickeable
                 DOMElements.appLogo.style.cursor = 'pointer';
-
-                // Asignar el evento click
                 DOMElements.appLogo.onclick = () => DOMElements.logoInput.click();
-
-                // Asignar el evento change al input
                 DOMElements.logoInput.onchange = async (event) => {
                     const file = event.target.files[0];
                     if (!file) return;
@@ -1132,7 +1142,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function guardarAjustesFirma() { if (!configCache) return; try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes PDF guardados!', 'success'); } catch (e) { showToast(`Error`, 'error'); } }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error`, 'error'); } }
 
-    // Función que faltaba: Revertir configuración
     function revertirADefecto() {
         if (!confirm('¿Restablecer configuración de PDF?')) return;
         configCache.firmaPos = { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } };
@@ -1140,7 +1149,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Configuración restablecida (No guardada permanentemente).', 'info');
     }
 
-    // --- MODAL DATOS BANCARIOS (NUEVO) ---
     function openDeliveryModal(projectId, artistName, projectName) {
         const modalEl = document.getElementById('delivery-modal');
         modalEl.querySelector('#delivery-project-id').value = projectId;
@@ -1154,7 +1162,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.show();
     }
 
-    // Función que faltaba: Cerrar modal de entrega
     function closeDeliveryModal() {
         const el = document.getElementById('delivery-modal');
         const modal = bootstrap.Modal.getInstance(el);
@@ -1247,15 +1254,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- 3. MODIFICACIÓN: CORRECCIÓN renderSidebar (Menú por Rol) ---
+    // --- RENDER SIDEBAR (MENÚ POR ROL) ---
     function renderSidebar(user) {
         const navContainer = document.getElementById('sidebar-nav-container');
         let p = user.permisos || []; 
-        const role = user.role ? user.role.toLowerCase() : 'cliente'; // Default a cliente si no hay rol
+        const role = user.role ? user.role.toLowerCase() : 'cliente';
         
         let html = '';
 
-        // --- MENÚ PARA CLIENTES (VISTA LIMITADA) ---
+        // MENÚ PARA CLIENTES
         if (role === 'cliente') {
              html = `
                 <div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
@@ -1263,7 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
              `;
         } 
-        // --- MENÚ PARA ADMIN / STAFF ---
+        // MENÚ PARA ADMIN / STAFF
         else {
             if (role !== 'admin' && p.length === 0) { p = ['dashboard']; }
             const isSuperAdmin = role === 'admin';
@@ -1290,8 +1297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         navContainer.innerHTML = html;
         document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => {
-             // Si el link tiene un onclick inline (como el de Mis Proyectos), ejecutamos eso.
-             // Si no, ejecutamos mostrarSeccion estándar.
              if(!e.currentTarget.onclick) {
                  mostrarSeccion(e.currentTarget.dataset.seccion);
              }
