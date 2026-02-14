@@ -15,6 +15,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- 1. Definición de Rutas de la API ---
+// Todas las rutas de la API deben comenzar con /api/
 app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -25,12 +26,14 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 
 // --- 2. Servir Archivos Estáticos ---
 // Sirve archivos de una carpeta 'public' si la tienes, o de la raíz.
+// Es una buena práctica tener una carpeta 'public'.
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname))); 
 
 // --- 2.5 RUTAS EXPLÍCITAS PARA PWA ---
 // Esto asegura que el service worker y el manifest se sirvan correctamente.
 app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
     res.sendFile(path.resolve(__dirname, 'sw.js'));
 });
 
@@ -46,6 +49,9 @@ app.get('*', (req, res) => {
   // Esto permite que el enrutador del frontend (en script.js) maneje la ruta.
   if (!req.path.startsWith('/api/')) {
     res.sendFile(path.resolve(__dirname, 'index.html'));
+  } else {
+    // Si es una llamada a una ruta API que no existe, envía un 404.
+    res.status(404).send('Ruta de API no encontrada');
   }
 });
 
