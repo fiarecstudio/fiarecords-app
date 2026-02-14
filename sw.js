@@ -1,11 +1,14 @@
-const CACHE_NAME = 'fia-studio-v3';
+// ==================================================================
+//             SW.JS - CORREGIDO (ESTRATEGIA DE CACHÉ MEJORADA)
+// ==================================================================
+const CACHE_NAME = 'fia-studio-v4'; // Se incrementa la versión para forzar la actualización
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
+  './style.css',
+  './script.js',
   // Iconos y librerías externas (CDN)
-  // Nota: Las CDNs a veces fallan offline si no tienen CORS habilitado, 
-  // pero intentaremos cachearlas. Lo ideal es descargar estos archivos .js y .css localmente.
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap',
   'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
   'https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css',
@@ -37,6 +40,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('Borrando caché antiguo:', cache);
             return caches.delete(cache);
           }
         })
@@ -46,20 +50,34 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Estrategia de carga: Cache First, falling back to Network
-// (Primero busca en cache, si no está, usa internet)
+// Estrategia de carga: Network First para API, Cache First para el resto
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  // CORRECCIÓN: Si es una petición a la API, usa la estrategia "Network First"
+  if (request.url.includes('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Si la respuesta de red es válida, la clonamos y la guardamos en caché para offline
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Si la red falla, intentamos obtenerla del caché
+          return caches.match(request);
+        })
+    );
+    return;
+  }
+
+  // Para todas las demás peticiones (archivos estáticos), usa "Cache First"
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Si está en cache, retornarlo
-      if (response) {
-        return response;
-      }
-      // Si no, buscar en internet
-      return fetch(event.request).catch(() => {
-        // Si falla internet y no está en cache (offline total)
-        // Podríamos retornar una página offline genérica aquí si quisiéramos
-      });
+    caches.match(request).then((response) => {
+      return response || fetch(request);
     })
   );
 });

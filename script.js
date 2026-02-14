@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCalendar = null;
     let configCache = null;
     let chartInstance = null;
+    let historialCacheados = []; // Caché para la vista de historial
 
     // --- URL API (Local vs Producción) ---
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -133,8 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
-
-    window.app = { syncNow: OfflineManager.syncNow };
 
     // --- FETCH API CORE ---
     async function fetchAPI(url, options = {}) {
@@ -338,8 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
         // 3. Mostrar Contenedor
-        DOMElements.loginContainer.style.display = ''; 
-        DOMElements.appWrapper.style.display = ''; 
+        DOMElements.loginContainer.style.display = 'none'; 
+        DOMElements.appWrapper.style.display = 'flex'; 
 
         // 4. Navegar a la sección correcta
         const hashSection = location.hash.replace('#', '');
@@ -359,8 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem('token');
         
         // Reset Views
-        DOMElements.loginContainer.style.display = ''; 
-        DOMElements.appWrapper.style.display = '';
+        DOMElements.loginContainer.style.display = 'flex'; 
+        DOMElements.appWrapper.style.display = 'none';
         toggleAuth('login');
         
         document.body.style.opacity = '1';
@@ -372,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Login Form
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
+            if (!navigator.onLine) { return showToast('Se requiere internet para iniciar sesión.', 'error'); }
             showLoader();
             try {
                 const userVal = document.getElementById('username').value;
@@ -393,9 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        document.getElementById('register-form').addEventListener('submit', registerUser);
-        document.getElementById('recover-form').addEventListener('submit', recoverPassword);
-        document.getElementById('reset-form').addEventListener('submit', resetPassword);
+        // Los event listeners para los otros formularios se asignan en el HTML a través de `window.app`
         
         // Toggle Password Visibility
         document.getElementById('toggle-password').addEventListener('click', () => {
@@ -403,10 +400,15 @@ document.addEventListener('DOMContentLoaded', () => {
              const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
              passwordInput.setAttribute('type', type);
         });
+        document.getElementById('toggle-password-reg').addEventListener('click', () => {
+            const passwordInput = document.getElementById('reg-password');
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+        });
     }
 
     function cerrarSesionConfirmacion() {
-        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir', cancelButtonText: 'Cancelar' })
+        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', cancelButtonColor: '#3085d6' })
         .then((result) => { if (result.isConfirmed) showLogin(); });
     }
 
@@ -423,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showResetPasswordView(token) {
         document.body.classList.add('auth-visible');
         DOMElements.appWrapper.style.display = 'none';
-        DOMElements.loginContainer.style.display = 'block';
+        DOMElements.loginContainer.style.display = 'flex';
         document.getElementById('reset-token').value = token;
         toggleAuth('reset');
     }
@@ -432,7 +434,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const token = document.getElementById('reset-token').value;
         const password = document.getElementById('new-password').value;
         try {
-            await fetchAPI(`${API_URL}/api/auth/reset-password`, { method: 'POST', body: JSON.stringify({ token, newPassword: password }) });
+            // Aquí no se usa fetchAPI porque no se necesita token de auth
+            const res = await fetch(`${API_URL}/api/auth/reset-password`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, newPassword: password }) 
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
             showToast('¡Contraseña actualizada!', 'success');
             toggleAuth('login');
         } catch (err) { document.getElementById('login-error').textContent = err.message; }
@@ -444,8 +453,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('reg-password').value;
         const nombreArtistico = document.getElementById('reg-artistname').value;
         try {
-            await fetchAPI(`${API_URL}/api/auth/register`, { method: 'POST', body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) });
-            showToast('¡Cuenta creada!', 'success');
+             const res = await fetch(`${API_URL}/api/auth/register`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) 
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            showToast('¡Cuenta creada! Ya puedes iniciar sesión.', 'success');
             toggleAuth('login');
         } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
@@ -453,8 +468,14 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const email = document.getElementById('rec-email').value;
         try {
-            await fetchAPI(`${API_URL}/api/auth/forgot-password`, { method: 'POST', body: JSON.stringify({ email }) });
-            showToast('Correo enviado.', 'success');
+            const res = await fetch(`${API_URL}/api/auth/forgot-password`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }) 
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            showToast('Correo de recuperación enviado.', 'success');
             toggleAuth('login');
         } catch (err) { document.getElementById('login-error').textContent = err.message; }
     }
@@ -462,16 +483,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- NAVEGACIÓN ---
     async function mostrarSeccion(id, updateHistory = true) {
         // UI Clean up
-        document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
+        document.querySelectorAll('main > section').forEach(sec => sec.classList.remove('active'));
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
         
         const seccionActiva = document.getElementById(id);
-        const links = document.querySelectorAll(`.nav-link-sidebar`);
-        links.forEach(l => { if (l.dataset.seccion === id) l.classList.add('active'); });
+        const linkActivo = document.querySelector(`.nav-link-sidebar[data-seccion="${id}"]`);
 
         if (seccionActiva) {
             seccionActiva.classList.add('active');
-            if (updateHistory) history.pushState(null, null, `#${id}`);
+            if(linkActivo) linkActivo.classList.add('active');
+            
+            if (updateHistory) {
+                // Solo actualiza el historial si la nueva sección no es la misma que la actual
+                if (`#${id}` !== window.location.hash) {
+                    history.pushState(null, null, `#${id}`);
+                }
+            }
             
             // Map actions to load data
             const loadDataActions = {
@@ -481,16 +508,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 'flujo-trabajo': cargarFlujoDeTrabajo,
                 'pagos': cargarPagos,
                 'registrar-proyecto': cargarOpcionesParaProyecto,
-                'registro-manual': cargarOpcionesParaProyectoManual,
                 'historial-proyectos': cargarHistorial,
                 'gestion-servicios': () => renderList('servicios'),
                 'gestion-artistas': () => renderList('artistas', true),
                 'gestion-usuarios': () => renderList('usuarios'),
                 'papelera-reciclaje': cargarPapelera,
-                'configuracion': cargarConfiguracion
+                'configuracion': cargarConfiguracion,
+                'vista-artista': () => { /* Se carga desde la llamada a irAVistaArtista */ }
             };
             // Trigger load data
-            await loadDataActions[id]?.();
+            if(loadDataActions[id]) await loadDataActions[id]();
         }
     }
 
@@ -521,14 +548,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const clickHandler = makeClickable ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
+                const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${makeClickable ? 'list-group-item-action' : ''}`;
 
-                return `<li class="list-item" ${clickHandler} style="${makeClickable ? 'cursor:pointer;' : ''}">
+                return `<li class="${listItemClass}" ${clickHandler} style="${makeClickable ? 'cursor:pointer;' : ''}">
                     <span>${escapeHTML(displayName)}</span>
-                    <div class="list-item-actions">
-                        <button class="btn-secondary" onclick="event.stopPropagation(); ${editAction}">✏️</button>
-                        <button class="btn-eliminar" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')">🗑️</button>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button>
                     </div></li>`;
-            }).join('') : `<li>No hay elementos.</li>`;
+            }).join('') : `<li class="list-group-item">No hay elementos registrados.</li>`;
         } catch (e) { console.error(e); }
     }
 
@@ -536,13 +564,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos'];
         for (const endpoint of endpoints) {
             const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
+            const listEl = document.getElementById(listId);
+            if (!listEl) continue;
+
             try {
                 const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
-                document.getElementById(listId).innerHTML = data.length ? data.map(item => {
-                    let displayName = item.nombre || item.username || item.nombreProyecto || 'Item';
-                    return `<li class="list-item"><span>${escapeHTML(displayName)}</span><div class="list-item-actions"><button class="btn-restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">↩️</button><button class="btn-eliminar" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">❌</button></div></li>`;
-                }).join('') : `<li>Vacía.</li>`;
-            } catch (e) { }
+                listEl.innerHTML = data.length ? data.map(item => {
+                    let displayName = item.nombre || item.username || item.nombreProyecto || 'Item sin nombre';
+                    return `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>${escapeHTML(displayName)}</span>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-success" onclick="app.restaurarItem('${item._id}', '${endpoint}')"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button class="btn btn-sm btn-danger" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')"><i class="bi bi-x-octagon-fill"></i></button>
+                                </div>
+                            </li>`;
+                }).join('') : `<li class="list-group-item">Papelera vacía.</li>`;
+            } catch (e) { listEl.innerHTML = `<li class="list-group-item">Error al cargar la papelera.</li>`; }
         }
     }
 
@@ -562,37 +599,45 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked');
             const permisos = Array.from(checkboxes).map(c => c.value);
             body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal };
-            if (!passVal) { showToast('Contraseña requerida', 'error'); return; }
+            if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; }
         }
         try {
             await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
             showToast('Creado exitosamente', 'success');
             limpiarForm(form.id);
-            renderList(type);
+            renderList(type, type === 'artistas');
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
 
     async function eliminarItem(id, endpoint) {
         Swal.fire({
-             title: '¿Mover a papelera?', text: "Podrás restaurarlo después", icon: 'warning',
-             showCancelButton: true, confirmButtonText: 'Sí, borrar'
+             title: '¿Mover a papelera?', text: "Podrás restaurarlo después desde la sección de Configuración.", icon: 'warning',
+             showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar',
+             confirmButtonColor: '#d33',
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
                     await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' });
                     showToast('Movido a papelera', 'info');
-                    renderList(endpoint);
+                    renderList(endpoint, endpoint === 'artistas');
                 } catch (e) { showToast(e.message, 'error'); }
             }
         });
     }
 
     async function restaurarItem(id, endpoint) {
-        try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
+        try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
     }
     async function eliminarPermanente(id, endpoint) {
-        if (!confirm('¡Irreversible!')) return;
-        try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
+        Swal.fire({
+             title: '¿Eliminar Permanentemente?', text: "¡Esta acción no se puede deshacer!", icon: 'error',
+             showCancelButton: true, confirmButtonText: 'Sí, eliminar para siempre', cancelButtonText: 'Cancelar',
+             confirmButtonColor: '#d33',
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
+            }
+        });
     }
 
     // --- MODALES DE EDICIÓN ---
@@ -612,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value };
         try {
             await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-            showToast('Actualizado', 'success');
+            showToast('Artista actualizado', 'success');
             bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide();
             // Actualizar vista si estamos en ella
             if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico);
@@ -633,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value) };
         try {
             await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-            showToast('Actualizado', 'success');
+            showToast('Servicio actualizado', 'success');
             bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide();
             renderList('servicios');
         } catch (e) { showToast(e.message, 'error'); }
@@ -692,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) });
             configCache.datosBancarios = datos;
             bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide();
-            Swal.fire({ icon: 'success', title: 'Guardado', timer: 1500, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false });
         } catch (e) { showToast('Error al guardar', 'error'); }
     }
 
@@ -702,7 +747,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF();
         
-        pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); 
         if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
 
         pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' });
@@ -710,8 +754,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = [
             ['Banco:', db.banco || ''],
             ['Titular:', db.titular || ''],
-            ['Tarjeta:', db.tarjeta || ''],
-            ['CLABE:', db.clabe || '']
+            ['Número de Tarjeta:', db.tarjeta || ''],
+            ['CLABE Interbancaria:', db.clabe || '']
         ];
         
         pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } });
@@ -721,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function compartirDatosBancariosWhatsApp() {
         if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning');
         const db = configCache.datosBancarios;
-        const msg = `*Datos Bancarios FiaRecords*\n\nBanco: ${db.banco}\nTitular: ${db.titular}\nTarjeta: ${db.tarjeta}\nCLABE: ${db.clabe}`;
+        const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
@@ -729,15 +773,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cargarDashboard() {
         try {
             const stats = await fetchAPI('/api/dashboard/stats');
-            document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes || 0).toFixed(2)}`;
+            document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0;
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0;
             const ctx = document.getElementById('incomeChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
             const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const dataValues = stats.monthlyIncome || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-            chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
-        } catch (e) { console.error(e); }
+            const dataValues = stats.monthlyIncome || Array(12).fill(0);
+            chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+        } catch (e) { console.error("Error cargando dashboard:", e); }
     }
     
     async function cargarConfiguracion() {
@@ -749,76 +793,274 @@ document.addEventListener('DOMContentLoaded', () => {
             firmaPreview.src = firmaSrc;
             const db = configCache.datosBancarios || {};
             document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || '';
-            document.getElementById('doc-type-selector').value = 'cotizacion'; cargarAjustesParaDocumento('cotizacion');
-        } catch (e) { showToast('Error config.', 'error'); }
+        } catch (e) { showToast('Error al cargar configuración.', 'error'); }
     }
     
-    // Config Firma PDF
-    function cargarAjustesParaDocumento(docType) { if (!configCache || !configCache.firmaPos || !configCache.firmaPos[docType]) return; const pos = configCache.firmaPos[docType]; document.querySelector(`input[name="vAlign"][value="${pos.vAlign}"]`).checked = true; document.getElementById('slider-firma-w').value = pos.w; actualizarPosicionFirma(); }
-    function actualizarPosicionFirma() { const docType = document.getElementById('doc-type-selector').value; const pos = configCache.firmaPos[docType]; pos.vAlign = document.querySelector('input[name="vAlign"]:checked').value; pos.w = parseInt(document.getElementById('slider-firma-w').value); }
-    async function guardarAjustesFirma() { if (!configCache) return; try { await fetchAPI('/api/configuracion/firma-pos', { method: 'PUT', body: JSON.stringify({ firmaPos: configCache.firmaPos }) }); showToast('¡Ajustes PDF guardados!', 'success'); } catch (e) { showToast(`Error`, 'error'); } }
-    async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error`, 'error'); } }
-    function revertirADefecto() { if (!confirm('¿Restablecer configuración de PDF?')) return; configCache.firmaPos = { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } }; cargarAjustesParaDocumento(document.getElementById('doc-type-selector').value); showToast('Configuración restablecida (No guardada permanentemente).', 'info'); }
+    async function subirFirma(event) { 
+        const file = event.target.files[0]; 
+        if (!file) return; 
+        const formData = new FormData(); 
+        formData.append('firmaFile', file); 
+        try { 
+            const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); 
+            showToast('¡Firma subida!', 'success'); 
+            const newSrc = data.filePath + `?t=${new Date().getTime()}`; 
+            document.getElementById('firma-preview-img').src = newSrc; 
+            if (configCache) configCache.firmaPath = data.filePath; 
+        } catch (e) { showToast(`Error al subir la firma`, 'error'); } 
+    }
 
     // --- PROYECTOS, FLUJO Y PAGOS ---
-    async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? c.artista.nombre : 'Público General'; return `<tr><td class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '')"` : ''}>${escapeHTML(nombreArtista)}</td><td>$${c.total.toFixed(2)}</td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td class="table-actions"><button class="btn-aprobar" onclick="app.aprobarCotizacion('${c._id}')">✓</button><button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${c._id}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')">💬</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${c._id}', true)">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="4">Sin cotizaciones.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4">Error offline.</td></tr>`; } }
+    async function cargarCotizaciones() { 
+        const tablaBody = document.getElementById('tablaCotizacionesBody'); 
+        tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
+        try { 
+            const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); 
+            tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { 
+                const esArtistaRegistrado = c.artista && c.artista._id; 
+                const nombreArtista = esArtistaRegistrado ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General'; 
+                return `<tr>
+                            <td class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '${escapeHTML(c.artista.nombreArtistico || '')}')"` : ''}>${escapeHTML(nombreArtista)}</td>
+                            <td>$${c.total.toFixed(2)}</td>
+                            <td>${new Date(c.createdAt).toLocaleDateString()}</td>
+                            <td class="table-actions">
+                                <button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar y Agendar"><i class="bi bi-check-lg"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
+                                <button class="btn btn-sm btn-outline-success" title="Compartir por WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
+                            </td>
+                        </tr>`; 
+            }).join('') : `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`; 
+        } catch (e) { 
+            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar cotizaciones. Es posible que estés offline.</td></tr>`; 
+        } 
+    }
     
     const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
     async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') {
         const board = document.getElementById('kanbanBoard');
         const filtros = document.getElementById('filtrosFlujo');
-        if (!filtros.innerHTML) { filtros.innerHTML = `<button class="btn-secondary active" onclick="app.filtrarFlujo('Todos')">Todos</button>` + procesos.filter(p => p !== 'Completo').map(p => `<button class="btn-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); }
-        board.innerHTML = procesos.filter(p => p !== 'Completo').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}"></div></div>`).join('');
-        try { localCache.proyectos = await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error flujo:", e); }
+        if (!filtros.innerHTML) { 
+            const botonesFiltro = ['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')];
+            filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); 
+        }
+        board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join('');
+        try { 
+            await fetchAPI('/api/proyectos'); // Esto actualiza localCache.proyectos
+            filtrarFlujo(filtroActivo); 
+        } catch (e) { console.error("Error cargando flujo:", e); }
     }
     function filtrarFlujo(filtro) {
-        document.querySelectorAll('#filtrosFlujo button').forEach(b => { b.classList.remove('active'); b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); });
-        const activeBtn = document.querySelector(`#filtrosFlujo button[onclick="app.filtrarFlujo('${filtro}')"]`);
-        if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-secondary'); activeBtn.classList.add('btn-primary'); }
-        document.querySelectorAll('.kanban-column').forEach(c => c.style.display = (filtro === 'Todos' || c.dataset.columna === filtro) ? 'block' : 'none');
+        document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active', 'btn-primary'));
+        const activeBtn = Array.from(document.querySelectorAll('#filtrosFlujo button')).find(b => b.textContent === filtro);
+        if (activeBtn) { activeBtn.classList.add('active', 'btn-primary'); }
+        
+        document.querySelectorAll('.kanban-column').forEach(c => c.style.display = (filtro === 'Todos' || c.dataset.columna === filtro) ? 'flex' : 'none');
         procesos.forEach(col => { if (document.getElementById(`columna-${col}`)) document.getElementById(`columna-${col}`).innerHTML = '' });
+        
         if (localCache.proyectos) {
-            localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.estatus !== 'Cancelado').forEach(p => {
-                const card = document.createElement('div'); card.className = `project-card`; card.dataset.id = p._id; card.style.borderColor = `var(--proceso-${p.proceso})`;
-                const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li>${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
+            localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.proceso !== 'Solicitud' && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted).forEach(p => {
+                const colEl = document.getElementById(`columna-${p.proceso}`);
+                if (!colEl) return;
+
+                const card = document.createElement('div'); 
+                card.className = `project-card`; 
+                card.dataset.id = p._id; 
+                card.style.borderLeftColor = `var(--proceso-${p.proceso.replace(/\s+/g, '')})`;
+                
+                const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li class="small">${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
-                card.innerHTML = `<div class="project-card-header"><span class="${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</span><div style="display:flex;gap:4px;"><button class="btn-secondary" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')">✏️</button><button class="btn-eliminar" style="width:24px;height:24px;padding:0;font-size:0.7em;" title="Eliminar Proyecto" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></div></div><div class="project-card-body"><div style="font-weight:600;margin-bottom:8px;font-size:0.9em;">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div><ul style="padding-left:0;list-style:none;font-size:0.85em;color:var(--text-color-light);">${serviciosHtml}</ul></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.5rem;border-top:1px solid var(--border-color);"><strong style="font-size:0.9em;">$${p.total.toFixed(2)}</strong><div style="display:flex;gap:4px;align-items:center;"><button class="btn-eliminar" title="Cancelar Cita" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.cancelarCita('${p._id}')">🚫</button><button class="btn-secondary" style="width:auto;padding:0.3rem 0.5rem;font-size:0.7em;" onclick="app.registrarPago('${p._id}')">$</button><select onchange="app.cambiarProceso('${p._id}', this.value)" style="width:20px;padding:0;border:none;background:transparent;margin:0;">${procesos.map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div></div>`;
-                document.getElementById(`columna-${p.proceso}`)?.appendChild(card);
+                
+                card.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-2">
+                                      <strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong>
+                                      <select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
+                                  </div>
+                                  <div class="small text-muted mb-2">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div>
+                                  <ul class="list-unstyled mb-2">${serviciosHtml}</ul>
+                                  <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+                                      <strong class="text-success">$${p.total.toFixed(2)}</strong>
+                                      <div class="btn-group">
+                                          <button class="btn btn-sm btn-outline-primary" title="Registrar Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button>
+                                          <button class="btn btn-sm btn-outline-secondary" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button>
+                                          <button class="btn btn-sm btn-outline-danger" title="Mover a Papelera" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>
+                                      </div>
+                                  </div>`;
+                colEl.appendChild(card);
             });
         }
     }
-    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto.estatus !== 'Pagado') { if (!confirm('Este proyecto no está pagado. ¿Completar?')) return; } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); if (proceso === 'Completo') { showToast('¡Proyecto completado!', 'success'); } filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-    async function cargarHistorial() { const tablaBody = document.getElementById('tablaHistorialBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { historialCacheados = await fetchAPI('/api/proyectos/completos'); tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { const artistaNombre = p.artista ? p.artista.nombre : 'Público General'; return `<tr><td class="${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(artistaNombre)}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="table-actions"><button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button><button class="btn-secondary" onclick="app.openDocumentsModal('${p._id}')">Docs</button><button class="btn-secondary" onclick="app.registrarPago('${p._id}', true)">$</button><button class="btn-eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button></td></tr>`; }).join('') : `<tr><td colspan="5">Sin historial.</td></tr>`; } catch (error) { tablaBody.innerHTML = `<tr><td colspan="5">Error.</td></tr>`; } }
-    async function eliminarProyecto(id, desdeCotizaciones = false) { if (!confirm('¿Mover a papelera?')) return; try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-    async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { const select = document.getElementById(selectId); try { const data = await fetchAPI(url); select.innerHTML = ''; if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } data.forEach(item => { const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); if (selectId === 'proyectoArtista' && preseleccionArtistaId) { select.value = preseleccionArtistaId; preseleccionArtistaId = null; } else if (currentValue) { select.value = currentValue; } } catch (error) { select.innerHTML = `<option value="">Error o Offline</option>`; } }
-    const cargarOpcionesParaProyecto = () => { cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); }
-    const cargarOpcionesParaProyectoManual = () => { cargarOpcionesParaSelect('/api/artistas', 'manualProyectoArtista', '_id', item => item.nombreArtistico || item.nombre, false); flatpickr("#manualFechaProyecto", { defaultDate: "today", locale: "es" }); };
-    function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
+    async function cambiarProceso(id, proceso) { 
+        try { 
+            const data = { proceso }; 
+            if (proceso === 'Completo') { 
+                const proyecto = localCache.proyectos.find(p => p._id === id); 
+                const restante = proyecto.total - (proyecto.montoPagado || 0);
+                if (restante > 0) { 
+                    const result = await Swal.fire({
+                        title: 'Proyecto con Saldo Pendiente',
+                        text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo de todos modos?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, completar',
+                        cancelButtonText: 'Cancelar'
+                    });
+                    if (!result.isConfirmed) {
+                        cargarFlujoDeTrabajo(); // Recargar para resetear el select
+                        return;
+                    }
+                } 
+            } 
+            await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); 
+            const proyecto = localCache.proyectos.find(p => p._id === id); 
+            if (proyecto) proyecto.proceso = proceso; 
+            if (proceso === 'Completo') { 
+                showToast('¡Proyecto completado y movido a historial!', 'success'); 
+            }
+            const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos';
+            filtrarFlujo(filtroActual);
+        } catch (e) { showToast(`Error: ${e.message}`, 'error'); } 
+    }
+    async function cargarHistorial() { 
+        const tablaBody = document.getElementById('tablaHistorialBody'); 
+        tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial...</td></tr>`; 
+        try { 
+            historialCacheados = await fetchAPI('/api/proyectos/completos'); 
+            tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { 
+                const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
+                return `<tr>
+                            <td class="${p.artista ? 'clickable-artist' : ''}" ondblclick="app.irAVistaArtista('${p.artista ? p.artista._id : ''}', '${escapeHTML(artistaNombre)}', '')">${escapeHTML(artistaNombre)}</td>
+                            <td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td>
+                            <td>${new Date(p.fecha).toLocaleDateString()}</td>
+                            <td class="table-actions">
+                                <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
+                                <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Ver/Añadir Pagos"><i class="bi bi-cash-stack"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
+                            </td>
+                        </tr>`; 
+            }).join('') : `<tr><td colspan="5" class="text-center">No hay proyectos en el historial.</td></tr>`; 
+        } catch (error) { 
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial.</td></tr>`; 
+        } 
+    }
+    async function eliminarProyecto(id, desdeCotizaciones = false) { 
+        Swal.fire({
+            title: '¿Mover a papelera?', text: "El proyecto se ocultará de las vistas principales.", icon: 'warning',
+            showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
+        }).then(async (result) => {
+            if(result.isConfirmed) {
+                try { 
+                    await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); 
+                    showToast('Movido a papelera.', 'info'); 
+                    if (desdeCotizaciones) { 
+                        cargarCotizaciones(); 
+                    } else if (document.getElementById('historial-proyectos').classList.contains('active')) { 
+                        cargarHistorial(); 
+                    } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { 
+                        const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; 
+                        cargarFlujoDeTrabajo(filtroActual);
+                    } 
+                } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+            }
+        });
+    }
+    async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
+        const select = document.getElementById(selectId); 
+        try { 
+            const data = await fetchAPI(url); 
+            select.innerHTML = ''; 
+            if (addPublicoGeneral) { 
+                const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); 
+            } 
+            data.forEach(item => { 
+                const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); 
+            }); 
+            if (selectId === 'proyectoArtista' && preseleccionArtistaId) { 
+                select.value = preseleccionArtistaId; preseleccionArtistaId = null; 
+            } else if (currentValue) { 
+                select.value = currentValue; 
+            } 
+        } catch (error) { 
+            select.innerHTML = `<option value="">Error al cargar datos</option>`; 
+        } 
+    }
+    const cargarOpcionesParaProyecto = () => { 
+        cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); 
+        cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); 
+        flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
+        proyectoActual = {};
+        mostrarProyectoActual();
+        document.getElementById('formProyecto').reset();
+    }
+    
+    function agregarAProyecto() { 
+        const select = document.getElementById('proyectoServicio'); 
+        if (!select.value) return; 
+        const id = `item-${select.value}-${Date.now()}`; 
+        proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; 
+        mostrarProyectoActual(); 
+    }
     function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
-    function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let total = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const subtotal = item.precioUnitario * item.unidades; total += subtotal; return `<li class="list-item"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${subtotal.toFixed(2)} <button class="btn-eliminar" style="padding:0.2rem 0.5rem;height:auto;" onclick="app.quitarDeProyecto('${item.id}')">X</button></span></li>`; }).join(''); document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
+    function mostrarProyectoActual() { 
+        const lista = document.getElementById('listaProyectoActual'); 
+        let subtotal = 0; 
+        lista.innerHTML = Object.values(proyectoActual).map(item => { 
+            const itemTotal = item.precioUnitario * item.unidades; 
+            subtotal += itemTotal; 
+            return `<li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${item.unidades}x ${escapeHTML(item.nombre)}</span>
+                        <span>$${itemTotal.toFixed(2)} 
+                            <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </span>
+                    </li>`; 
+        }).join(''); 
+        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
+        const total = subtotal - descuento;
+        document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; 
+    }
     async function guardarProyecto(procesoDestino) {
         const artistaSelect = document.getElementById('proyectoArtista'); const artistaId = artistaSelect.value; const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; const horaInput = document.getElementById('horaProyecto').value;
         let fechaFinal = new Date(); if (fechaInput) { fechaFinal = fechaInput; if (horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); } }
-        if (Object.keys(proyectoActual).length === 0) { showToast('Faltan servicios.', 'error'); return null; }
+        if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio al proyecto.', 'error'); return null; }
         const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
         const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
         const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
         const total = Math.max(0, subtotal - descuento);
         const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoDestino, esAlbum: document.getElementById('esAlbum').checked };
-        try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error: ${error.message}`, 'error'); return null; }
+        try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error al guardar: ${error.message}`, 'error'); return null; }
     }
-    async function guardarProyectoManual() {
-        const artistaId = document.getElementById('manualProyectoArtista').value; const nombreProyecto = document.getElementById('manualNombreProyecto').value; const fecha = document.getElementById('manualFechaProyecto')._flatpickr.selectedDates[0]; const descripcion = document.getElementById('manualDescripcion').value;
-        if (!artistaId || !nombreProyecto || !fecha) { return showToast('Datos incompletos.', 'error'); }
-        const body = { artista: artistaId, nombreProyecto: nombreProyecto, items: [{ nombre: descripcion, unidades: 1, precioUnitario: 0 }], total: 0, estatus: 'Pagado', proceso: 'Agendado', fecha: fecha.toISOString(), };
-        try { await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); showToast('Guardado.', 'success'); document.getElementById('formProyectoManual').reset(); mostrarSeccion('flujo-trabajo'); } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
+    
+    async function generarCotizacion() { 
+        const nuevoProyecto = await guardarProyecto('Cotizacion'); 
+        if (nuevoProyecto) { 
+            showToast(nuevoProyecto.offline ? 'Cotización guardada en cola offline.' : 'Cotización guardada.', nuevoProyecto.offline ? 'warning' : 'success'); 
+            await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); 
+            cargarOpcionesParaProyecto(); // Resetea el formulario
+            mostrarSeccion('cotizaciones'); 
+        } 
     }
-    async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast(nuevoProyecto.offline ? 'Guardado offline.' : 'Cotización guardada.', nuevoProyecto.offline ? 'warning' : 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('cotizaciones'); } }
-    async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('Agendado.', 'success'); proyectoActual = {}; document.getElementById('proyectoDescuento').value = ''; document.getElementById('horaProyecto').value = ''; mostrarProyectoActual(); document.getElementById('formProyecto').reset(); mostrarSeccion('flujo-trabajo'); } }
-    async function registrarNuevoArtistaDesdeFormulario(formPrefix) {
-        const inputId = formPrefix ? `${formPrefix}NombreNuevoArtista` : 'nombreNuevoArtista'; const containerId = formPrefix ? `${formPrefix}NuevoArtistaContainer` : 'nuevoArtistaContainer'; const nombreInput = document.getElementById(inputId); const nombre = nombreInput.value.trim();
-        if (!nombre) { showToast('Introduce un nombre.', 'error'); return; }
-        try { await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre }) }); const selectId = formPrefix === 'manual' ? 'manualProyectoArtista' : 'proyectoArtista'; await cargarOpcionesParaSelect('/api/artistas', selectId, '_id', item => item.nombreArtistico || item.nombre, formPrefix !== 'manual'); const select = document.getElementById(selectId); select.selectedIndex = select.options.length - 1; document.getElementById(containerId).style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+    async function enviarAFlujoDirecto() { 
+        const nuevoProyecto = await guardarProyecto('Agendado'); 
+        if (nuevoProyecto) { 
+            showToast('Proyecto agendado y enviado al flujo de trabajo.', 'success'); 
+            cargarOpcionesParaProyecto(); // Resetea el formulario
+            mostrarSeccion('flujo-trabajo'); 
+        } 
+    }
+    async function registrarNuevoArtistaDesdeFormulario() {
+        const nombreInput = document.getElementById('nombreNuevoArtista'); 
+        const nombre = nombreInput.value.trim();
+        if (!nombre) { showToast('Introduce un nombre para el nuevo artista.', 'error'); return; }
+        try { 
+            const nuevoArtista = await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre: nombre, nombreArtistico: nombre }) }); 
+            showToast('Artista guardado', 'success');
+            await cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); 
+            const select = document.getElementById('proyectoArtista'); 
+            select.value = nuevoArtista._id;
+            document.getElementById('nuevoArtistaContainer').style.display = 'none'; 
+            nombreInput.value = ''; 
+        } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
     }
 
     // --- AGENDA Y EVENTOS ---
@@ -826,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const props = info.event.extendedProps;
         document.getElementById('modal-event-id').value = info.event.id;
         document.getElementById('modal-event-title').textContent = info.event.title;
-        document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
         document.getElementById('modal-event-total').textContent = `$${(props.total || 0).toFixed(2)}`;
         document.getElementById('modal-event-status').textContent = props.estatus;
         document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join('');
@@ -836,15 +1078,39 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('edit-event-time').value = `${hours}:${minutes}`;
         new bootstrap.Modal(document.getElementById('event-modal')).show();
     }
-    async function cancelarCita(id) { if (!confirm('¿Cancelar cita? Se liberará la fecha.')) return; try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cancelada.', 'info'); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); app.cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) app.filtrarFlujo('Todos'); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    async function cancelarCita(id) { 
+        Swal.fire({
+            title: '¿Cancelar esta cita?', text: "La fecha se liberará en la agenda.", icon: 'warning',
+            showCancelButton: true, confirmButtonText: 'Sí, cancelar', cancelButtonText: 'No', confirmButtonColor: '#d33'
+        }).then(async (result) => {
+            if(result.isConfirmed) {
+                try { 
+                    await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); 
+                    showToast('Cita cancelada.', 'info'); 
+                    const el = document.getElementById('event-modal'); 
+                    const m = bootstrap.Modal.getInstance(el); 
+                    if(m) m.hide(); 
+                    if(document.getElementById('agenda').classList.contains('active')) cargarAgenda();
+                    if (document.getElementById('flujo-trabajo').classList.contains('active')) cargarFlujoDeTrabajo(); 
+                } catch (e) { showToast(`Error: ${e.message}`, 'error'); } 
+            }
+        });
+    }
     async function actualizarHorarioProyecto() {
         const id = document.getElementById('modal-event-id').value;
         const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0];
         const newTimeInput = document.getElementById('edit-event-time').value;
-        if (!newDateInput) return showToast("Selecciona fecha", "error");
+        if (!newDateInput) return showToast("Selecciona una nueva fecha", "error");
         let finalDate = new Date(newDateInput);
         if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); }
-        try { await app.cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); app.cargarAgenda(); } catch (e) { showToast("Error", "error"); }
+        try { 
+            await cambiarAtributo(id, 'fecha', finalDate.toISOString()); 
+            showToast("Horario actualizado", "success"); 
+            const el = document.getElementById('event-modal'); 
+            const m = bootstrap.Modal.getInstance(el); 
+            if(m) m.hide(); 
+            cargarAgenda(); 
+        } catch (e) { showToast("Error al actualizar", "error"); }
     }
     async function cargarAgenda() {
         const calendarEl = document.getElementById('calendario');
@@ -853,151 +1119,506 @@ document.addEventListener('DOMContentLoaded', () => {
             const eventos = await fetchAPI('/api/proyectos/agenda');
             const isMobile = window.innerWidth < 768;
             currentCalendar = new FullCalendar.Calendar(calendarEl, {
-                locale: 'es', initialView: 'dayGridMonth',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listWeek' },
-                height: 'auto', dayMaxEvents: isMobile ? false : true,
+                locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' },
+                height: 'auto', dayMaxEvents: isMobile ? 1 : true,
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 navLinks: true, editable: true, events: eventos,
-                dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Fecha seleccionada: ${info.date.toLocaleDateString()}`, 'info'); } },
+                dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Fecha preseleccionada: ${info.date.toLocaleDateString()}`, 'info'); } },
                 eventClick: openEventModal,
-                eventDrop: async (info) => { if (!confirm(`¿Mover proyecto?`)) { info.revert(); return; } try { await app.cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Actualizado.', 'success'); cargarFlujoDeTrabajo('Todos'); } catch (error) { info.revert(); } },
-                eventContent: (arg) => { if (isMobile && !arg.view.type.includes('list')) { return { html: '' }; } else { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; } },
-                eventDidMount: function (info) { if (isMobile && !info.view.type.includes('list')) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; } }
+                eventDrop: async (info) => { 
+                    Swal.fire({
+                        title: '¿Reagendar este proyecto?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question',
+                        showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar'
+                    }).then(async (result) => {
+                        if (result.isConfirmed) {
+                            try { 
+                                await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); 
+                                showToast('Proyecto reagendado.', 'success'); 
+                                cargarFlujoDeTrabajo();
+                            } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } 
+                        } else {
+                            info.revert();
+                        }
+                    });
+                },
+                eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; },
+                eventDidMount: function(info) {
+                    let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`;
+                    info.el.style.backgroundColor = colorVar;
+                    info.el.style.borderColor = colorVar;
+                }
             });
             currentCalendar.render();
-        } catch (error) { calendarEl.innerHTML = '<p>Error agenda.</p>'; }
+        } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; }
     }
 
     // --- ACCIONES GENERALES ---
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-    async function aprobarCotizacion(id) { if (!confirm('¿Aprobar cotización?')) return; try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error`, 'error'); } }
-    async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? proyecto.artista.nombre : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Resumen FiaRecords:\n\nServicios:\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total: $${proyecto.total.toFixed(2)} MXN*\n\nContáctanos para confirmar.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error.', 'error'); } }
-    async function registrarPago(proyectoId, desdeHistorial = false) {
-        const cache = desdeHistorial ? historialCacheados : localCache.proyectos;
-        let proyecto = cache.find(p => p._id === proyectoId);
-        if (!proyecto) { try { proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); } catch (e) { return showToast('No encontrado.', 'error'); } }
-        const restante = proyecto.total - (proyecto.montoPagado || 0);
-        const montoStr = prompt(`Registrar pago\nRestante: $${restante.toFixed(2)}\n¿Monto?`, restante > 0 ? restante.toFixed(2) : '0.00');
-        if (montoStr === null) return;
-        const monto = parseFloat(montoStr);
-        if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error');
-        const metodo = prompt('Método (Efectivo, Transferencia):', 'Efectivo'); if (!metodo) return;
-        try {
-            const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) });
-            showToast(proyectoActualizado.offline ? 'Offline. Recibo local.' : '¡Pago registrado!', proyectoActualizado.offline ? 'info' : 'success');
-            const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1];
-            await generarReciboPDF(proyectoActualizado, ultimoPago);
-            if (document.getElementById('pagos').classList.contains('active')) { app.cargarPagos(); }
-            else if (desdeHistorial) { cargarHistorial(); }
-            else { cargarFlujoDeTrabajo(); }
-        } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+    async function aprobarCotizacion(id) { 
+        Swal.fire({
+            title: '¿Aprobar Cotización?', text: "El proyecto se agendará y moverá al flujo de trabajo.", icon: 'question',
+            showCancelButton: true, confirmButtonText: 'Sí, aprobar', cancelButtonText: 'Cancelar', confirmButtonColor: '#198754'
+        }).then(async (result) => {
+            if(result.isConfirmed) {
+                try { 
+                    await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); 
+                    showToast('¡Cotización aprobada!', 'success'); 
+                    mostrarSeccion('flujo-trabajo'); 
+                } catch (error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } 
+            }
+        });
     }
-    async function cargarPagos() { mostrarSeccionPagos('pendientes', document.querySelector('#pagos .btn-group button.active') || document.querySelector('#pagos button')); }
+    async function compartirPorWhatsApp(proyectoId) { 
+        try { 
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); 
+            const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; 
+            const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${proyecto.total.toFixed(2)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; 
+            window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); 
+        } catch (error) { showToast('Error al obtener datos del proyecto.', 'error'); } 
+    }
+    async function registrarPago(proyectoId, desdeHistorial = false) {
+        let proyecto;
+        try {
+            proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+        } catch(e) {
+            return showToast('Proyecto no encontrado.', 'error');
+        }
+
+        const restante = proyecto.total - (proyecto.montoPagado || 0);
+
+        const { value: formValues } = await Swal.fire({
+            title: 'Registrar Pago',
+            html:
+                `<p>Saldo Restante: <strong class="text-danger">$${restante.toFixed(2)}</strong></p>` +
+                '<input id="swal-monto" type="number" class="swal2-input" placeholder="Monto a pagar" value="' + (restante > 0 ? restante.toFixed(2) : '0.00') + '">' +
+                '<select id="swal-metodo" class="swal2-select"><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option></select>',
+            focusConfirm: false,
+            preConfirm: () => {
+                return [
+                    document.getElementById('swal-monto').value,
+                    document.getElementById('swal-metodo').value
+                ]
+            }
+        });
+
+        if (formValues) {
+            const [montoStr, metodo] = formValues;
+            const monto = parseFloat(montoStr);
+            if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error');
+            
+            try {
+                const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) });
+                showToast(proyectoActualizado.offline ? 'Pago registrado en cola offline.' : '¡Pago registrado exitosamente!', proyectoActualizado.offline ? 'info' : 'success');
+                const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1];
+                await generarReciboPDF(proyectoActualizado, ultimoPago);
+                if (document.getElementById('pagos').classList.contains('active')) { cargarPagos(); }
+                else if (desdeHistorial) { cargarHistorial(); }
+                else { cargarFlujoDeTrabajo(); }
+            } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
+        }
+    }
+    async function cargarPagos() { 
+        document.querySelector('#pagos .btn-group button.active')?.classList.remove('active');
+        const btnPendientes = document.querySelector('#pagos .btn-group button');
+        if (btnPendientes) btnPendientes.classList.add('active');
+        mostrarSeccionPagos('pendientes', btnPendientes); 
+    }
     function mostrarSeccionPagos(vista, btn) {
         document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active'));
         if (btn) btn.classList.add('active');
         if (vista === 'pendientes') { document.getElementById('vista-pagos-pendientes').style.display = 'block'; document.getElementById('vista-pagos-historial').style.display = 'none'; cargarPagosPendientes(); } else { document.getElementById('vista-pagos-pendientes').style.display = 'none'; document.getElementById('vista-pagos-historial').style.display = 'block'; cargarHistorialPagos(); }
     }
     async function cargarPagosPendientes() {
-        const tabla = document.getElementById('tablaPendientesBody'); tabla.innerHTML = '<tr><td colspan="5">Calculando...</td></tr>';
-        const pendientes = localCache.proyectos.filter(p => { const pagado = p.montoPagado || 0; return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion'; });
-        if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
-        tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn-secondary" onclick="app.registrarPago('${p._id}')">Cobrar 💵</button><button class="btn-secondary" onclick="app.compartirPorWhatsApp('${p._id}')">Recordar 💬</button></td></tr>`; }).join('');
+        const tabla = document.getElementById('tablaPendientesBody'); tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
+        await fetchAPI('/api/proyectos'); // Asegura que el caché local esté actualizado
+        const pendientes = localCache.proyectos.filter(p => { const pagado = p.montoPagado || 0; return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; });
+        if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
+        tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button><button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button></td></tr>`; }).join('');
     }
-    async function cargarHistorialPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn-secondary" title="Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')">📄</button><button class="btn-secondary" title="WhatsApp" onclick="app.compartirPagoPorWhatsApp(JSON.stringify(${JSON.stringify(p)}).replace(/'/g, '&apos;'))">💬</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')">🗑️</button></td></tr>`).join('') : `<tr><td colspan="5">Sin pagos.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5">Error offline.</td></tr>`; } }
-    async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId) || proyecto.pagos.find(p => p._id.startsWith('temp')); if (!pago) return showToast('No encontrado.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error.', 'error'); } }
-    function compartirPagoPorWhatsApp(pagoString) { const pago = JSON.parse(pagoString); const mensaje = `Confirmación de pago FiaRecords:\n\n*Fecha:* ${new Date(pago.fecha).toLocaleDateString()}\n*Monto:* $${pago.monto.toFixed(2)} MXN\n*Método:* ${pago.metodo}\n\n¡Gracias!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
-    async function eliminarPago(proyectoId, pagoId) { if (!confirm('¿Eliminar pago? Afectará el saldo.')) return; try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Eliminado.', 'success'); cargarPagos(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-    async function openDocumentsModal(proyectoId) { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); if (!proyecto) return showToast('No encontrado.', 'error'); document.getElementById('modal-project-id').value = proyectoId; document.getElementById('modal-project-id').dataset.total = proyecto.total; showDocumentSection('contrato'); const contrato = proyecto.detallesContrato || {}; document.getElementById('contrato-nombre-album').value = contrato.nombreAlbum || ''; document.getElementById('contrato-canciones').value = contrato.cantidadCanciones || ''; document.getElementById('contrato-duracion').value = contrato.duracion || ''; document.getElementById('contrato-pago-inicial').value = contrato.pagoInicial || ''; document.getElementById('contrato-pago-final').value = contrato.pagoFinal || ''; calcularSaldoContrato(); const dist = proyecto.detallesDistribucion || {}; document.getElementById('dist-titulo').value = dist.tituloLanzamiento || ''; const tracksContainer = document.getElementById('dist-tracks-container'); tracksContainer.innerHTML = ''; (dist.tracks && dist.tracks.length > 0 ? dist.tracks : [{ titulo: '', isrc: '' }]).forEach(track => addTrackField(track.titulo, track.isrc)); new bootstrap.Modal(document.getElementById('document-modal')).show(); }
-    function closeDocumentsModal() { const el = document.getElementById('document-modal'); const m = bootstrap.Modal.getInstance(el); if (m) m.hide(); }
-    function showDocumentSection(sectionName) { document.querySelectorAll('.document-section').forEach(s => s.style.display = 'none'); document.getElementById(`section-${sectionName}`).style.display = 'block'; }
-    function addTrackField(titulo = '', isrc = '') { const container = document.getElementById('dist-tracks-container'); const trackDiv = document.createElement('div'); trackDiv.className = 'input-group mb-2'; trackDiv.innerHTML = `<input type="text" class="form-control dist-track-titulo" placeholder="Título" value="${escapeHTML(titulo)}"><input type="text" class="form-control dist-track-isrc" placeholder="ISRC" value="${escapeHTML(isrc)}">`; container.appendChild(trackDiv); }
-    function calcularSaldoContrato() { const total = parseFloat(document.getElementById('modal-project-id').dataset.total) || 0; const inicial = parseFloat(document.getElementById('contrato-pago-inicial').value) || 0; const final = total - inicial; document.getElementById('contrato-pago-final').value = final > 0 ? final.toFixed(2) : '0.00'; }
-    async function saveAndGenerateContract() { const proyectoId = document.getElementById('modal-project-id').value; const data = { nombreAlbum: document.getElementById('contrato-nombre-album').value, cantidadCanciones: parseInt(document.getElementById('contrato-canciones').value), duracion: document.getElementById('contrato-duracion').value, pagoInicial: parseFloat(document.getElementById('contrato-pago-inicial').value), pagoFinal: parseFloat(document.getElementById('contrato-pago-final').value) }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'contrato', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarContratoPDF(proyectoCompleto); closeDocumentsModal(); }
-    async function saveAndGenerateDistribution() { const proyectoId = document.getElementById('modal-project-id').value; const tracks = []; document.querySelectorAll('#dist-tracks-container .input-group').forEach(row => { const titulo = row.querySelector('.dist-track-titulo').value; const isrc = row.querySelector('.dist-track-isrc').value; if (titulo) tracks.push({ titulo, isrc }); }); const data = { tituloLanzamiento: document.getElementById('dist-titulo').value, upc: document.getElementById('dist-upc').value, tracks }; await fetchAPI(`/api/proyectos/${proyectoId}/documentos`, { method: 'PUT', body: JSON.stringify({ tipo: 'distribucion', data }) }); const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`); await generarDistribucionPDF(proyectoCompleto); closeDocumentsModal(); }
+    async function cargarHistorialPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } }
+    async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
+    async function compartirRecordatorioPago(proyectoId) {
+        try {
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+            const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente';
+            const restante = proyecto.total - (proyecto.montoPagado || 0);
+            const mensaje = `¡Hola ${nombreCliente}! Te enviamos un recordatorio de FiaRecords sobre tu proyecto "${proyecto.nombreProyecto || 'General'}".\n\nEl saldo pendiente es de: *$${restante.toFixed(2)} MXN*.\n\nQuedamos a tus órdenes.`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+        } catch(e) {
+            showToast('Error al obtener datos del proyecto', 'error');
+        }
+    }
+    async function eliminarPago(proyectoId, pagoId) { 
+        Swal.fire({
+            title: '¿Eliminar este pago?', text: "Esta acción afectará el saldo del proyecto y no se puede deshacer.", icon: 'error',
+            showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
+        }).then(async (result) => {
+            if(result.isConfirmed){
+                try { 
+                    await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); 
+                    showToast('Pago eliminado.', 'success'); 
+                    cargarPagos(); 
+                } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+            }
+        });
+    }
 
     // --- PDF GENERATION ---
-    function getFinalCoordinates(pos) { let baseX, baseY; switch (pos.vAlign) { case 'top': baseY = PDF_DIMENSIONS.MARGIN; break; case 'middle': baseY = (PDF_DIMENSIONS.HEIGHT / 2) - (pos.h / 2); break; default: baseY = PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN; } switch (pos.hAlign) { case 'left': baseX = PDF_DIMENSIONS.MARGIN; break; case 'center': baseX = (PDF_DIMENSIONS.WIDTH / 2) - (pos.w / 2); break; default: baseX = PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN; } let finalX = baseX + pos.offsetX; let finalY = baseY + pos.offsetY; finalX = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalX, PDF_DIMENSIONS.WIDTH - pos.w - PDF_DIMENSIONS.MARGIN)); finalY = Math.max(PDF_DIMENSIONS.MARGIN, Math.min(finalY, PDF_DIMENSIONS.HEIGHT - pos.h - PDF_DIMENSIONS.MARGIN)); return { x: finalX, y: finalY, w: pos.w, h: pos.h }; }
-    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : 'https://placehold.co/150x60?text=Firma'; try { const response = await fetch(firmaPath); if (!response.ok) throw new Error('.'); const firmaImg = await response.blob(); const reader = new FileReader(); reader.readAsDataURL(firmaImg); reader.onloadend = function () { try { const base64data = reader.result; const pos = getFinalCoordinates(configCache.firmaPos[docType]); if (docType === 'contrato') { pdf.line(PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 2, PDF_DIMENSIONS.MARGIN + 70, pos.y + pos.h + 2); pdf.text(proyecto.artista.nombre, PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 7); pdf.text('Firma del Cliente', PDF_DIMENSIONS.MARGIN, pos.y + pos.h + 12); } pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7); pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12); } catch (e) { } finally { pdf.save(finalFileName); } } } catch (e) { pdf.save(finalFileName); } }
-    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 200, 20, { align: 'right' }); pdf.text("Juárez N.L.", 200, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 200, 50, { align: 'right' }); const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${proyecto.total.toFixed(2)} MXN`, 200, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error PDF", 'error'); } }
-    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : null); if (!pago) { if (proyecto.montoPagado > 0) { const dummyPago = { monto: proyecto.montoPagado }; return generarReciboPDF(proyecto, dummyPago); } return showToast('Sin pagos registrados.', 'error'); } const saldoRestante = proyecto.total - proyecto.montoPagado; pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? proyecto.artista.nombre : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'plain', body: [['Total Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto Recibo:', `$${pago.monto.toFixed(2)}`], ['Restante Total:', `$${saldoRestante.toFixed(2)}`]] }); const fileName = `Recibo.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error recibo.', 'error'); } }
-    async function generarContratoPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const c = proyecto.detallesContrato; pdf.setFillColor(0, 0, 0); pdf.rect(14, 15, 40, 15, 'F'); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text('CONTRATO DE SERVICIOS', 105, 40, { align: 'center' }); pdf.setFontSize(10).setFont(undefined, 'normal'); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 55); pdf.text(`Cliente: ${proyecto.artista.nombre}`, 14, 65); const terminos = `Servicios para el álbum "${c.nombreAlbum}". Pago total: $${proyecto.total}. Anticipo: $${c.pagoInicial}.`; pdf.text(terminos, 14, 80, { maxWidth: 180 }); const fileName = `Contrato.pdf`; await addFirmaToPdf(pdf, 'contrato', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); } }
-    async function generarDistribucionPDF(proyecto) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const d = proyecto.detallesDistribucion; pdf.setFontSize(16).text('DISTRIBUCIÓN DIGITAL', 105, 20, { align: 'center' }); pdf.autoTable({ startY: 40, body: [['Lanzamiento:', d.tituloLanzamiento], ['UPC:', d.upc]] }); const fileName = `Distribucion.pdf`; await addFirmaToPdf(pdf, 'distribucion', fileName, proyecto); } catch (e) { showToast("Error PDF", 'error'); } }
+    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
+        const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : null; 
+        try {
+            if (firmaPath) {
+                const response = await fetch(firmaPath); 
+                if (!response.ok) throw new Error('No se pudo cargar la imagen de la firma.'); 
+                const firmaImg = await response.blob(); 
+                const reader = new FileReader(); 
+                reader.readAsDataURL(firmaImg); 
+                reader.onloadend = function () { 
+                    try { 
+                        const base64data = reader.result;
+                        // Coordenadas y tamaño por defecto
+                        const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
+                        pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
+                        pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
+                        pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
+                        pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
+                    } catch (e) {
+                        console.error("Error al añadir firma al PDF:", e);
+                    } finally { 
+                        pdf.save(finalFileName); 
+                    } 
+                } 
+            } else {
+                 pdf.save(finalFileName);
+            }
+        } catch (e) { 
+            console.error("Error al procesar firma:", e);
+            pdf.save(finalFileName); 
+        } 
+    }
+    async function generarCotizacionPDF(proyectoIdOrObject) { 
+        try { 
+            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+            if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
+            pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); 
+            pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); 
+            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); 
+            const body = proyecto.items.map(item => [`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
+            if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } 
+            pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0] } }); 
+            let finalY = pdf.lastAutoTable.finalY + 10; 
+            pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); 
+            pdf.text(`Total: $${proyecto.total.toFixed(2)} MXN`, 196, finalY, { align: 'right' }); 
+            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
+        } catch (error) { showToast("Error al generar PDF", 'error'); } 
+    }
+    async function generarReciboPDF(proyecto, pagoEspecifico) { 
+        try { 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+            const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
+            if (!pago) return showToast('No hay pagos para generar un recibo.', 'error');
+            const saldoRestante = proyecto.total - proyecto.montoPagado; 
+            if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
+            pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); 
+            pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); 
+            pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto de este Recibo:', `$${pago.monto.toFixed(2)} (${pago.metodo})`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)}`]] }); 
+            const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
+        } catch (error) { showToast('Error al generar recibo.', 'error'); } 
+    }
 
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico, isClientView = false) {
-        document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombre)}`;
+        document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
         const contenido = document.getElementById('vista-artista-contenido');
-        contenido.innerHTML = '<p>Cargando...</p>';
+        contenido.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         try {
-            const [proyectos, todosPagos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI('/api/proyectos/pagos/todos'), fetchAPI(`/api/artistas/${artistaId}`)]);
-            let html = `<div class="card" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;"><div><p style="font-size: 1.1em;"><strong>Nombre:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p style="color:var(--text-color-light);"><strong>Artístico:</strong> ${escapeHTML(artistaInfo.nombreArtistico || 'N/A')}</p><p><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')} | <strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
-            if (!isClientView) { html += `<div style="display:flex; gap: 0.5rem; flex-wrap: wrap;"><button class="btn-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')">✏️ Editar Datos</button><button class="btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')">➕ Nuevo Proyecto</button></div>`; }
-            html += `</div><h3>Proyectos</h3>`;
-            if (proyectos.length) { html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Acciones</th></tr></thead><tbody>'; proyectos.forEach(p => { html += `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td>${escapeHTML(p.nombreProyecto || 'Proyecto')}</td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td class="table-actions">`; if (!isClientView) { html += `<button class="btn-secondary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">☁️</button>`; } html += `<button class="btn-secondary" title="PDF" onclick="app.generarCotizacionPDF('${p._id}')">📄</button>`; if (!isClientView) { html += `<button class="btn-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')">✏️</button><button class="btn-eliminar" title="Eliminar" onclick="app.eliminarProyecto('${p._id}')">🗑️</button>`; } html += `</td></tr>`; }); html += '</tbody></table></div>'; } else { html += '<p>Sin proyectos registrados.</p>'; }
+            const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
+            let html = `<div class="card mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap">
+                                    <div>
+                                        <p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
+                                        <p class="mb-1 text-muted"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
+                                        <p class="mb-0 text-muted"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
+                                    </div>`;
+            if (!isClientView) { 
+                html += `<div class="btn-group mt-2 mt-md-0">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
+                            <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
+                        </div>`; 
+            }
+            html += `</div></div></div><h3>Historial de Proyectos</h3>`;
+            if (proyectos.length) { 
+                html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
+                proyectos.forEach(p => { 
+                    html += `<tr>
+                                <td>${new Date(p.fecha).toLocaleDateString()}</td>
+                                <td>${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td>
+                                <td>$${p.total.toFixed(2)}</td>
+                                <td>$${(p.montoPagado || 0).toFixed(2)}</td>
+                                <td><span class="badge" style="background-color: var(--proceso-${p.proceso.replace(/\s+/g, '')})">${p.proceso}</span></td>
+                                <td class="table-actions">
+                                    <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
+                                    <button class="btn btn-sm btn-outline-secondary" title="Generar PDF de Cotización" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
+                                    ${!isClientView ? `<button class="btn btn-sm btn-outline-danger" title="Mover a Papelera" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>` : ''}
+                                </td>
+                            </tr>`; 
+                }); 
+                html += '</tbody></table></div>'; 
+            } else { 
+                html += '<p>Este artista aún no tiene proyectos registrados.</p>'; 
+            }
             contenido.innerHTML = html;
             mostrarSeccion('vista-artista');
-        } catch (e) { contenido.innerHTML = '<p>Error cargando historial.</p>'; console.error(e); }
+        } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar el historial del artista.</p>'; console.error(e); }
     }
-    async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { if (!artistaId) { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre); if (artista) artistaId = artista._id; else return; } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
+    async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
+        if (!artistaId) { 
+            const artistas = await fetchAPI('/api/artistas'); 
+            const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
+            if (artista) artistaId = artista._id; else return; 
+        } 
+        mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); 
+    }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
 
-    async function editarInfoProyecto(id) { const proyecto = localCache.proyectos.find(p => p._id === id) || historialCacheados.find(p => p._id === id); if (!proyecto) return; const nuevoNombre = prompt('Editar Nombre:', proyecto.nombreProyecto || ''); if (nuevoNombre === null) return; const nuevoTotalStr = prompt('Editar Precio ($):', proyecto.total || 0); if (nuevoTotalStr === null) return; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } }
-    function openDeliveryModal(projectId, artistName, projectName) { const modalEl = document.getElementById('delivery-modal'); modalEl.querySelector('#delivery-project-id').value = projectId; modalEl.querySelector('#delivery-artist-name').value = artistName; modalEl.querySelector('#delivery-project-name').value = projectName; const project = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); modalEl.querySelector('#delivery-link-input').value = project ? project.enlaceEntrega : ''; document.getElementById('drive-status').textContent = ''; document.getElementById('drive-file-input').value = ''; new bootstrap.Modal(modalEl).show(); }
+    async function editarInfoProyecto(id) {
+        let proyecto = localCache.proyectos.find(p => p._id === id);
+        if(!proyecto) proyecto = historialCacheados.find(p => p._id === id);
+        if (!proyecto) return showToast('Proyecto no encontrado', 'error');
+
+        const { value: formValues } = await Swal.fire({
+            title: 'Editar Información del Proyecto',
+            html:
+                `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}">` +
+                `<input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`,
+            focusConfirm: false,
+            preConfirm: () => {
+                return [
+                    document.getElementById('swal-nombre').value,
+                    document.getElementById('swal-total').value
+                ]
+            }
+        });
+        
+        if (formValues) {
+            const [nuevoNombre, nuevoTotalStr] = formValues;
+            const nuevoTotal = parseFloat(nuevoTotalStr);
+            try { 
+                if (nuevoNombre.trim() !== proyecto.nombreProyecto) { 
+                    await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); 
+                    proyecto.nombreProyecto = nuevoNombre.trim(); 
+                } 
+                if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { 
+                    await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); 
+                    proyecto.total = nuevoTotal; 
+                } 
+                showToast('Proyecto actualizado.', 'success'); 
+                if (document.getElementById('flujo-trabajo').classList.contains('active')) { 
+                    const filtro = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; 
+                    cargarFlujoDeTrabajo(filtro);
+                } else if (document.getElementById('vista-artista').classList.contains('active')) { 
+                    const nombreActual = document.getElementById('vista-artista-nombre').textContent; 
+                    const art = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual); 
+                    if (art) mostrarVistaArtista(art._id, nombreActual, ''); 
+                } 
+            } catch (e) { showToast(`Error al editar`, 'error'); } 
+        }
+    }
+    function openDeliveryModal(projectId, artistName, projectName) { 
+        const modalEl = document.getElementById('delivery-modal'); 
+        modalEl.querySelector('#delivery-project-id').value = projectId; 
+        modalEl.querySelector('#delivery-artist-name').value = artistName; 
+        modalEl.querySelector('#delivery-project-name').value = projectName; 
+        const proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); 
+        modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
+        document.getElementById('drive-status').textContent = ''; 
+        document.getElementById('drive-file-input').value = ''; 
+        document.getElementById('btn-drive-upload').onclick = subirADrive; // Asignar evento aquí
+        new bootstrap.Modal(modalEl).show(); 
+    }
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
-    async function saveDeliveryLink() { const projectId = document.getElementById('delivery-project-id').value; const enlace = document.getElementById('delivery-link-input').value; try { await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); showToast('Enlace guardado.', 'success'); closeDeliveryModal(); } catch (e) { showToast(`Error`, 'error'); } }
-    function sendDeliveryByWhatsapp() { const link = document.getElementById('delivery-link-input').value; if (!link) return showToast('Falta el enlace.', 'error'); const artistName = document.getElementById('delivery-artist-name').value; const projectName = document.getElementById('delivery-project-name').value; const mensaje = `¡Hola ${artistName}! Archivos finales de "${projectName}":\n\n${link}\n\n¡Gracias por confiar en FiaRecords!`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); }
+    async function saveDeliveryLink() { 
+        const projectId = document.getElementById('delivery-project-id').value; 
+        const enlace = document.getElementById('delivery-link-input').value; 
+        try { 
+            await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); 
+            showToast('Enlace de entrega guardado.', 'success'); 
+            closeDeliveryModal(); 
+        } catch (e) { showToast(`Error al guardar el enlace`, 'error'); } 
+    }
 
     // --- SETUP Y MENÚ ---
     function setupMobileMenu() {
         const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay');
         const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); };
         if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu);
-        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); });
+        document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); });
     }
 
     function initAppEventListeners(payload) {
-        flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });
         
         document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
         
         // Listeners Formularios Creación (Vistas)
-        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { document.getElementById(`form${type}`).addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); });
+        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); });
         
         // Listeners Modales Edición
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista);
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio);
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario);
         
-        document.getElementById('btnAgregarAProyecto').addEventListener('click', agregarAProyecto); document.getElementById('btnGenerarCotizacion').addEventListener('click', generarCotizacion); document.getElementById('btnEnviarAFlujo').addEventListener('click', enviarAFlujoDirecto); document.getElementById('btnNuevoArtista').addEventListener('click', () => { document.getElementById('nuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('')); document.getElementById('manualBtnNuevoArtista').addEventListener('click', () => { document.getElementById('manualNuevoArtistaContainer').style.display = 'block'; }); document.getElementById('btnGuardarManualNuevoArtista').addEventListener('click', () => registrarNuevoArtistaDesdeFormulario('manual')); document.getElementById('firma-input').addEventListener('change', subirFirma); document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
+        document.getElementById('firma-input').addEventListener('change', subirFirma); 
+        document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
         
         setupCustomization(payload);
         setupMobileMenu();
 
-        // **FIX: Logout Listener Seguro**
-        const logoutBtn = document.getElementById('logout-button'); 
-        if (logoutBtn) { 
-            logoutBtn.onclick = cerrarSesionConfirmacion; 
+        if (DOMElements.logoutButton) { 
+            DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; 
         }
+
+        // Conexión con Offline Manager
+        window.addEventListener('online', OfflineManager.updateIndicator);
+        window.addEventListener('offline', OfflineManager.updateIndicator);
+        OfflineManager.updateIndicator();
     }
 
-    function setupCustomization(payload) { if (payload.role === 'admin') { if (DOMElements.appLogo && DOMElements.logoInput) { DOMElements.appLogo.style.cursor = 'pointer'; DOMElements.appLogo.onclick = () => DOMElements.logoInput.click(); DOMElements.logoInput.onchange = async (event) => { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('logoFile', file); try { await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); showToast('Logo guardado!', 'success'); await loadPublicLogo(); } catch (e) { showToast(`Error al subir logo`, 'error'); } }; } } }
+    function setupCustomization(payload) { 
+        if (payload.role === 'admin') { 
+            if (DOMElements.appLogo && DOMElements.logoInput) { 
+                DOMElements.appLogo.style.cursor = 'pointer'; 
+                DOMElements.appLogo.title = 'Haz clic para cambiar el logo';
+                DOMElements.appLogo.onclick = () => DOMElements.logoInput.click(); 
+                DOMElements.logoInput.onchange = async (event) => { 
+                    const file = event.target.files[0]; 
+                    if (!file) return; 
+                    const formData = new FormData(); 
+                    formData.append('logoFile', file); 
+                    try { 
+                        await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
+                        showToast('Logo actualizado!', 'success'); 
+                        await loadPublicLogo(); 
+                    } catch (e) { showToast(`Error al subir logo`, 'error'); } 
+                }; 
+            } 
+        } 
+    }
 
     function renderSidebar(user) {
         const navContainer = document.getElementById('sidebar-nav-container');
         let p = user.permisos || []; const role = user.role ? user.role.toLowerCase() : 'cliente';
         let html = '';
-        if (role === 'cliente') { html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar" data-seccion="vista-artista" onclick="app.irAVistaArtista(null, '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a></div>`; } 
-        else {
-            if (role !== 'admin' && p.length === 0) { p = ['dashboard']; } const isSuperAdmin = role === 'admin'; const canAccess = (permKey) => { if (isSuperAdmin) return true; return p.includes(permKey); };
-            html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}${canAccess('finanzas') || canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}${canAccess('finanzas') || canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Pagos</a>' : ''}${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="registro-manual"><i class="bi bi-pencil-square"></i> Registro Manual</a>' : ''}</div><div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}</div>${canAccess('configuracion') ? `<div class="nav-group"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div><a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a><a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a></div>` : ''}`;
+        if (role === 'cliente') { 
+            html = `<div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
+                        <a class="nav-link-sidebar" data-seccion="vista-artista" onclick="app.irAVistaArtista('${user.artistaId}', '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
+                    </div>`; 
+        } else {
+            const isSuperAdmin = role === 'admin'; 
+            const canAccess = (permKey) => isSuperAdmin || p.includes(permKey);
+            
+            html = `<div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
+                        ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}
+                        ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}
+                        ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}
+                        ${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}
+                        ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}
+                        ${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Gestión de Pagos</a>' : ''}
+                    </div>
+                    <div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
+                        ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}
+                        ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}
+                        ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}
+                    </div>
+                    ${isSuperAdmin ? `<div class="nav-group">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div>
+                        <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a>
+                        <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a>
+                    </div>` : ''}`;
         }
         navContainer.innerHTML = html;
-        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { mostrarSeccion(e.currentTarget.dataset.seccion); } }); });
+        document.querySelectorAll('.nav-link-sidebar').forEach(link => { 
+            link.addEventListener('click', (e) => { 
+                if(!e.currentTarget.onclick) { 
+                    e.preventDefault(); 
+                    mostrarSeccion(e.currentTarget.dataset.seccion); 
+                } 
+            }); 
+        });
     }
 
-    // EXPORTS
-    window.app = { eliminarItem, editarItem: (id, end) => console.log('Usar modales'), restaurarItem, vaciarPapelera, cambiarProceso, filtrarFlujo, eliminarProyecto, quitarDeProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF, compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirPagoPorWhatsApp, eliminarPago, openDocumentsModal, closeDocumentsModal, showDocumentSection, saveAndGenerateContract, saveAndGenerateDistribution, addTrackField, mostrarVistaArtista, irAVistaArtista, calcularSaldoContrato, cargarAjustesParaDocumento, actualizarPosicionFirma, guardarAjustesFirma, revertirADefecto, guardarDatosBancarios, generarDatosBancariosPDF, compartirDatosBancariosWhatsApp, generarContratoPDF, openEventModal, closeEventModal, openDeliveryModal, closeDeliveryModal, saveDeliveryLink, sendDeliveryByWhatsapp, guardarProyectoManual, editarInfoProyecto, filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive, syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagosPendientes, cargarHistorialPagos, cargarPagos, nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario, guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, loadFlujo: () => cargarFlujoDeTrabajo(), toggleAuth, registerUser, recoverPassword, generarReciboPDF, showResetPasswordView, resetPassword, cerrarSesionConfirmacion, eliminarPermanente };
+    // --- EXPORTS GLOBALES ---
+    window.app = {
+        eliminarItem,
+        restaurarItem,
+        eliminarPermanente,
+        cambiarProceso,
+        filtrarFlujo,
+        eliminarProyecto,
+        quitarDeProyecto,
+        agregarAProyecto,
+        cambiarAtributo,
+        aprobarCotizacion,
+        generarCotizacionPDF,
+        compartirPorWhatsApp,
+        registrarPago,
+        reimprimirRecibo,
+        compartirRecordatorioPago,
+        eliminarPago,
+        mostrarVistaArtista,
+        irAVistaArtista,
+        guardarDatosBancarios,
+        generarDatosBancariosPDF,
+        compartirDatosBancariosWhatsApp,
+        openDeliveryModal,
+        saveDeliveryLink,
+        editarInfoProyecto,
+        filtrarTablas,
+        actualizarHorarioProyecto,
+        cargarAgenda,
+        cancelarCita,
+        subirADrive,
+        syncNow: OfflineManager.syncNow,
+        mostrarSeccion,
+        mostrarSeccionPagos,
+        cargarPagos,
+        nuevoProyectoParaArtista,
+        abrirModalEditarArtista,
+        abrirModalEditarServicio,
+        abrirModalEditarUsuario,
+        guardarEdicionArtista,
+        guardarEdicionServicio,
+        guardarEdicionUsuario,
+        generarReciboPDF,
+        cerrarSesionConfirmacion,
+        registrarNuevoArtistaDesdeFormulario,
+        generarCotizacion,
+        enviarAFlujoDirecto,
+        // CORRECCIÓN: FUNCIONES DE AUTH AHORA GLOBALES
+        toggleAuth,
+        registerUser,
+        recoverPassword,
+        resetPassword,
+        showResetPasswordView
+    };
 });
 
-if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').then(function (registration) { console.log('SW OK'); }, function (err) { console.log('SW Fail'); }); }); }
+// Registrar Service Worker
+if ('serviceWorker' in navigator) { 
+    window.addEventListener('load', function () { 
+        navigator.serviceWorker.register('sw.js').then(function (registration) { 
+            console.log('ServiceWorker registration successful with scope: ', registration.scope); 
+        }, function (err) { 
+            console.log('ServiceWorker registration failed: ', err); 
+        }); 
+    }); 
+}

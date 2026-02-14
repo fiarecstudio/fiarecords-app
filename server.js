@@ -1,5 +1,5 @@
 // ==================================================================
-//             SERVER.JS - CORREGIDO (RUTA AUTH ARREGLADA)
+//             SERVER.JS - CORREGIDO (RUTA CATCH-ALL MEJORADA)
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
@@ -15,7 +15,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- 1. Definición de Rutas de la API ---
-// AQUI ESTABA EL ERROR: Se agregó '/api' al principio para coincidir con el frontend
 app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -25,13 +24,12 @@ app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // --- 2. Servir Archivos Estáticos ---
-// Mueve tus archivos sw.js, manifest.json, iconos e index.html a una carpeta llamada "public" si es posible.
-// Si los tienes en la raíz junto a server.js, esto funciona pero es menos seguro.
+// Sirve archivos de una carpeta 'public' si la tienes, o de la raíz.
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname))); 
 
-// --- 2.5 RUTAS EXPLÍCITAS PARA PWA (LA SOLUCIÓN) ---
-// Esto fuerza al servidor a enviar el archivo correcto en lugar del HTML
+// --- 2.5 RUTAS EXPLÍCITAS PARA PWA ---
+// Esto asegura que el service worker y el manifest se sirvan correctamente.
 app.get('/sw.js', (req, res) => {
     res.sendFile(path.resolve(__dirname, 'sw.js'));
 });
@@ -40,14 +38,15 @@ app.get('/manifest.json', (req, res) => {
     res.sendFile(path.resolve(__dirname, 'manifest.json'));
 });
 
-// --- 3. Ruta Catch-All (Manejador Final) ---
-app.use((req, res, next) => {
-    // Si la petición NO es para la API y NO es el service worker, envía el index.html
-    // Nota: aquí también ajustamos para que ignore /api/auth correctamente
-    if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth')) {
-        return res.sendFile(path.resolve(__dirname, 'index.html'));
-    }
-    next();
+// --- 3. Ruta Catch-All (Manejador Final para SPA) ---
+// ESTA ES LA CORRECCIÓN CLAVE PARA LAS RECARGAS DE PÁGINA.
+// Debe ir al final, después de todas las rutas de API y estáticas.
+app.get('*', (req, res) => {
+  // Si la petición no empieza con /api/, entonces sirve el index.html
+  // Esto permite que el enrutador del frontend (en script.js) maneje la ruta.
+  if (!req.path.startsWith('/api/')) {
+    res.sendFile(path.resolve(__dirname, 'index.html'));
+  }
 });
 
 // --- Conexión a Base de Datos y Arranque del Servidor ---
