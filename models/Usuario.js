@@ -36,6 +36,14 @@ const UsuarioSchema = new mongoose.Schema({
         default: [] 
     },
 
+    // --- NUEVO CAMPO: VINCULACIÓN MANUAL CON ARTISTA ---
+    artistaId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Artista', 
+        default: null 
+    },
+    // --------------------------------------------------
+
     isDeleted: { 
         type: Boolean, 
         default: false 

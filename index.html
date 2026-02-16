@@ -372,7 +372,8 @@
                                 <div class="col-md-6">
                                     <select id="roleUsuario" class="form-select">
                                         <option value="admin">Admin</option>
-                                        <option value="productor">Productor</option>
+                                        <option value="ingeniero">Ingeniero</option>
+                                        <option value="diseñador">Diseñador</option>
                                         <option value="cliente">Cliente</option>
                                     </select>
                                 </div>
@@ -556,18 +557,41 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="formEditarUsuario">
+                <form id="formEditarUsuario" onsubmit="app.guardarEdicionUsuario(event)">
                     <input type="hidden" id="editUsuarioId">
-                    <div class="mb-3"><label>Usuario</label><input type="text" class="form-control" id="editUsuarioName" required></div>
-                    <div class="mb-3"><label>Email</label><input type="email" class="form-control" id="editUsuarioEmail"></div>
-                    <div class="mb-3"><label>Rol</label>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Usuario</label>
+                        <input type="text" class="form-control" id="editUsuarioName" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editUsuarioEmail">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
                         <select class="form-select" id="editUsuarioRole">
-                            <option value="Cliente">Cliente</option>
-                            <option value="Staff">Staff</option>
+                            <option value="cliente">Cliente</option>
                             <option value="admin">Admin</option>
+                            <option value="ingeniero">Ingeniero</option>
+                            <option value="diseñador">Diseñador</option>
                         </select>
                     </div>
-                    <div class="mb-3"><label>Contraseña (Opcional)</label><input type="password" class="form-control" id="editUsuarioPass"></div>
+
+                    <div class="mb-3 p-2 bg-light border rounded">
+                        <label class="form-label text-primary fw-bold">🎵 Vincular con Artista</label>
+                        <select class="form-select" id="editUsuarioArtista">
+                            <option value="">-- Cargando Artistas... --</option>
+                        </select>
+                        <div class="form-text small">Selecciona el artista para que este usuario vea sus proyectos.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña (Opcional)</label>
+                        <input type="password" class="form-control" id="editUsuarioPass" placeholder="Dejar vacío para no cambiar">
+                    </div>
+                    
                     <div class="mb-3 permisos-container" id="editUsuarioPermisosContainer">
                          <label class="fw-bold d-block mb-2">Permisos:</label>
                          <div class="d-flex flex-wrap gap-2">
@@ -579,6 +603,7 @@
                             <label><input type="checkbox" value="gestion-usuarios"> Users</label>
                          </div>
                     </div>
+                    
                     <button type="submit" class="btn btn-primary w-100">Actualizar</button>
                 </form>
             </div>

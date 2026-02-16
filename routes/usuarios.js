@@ -24,7 +24,8 @@ router.get('/', async (req, res) => {
 // ==========================================
 router.post('/', async (req, res) => {
     try {
-        const { username, email, password, role, permisos } = req.body;
+        // Desestructuramos artistaId por si lo quieres mandar al crear también
+        const { username, email, password, role, permisos, artistaId } = req.body;
         
         // Validar correo único
         if (email) {
@@ -34,7 +35,14 @@ router.post('/', async (req, res) => {
 
         // NOTA: Aquí confiamos en que tu modelo Usuario.js tiene el "pre-save hook" 
         // para encriptar la contraseña automáticamente.
-        const nuevoUsuario = new Usuario({ username, email, password, role, permisos });
+        const nuevoUsuario = new Usuario({ 
+            username, 
+            email, 
+            password, 
+            role, 
+            permisos,
+            artistaId: artistaId || null // Guardamos vínculo si viene
+        });
         
         await nuevoUsuario.save();
         res.status(201).json(nuevoUsuario);
@@ -45,11 +53,12 @@ router.post('/', async (req, res) => {
 });
 
 // ==========================================
-// ACTUALIZAR USUARIO (CORREGIDO)
+// ACTUALIZAR USUARIO (CORREGIDO CON VÍNCULO)
 // ==========================================
 router.put('/:id', async (req, res) => {
     try {
-        const { username, email, role, permisos, password } = req.body;
+        // --- CAMBIO CLAVE AQUÍ: Recibimos artistaId ---
+        const { username, email, role, permisos, password, artistaId } = req.body;
         const usuarioId = req.params.id;
 
         // 1. Validar si el email nuevo ya existe (si es que se está cambiando)
@@ -61,14 +70,20 @@ router.put('/:id', async (req, res) => {
         }
 
         // 2. Preparar objeto de actualización DINÁMICO
-        // (Solo agregamos lo que viene en el body para no borrar datos existentes)
         let datosActualizar = {};
         if (username) datosActualizar.username = username;
         if (email) datosActualizar.email = email;
         if (role) datosActualizar.role = role;
         if (permisos) datosActualizar.permisos = permisos;
+        
+        // --- AQUÍ GUARDAMOS EL VÍNCULO MANUAL ---
+        // Si nos mandan un artistaId, lo guardamos. Si mandan cadena vacía, lo ponemos null (desvincular)
+        if (artistaId !== undefined) {
+            datosActualizar.artistaId = artistaId || null;
+        }
 
         // 3. Manejo de Contraseña y Sincronización
+        // Al usar findByIdAndUpdate, el pre-save del modelo NO se ejecuta, así que encriptamos manual aquí.
         if (password && password.trim() !== "") {
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
@@ -76,15 +91,15 @@ router.put('/:id', async (req, res) => {
             // Asignamos la contraseña encriptada al usuario
             datosActualizar.password = hashedPassword;
 
-            // --- SINCRONIZACIÓN HACIA ARTISTA ---
-            // Si tu modelo Artista tiene campo password, esto es correcto.
-            if (email) {
+            // --- SINCRONIZACIÓN HACIA ARTISTA (OPCIONAL) ---
+            // Solo si quieres que al cambiar la clave del usuario, cambie en el Artista (si Artista tuviera login propio)
+            // Si Artista no usa password para login, puedes borrar este bloque if/else.
+            /* if (email) {
                  await Artista.updateMany(
-                    { correo: email }, // Ojo: Verifica si en Artista es 'email' o 'correo'
+                    { correo: email }, 
                     { password: hashedPassword }
                 );
             } else {
-                // Si no mandaron email en el body, buscamos el usuario actual para obtener su email
                 const usuarioActual = await Usuario.findById(usuarioId);
                 if(usuarioActual) {
                     await Artista.updateMany(
@@ -93,15 +108,14 @@ router.put('/:id', async (req, res) => {
                     );
                 }
             }
-            console.log(">> Sincronización: Contraseña actualizada.");
+            */
+            console.log(">> Contraseña actualizada.");
         }
 
         // 4. Actualizar Usuario
-        // Usamos findByIdAndUpdate porque este método NO dispara el pre-save hook del modelo,
-        // por eso encriptamos la contraseña manualmente arriba (paso 3).
         const usuarioActualizado = await Usuario.findByIdAndUpdate(
             usuarioId,
-            datosActualizar,
+            { $set: datosActualizar }, // Usamos $set para ser explícitos
             { new: true }
         ).select('-password');
 

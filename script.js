@@ -84,8 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(imgUrl);
             const blob = await response.blob();
             const reader = new FileReader();
-            reader.onloadend = () => { logoBase64 = reader.result; };
+            const promise = new Promise((resolve) => {
+                reader.onloadend = () => { logoBase64 = reader.result; resolve(); };
+            });
             reader.readAsDataURL(blob);
+            await promise;
         } catch (e) { console.warn("No se pudo precargar logo"); }
     }
 
@@ -230,20 +233,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if(activeSection === 'gestion-usuarios') renderPaginatedList('usuarios', query);
     }
 
-    // --- CARGAR LOGO Y CONFIG ---
+    // --- CARGAR LOGO Y CONFIG (CORREGIDO FAVICON) ---
     async function loadInitialConfig() {
         try {
             const config = await fetchAPI('/api/configuracion');
             
             if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
+                
+                // 1. Logos en App y Login
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
                 if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
+
+                // 2. --- FIX FAVICON (ICONO DE PESTAÑA) ---
+                let link = document.querySelector("link[rel~='icon']");
+                if (!link) {
+                    link = document.createElement('link');
+                    link.rel = 'icon';
+                    document.getElementsByTagName('head')[0].appendChild(link);
+                }
+                link.href = logoSrc;
+                // -----------------------------------------
+
                 localStorage.setItem('cached_logo_path', logoSrc);
                 configCache = config;
             }
         } catch (e) { 
-            console.warn("No se pudo cargar config remota, usando caché local si existe.");
+            console.warn("Usando caché local para config.");
             const cachedLogo = localStorage.getItem('cached_logo_path');
             if(cachedLogo) {
                 if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
@@ -320,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- MANEJO DE VISTAS (MODIFICADO PARA FIX CLIENTES) ---
+    // --- MANEJO DE VISTAS ---
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         
@@ -347,21 +363,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const hashSection = location.hash.replace('#', '');
         
-        // --- LÓGICA DE REDIRECCIÓN CORREGIDA ---
+        // --- LÓGICA DE REDIRECCIÓN ---
         if (payload.role && payload.role.toLowerCase() === 'cliente') {
-             // Si es cliente, FORZAMOS ir a su vista de artista usando el ID del token
              if(payload.artistaId) {
-                 // Cargamos la vista y los datos inmediatamente
                  await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username, true);
-                 mostrarSeccion('vista-artista', false); // false para no añadir al historial si ya estamos ahi
+                 mostrarSeccion('vista-artista', false); 
              } else {
-                 // Si aun así falla (caso raro), mostramos error
                  document.getElementById('vista-artista-contenido').innerHTML = 
                     '<div class="alert alert-warning">No se encontró un perfil de artista vinculado. Contacta a soporte.</div>';
                  mostrarSeccion('vista-artista', false);
              }
         } else {
-             // Si es Admin/Staff, comportamiento normal
              mostrarSeccion(hashSection || 'dashboard', false);
         }
 
@@ -517,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'historial-proyectos': cargarHistorial,
                 'papelera-reciclaje': cargarPapelera,
                 'configuracion': cargarConfiguracion,
-                'vista-artista': () => { } // Ahora se carga desde showApp o irAVistaArtista
+                'vista-artista': () => { } 
             };
             if(loadDataActions[id]) await loadDataActions[id]();
         }
@@ -687,7 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- MODALES ---
+    // --- MODALES Y EDICIÓN ---
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
         document.getElementById('editArtistId').value = id;
         document.getElementById('editArtistNombre').value = nombre;
@@ -730,13 +742,39 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    function abrirModalEditarUsuario(itemStr) {
+    // --- EDICIÓN USUARIOS (ACTUALIZADO CON SELECT ARTISTA) ---
+    async function abrirModalEditarUsuario(itemStr) {
         const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
+        
         document.getElementById('editUsuarioId').value = item._id;
         document.getElementById('editUsuarioName').value = item.username;
         document.getElementById('editUsuarioEmail').value = item.email || '';
         document.getElementById('editUsuarioRole').value = item.role;
-        document.getElementById('editUsuarioPass').value = '';
+        document.getElementById('editUsuarioPass').value = ''; 
+
+        // --- CARGAR SELECTOR DE ARTISTAS ---
+        const selectArtista = document.getElementById('editUsuarioArtista');
+        if (selectArtista) {
+            selectArtista.innerHTML = '<option value="">Cargando...</option>';
+            try {
+                // Usamos caché o pedimos a la API
+                let artistas = localCache.artistas;
+                if (!artistas || artistas.length === 0) {
+                    artistas = await fetchAPI('/api/artistas');
+                    localCache.artistas = artistas;
+                }
+                
+                let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>';
+                artistas.forEach(a => {
+                    const selected = (item.artistaId === a._id) ? 'selected' : '';
+                    opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`;
+                });
+                selectArtista.innerHTML = opts;
+            } catch (e) {
+                selectArtista.innerHTML = '<option value="">Error al cargar</option>';
+            }
+        }
+        // -----------------------------------
         
         document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false);
         if (item.permisos && Array.isArray(item.permisos)) {
@@ -747,10 +785,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show();
     }
+
     async function guardarEdicionUsuario(e) {
         e.preventDefault();
         const id = document.getElementById('editUsuarioId').value;
         const pass = document.getElementById('editUsuarioPass').value;
+        
+        // Obtenemos el artista seleccionado
+        const artistaSelect = document.getElementById('editUsuarioArtista');
+        const artistaId = artistaSelect ? artistaSelect.value : null;
+
         const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked');
         const permisos = Array.from(checkboxes).map(c => c.value);
 
@@ -758,13 +802,14 @@ document.addEventListener('DOMContentLoaded', () => {
             username: document.getElementById('editUsuarioName').value,
             email: document.getElementById('editUsuarioEmail').value,
             role: document.getElementById('editUsuarioRole').value,
-            permisos: permisos
+            permisos: permisos,
+            artistaId: artistaId // <--- Enviamos esto al backend
         };
         if(pass) body.password = pass;
 
         try {
             await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-            showToast('Usuario actualizado', 'success');
+            showToast('Usuario actualizado y vinculado.', 'success');
             bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide();
             localCache.usuarios = [];
             renderPaginatedList('usuarios');
@@ -1443,7 +1488,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (proyectos.length) { 
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
-                    // --- MODIFICACION: Botones de descarga para clientes ---
                     let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
                     if (p.enlaceEntrega) {
                         accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
@@ -1467,7 +1511,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += '<p>Este artista aún no tiene proyectos registrados.</p>'; 
             }
             contenido.innerHTML = html;
-            mostrarSeccion('vista-artista', false); // No añadir historial extra si no es necesario
+            mostrarSeccion('vista-artista', false); 
         } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar el historial del artista.</p>'; console.error(e); }
     }
 
