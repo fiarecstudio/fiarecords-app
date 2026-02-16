@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutButton: document.getElementById('logout-button'),
         welcomeUser: document.getElementById('welcome-user'),
         appLogo: document.getElementById('app-logo'),
-        loginLogo: document.getElementById('login-logo'), // IMPORTANTE: Referencia al logo del login
+        loginLogo: document.getElementById('login-logo'), 
         connectionStatus: document.getElementById('connection-status'),
         connectionText: document.getElementById('connection-text'),
         logoInput: document.getElementById('logo-input')
@@ -141,12 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
 
-    // --- FETCH API CORE (CORREGIDO PARA LOGO) ---
+    // --- FETCH API CORE ---
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
         const token = localStorage.getItem('token');
         
-        // CORRECCIÓN IMPORTANTE: Permitir cargar configuración sin token
         const isPublic = url.includes('/auth/') || url.includes('/configuracion'); 
 
         if (!token && !isPublic) { 
@@ -183,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Solo mostramos loader si NO es la configuración (para que el logo cargue suave)
         if(!url.includes('/configuracion')) showLoader();
         
         try {
@@ -191,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (res.status === 401 && !isPublic) { showLogin(); throw new Error('Sesión expirada.'); }
             
-            // Si la config falla por auth (raro con el fix, pero posible), retornamos null para manejarlo
             if (res.status === 401 && url.includes('/configuracion')) { return null; }
 
             if (res.status === 204) return { ok: true };
@@ -217,19 +214,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function filtrarTablas(query) {
         query = query.toLowerCase();
         
-        // 1. Filtro para tablas normales (HTML estático)
         document.querySelectorAll('section.active tbody tr').forEach(row => { 
             const text = row.innerText.toLowerCase(); 
             row.style.display = text.includes(query) ? '' : 'none'; 
         });
         
-        // 2. Filtro para Kanban (Tarjetas)
         document.querySelectorAll('section.active .project-card').forEach(card => { 
             const text = card.innerText.toLowerCase(); 
             card.style.display = text.includes(query) ? 'flex' : 'none'; 
         });
         
-        // 3. Filtro para Listas Paginadas (Artistas, Servicios, Usuarios)
         const activeSection = document.querySelector('section.active').id;
         if(activeSection === 'gestion-artistas') renderPaginatedList('artistas', query);
         if(activeSection === 'gestion-servicios') renderPaginatedList('servicios', query);
@@ -239,23 +233,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CARGAR LOGO Y CONFIG ---
     async function loadInitialConfig() {
         try {
-            // Intentamos cargar la config (FetchAPI ya permite esto sin token gracias al fix)
             const config = await fetchAPI('/api/configuracion');
             
             if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
-                
-                // 1. Actualizar imágenes en el DOM
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
                 if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
-                
-                // 2. Guardar ruta en LocalStorage para futuras visitas sin login
                 localStorage.setItem('cached_logo_path', logoSrc);
-                
                 configCache = config;
             }
         } catch (e) { 
-            // Si falla, intentamos usar el cacheado si existe
             console.warn("No se pudo cargar config remota, usando caché local si existe.");
             const cachedLogo = localStorage.getItem('cached_logo_path');
             if(cachedLogo) {
@@ -304,14 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INICIALIZACIÓN ---
     (async function init() {
-        // 1. Aplicar logo desde caché local INMEDIATAMENTE (para que se vea en login)
         const cachedLogo = localStorage.getItem('cached_logo_path');
         if(cachedLogo) {
             if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
             if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
         }
 
-        // 2. Intentar cargar config fresca del servidor
         await loadInitialConfig();
         
         setTimeout(preloadLogoForPDF, 2000);
@@ -335,11 +320,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- MANEJO DE VISTAS ---
+    // --- MANEJO DE VISTAS (MODIFICADO PARA FIX CLIENTES) ---
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         
-        // Volvemos a cargar config para asegurar que tenemos firma y datos frescos
         if (!configCache) await loadInitialConfig();
         
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
@@ -347,20 +331,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS ---
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
         if (datosBancariosBtn) {
-            if (payload.role.toLowerCase() === 'cliente') {
+            if (payload.role && payload.role.toLowerCase() === 'cliente') {
                 datosBancariosBtn.style.display = 'none';
             } else {
                 datosBancariosBtn.style.display = 'block';
             }
-        }
-
-        // --- CLIENTE: AUTO-DETECTAR ID SI FALTA ---
-        if (payload.role.toLowerCase() === 'cliente' && !payload.artistaId) {
-            try {
-                const artistas = await fetchAPI('/api/artistas');
-                const miArtista = artistas.find(a => a.nombre === payload.nombre || a.nombre === payload.username);
-                if (miArtista) payload.artistaId = miArtista._id;
-            } catch(e) { console.log("Error vinculando artista al usuario cliente"); }
         }
 
         renderSidebar(payload);
@@ -371,10 +346,22 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.appWrapper.style.display = 'flex'; 
 
         const hashSection = location.hash.replace('#', '');
-        // Si es cliente y no hay hash o es dashboard, mandar a vista-artista
-        if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
-             mostrarSeccion('vista-artista', false);
+        
+        // --- LÓGICA DE REDIRECCIÓN CORREGIDA ---
+        if (payload.role && payload.role.toLowerCase() === 'cliente') {
+             // Si es cliente, FORZAMOS ir a su vista de artista usando el ID del token
+             if(payload.artistaId) {
+                 // Cargamos la vista y los datos inmediatamente
+                 await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username, true);
+                 mostrarSeccion('vista-artista', false); // false para no añadir al historial si ya estamos ahi
+             } else {
+                 // Si aun así falla (caso raro), mostramos error
+                 document.getElementById('vista-artista-contenido').innerHTML = 
+                    '<div class="alert alert-warning">No se encontró un perfil de artista vinculado. Contacta a soporte.</div>';
+                 mostrarSeccion('vista-artista', false);
+             }
         } else {
+             // Si es Admin/Staff, comportamiento normal
              mostrarSeccion(hashSection || 'dashboard', false);
         }
 
@@ -516,7 +503,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 history.pushState(null, null, `#${id}`);
             }
             
-            // --- NUEVO: Cargar datos paginados ---
             if(id === 'gestion-artistas') renderPaginatedList('artistas');
             if(id === 'gestion-servicios') renderPaginatedList('servicios');
             if(id === 'gestion-usuarios') renderPaginatedList('usuarios');
@@ -531,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'historial-proyectos': cargarHistorial,
                 'papelera-reciclaje': cargarPapelera,
                 'configuracion': cargarConfiguracion,
-                'vista-artista': () => { }
+                'vista-artista': () => { } // Ahora se carga desde showApp o irAVistaArtista
             };
             if(loadDataActions[id]) await loadDataActions[id]();
         }
@@ -543,7 +529,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const listEl = document.getElementById(listId);
         if(!listEl) return;
 
-        // 1. Obtener datos (o usar caché)
         let data = localCache[endpoint];
         if (!data || data.length === 0) {
             try {
@@ -552,7 +537,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch(e) { console.error("Error fetching " + endpoint); data = []; }
         }
 
-        // 2. Gestionar Filtro (Persistencia)
         if (filterText !== null) {
             paginationState[endpoint].filter = filterText.toLowerCase();
             paginationState[endpoint].page = 1; 
@@ -560,7 +544,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const currentFilter = paginationState[endpoint].filter;
         
-        // 3. Filtrar
         let filteredData = data;
         if (currentFilter) {
             filteredData = data.filter(item => {
@@ -569,7 +552,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // 4. Paginar
         const page = paginationState[endpoint].page;
         const limit = paginationState[endpoint].limit;
         const start = (page - 1) * limit;
@@ -577,7 +559,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const paginatedItems = filteredData.slice(start, end);
         const totalPages = Math.ceil(filteredData.length / limit);
 
-        // 5. Renderizar Items
         listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => {
             let displayName, editAction;
             if (endpoint === 'artistas') { 
@@ -602,7 +583,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div></li>`;
         }).join('') : `<li class="list-group-item">No hay resultados.</li>`;
 
-        // 6. Renderizar Controles
         renderPaginationControls(listEl, endpoint, page, totalPages);
     }
 
@@ -625,14 +605,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function changePage(endpoint, delta) {
         paginationState[endpoint].page += delta;
         renderPaginatedList(endpoint, null); 
-    }
-
-    // --- RENDER LIST ---
-    async function renderList(endpoint, makeClickable = false) {
-        if(['artistas','servicios','usuarios'].includes(endpoint)) {
-            renderPaginatedList(endpoint);
-            return;
-        }
     }
 
     async function cargarPapelera() {
@@ -1495,9 +1467,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += '<p>Este artista aún no tiene proyectos registrados.</p>'; 
             }
             contenido.innerHTML = html;
-            mostrarSeccion('vista-artista');
+            mostrarSeccion('vista-artista', false); // No añadir historial extra si no es necesario
         } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar el historial del artista.</p>'; console.error(e); }
     }
+
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
         if (!artistaId) { 
             const artistas = await fetchAPI('/api/artistas'); 
@@ -1644,7 +1617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (role === 'cliente') { 
             html = `<div class="nav-group mb-3">
                         <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
-                        <a class="nav-link-sidebar" data-seccion="vista-artista" onclick="app.irAVistaArtista('${user.artistaId}', '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
+                        <a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista('${user.artistaId}', '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
                     </div>`; 
         } else {
             const isSuperAdmin = role === 'admin'; 

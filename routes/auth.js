@@ -1,13 +1,17 @@
+// ==========================================
+// ARCHIVO: routes/auth.js (COMPLETO Y CORREGIDO)
+// ==========================================
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs'); // Necesario para la comparación manual en login
 const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 const { google } = require('googleapis');
 
 // ============================================================
-// CONFIGURACIÓN GMAIL API (HTTP PUERTO 443)
+// CONFIGURACIÓN GMAIL API (Tu código original)
 // ============================================================
 const OAuth2 = google.auth.OAuth2;
 
@@ -25,7 +29,7 @@ const createTransporter = async () => {
     return oauth2Client;
 };
 
-// Función auxiliar para codificar caracteres especiales (Corrige la "ñ")
+// Función auxiliar para codificar caracteres especiales
 const makeBody = (to, from, subject, message) => {
     const encodedSubject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
     const str = [
@@ -62,7 +66,7 @@ const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
         return true;
     } catch (error) {
         console.error("❌ Error API Gmail:", error.message);
-        throw error;
+        throw error; // Propagamos el error para manejarlo en la ruta
     }
 };
 
@@ -72,9 +76,12 @@ const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
 router.post('/register', async (req, res) => {
     try {
         const { username, email, password, nombre, createArtist } = req.body;
+        
+        // Validar si existe
         const userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
         if (userExists) return res.status(400).json({ error: 'Usuario o correo ya existe.' });
 
+        // Crear Usuario
         const newUser = new Usuario({
             username, email, password,
             role: 'cliente',
@@ -82,18 +89,24 @@ router.post('/register', async (req, res) => {
         });
         const savedUser = await newUser.save();
 
+        // Crear Artista opcionalmente
         if (createArtist) {
             const newArtista = new Artista({
                 nombre: nombre || username,
                 nombreArtistico: nombre || username,
                 correo: email,
-                usuarioId: savedUser._id,
+                usuarioId: savedUser._id, // Aquí vinculamos directamente
                 telefono: ''
             });
             await newArtista.save();
         }
 
-        const token = jwt.sign({ id: savedUser._id, role: savedUser.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+        // Generar Token
+        const token = jwt.sign({ 
+            id: savedUser._id, 
+            role: savedUser.role 
+        }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+
         res.status(201).json({ token });
     } catch (error) {
         console.error(error);
@@ -102,26 +115,81 @@ router.post('/register', async (req, res) => {
 });
 
 // ============================================================
-// 2. LOGIN
+// 2. LOGIN (CON LÓGICA DE AUTO-VINCULACIÓN)
 // ============================================================
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await Usuario.findOne({ username, isDeleted: false });
+
+        // A. Buscar usuario por username O email
+        const user = await Usuario.findOne({ 
+            $or: [{ username: username }, { email: username }],
+            isDeleted: false 
+        });
         
-        if (!user || !(await user.matchPassword(password))) {
-            return res.status(400).json({ error: 'Credenciales inválidas.' });
+        // B. Validar contraseña
+        if (!user) return res.status(400).json({ error: 'Usuario no encontrado.' });
+
+        // Usamos matchPassword del modelo si existe, o bcrypt directo como respaldo
+        let isMatch = false;
+        if (user.matchPassword) {
+            isMatch = await user.matchPassword(password);
+        } else {
+            isMatch = await bcrypt.compare(password, user.password);
         }
 
+        if (!isMatch) return res.status(400).json({ error: 'Contraseña incorrecta.' });
+
+        // C. --- AUTO-VINCULACIÓN DE ARTISTA ---
+        // Esto soluciona que tus usuarios antiguos no vean sus proyectos
+        let artistaId = null;
+        let artistaVinculado = null;
+
+        // 1. Buscamos si ya está vinculado por ID
+        artistaVinculado = await Artista.findOne({ usuarioId: user._id });
+
+        // 2. Si no, buscamos por CORREO y lo vinculamos
+        if (!artistaVinculado && user.email) {
+            artistaVinculado = await Artista.findOne({ correo: user.email });
+            if (artistaVinculado) {
+                console.log(`>> Auto-vinculando usuario ${user.username} con artista ${artistaVinculado.nombre} por correo.`);
+                artistaVinculado.usuarioId = user._id;
+                await artistaVinculado.save();
+            }
+        }
+
+        // 3. Si no, buscamos por NOMBRE (username) y lo vinculamos
+        if (!artistaVinculado) {
+             artistaVinculado = await Artista.findOne({ 
+                nombre: { $regex: new RegExp(`^${user.username}$`, 'i') } 
+             });
+             if (artistaVinculado) {
+                 console.log(`>> Auto-vinculando usuario ${user.username} con artista ${artistaVinculado.nombre} por nombre.`);
+                 artistaVinculado.usuarioId = user._id;
+                 await artistaVinculado.save();
+             }
+        }
+
+        if (artistaVinculado) {
+            artistaId = artistaVinculado._id;
+        }
+
+        // D. Generar Token (INCLUYENDO EL ARTISTA ID)
         const token = jwt.sign({ 
             id: user._id, 
             username: user.username, 
             role: user.role,
-            permisos: user.permisos || []
+            permisos: user.permisos || [],
+            artistaId: artistaId, // <--- CLAVE PARA EL FRONTEND
+            nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username
         }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
 
         res.json({ token, role: user.role });
-    } catch (error) { res.status(500).json({ error: 'Error del servidor' }); }
+
+    } catch (error) { 
+        console.error(error);
+        res.status(500).json({ error: 'Error del servidor' }); 
+    }
 });
 
 // ============================================================
@@ -141,8 +209,13 @@ router.post('/forgot-password', async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
         await user.save();
 
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const resetUrl = `${frontendUrl}/reset-password/${token}`;
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'; // Ajusta si usas otro puerto
+        // Detectar si el frontendUrl tiene slash al final o no para armar bien la URL
+        const cleanFrontendUrl = frontendUrl.replace(/\/$/, ''); 
+        // Generamos link para tu frontend HTML estático (donde tienes el script que lee ?token=...)
+        // O si usas la ruta /reset-password/TOKEN en el script.js, usa esa.
+        // Asumo que tu frontend maneja la ruta limpia:
+        const resetUrl = `${cleanFrontendUrl}/reset-password/${token}`;
 
         const htmlContent = `
             <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
@@ -194,6 +267,7 @@ const procesarResetPassword = async (req, res, token) => {
 
         if (!user) return res.status(400).json({ error: 'Token inválido o expirado.' });
 
+        // Si usas el pre-save hook en el modelo Usuario para hashear, esto funciona directo:
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
@@ -206,12 +280,12 @@ const procesarResetPassword = async (req, res, token) => {
     }
 };
 
-// RUTA A: Cuando el token viene en la URL (ej: /reset-password/abc12345)
+// RUTA A: Cuando el token viene en la URL
 router.post('/reset-password/:token', async (req, res) => {
     return procesarResetPassword(req, res, req.params.token);
 });
 
-// RUTA B: Cuando el token viene en el cuerpo (ej: /reset-password) <- ESTA ES LA QUE TE FALTABA
+// RUTA B: Cuando el token viene en el cuerpo
 router.post('/reset-password', async (req, res) => {
     return procesarResetPassword(req, res, req.body.token);
 });
