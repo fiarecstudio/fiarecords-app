@@ -1,5 +1,5 @@
 // ==================================================================
-//      SERVER.JS - CORREGIDO FINAL (AJUSTE PARA DEPLOY EN RENDER)
+//      SERVER.JS - VERSIÓN FINAL CORREGIDA PARA DEPLOY
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
@@ -9,12 +9,13 @@ const path = require('path');
 
 const app = express();
 
-// --- Middlewares Principales ---
+// --- 1. Middlewares Principales ---
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// --- 1. Definición de Rutas de la API ---
+// --- 2. Definición de Rutas de la API ---
+// CUALQUIER PETICIÓN QUE EMPIECE CON /api SERÁ MANEJADA AQUÍ PRIMERO
 app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -23,37 +24,23 @@ app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
-// --- 2. Servir Archivos Estáticos ---
-// Sirve el contenido del directorio actual (donde está tu index.html, etc.)
+// --- 3. Servir Archivos Estáticos ---
+// Express buscará archivos como index.html, style.css, etc., aquí.
 app.use(express.static(path.join(__dirname))); 
 
-// --- 2.5 RUTAS EXPLÍCITAS PARA PWA ---
-app.get('/sw.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
-    res.sendFile(path.resolve(__dirname, 'sw.js'));
+// --- 4. Ruta Catch-All (Manejador Final para SPA) ---
+// ESTA RUTA SOLO SE EJECUTARÁ SI LA PETICIÓN NO FUE CAPTURADA ANTES
+// (es decir, no es una ruta de API y no es un archivo estático existente).
+// Envía el archivo principal de la aplicación para que el enrutador del frontend se encargue.
+app.get('*', (req, res) => {
+  res.sendFile(path.resolve(__dirname, 'index.html'));
 });
 
-app.get('/manifest.json', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'manifest.json'));
-});
-
-// --- 3. Ruta Catch-All (Manejador Final para SPA) ---
-// CORRECCIÓN PARA RENDER: Se usa '/*' en lugar de solo '*'
-app.get('/*', (req, res) => {
-  // Si la petición no es para la API, sirve el index.html
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.resolve(__dirname, 'index.html'));
-  } else {
-    // Si es una llamada a una ruta API que no existe, envía un 404.
-    res.status(404).json({ error: 'Ruta de API no encontrada' });
-  }
-});
-
-// --- Conexión a Base de Datos y Arranque del Servidor ---
+// --- 5. Conexión a Base de Datos y Arranque del Servidor ---
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
-    const PORT = process.env.PORT || 5000;
+    const PORT = process.env.PORT || 10000; // Render a veces prefiere el puerto 10000
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
     });
