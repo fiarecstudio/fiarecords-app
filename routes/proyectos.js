@@ -1,33 +1,55 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js (CORREGIDO PARA DATOS ANTIGUOS)
+// ARCHIVO: routes/proyectos.js (CON SEGURIDAD Y FILTRADO POR ROL)
 // ==========================================
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Proyecto = require('../models/Proyecto');
+const auth = require('../middleware/auth'); // IMPORTANTE: Asegúrate de tener este middleware
+
+// Aplicar seguridad a todas las rutas de proyectos
+router.use(auth);
+
+// --- FUNCIÓN AUXILIAR PARA FILTRAR POR ROL ---
+// Si es cliente, solo devuelve proyectos de su artistaId.
+// Si es admin/staff, devuelve todo.
+const getFiltroUsuario = (req) => {
+    let filtro = { isDeleted: { $ne: true } };
+    
+    if (req.user.role && req.user.role.toLowerCase() === 'cliente') {
+        // Asumiendo que el token JWT tiene el campo 'artistaId'
+        // Si tu modelo de usuario no guarda 'artistaId', necesitarás buscarlo primero.
+        if (req.user.artistaId) {
+            filtro.artista = req.user.artistaId;
+        } else {
+            // Fallback de seguridad: si es cliente pero no tiene ID de artista, no ve nada
+            filtro.artista = "000000000000000000000000"; 
+        }
+    }
+    return filtro;
+};
 
 // --- RUTAS GET PRINCIPALES ---
 
-// 1. Obtener todos (Activos + Antiguos sin campo isDeleted)
+// 1. Obtener todos (Filtrado por usuario)
 router.get('/', async (req, res) => {
     try {
-        // CAMBIO CLAVE: { $ne: true } significa "Que no sea verdadero"
-        // Esto incluye 'false' y también los que no tienen el campo (viejos)
-        const proyectos = await Proyecto.find({ isDeleted: { $ne: true } })
+        const filtro = getFiltroUsuario(req);
+        const proyectos = await Proyecto.find(filtro)
                                         .populate('artista')
                                         .sort({ fecha: 1 });
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. Obtener agenda
+// 2. Obtener agenda (Filtrado)
 router.get('/agenda', async (req, res) => {
     try {
-        const proyectos = await Proyecto.find({ 
-            estatus: { $ne: 'Cancelado' },
-            proceso: { $ne: 'Completo' },
-            isDeleted: { $ne: true } // Muestra activos y viejos
-        }).populate('artista');
+        const filtro = getFiltroUsuario(req);
+        filtro.estatus = { $ne: 'Cancelado' };
+        filtro.proceso = { $ne: 'Completo' };
+
+        const proyectos = await Proyecto.find(filtro).populate('artista');
         
         const eventos = proyectos.map(p => ({
             id: p._id,
@@ -47,36 +69,35 @@ router.get('/agenda', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. Cotizaciones
+// 3. Cotizaciones (Filtrado)
 router.get('/cotizaciones', async (req, res) => {
     try {
-        const cotizaciones = await Proyecto.find({ 
-            estatus: 'Cotizacion', 
-            isDeleted: { $ne: true } 
-        }).populate('artista');
+        const filtro = getFiltroUsuario(req);
+        filtro.estatus = 'Cotizacion';
+        
+        const cotizaciones = await Proyecto.find(filtro).populate('artista');
         res.json(cotizaciones);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Completados
+// 4. Completados (Filtrado)
 router.get('/completos', async (req, res) => {
     try {
-        const completos = await Proyecto.find({ 
-            proceso: 'Completo', 
-            isDeleted: { $ne: true } 
-        }).populate('artista').sort({ fecha: -1 });
+        const filtro = getFiltroUsuario(req);
+        filtro.proceso = 'Completo';
+
+        const completos = await Proyecto.find(filtro).populate('artista').sort({ fecha: -1 });
         res.json(completos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Pagos Globales
+// 5. Pagos Globales (Filtrado: Clientes solo ven sus pagos)
 router.get('/pagos/todos', async (req, res) => {
     try {
-        // Filtramos para no traer pagos de proyectos borrados
-        const proyectos = await Proyecto.find({ 
-            "pagos.0": { $exists: true }, 
-            isDeleted: { $ne: true } 
-        }).populate('artista');
+        const filtro = getFiltroUsuario(req);
+        filtro["pagos.0"] = { $exists: true };
+
+        const proyectos = await Proyecto.find(filtro).populate('artista');
         
         let todosPagos = [];
         proyectos.forEach(p => {
@@ -103,9 +124,14 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Por Artista
+// 6. Por Artista (Seguridad Extra)
 router.get('/por-artista/:id', async (req, res) => {
     try {
+        // Seguridad: Si es cliente, solo puede ver SU ID
+        if (req.user.role === 'cliente' && req.user.artistaId !== req.params.id) {
+            return res.status(403).json({ error: 'No tienes permiso para ver proyectos de otro artista.' });
+        }
+
         const proyectos = await Proyecto.find({ 
             artista: req.params.id, 
             isDeleted: { $ne: true } 
@@ -114,11 +140,11 @@ router.get('/por-artista/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- RUTAS DE PAPELERA ---
+// --- RUTAS DE PAPELERA (SOLO ADMIN) ---
 
 router.get('/papelera/all', async (req, res) => {
     try {
-        // Aquí SI buscamos explícitamente los borrados (true)
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const proyectos = await Proyecto.find({ isDeleted: true }).populate('artista');
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -126,6 +152,7 @@ router.get('/papelera/all', async (req, res) => {
 
 router.put('/:id/restaurar', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false });
         res.status(204).send();
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -133,6 +160,7 @@ router.put('/:id/restaurar', async (req, res) => {
 
 router.delete('/:id/permanente', async (req, res) => {
     try {
+        if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admin puede borrar permanente' });
         await Proyecto.findByIdAndDelete(req.params.id);
         res.status(204).send();
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -140,6 +168,7 @@ router.delete('/:id/permanente', async (req, res) => {
 
 router.delete('/papelera/vaciar', async (req, res) => {
     try {
+        if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admin puede vaciar papelera' });
         await Proyecto.deleteMany({ isDeleted: true });
         res.status(204).send();
     } catch (err) { res.status(500).json({ error: "Error al vaciar la papelera" }); }
@@ -148,11 +177,19 @@ router.delete('/papelera/vaciar', async (req, res) => {
 
 // --- RUTAS STANDARD ---
 
-// 7. Por ID
+// 7. Por ID (Con verificación de propiedad)
 router.get('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
         if (!proyecto) return res.status(404).json({ error: 'No encontrado' });
+
+        // Seguridad: Si es cliente, verificar que el proyecto sea suyo
+        if (req.user.role === 'cliente') {
+            if (!proyecto.artista || proyecto.artista._id.toString() !== req.user.artistaId) {
+                return res.status(403).json({ error: 'No tienes permiso para ver este proyecto.' });
+            }
+        }
+
         res.json(proyecto);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -161,8 +198,15 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
-        // Al crear uno nuevo, le ponemos isDeleted: false explícitamente
-        const datos = { ...req.body, isDeleted: false };
+        
+        let datos = { ...req.body, isDeleted: false };
+
+        // SEGURIDAD: Si es cliente, forzamos que el artista sea él mismo
+        if (req.user.role === 'cliente') {
+            if (!req.user.artistaId) return res.status(400).json({ error: 'Usuario cliente sin artista asociado.' });
+            datos.artista = req.user.artistaId;
+        }
+
         const nuevo = new Proyecto(datos);
         const guardado = await nuevo.save();
         res.status(201).json(guardado);
@@ -172,6 +216,8 @@ router.post('/', async (req, res) => {
 // 9. Actualizar Proceso
 router.put('/:id/proceso', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Clientes no pueden cambiar procesos' });
+        
         const updateData = { proceso: req.body.proceso };
         if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago';
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -182,6 +228,7 @@ router.put('/:id/proceso', async (req, res) => {
 // 10. Actualizar Estatus (Cancelar)
 router.put('/:id/estatus', async (req, res) => {
     try {
+        // Clientes pueden cancelar sus propias citas (opcional, aquí permitido)
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { estatus: req.body.estatus }, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -190,6 +237,7 @@ router.put('/:id/estatus', async (req, res) => {
 // 11. Nombre
 router.put('/:id/nombre', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -198,22 +246,26 @@ router.put('/:id/nombre', async (req, res) => {
 // 12. Fecha
 router.put('/:id/fecha', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 13. Enlace
+// 13. Enlace (Solo staff puede subir enlaces)
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true });
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 14. Agregar Pago
+// 14. Agregar Pago (Solo staff)
 router.post('/:id/pagos', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
+
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
         if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
@@ -239,6 +291,7 @@ router.post('/:id/pagos', async (req, res) => {
 // 15. Documentos
 router.put('/:id/documentos', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const update = {};
         if (req.body.tipo === 'contrato') update.detallesContrato = req.body.data;
         if (req.body.tipo === 'distribucion') update.detallesDistribucion = req.body.data;
@@ -250,7 +303,8 @@ router.put('/:id/documentos', async (req, res) => {
 // 16. Eliminar (SOFT DELETE)
 router.delete('/:id', async (req, res) => {
     try {
-        // Marcamos como borrado en lugar de eliminar
+        // Clientes no pueden borrar
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -259,6 +313,7 @@ router.delete('/:id', async (req, res) => {
 // 17. Eliminar Pago
 router.delete('/:id/pagos/:pagoId', async (req, res) => {
     try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'Acceso denegado' });
         const proyecto = await Proyecto.findById(req.params.id);
         if(!proyecto) return res.status(404).json({error: 'Proyecto no encontrado'});
 

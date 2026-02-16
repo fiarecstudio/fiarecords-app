@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCalendar = null;
     let configCache = null;
     let chartInstance = null;
-    let historialCacheados = []; // Caché para la vista de historial
+    let historialCacheados = []; 
 
     // --- URL API (Local vs Producción) ---
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
-    // --- UTILIDADES (TOASTS, LOADER, ETC) ---
+    // --- UTILIDADES ---
     function showToast(message, type = 'success') {
         const Toast = Swal.mixin({
             toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
             if (newQueue.length === 0) {
                 showToast('Sincronización completada', 'success');
-                // Recargar datos clave tras sincronizar
                 await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios')]);
                 const currentHash = location.hash.replace('#', '');
                 if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
@@ -161,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // POST/PUT/DELETE Offline Queue Logic
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -178,7 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // Actualizar Caché Local si es GET
             if (!options.method || options.method === 'GET') {
                 if (url.includes('/artistas')) { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
                 if (url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
@@ -230,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-    // --- GOOGLE DRIVE INTEGRATION ---
+    // --- GOOGLE DRIVE ---
     function initializeGapiClient() { gapi.load('client', async () => { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs, }); gapiInited = true; }); }
     function initializeGisClient() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '', }); gisInited = true; }
     if (typeof gapi !== 'undefined') initializeGapiClient();
@@ -302,10 +299,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
         
-        // Setup Login Listeners Inmediatamente
         setupAuthListeners();
 
-        // Check password reset token
         const path = window.location.pathname;
         if (path.startsWith('/reset-password/')) {
              const token = path.split('/').pop();
@@ -313,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
         }
 
-        // Check Auth Token
         const token = localStorage.getItem('token');
         if (token) {
             try {
@@ -324,23 +318,29 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- MANEJO DE VISTAS (LOGIN VS APP) ---
+    // --- MANEJO DE VISTAS ---
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         if (!configCache) await loadInitialConfig();
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
-        // 1. Renderizar Sidebar
+        // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS ---
+        const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
+        if (datosBancariosBtn) {
+            if (payload.role.toLowerCase() === 'cliente') {
+                datosBancariosBtn.style.display = 'none';
+            } else {
+                datosBancariosBtn.style.display = 'block';
+            }
+        }
+
         renderSidebar(payload);
         
-        // 2. Inicializar Eventos de la App (incluyendo Logout)
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
-        // 3. Mostrar Contenedor
         DOMElements.loginContainer.style.display = 'none'; 
         DOMElements.appWrapper.style.display = 'flex'; 
 
-        // 4. Navegar a la sección correcta
         const hashSection = location.hash.replace('#', '');
         if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
              mostrarSeccion('vista-artista', false);
@@ -348,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
              mostrarSeccion(hashSection || 'dashboard', false);
         }
 
-        // Asegurar visibilidad
         document.body.style.opacity = '1';
         document.body.style.visibility = 'visible';
     }
@@ -357,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('auth-visible');
         localStorage.removeItem('token');
         
-        // Reset Views
         DOMElements.loginContainer.style.display = 'flex'; 
         DOMElements.appWrapper.style.display = 'none';
         toggleAuth('login');
@@ -366,12 +364,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.visibility = 'visible';
     }
 
-    // --- AUTH LISTENERS & LOGIC ---
+    // --- AUTH ---
     function setupAuthListeners() {
-        // Login Form
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!navigator.onLine) { return showToast('Se requiere internet para iniciar sesión.', 'error'); }
+            if (!navigator.onLine) { return showToast('Se requiere internet.', 'error'); }
             showLoader();
             try {
                 const userVal = document.getElementById('username').value;
@@ -392,23 +389,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Los event listeners para los otros formularios se asignan en el HTML a través de `window.app`
-        
-        // Toggle Password Visibility
         document.getElementById('toggle-password').addEventListener('click', () => {
              const passwordInput = document.getElementById('password');
-             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-             passwordInput.setAttribute('type', type);
+             passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
         });
         document.getElementById('toggle-password-reg').addEventListener('click', () => {
             const passwordInput = document.getElementById('reg-password');
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
+            passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
         });
     }
 
     function cerrarSesionConfirmacion() {
-        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', cancelButtonColor: '#3085d6' })
+        Swal.fire({ title: '¿Salir?', text: "Cerrarás tu sesión actual", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, Salir', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' })
         .then((result) => { if (result.isConfirmed) showLogin(); });
     }
 
@@ -421,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-error').textContent = '';
     }
 
-    // --- RESET & REGISTER FUNCTIONS ---
+    // --- AUTH ACTIONS ---
     function showResetPasswordView(token) {
         document.body.classList.add('auth-visible');
         DOMElements.appWrapper.style.display = 'none';
@@ -434,7 +426,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const token = document.getElementById('reset-token').value;
         const password = document.getElementById('new-password').value;
         try {
-            // Aquí no se usa fetchAPI porque no se necesita token de auth
             const res = await fetch(`${API_URL}/api/auth/reset-password`, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' },
@@ -482,7 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NAVEGACIÓN ---
     async function mostrarSeccion(id, updateHistory = true) {
-        // UI Clean up
         document.querySelectorAll('main > section').forEach(sec => sec.classList.remove('active'));
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
         
@@ -493,14 +483,10 @@ document.addEventListener('DOMContentLoaded', () => {
             seccionActiva.classList.add('active');
             if(linkActivo) linkActivo.classList.add('active');
             
-            if (updateHistory) {
-                // Solo actualiza el historial si la nueva sección no es la misma que la actual
-                if (`#${id}` !== window.location.hash) {
-                    history.pushState(null, null, `#${id}`);
-                }
+            if (updateHistory && `#${id}` !== window.location.hash) {
+                history.pushState(null, null, `#${id}`);
             }
             
-            // Map actions to load data
             const loadDataActions = {
                 'dashboard': cargarDashboard,
                 'agenda': cargarAgenda,
@@ -514,14 +500,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 'gestion-usuarios': () => renderList('usuarios'),
                 'papelera-reciclaje': cargarPapelera,
                 'configuracion': cargarConfiguracion,
-                'vista-artista': () => { /* Se carga desde la llamada a irAVistaArtista */ }
+                'vista-artista': () => { }
             };
-            // Trigger load data
             if(loadDataActions[id]) await loadDataActions[id]();
         }
     }
 
-    // --- CRUD Y RENDER ---
+    // --- RENDERIZADO LISTAS ---
     async function renderList(endpoint, makeClickable = false) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         try {
@@ -611,9 +596,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function eliminarItem(id, endpoint) {
         Swal.fire({
-             title: '¿Mover a papelera?', text: "Podrás restaurarlo después desde la sección de Configuración.", icon: 'warning',
-             showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar',
-             confirmButtonColor: '#d33',
+             title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning',
+             showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33',
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try {
@@ -630,9 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function eliminarPermanente(id, endpoint) {
         Swal.fire({
-             title: '¿Eliminar Permanentemente?', text: "¡Esta acción no se puede deshacer!", icon: 'error',
-             showCancelButton: true, confirmButtonText: 'Sí, eliminar para siempre', cancelButtonText: 'Cancelar',
-             confirmButtonColor: '#d33',
+             title: '¿Eliminar Permanentemente?', text: "¡Acción irreversible!", icon: 'error',
+             showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33',
         }).then(async (result) => {
             if (result.isConfirmed) {
                 try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); }
@@ -640,9 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- MODALES DE EDICIÓN ---
-
-    // 1. ARTISTAS
+    // --- MODALES ---
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) {
         document.getElementById('editArtistId').value = id;
         document.getElementById('editArtistNombre').value = nombre;
@@ -659,13 +640,11 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
             showToast('Artista actualizado', 'success');
             bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide();
-            // Actualizar vista si estamos en ella
             if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico);
             renderList('artistas', true);
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // 2. SERVICIOS
     function abrirModalEditarServicio(id, nombre, precio) {
         document.getElementById('editServicioId').value = id;
         document.getElementById('editServicioNombre').value = nombre;
@@ -684,7 +663,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // 3. USUARIOS
     function abrirModalEditarUsuario(itemStr) {
         const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
         document.getElementById('editUsuarioId').value = item._id;
@@ -725,7 +703,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // --- DATOS BANCARIOS (GUARDAR, PDF, WHATS) ---
+    // --- DATOS BANCARIOS (NUEVO: CARGAR AL ABRIR) ---
+    async function cargarDatosBancariosEnModal() {
+        try {
+            if (!configCache || !configCache.datosBancarios) {
+                await loadInitialConfig();
+            }
+            const db = configCache.datosBancarios || {};
+            document.getElementById('banco').value = db.banco || '';
+            document.getElementById('titular').value = db.titular || '';
+            document.getElementById('tarjeta').value = db.tarjeta || '';
+            document.getElementById('clabe').value = db.clabe || '';
+        } catch (error) {
+            console.error("Error al cargar datos bancarios:", error);
+        }
+    }
+
     async function guardarDatosBancarios() {
         const datos = {
             banco: document.getElementById('banco').value,
@@ -748,7 +741,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const pdf = new jsPDF();
         
         if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); }
-
         pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' });
         
         const data = [
@@ -757,7 +749,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ['Número de Tarjeta:', db.tarjeta || ''],
             ['CLABE Interbancaria:', db.clabe || '']
         ];
-        
         pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } });
         pdf.save("FiaRecords_DatosBancarios.pdf");
     }
@@ -810,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(`Error al subir la firma`, 'error'); } 
     }
 
-    // --- PROYECTOS, FLUJO Y PAGOS ---
+    // --- PROYECTOS & KANBAN (CORREGIDO) ---
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
         tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
@@ -824,15 +815,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td>$${c.total.toFixed(2)}</td>
                             <td>${new Date(c.createdAt).toLocaleDateString()}</td>
                             <td class="table-actions">
-                                <button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar y Agendar"><i class="bi bi-check-lg"></i></button>
+                                <button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar"><i class="bi bi-check-lg"></i></button>
                                 <button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
-                                <button class="btn btn-sm btn-outline-success" title="Compartir por WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
+                                <button class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Borrar"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>`; 
             }).join('') : `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`; 
         } catch (e) { 
-            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar cotizaciones. Es posible que estés offline.</td></tr>`; 
+            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; 
         } 
     }
     
@@ -846,10 +837,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join('');
         try { 
-            await fetchAPI('/api/proyectos'); // Esto actualiza localCache.proyectos
+            await fetchAPI('/api/proyectos'); 
             filtrarFlujo(filtroActivo); 
         } catch (e) { console.error("Error cargando flujo:", e); }
     }
+
     function filtrarFlujo(filtro) {
         document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active', 'btn-primary'));
         const activeBtn = Array.from(document.querySelectorAll('#filtrosFlujo button')).find(b => b.textContent === filtro);
@@ -871,24 +863,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li class="small">${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
                 
-                card.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-2">
+                // --- AQUI ESTA LA CORRECCION DE LA TARJETA CHUECA ---
+                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2">
                                       <strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong>
                                       <select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
                                   </div>
-                                  <div class="small text-muted mb-2">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div>
-                                  <ul class="list-unstyled mb-2">${serviciosHtml}</ul>
-                                  <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+                                  <div class="project-card-body">
+                                      <div class="small text-muted mb-2">🗓️ ${new Date(p.fecha).toLocaleDateString()}</div>
+                                      <ul class="list-unstyled mb-0 small">${serviciosHtml}</ul>
+                                  </div>
+                                  <div class="project-card-footer">
                                       <strong class="text-success">$${p.total.toFixed(2)}</strong>
                                       <div class="btn-group">
-                                          <button class="btn btn-sm btn-outline-primary" title="Registrar Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button>
-                                          <button class="btn btn-sm btn-outline-secondary" title="Editar Info" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button>
-                                          <button class="btn btn-sm btn-outline-danger" title="Mover a Papelera" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>
+                                          <button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button>
+                                          <button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button>
+                                          <button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>
                                       </div>
                                   </div>`;
                 colEl.appendChild(card);
             });
         }
     }
+
     async function cambiarProceso(id, proceso) { 
         try { 
             const data = { proceso }; 
@@ -905,7 +901,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         cancelButtonText: 'Cancelar'
                     });
                     if (!result.isConfirmed) {
-                        cargarFlujoDeTrabajo(); // Recargar para resetear el select
+                        cargarFlujoDeTrabajo();
                         return;
                     }
                 } 
@@ -920,6 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filtrarFlujo(filtroActual);
         } catch (e) { showToast(`Error: ${e.message}`, 'error'); } 
     }
+
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial...</td></tr>`; 
@@ -933,18 +930,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td>${new Date(p.fecha).toLocaleDateString()}</td>
                             <td class="table-actions">
                                 <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
-                                <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Ver/Añadir Pagos"><i class="bi bi-cash-stack"></i></button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
+                                <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Borrar"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>`; 
-            }).join('') : `<tr><td colspan="5" class="text-center">No hay proyectos en el historial.</td></tr>`; 
+            }).join('') : `<tr><td colspan="5" class="text-center">No hay proyectos.</td></tr>`; 
         } catch (error) { 
-            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial.</td></tr>`; 
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar historial.</td></tr>`; 
         } 
     }
+
     async function eliminarProyecto(id, desdeCotizaciones = false) { 
         Swal.fire({
-            title: '¿Mover a papelera?', text: "El proyecto se ocultará de las vistas principales.", icon: 'warning',
+            title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning',
             showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
         }).then(async (result) => {
             if(result.isConfirmed) {
@@ -963,6 +961,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // --- FORMULARIO NUEVO PROYECTO (CLIENTE VS ADMIN) ---
     async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
         const select = document.getElementById(selectId); 
         try { 
@@ -983,8 +983,38 @@ document.addEventListener('DOMContentLoaded', () => {
             select.innerHTML = `<option value="">Error al cargar datos</option>`; 
         } 
     }
-    const cargarOpcionesParaProyecto = () => { 
-        cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); 
+
+    const cargarOpcionesParaProyecto = () => {
+        const token = localStorage.getItem('token');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const esCliente = payload.role.toLowerCase() === 'cliente';
+
+        const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
+        const btnNuevoArtista = document.getElementById('btnNuevoArtista');
+
+        if (esCliente) {
+            // --- CLIENTE: OCULTAR SELECCIÓN DE ARTISTA ---
+            artistaSelectContainer.style.display = 'none';
+            if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
+            
+            // Añadir mensaje visual si no existe
+            if (!document.getElementById('info-artista-cliente')) {
+                 const infoArtistaEl = document.createElement('p');
+                 infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${payload.username}</strong>`;
+                 infoArtistaEl.id = 'info-artista-cliente';
+                 infoArtistaEl.className = 'alert alert-info py-2';
+                 artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
+            }
+        } else {
+            // --- ADMIN: MOSTRAR TODO ---
+            artistaSelectContainer.style.display = 'flex';
+            if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
+            if (document.getElementById('info-artista-cliente')) {
+                document.getElementById('info-artista-cliente').remove();
+            }
+            cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true);
+        }
+
         cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); 
         flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es" });
         proyectoActual = {};
@@ -1036,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (nuevoProyecto) { 
             showToast(nuevoProyecto.offline ? 'Cotización guardada en cola offline.' : 'Cotización guardada.', nuevoProyecto.offline ? 'warning' : 'success'); 
             await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); 
-            cargarOpcionesParaProyecto(); // Resetea el formulario
+            cargarOpcionesParaProyecto(); 
             mostrarSeccion('cotizaciones'); 
         } 
     }
@@ -1044,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const nuevoProyecto = await guardarProyecto('Agendado'); 
         if (nuevoProyecto) { 
             showToast('Proyecto agendado y enviado al flujo de trabajo.', 'success'); 
-            cargarOpcionesParaProyecto(); // Resetea el formulario
+            cargarOpcionesParaProyecto(); 
             mostrarSeccion('flujo-trabajo'); 
         } 
     }
@@ -1231,7 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function cargarPagosPendientes() {
         const tabla = document.getElementById('tablaPendientesBody'); tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
-        await fetchAPI('/api/proyectos'); // Asegura que el caché local esté actualizado
+        await fetchAPI('/api/proyectos'); 
         const pendientes = localCache.proyectos.filter(p => { const pagado = p.montoPagado || 0; return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; });
         if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
         tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button><button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button></td></tr>`; }).join('');
@@ -1251,7 +1281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function eliminarPago(proyectoId, pagoId) { 
         Swal.fire({
-            title: '¿Eliminar este pago?', text: "Esta acción afectará el saldo del proyecto y no se puede deshacer.", icon: 'error',
+            title: '¿Eliminar este pago?', text: "Esta acción afectará el saldo del proyecto.", icon: 'error',
             showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
         }).then(async (result) => {
             if(result.isConfirmed){
@@ -1264,7 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- PDF GENERATION ---
+    // --- PDF ---
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
         const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : null; 
         try {
@@ -1277,25 +1307,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onloadend = function () { 
                     try { 
                         const base64data = reader.result;
-                        // Coordenadas y tamaño por defecto
                         const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
                         pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
                         pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
                         pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
                         pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
-                    } catch (e) {
-                        console.error("Error al añadir firma al PDF:", e);
-                    } finally { 
-                        pdf.save(finalFileName); 
-                    } 
+                    } catch (e) { console.error("Error firma PDF:", e); } finally { pdf.save(finalFileName); } 
                 } 
-            } else {
-                 pdf.save(finalFileName);
-            }
-        } catch (e) { 
-            console.error("Error al procesar firma:", e);
-            pdf.save(finalFileName); 
-        } 
+            } else { pdf.save(finalFileName); }
+        } catch (e) { pdf.save(finalFileName); } 
     }
     async function generarCotizacionPDF(proyectoIdOrObject) { 
         try { 
@@ -1321,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { jsPDF } = window.jspdf; 
             const pdf = new jsPDF(); 
             const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
-            if (!pago) return showToast('No hay pagos para generar un recibo.', 'error');
+            if (!pago) return showToast('No hay pagos.', 'error');
             const saldoRestante = proyecto.total - proyecto.montoPagado; 
             if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
             pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); 
@@ -1356,26 +1376,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (proyectos.length) { 
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
+                    // --- MODIFICACION: Botones de descarga para clientes ---
+                    let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
+                    if (p.enlaceEntrega) {
+                        accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
+                    }
+                    if (!isClientView) {
+                        accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
+                        accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
+                    }
+
                     html += `<tr>
                                 <td>${new Date(p.fecha).toLocaleDateString()}</td>
                                 <td>${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td>
                                 <td>$${p.total.toFixed(2)}</td>
                                 <td>$${(p.montoPagado || 0).toFixed(2)}</td>
                                 <td><span class="badge" style="background-color: var(--proceso-${p.proceso.replace(/\s+/g, '')})">${p.proceso}</span></td>
-                                <td class="table-actions">
-                                    <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
-                                    <button class="btn btn-sm btn-outline-secondary" title="Generar PDF de Cotización" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
-                                    ${!isClientView ? `<button class="btn btn-sm btn-outline-danger" title="Mover a Papelera" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>` : ''}
-                                </td>
+                                <td class="table-actions">${accionesHtml}</td>
                             </tr>`; 
                 }); 
                 html += '</tbody></table></div>'; 
             } else { 
-                html += '<p>Este artista aún no tiene proyectos registrados.</p>'; 
+                html += '<p>No hay proyectos registrados.</p>'; 
             }
             contenido.innerHTML = html;
             mostrarSeccion('vista-artista');
-        } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar el historial del artista.</p>'; console.error(e); }
+        } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar historial.</p>'; console.error(e); }
     }
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
         if (!artistaId) { 
@@ -1393,7 +1419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!proyecto) return showToast('Proyecto no encontrado', 'error');
 
         const { value: formValues } = await Swal.fire({
-            title: 'Editar Información del Proyecto',
+            title: 'Editar Información',
             html:
                 `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}">` +
                 `<input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`,
@@ -1439,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
         document.getElementById('drive-status').textContent = ''; 
         document.getElementById('drive-file-input').value = ''; 
-        document.getElementById('btn-drive-upload').onclick = subirADrive; // Asignar evento aquí
+        document.getElementById('btn-drive-upload').onclick = subirADrive; 
         new bootstrap.Modal(modalEl).show(); 
     }
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
@@ -1466,10 +1492,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
         
-        // Listeners Formularios Creación (Vistas)
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); });
         
-        // Listeners Modales Edición
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista);
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio);
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario);
@@ -1477,6 +1501,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('firma-input').addEventListener('change', subirFirma); 
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
         
+        // Listener para cargar datos bancarios al abrir el modal
+        const modalDatosBancarios = document.getElementById('modalDatosBancarios');
+        if (modalDatosBancarios) {
+            modalDatosBancarios.addEventListener('show.bs.modal', function () {
+                cargarDatosBancariosEnModal();
+            });
+        }
+
         setupCustomization(payload);
         setupMobileMenu();
 
@@ -1484,7 +1516,6 @@ document.addEventListener('DOMContentLoaded', () => {
             DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; 
         }
 
-        // Conexión con Offline Manager
         window.addEventListener('online', OfflineManager.updateIndicator);
         window.addEventListener('offline', OfflineManager.updateIndicator);
         OfflineManager.updateIndicator();
@@ -1523,7 +1554,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const isSuperAdmin = role === 'admin'; 
             const canAccess = (permKey) => isSuperAdmin || p.includes(permKey);
-            
             html = `<div class="nav-group mb-3">
                         <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
                         ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}
@@ -1603,7 +1633,6 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarNuevoArtistaDesdeFormulario,
         generarCotizacion,
         enviarAFlujoDirecto,
-        // CORRECCIÓN: FUNCIONES DE AUTH AHORA GLOBALES
         toggleAuth,
         registerUser,
         recoverPassword,
@@ -1616,9 +1645,9 @@ document.addEventListener('DOMContentLoaded', () => {
 if ('serviceWorker' in navigator) { 
     window.addEventListener('load', function () { 
         navigator.serviceWorker.register('sw.js').then(function (registration) { 
-            console.log('ServiceWorker registration successful with scope: ', registration.scope); 
+            console.log('ServiceWorker OK: ', registration.scope); 
         }, function (err) { 
-            console.log('ServiceWorker registration failed: ', err); 
+            console.log('ServiceWorker Falló: ', err); 
         }); 
     }); 
 }

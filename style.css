@@ -281,12 +281,82 @@ body.auth-visible #app-wrapper {
 .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 .kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center;}
 
+
+/* === CAMBIOS PARA CORREGIR KANBAN === */
+
 /* Kanban */
-.kanban-board { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; min-height: 400px; align-items: flex-start; }
-.kanban-column { min-width: 300px; width: 300px; background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; border: 1px solid var(--border-color); flex-shrink: 0; }
-.kanban-column h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; text-align: center; opacity: 0.8; }
-.project-card { background: var(--card-background); padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; box-shadow: var(--shadow-sm); border-left: 4px solid var(--primary-color); cursor: pointer; transition: transform 0.2s; position: relative; }
-.project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); z-index: 10; }
+.kanban-board { 
+    display: flex; 
+    overflow-x: auto; 
+    gap: 1rem; 
+    padding-bottom: 1rem; 
+    min-height: 400px; 
+    /* Esta línea alinea las columnas en la parte superior */
+    align-items: flex-start; 
+}
+
+.kanban-column { 
+    min-width: 300px; 
+    width: 300px; 
+    background-color: var(--secondary-button-bg); 
+    border-radius: 12px; 
+    padding: 1rem; 
+    border: 1px solid var(--border-color); 
+    flex-shrink: 0;
+    /* Convertimos la columna en un contenedor flex para apilar tarjetas */
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.kanban-column h3 { 
+    font-size: 1.1rem; 
+    font-weight: 700; 
+    margin-bottom: 0; /* Reducimos el margen para que el gap de la columna actúe */
+    text-align: center; 
+    opacity: 0.8; 
+}
+
+/* LA SOLUCIÓN PRINCIPAL PARA LAS TARJETAS CHUECAS */
+.project-card { 
+    background: var(--card-background); 
+    padding: 1rem; 
+    border-radius: 8px; 
+    margin-bottom: 0; /* El gap de la columna ya maneja el espaciado */
+    box-shadow: var(--shadow-sm); 
+    border-left: 4px solid var(--primary-color); 
+    cursor: pointer; 
+    transition: transform 0.2s, box-shadow 0.2s; 
+    position: relative;
+    /* Convertimos la tarjeta en un contenedor flex vertical */
+    display: flex;
+    flex-direction: column;
+    /* Aseguramos que la tarjeta tenga una altura mínima y pueda crecer */
+    min-height: 180px; 
+}
+
+.project-card:hover { 
+    transform: translateY(-3px); 
+    box-shadow: var(--shadow-md); 
+    z-index: 10; 
+}
+
+/* Nueva clase para el cuerpo de la tarjeta */
+.project-card-body {
+    flex-grow: 1; /* Esta es la magia: hace que el cuerpo crezca */
+}
+
+/* Nueva clase para el pie de la tarjeta */
+.project-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto; /* Empuja el footer hacia abajo */
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+/* === FIN DE CAMBIOS PARA KANBAN === */
+
 
 /* Loader */
 #loader-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }

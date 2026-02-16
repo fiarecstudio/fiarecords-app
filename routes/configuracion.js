@@ -1,4 +1,6 @@
-// routes/configuracion.js
+// ==========================================
+// ARCHIVO: routes/configuracion.js (PROTEGIDO)
+// ==========================================
 const express = require('express');
 const router = express.Router();
 const Configuracion = require('../models/Configuracion');
@@ -10,7 +12,9 @@ const fs = require('fs');
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadPath = 'uploads/';
-        fs.mkdirSync(uploadPath, { recursive: true });
+        if (!fs.existsSync(uploadPath)){
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
@@ -20,6 +24,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Ruta pública (sin auth) para que el login pueda ver el logo
 router.get('/public/logo', async (req, res) => {
     try {
         const config = await Configuracion.findOne({ singletonId: 'main_config' });
@@ -27,8 +32,19 @@ router.get('/public/logo', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al obtener el logo' }); }
 });
 
+// A partir de aquí, todo requiere login
 router.use(auth);
 
+// Middleware para verificar si es ADMIN
+const isAdmin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de administrador.' });
+    }
+};
+
+// Obtener configuración (Clientes pueden ver, pero no editar)
 router.get('/', async (req, res) => {
     try {
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
@@ -47,7 +63,9 @@ router.get('/defaults', (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al obtener los valores predeterminados.' }); }
 });
 
-router.put('/firma-pos', async (req, res) => {
+// --- RUTAS PROTEGIDAS (SOLO ADMIN) ---
+
+router.put('/firma-pos', isAdmin, async (req, res) => {
     try {
         const { firmaPos } = req.body;
         const config = await Configuracion.findOneAndUpdate({ singletonId: 'main_config' }, { $set: { firmaPos: firmaPos } }, { new: true, upsert: true });
@@ -55,8 +73,8 @@ router.put('/firma-pos', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al guardar la posición de la firma.' }); }
 });
 
-// NUEVA RUTA PARA GUARDAR DATOS BANCARIOS
-router.put('/datos-bancarios', async (req, res) => {
+// PROTEGER DATOS BANCARIOS: Solo admin puede modificar
+router.put('/datos-bancarios', isAdmin, async (req, res) => {
     try {
         const { datosBancarios } = req.body;
         const config = await Configuracion.findOneAndUpdate(
@@ -70,7 +88,7 @@ router.put('/datos-bancarios', async (req, res) => {
     }
 });
 
-router.post('/upload-firma', upload.single('firmaFile'), async (req, res) => {
+router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
     try {
         const filePath = `/${req.file.path.replace(/\\/g, "/")}`;
@@ -79,7 +97,7 @@ router.post('/upload-firma', upload.single('firmaFile'), async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al guardar la ruta de la firma.' }); }
 });
 
-router.post('/upload-logo', upload.single('logoFile'), async (req, res) => {
+router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
     try {
         const filePath = `/${req.file.path.replace(/\\/g, "/")}`;
