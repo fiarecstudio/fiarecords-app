@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js (FINAL - ADAPTADO A TUS MODELOS)
+// ARCHIVO: routes/proyectos.js
 // ==========================================
 const express = require('express');
 const router = express.Router();
@@ -8,7 +8,7 @@ const Proyecto = require('../models/Proyecto');
 const Artista = require('../models/Artista'); 
 const auth = require('../middleware/auth');   
 
-// Middleware de seguridad general
+// Middleware de seguridad general (token requerido)
 router.use(auth);
 
 // ------------------------------------------------------------------
@@ -16,39 +16,35 @@ router.use(auth);
 // Conecta el Usuario logueado con su perfil de Artista
 // ------------------------------------------------------------------
 const getFiltroUsuario = async (req) => {
-    // 1. Filtro base: no mostrar lo borrado
+    // 1. Filtro base: no mostrar lo borrado (isDeleted no debe ser true)
     let filtro = { isDeleted: { $ne: true } };
 
     // 2. Si es ADMIN, STAFF o INGENIERO, ven todo.
-    // (Ajusta los roles según tu sistema, aquí permito ver a todos menos 'cliente')
     if (!req.user.role || req.user.role !== 'cliente') {
         return filtro;
     }
 
     // 3. LOGICA PARA CLIENTES
-    // Buscamos al Artista usando el ID del usuario conectado (req.user.id)
-    // Esto es gracias al campo 'usuarioId' que vi en tu modelo Artista.
-    
-    // Paso A: Buscar por ID de Usuario (La forma más exacta)
+    // Buscamos al Artista usando el ID del usuario conectado
     let artistaVinculado = await Artista.findOne({ usuarioId: req.user.id });
 
-    // Paso B: Fallback (Si no tiene usuarioId vinculado, buscamos por correo)
+    // Fallback: Si no tiene usuarioId vinculado, buscamos por correo
     if (!artistaVinculado) {
-        console.log(`Buscando artista por correo para: ${req.user.email}`);
+        // console.log(`Buscando artista por correo para: ${req.user.email}`);
         artistaVinculado = await Artista.findOne({ 
-            correo: { $regex: new RegExp(`^${req.user.email}$`, 'i') } // 'correo' es el campo en tu modelo Artista
+            correo: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
         });
     }
 
     // 4. Aplicar el filtro
     if (artistaVinculado) {
         filtro.artista = artistaVinculado._id;
-        // Guardamos el ID en el request por si lo ocupamos más abajo
+        // Guardamos el ID en el request para validaciones posteriores
         req.user.artistaId = artistaVinculado._id; 
     } else {
-        // SEGURIDAD: Es cliente pero no encontramos su Artista. BLOQUEAR.
-        console.warn(`ALERTA: Usuario cliente ${req.user.email} sin perfil de artista.`);
-        filtro.artista = new mongoose.Types.ObjectId(); // ID que no existe
+        // SEGURIDAD: Es cliente pero no encontramos su Artista.
+        // Asignamos un ID falso para que la consulta no devuelva nada, en lugar de devolver todo.
+        filtro.artista = new mongoose.Types.ObjectId(); 
     }
 
     return filtro;
@@ -58,7 +54,7 @@ const getFiltroUsuario = async (req) => {
 // RUTAS GET (LECTURA)
 // ------------------------------------------------------------------
 
-// 1. Todos los proyectos
+// 1. Todos los proyectos (Dashboard general)
 router.get('/', async (req, res) => {
     try {
         const filtro = await getFiltroUsuario(req);
@@ -105,7 +101,7 @@ router.get('/cotizaciones', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Completados
+// 4. Completados (Historial general)
 router.get('/completos', async (req, res) => {
     try {
         const filtro = await getFiltroUsuario(req);
@@ -143,14 +139,14 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Por ID de Artista (Seguridad Reforzada)
+// 6. Por ID de Artista (ESTA ES LA RUTA QUE ARREGLA TU ERROR EN EL FRONTEND)
 router.get('/por-artista/:id', async (req, res) => {
     try {
+        // Seguridad: Si es cliente, verificar que pide SU propio historial
         if (req.user.role === 'cliente') {
              const filtroPropio = await getFiltroUsuario(req);
-             // Validar que el ID solicitado coincida con el ID del artista del usuario
              if (filtroPropio.artista && filtroPropio.artista.toString() !== req.params.id) {
-                 return res.status(403).json({ error: 'No autorizado.' });
+                 return res.status(403).json({ error: 'No autorizado. Solo puedes ver tu propio historial.' });
              }
         }
 
@@ -158,8 +154,12 @@ router.get('/por-artista/:id', async (req, res) => {
             artista: req.params.id, 
             isDeleted: { $ne: true } 
         }).populate('artista').sort({ fecha: -1 });
+        
         res.json(proyectos);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: 'Error al obtener historial del artista.' }); 
+    }
 });
 
 // 7. Proyecto individual por ID
@@ -172,7 +172,7 @@ router.get('/:id', async (req, res) => {
             const filtro = await getFiltroUsuario(req);
             // Si el proyecto no tiene artista o el ID no coincide, bloqueamos
             if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) {
-                return res.status(403).json({ error: 'No tienes permiso.' });
+                return res.status(403).json({ error: 'No tienes permiso para ver este proyecto.' });
             }
         }
         res.json(proyecto);
@@ -183,7 +183,7 @@ router.get('/:id', async (req, res) => {
 // RUTAS POST/PUT (ESCRITURA)
 // ------------------------------------------------------------------
 
-// 8. Crear
+// 8. Crear Proyecto
 router.post('/', async (req, res) => {
     try {
         if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
@@ -273,7 +273,7 @@ router.post('/:id/pagos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 15. Documentos
+// 15. Documentos (Contratos, etc)
 router.put('/:id/documentos', async (req, res) => {
     try {
         if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
