@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutButton: document.getElementById('logout-button'),
         welcomeUser: document.getElementById('welcome-user'),
         appLogo: document.getElementById('app-logo'),
-        loginLogo: document.getElementById('login-logo'),
+        loginLogo: document.getElementById('login-logo'), // IMPORTANTE: Referencia al logo del login
         connectionStatus: document.getElementById('connection-status'),
         connectionText: document.getElementById('connection-text'),
         logoInput: document.getElementById('logo-input')
@@ -141,11 +141,19 @@ document.addEventListener('DOMContentLoaded', () => {
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
 
-    // --- FETCH API CORE ---
+    // --- FETCH API CORE (CORREGIDO PARA LOGO) ---
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
         const token = localStorage.getItem('token');
-        if (!token && !url.includes('/auth/')) { showLogin(); throw new Error('No autenticado'); }
+        
+        // CORRECCIÓN IMPORTANTE: Permitir cargar configuración sin token
+        const isPublic = url.includes('/auth/') || url.includes('/configuracion'); 
+
+        if (!token && !isPublic) { 
+            showLogin(); 
+            throw new Error('No autenticado'); 
+        }
+
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
@@ -175,10 +183,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        showLoader();
+        // Solo mostramos loader si NO es la configuración (para que el logo cargue suave)
+        if(!url.includes('/configuracion')) showLoader();
+        
         try {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers });
-            if (res.status === 401) { showLogin(); throw new Error('Sesión expirada.'); }
+            
+            if (res.status === 401 && !isPublic) { showLogin(); throw new Error('Sesión expirada.'); }
+            
+            // Si la config falla por auth (raro con el fix, pero posible), retornamos null para manejarlo
+            if (res.status === 401 && url.includes('/configuracion')) { return null; }
+
             if (res.status === 204) return { ok: true };
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
@@ -193,7 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return data;
         } catch (e) {
             throw e;
-        } finally { hideLoader(); }
+        } finally { 
+            hideLoader(); 
+        }
     }
 
     // --- FUNCIONES AUXILIARES ---
@@ -213,23 +230,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // 3. Filtro para Listas Paginadas (Artistas, Servicios, Usuarios)
-        // Detectamos la sección activa y llamamos a la paginación con el filtro
         const activeSection = document.querySelector('section.active').id;
         if(activeSection === 'gestion-artistas') renderPaginatedList('artistas', query);
         if(activeSection === 'gestion-servicios') renderPaginatedList('servicios', query);
         if(activeSection === 'gestion-usuarios') renderPaginatedList('usuarios', query);
     }
 
+    // --- CARGAR LOGO Y CONFIG ---
     async function loadInitialConfig() {
         try {
+            // Intentamos cargar la config (FetchAPI ya permite esto sin token gracias al fix)
             const config = await fetchAPI('/api/configuracion');
-            configCache = config;
-            if (config.logoPath && DOMElements.appLogo) { 
+            
+            if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
+                
+                // 1. Actualizar imágenes en el DOM
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
                 if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
+                
+                // 2. Guardar ruta en LocalStorage para futuras visitas sin login
+                localStorage.setItem('cached_logo_path', logoSrc);
+                
+                configCache = config;
             }
-        } catch (e) { configCache = { firmaPos: { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } } }; }
+        } catch (e) { 
+            // Si falla, intentamos usar el cacheado si existe
+            console.warn("No se pudo cargar config remota, usando caché local si existe.");
+            const cachedLogo = localStorage.getItem('cached_logo_path');
+            if(cachedLogo) {
+                if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
+                if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
+            }
+            configCache = { firmaPos: { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } } }; 
+        }
     }
 
     function applyTheme(theme) {
@@ -245,17 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof gapi !== 'undefined') initializeGapiClient();
     if (typeof google !== 'undefined') initializeGisClient();
 
-    async function findOrCreateFolder(name, parentId = null) {
-        let query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
-        if (parentId) query += ` and '${parentId}' in parents`;
-        const res = await gapi.client.drive.files.list({ q: query, fields: 'files(id, name)' });
-        if (res.result.files.length > 0) return res.result.files[0].id;
-        const fileMetadata = { 'name': name, 'mimeType': 'application/vnd.google-apps.folder' };
-        if (parentId) fileMetadata.parents = [parentId];
-        const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
-        return createRes.result.id;
-    }
-
     async function subirADrive() {
         if (!gapiInited || !gisInited) return showToast('Error: Librerías Google no cargadas', 'error');
         const fileInput = document.getElementById('drive-file-input');
@@ -264,9 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
             try {
-                // Simulación de subida para el ejemplo, reconecta lógica completa si tienes IDs
                 showToast('Subiendo archivo...', 'info');
-                // Aquí iría la lógica real de subida que ya tenías
                 setTimeout(() => {
                     document.getElementById('delivery-link-input').value = "https://drive.google.com/file/d/example";
                     saveDeliveryLink();
@@ -283,7 +304,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INICIALIZACIÓN ---
     (async function init() {
+        // 1. Aplicar logo desde caché local INMEDIATAMENTE (para que se vea en login)
+        const cachedLogo = localStorage.getItem('cached_logo_path');
+        if(cachedLogo) {
+            if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
+            if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
+        }
+
+        // 2. Intentar cargar config fresca del servidor
         await loadInitialConfig();
+        
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
         setupAuthListeners();
@@ -305,10 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
-    // --- MANEJO DE VISTAS (FIX: CLIENTE AUTO-DETECT) ---
+    // --- MANEJO DE VISTAS ---
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
+        
+        // Volvemos a cargar config para asegurar que tenemos firma y datos frescos
         if (!configCache) await loadInitialConfig();
+        
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
         // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS ---
@@ -338,6 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.appWrapper.style.display = 'flex'; 
 
         const hashSection = location.hash.replace('#', '');
+        // Si es cliente y no hay hash o es dashboard, mandar a vista-artista
         if (payload.role && payload.role.toLowerCase() === 'cliente' && (!hashSection || hashSection === 'dashboard')) {
              mostrarSeccion('vista-artista', false);
         } else {
@@ -352,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('auth-visible');
         localStorage.removeItem('token');
         
-        // --- CORRECCIÓN: LIMPIAR URL ---
         history.pushState("", document.title, window.location.pathname);
 
         DOMElements.loginContainer.style.display = 'flex'; 
@@ -504,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NUEVO: SISTEMA DE PAGINACIÓN ---
+    // --- SISTEMA DE PAGINACIÓN ---
     async function renderPaginatedList(endpoint, filterText = null) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         const listEl = document.getElementById(listId);
@@ -594,20 +627,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPaginatedList(endpoint, null); 
     }
 
-    // --- RENDER LIST (FALLBACK PARA OTROS) ---
+    // --- RENDER LIST ---
     async function renderList(endpoint, makeClickable = false) {
-        // Se mantiene por compatibilidad, pero redirecciona a la paginada
         if(['artistas','servicios','usuarios'].includes(endpoint)) {
             renderPaginatedList(endpoint);
             return;
         }
-        const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
-        try {
-            const data = await fetchAPI(`/api/${endpoint}`);
-            const listEl = document.getElementById(listId);
-            if(!listEl) return;
-            // Fallback simple rendering if needed for other lists
-        } catch (e) { console.error(e); }
     }
 
     async function cargarPapelera() {
@@ -655,7 +680,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) });
             showToast('Creado exitosamente', 'success');
             limpiarForm(form.id);
-            // Actualizar lista paginada y caché
             localCache[type] = []; // Forzar recarga
             renderPaginatedList(type);
         } catch (error) { showToast(`Error: ${error.message}`, 'error'); }
@@ -670,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' });
                     showToast('Movido a papelera', 'info');
-                    localCache[endpoint] = []; // Forzar recarga
+                    localCache[endpoint] = []; 
                     renderPaginatedList(endpoint);
                 } catch (e) { showToast(e.message, 'error'); }
             }
@@ -775,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // --- DATOS BANCARIOS (NUEVO: CARGAR AL ABRIR) ---
+    // --- DATOS BANCARIOS ---
     async function cargarDatosBancariosEnModal() {
         try {
             if (!configCache || !configCache.datosBancarios) {
@@ -873,7 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(`Error al subir la firma`, 'error'); } 
     }
 
-    // --- PROYECTOS & KANBAN (CORREGIDO) ---
+    // --- PROYECTOS & KANBAN ---
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
         tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
@@ -935,7 +959,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const serviciosHtml = p.items.length > 0 ? p.items.map(i => `<li class="small">${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
                 
-                // --- KANBAN CORREGIDO (Header, Body, Footer) ---
                 card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2">
                                       <strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong>
                                       <select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
@@ -1034,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- FORMULARIO NUEVO PROYECTO (CLIENTE VS ADMIN) ---
+    // --- FORMULARIO NUEVO PROYECTO ---
     async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
         const select = document.getElementById(selectId); 
         try { 
@@ -1607,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     try { 
                         await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
                         showToast('Logo actualizado!', 'success'); 
-                        await loadPublicLogo(); 
+                        await loadInitialConfig(); 
                     } catch (e) { showToast(`Error al subir logo`, 'error'); } 
                 }; 
             } 
@@ -1710,7 +1733,6 @@ document.addEventListener('DOMContentLoaded', () => {
         recoverPassword,
         resetPassword,
         showResetPasswordView,
-        // --- NUEVO: PAGINACIÓN EXPORTADA ---
         changePage,
     };
 });
