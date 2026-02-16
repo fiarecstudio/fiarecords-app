@@ -1,5 +1,5 @@
 // ==================================================================
-//      SERVER.JS - VERSIÓN FINAL CORREGIDA PARA DEPLOY
+//      SERVER.JS - SOLUCIÓN DEFINITIVA CON EXPRESIÓN REGULAR
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
@@ -15,7 +15,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- 2. Definición de Rutas de la API ---
-// CUALQUIER PETICIÓN QUE EMPIECE CON /api SERÁ MANEJADA AQUÍ PRIMERO
+// Todas las peticiones que empiecen con /api serán manejadas aquí.
 app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -25,14 +25,14 @@ app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // --- 3. Servir Archivos Estáticos ---
-// Express buscará archivos como index.html, style.css, etc., aquí.
+// Sirve archivos como index.html, style.css, script.js, etc.
 app.use(express.static(path.join(__dirname))); 
 
-// --- 4. Ruta Catch-All (Manejador Final para SPA) ---
-// ESTA RUTA SOLO SE EJECUTARÁ SI LA PETICIÓN NO FUE CAPTURADA ANTES
-// (es decir, no es una ruta de API y no es un archivo estático existente).
-// Envía el archivo principal de la aplicación para que el enrutador del frontend se encargue.
-app.get('*', (req, res) => {
+// --- 4. Ruta Catch-All con EXPRESIÓN REGULAR (La Solución Final) ---
+// Esta ruta usa una expresión regular (/.*/) para capturar CUALQUIER
+// petición GET que no haya sido manejada por las rutas de API o de archivos estáticos.
+// Esto evita el error de parsing del comodín '*'.
+app.get(/.*/, (req, res) => {
   res.sendFile(path.resolve(__dirname, 'index.html'));
 });
 
@@ -40,7 +40,7 @@ app.get('*', (req, res) => {
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
-    const PORT = process.env.PORT || 10000; // Render a veces prefiere el puerto 10000
+    const PORT = process.env.PORT || 10000;
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
     });
