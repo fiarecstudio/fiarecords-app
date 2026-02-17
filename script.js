@@ -73,6 +73,24 @@ document.addEventListener('DOMContentLoaded', () => {
         Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
+    // --- NUEVA UTILIDAD DE SEGURIDAD ---
+    // Esta función recupera el rol directamente del token para evitar errores de navegación
+    function getUserRoleAndId() {
+        const token = localStorage.getItem('token');
+        if (!token) return { role: null, id: null, artistaId: null };
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return { 
+                role: payload.role ? payload.role.toLowerCase() : 'cliente',
+                id: payload.id,
+                artistaId: payload.artistaId,
+                username: payload.username
+            };
+        } catch (e) {
+            return { role: null, id: null, artistaId: null };
+        }
+    }
+
     function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
     function showLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'flex'; }
     function hideLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'none'; }
@@ -340,12 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         
-        // --- FIX SEGURIDAD VISUAL: Asignar data-role y renderizar Sidebar INMEDIATAMENTE ---
-        // Esto previene que se muestren opciones de administrador mientras carga el resto
+        // --- FIX SEGURIDAD VISUAL ---
+        // Asignamos data-role al body ANTES de mostrar nada para que el CSS
+        // pueda ocultar elementos si es necesario y renderSidebar se ejecuta ya.
         const role = payload.role ? payload.role.toLowerCase() : 'cliente';
         document.body.setAttribute('data-role', role);
 
-        renderSidebar(payload); // Renderizamos el menú antes de mostrar el wrapper
+        renderSidebar(payload); 
         
         if (!configCache) await loadInitialConfig();
         
@@ -360,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 datosBancariosBtn.style.display = 'block';
             }
         }
-        
+
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
         DOMElements.loginContainer.style.display = 'none'; 
@@ -373,7 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- LÓGICA DE REDIRECCIÓN ---
         if (role === 'cliente') {
              if(payload.artistaId) {
-                 await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username, true);
+                 // Aquí ya no pasamos 'true' hardcodeado, la función mostrarVistaArtista
+                 // verificará el rol internamente.
+                 await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username);
                  mostrarSeccion('vista-artista', false); 
              } else {
                  document.getElementById('vista-artista-contenido').innerHTML = 
@@ -1102,12 +1123,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const cargarOpcionesParaProyecto = () => {
-        const token = localStorage.getItem('token');
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const esCliente = payload.role.toLowerCase() === 'cliente';
+        const userInfo = getUserRoleAndId();
+        const esCliente = userInfo.role === 'cliente';
 
         const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
+        
+        // Botón de Volver (Solo para clientes)
+        // Eliminamos si existe uno previo para no duplicar
+        const existingBackBtn = document.getElementById('btn-volver-cliente');
+        if(existingBackBtn) existingBackBtn.remove();
 
         if (esCliente) {
             // --- CLIENTE: MODIFICACIÓN CRÍTICA ---
@@ -1118,16 +1143,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. Forzar el valor del select al ID del artista del cliente
             const select = document.getElementById('proyectoArtista');
             // Creamos una única opción forzada, sin llamar a cargarOpcionesParaSelect
-            select.innerHTML = `<option value="${payload.artistaId}" selected>${payload.username}</option>`;
+            select.innerHTML = `<option value="${userInfo.artistaId}" selected>${userInfo.username}</option>`;
 
             // 3. Mostrar mensaje visual
             if (!document.getElementById('info-artista-cliente')) {
                  const infoArtistaEl = document.createElement('p');
-                 infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${payload.username}</strong>`;
+                 infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${userInfo.username}</strong>`;
                  infoArtistaEl.id = 'info-artista-cliente';
                  infoArtistaEl.className = 'alert alert-info py-2';
                  artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
             }
+
+            // 4. Agregar Botón de Cancelar/Volver
+            const formFooter = document.querySelector('#formProyecto button[type="submit"]').parentElement;
+            const backBtn = document.createElement('button');
+            backBtn.type = 'button';
+            backBtn.id = 'btn-volver-cliente';
+            backBtn.className = 'btn btn-secondary ms-2';
+            backBtn.innerText = 'Cancelar / Volver';
+            backBtn.onclick = () => {
+                // Volver a la vista del artista
+                mostrarSeccion('vista-artista');
+            };
+            formFooter.appendChild(backBtn);
+
         } else {
             // --- ADMIN: MOSTRAR TODO NORMAL ---
             artistaSelectContainer.style.display = 'flex';
@@ -1388,13 +1427,12 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetchAPI('/api/proyectos'); 
         
         // --- FILTRO DE CLIENTES ---
-        const token = localStorage.getItem('token');
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const isClient = payload.role.toLowerCase() === 'cliente';
+        const userInfo = getUserRoleAndId();
+        const isClient = userInfo.role === 'cliente';
 
         const pendientes = localCache.proyectos.filter(p => { 
             // Si es cliente, solo sus proyectos
-            if (isClient && (!p.artista || p.artista._id !== payload.artistaId)) return false;
+            if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
 
             const pagado = p.montoPagado || 0; 
             return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; 
@@ -1421,14 +1459,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     
-    // --- FIX HISTORIAL PAGOS CLIENTE ---
+    // --- FIX HISTORIAL PAGOS CLIENTE & BOTON IMPRIMIR ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
         
-        const token = localStorage.getItem('token');
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const isClient = payload.role.toLowerCase() === 'cliente';
+        const userInfo = getUserRoleAndId();
+        const isClient = userInfo.role === 'cliente';
 
         try { 
             let pagos = [];
@@ -1440,14 +1477,14 @@ document.addEventListener('DOMContentLoaded', () => {
                      await fetchAPI('/api/proyectos');
                 }
 
-                const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === payload.artistaId);
+                const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === userInfo.artistaId);
                 
                 misProyectos.forEach(proj => {
                     if (proj.pagos && proj.pagos.length > 0) {
                         proj.pagos.forEach(pago => {
                             pagos.push({
                                 fecha: pago.fecha || new Date().toISOString(),
-                                artista: payload.username, // Nombre visual
+                                artista: userInfo.username, // Nombre visual
                                 monto: pago.monto,
                                 metodo: pago.metodo,
                                 proyectoId: proj._id,
@@ -1466,9 +1503,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
-                // --- FIX BOTÓN REIMPRIMIR PARA TODOS ---
+                // --- BOTÓN REIMPRIMIR (DISPONIBLE PARA TODOS) ---
                 let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
                 
+                // --- BOTONES EXTRA SOLO PARA ADMIN ---
                 if (!isClient) {
                     buttons += `<button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button>`;
                 }
@@ -1563,7 +1601,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast('Error al generar recibo.', 'error'); } 
     }
 
-    async function mostrarVistaArtista(artistaId, nombre, nombreArtistico, isClientView = false) {
+    // --- FIX NAVEGACIÓN CLIENTE: Verificación robusta del rol ---
+    async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
+        // Obtenemos el rol REAL del usuario logueado en este momento
+        const userInfo = getUserRoleAndId();
+        // Si el usuario es cliente, forzamos isClientView a true sin importar los argumentos
+        const isClientView = (userInfo.role === 'cliente');
+
         document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
         const contenido = document.getElementById('vista-artista-contenido');
         contenido.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
@@ -1580,12 +1624,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                                     </div>`;
             if (!isClientView) { 
+                // VISTA ADMIN
                 html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`; 
             } else {
-                 // --- CLIENTE: BOTÓN NUEVO PROYECTO SOLO ---
+                 // VISTA CLIENTE
                  html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`;
@@ -1600,6 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
                     }
                     if (!isClientView) {
+                        // SOLO ADMIN ve borrar y entrega
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
@@ -1623,11 +1669,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
-        if (!artistaId) { 
-            const artistas = await fetchAPI('/api/artistas'); 
-            const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
-            if (artista) artistaId = artista._id; else return; 
+        // Si no se pasa ID (ej: navegación cliente), buscar el propio
+        const userInfo = getUserRoleAndId();
+        
+        if (!artistaId) {
+            // Si es cliente, usa su propio ID
+            if (userInfo.role === 'cliente' && userInfo.artistaId) {
+                artistaId = userInfo.artistaId;
+                // Si no se pasaron nombres, usamos los del token o placeholder
+                if (!artistaNombre) artistaNombre = userInfo.username;
+            } else {
+                // Si es admin y no pasó ID, hay que buscar
+                const artistas = await fetchAPI('/api/artistas'); 
+                const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
+                if (artista) artistaId = artista._id; else return;
+            }
         } 
+        // La función mostrarVistaArtista ahora determina por sí misma si es vista de cliente
         mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); 
     }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
@@ -1782,9 +1840,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let p = user.permisos || []; const role = user.role ? user.role.toLowerCase() : 'cliente';
         let html = '';
         if (role === 'cliente') { 
+            // Para el cliente, al hacer click en "Mis Proyectos", llamamos a irAVistaArtista sin ID
+            // La función ahora detectará automáticamente el ID del cliente
             html = `<div class="nav-group mb-3">
                         <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
-                        <a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista('${user.artistaId}', '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
+                        <a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
                         <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Mis Pagos</a>
                     </div>`; 
         } else {
