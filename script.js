@@ -1763,3 +1763,4 @@ if ('serviceWorker' in navigator) {
             console.log('ServiceWorker Falló: ', err); 
         }); 
     }); 
+}
