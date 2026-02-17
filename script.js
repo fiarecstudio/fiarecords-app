@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- NUEVA UTILIDAD DE SEGURIDAD ---
-    // Esta función recupera el rol directamente del token para evitar errores de navegación
+    // Recupera rol y datos del token para validaciones visuales
     function getUserRoleAndId() {
         const token = localStorage.getItem('token');
         if (!token) return { role: null, id: null, artistaId: null };
@@ -359,8 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.remove('auth-visible');
         
         // --- FIX SEGURIDAD VISUAL ---
-        // Asignamos data-role al body ANTES de mostrar nada para que el CSS
-        // pueda ocultar elementos si es necesario y renderSidebar se ejecuta ya.
         const role = payload.role ? payload.role.toLowerCase() : 'cliente';
         document.body.setAttribute('data-role', role);
 
@@ -392,8 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- LÓGICA DE REDIRECCIÓN ---
         if (role === 'cliente') {
              if(payload.artistaId) {
-                 // Aquí ya no pasamos 'true' hardcodeado, la función mostrarVistaArtista
-                 // verificará el rol internamente.
                  await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username);
                  mostrarSeccion('vista-artista', false); 
              } else {
@@ -564,10 +560,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- SISTEMA DE PAGINACIÓN ---
+    // --- CORRECCIÓN IMAGEN 2: Seguridad en Listados ---
     async function renderPaginatedList(endpoint, filterText = null) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         const listEl = document.getElementById(listId);
         if(!listEl) return;
+
+        // VERIFICACIÓN DE ROL PARA SEGURIDAD VISUAL
+        const userInfo = getUserRoleAndId();
+        const isClient = (userInfo.role === 'cliente');
 
         let data = localCache[endpoint];
         if (!data || data.length === 0) {
@@ -615,12 +616,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
             const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`;
 
-            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}">
-                <span>${escapeHTML(displayName)}</span>
-                <div class="btn-group">
+            // --- SEGURIDAD: SI ES CLIENTE, LOS BOTONES NO SE GENERAN ---
+            let buttonsHtml = '';
+            if (!isClient) {
+                buttonsHtml = `<div class="btn-group">
                     <button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button>
-                </div></li>`;
+                </div>`;
+            }
+
+            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}">
+                <span>${escapeHTML(displayName)}</span>
+                ${buttonsHtml}
+            </li>`;
         }).join('') : `<li class="list-group-item">No hay resultados.</li>`;
 
         renderPaginationControls(listEl, endpoint, page, totalPages);
@@ -1129,23 +1137,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
         
-        // Botón de Volver (Solo para clientes)
-        // Eliminamos si existe uno previo para no duplicar
-        const existingBackBtn = document.getElementById('btn-volver-cliente');
-        if(existingBackBtn) existingBackBtn.remove();
+        // --- ELIMINADO EL BOTÓN DE VOLVER QUE DABA PROBLEMAS ---
+        // Se ha limpiado esta lógica para que el cliente use el menú lateral para navegar.
 
         if (esCliente) {
-            // --- CLIENTE: MODIFICACIÓN CRÍTICA ---
-            // 1. Ocultar el selector para evitar ruido visual y "Público General"
+            // --- CLIENTE: VISUALIZACIÓN SIMPLIFICADA ---
             artistaSelectContainer.style.display = 'none';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
             
-            // 2. Forzar el valor del select al ID del artista del cliente
             const select = document.getElementById('proyectoArtista');
-            // Creamos una única opción forzada, sin llamar a cargarOpcionesParaSelect
             select.innerHTML = `<option value="${userInfo.artistaId}" selected>${userInfo.username}</option>`;
 
-            // 3. Mostrar mensaje visual
             if (!document.getElementById('info-artista-cliente')) {
                  const infoArtistaEl = document.createElement('p');
                  infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${userInfo.username}</strong>`;
@@ -1153,28 +1155,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  infoArtistaEl.className = 'alert alert-info py-2';
                  artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
             }
-
-            // 4. Agregar Botón de Cancelar/Volver
-            const formFooter = document.querySelector('#formProyecto button[type="submit"]').parentElement;
-            const backBtn = document.createElement('button');
-            backBtn.type = 'button';
-            backBtn.id = 'btn-volver-cliente';
-            backBtn.className = 'btn btn-secondary ms-2';
-            backBtn.innerText = 'Cancelar / Volver';
-            backBtn.onclick = () => {
-                // Volver a la vista del artista
-                mostrarSeccion('vista-artista');
-            };
-            formFooter.appendChild(backBtn);
-
         } else {
-            // --- ADMIN: MOSTRAR TODO NORMAL ---
+            // --- ADMIN: MOSTRAR TODO ---
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
             if (document.getElementById('info-artista-cliente')) {
                 document.getElementById('info-artista-cliente').remove();
             }
-            // Solo cargamos la lista completa si es ADMIN
             cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true);
         }
 
@@ -1445,10 +1432,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; 
             const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; 
             
-            // --- BOTONES POR ROL ---
+            // --- BOTONES POR ROL (PENDIENTES) ---
             let buttons = '';
             if (isClient) {
-                // ELIMINADO EL BOTÓN "PREGUNTAR" - AHORA ESTÁ VACÍO
+                // El cliente NO ve botones en la tabla de deudas pendientes
                 buttons = '';
             } else {
                 buttons = `<button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button>
@@ -1459,7 +1446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     
-    // --- FIX HISTORIAL PAGOS CLIENTE & BOTON IMPRIMIR ---
+    // --- CORRECCIÓN IMAGEN 3: Historial de Pagos y Botón Imprimir ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -1472,11 +1459,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isClient) {
                 // --- LÓGICA ROBUSTA PARA CLIENTES ---
-                // Si la caché está vacía, forzamos la descarga de proyectos
                 if (!localCache.proyectos || localCache.proyectos.length === 0) {
                      await fetchAPI('/api/proyectos');
                 }
-
                 const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === userInfo.artistaId);
                 
                 misProyectos.forEach(proj => {
@@ -1484,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         proj.pagos.forEach(pago => {
                             pagos.push({
                                 fecha: pago.fecha || new Date().toISOString(),
-                                artista: userInfo.username, // Nombre visual
+                                artista: userInfo.username, 
                                 monto: pago.monto,
                                 metodo: pago.metodo,
                                 proyectoId: proj._id,
@@ -1493,8 +1478,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                 });
-
-                // Ordenamos por fecha descendente
                 pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             } else {
@@ -1503,10 +1486,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
-                // --- BOTÓN REIMPRIMIR (DISPONIBLE PARA TODOS) ---
+                // --- BOTÓN DE IMPRIMIR: SIEMPRE VISIBLE PARA EL CLIENTE EN EL HISTORIAL ---
                 let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
                 
-                // --- BOTONES EXTRA SOLO PARA ADMIN ---
                 if (!isClient) {
                     buttons += `<button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button>`;
                 }
@@ -1601,11 +1583,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast('Error al generar recibo.', 'error'); } 
     }
 
-    // --- FIX NAVEGACIÓN CLIENTE: Verificación robusta del rol ---
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
-        // Obtenemos el rol REAL del usuario logueado en este momento
         const userInfo = getUserRoleAndId();
-        // Si el usuario es cliente, forzamos isClientView a true sin importar los argumentos
         const isClientView = (userInfo.role === 'cliente');
 
         document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
@@ -1614,7 +1593,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
-            // --- FIX MODO OSCURO: Se eliminan estilos fijos y se usan variables ---
             let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
@@ -1624,13 +1602,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                                     </div>`;
             if (!isClientView) { 
-                // VISTA ADMIN
                 html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`; 
             } else {
-                 // VISTA CLIENTE
                  html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`;
@@ -1645,7 +1621,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
                     }
                     if (!isClientView) {
-                        // SOLO ADMIN ve borrar y entrega
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
@@ -1669,23 +1644,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
-        // Si no se pasa ID (ej: navegación cliente), buscar el propio
         const userInfo = getUserRoleAndId();
         
         if (!artistaId) {
-            // Si es cliente, usa su propio ID
             if (userInfo.role === 'cliente' && userInfo.artistaId) {
                 artistaId = userInfo.artistaId;
-                // Si no se pasaron nombres, usamos los del token o placeholder
                 if (!artistaNombre) artistaNombre = userInfo.username;
             } else {
-                // Si es admin y no pasó ID, hay que buscar
                 const artistas = await fetchAPI('/api/artistas'); 
                 const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
                 if (artista) artistaId = artista._id; else return;
             }
         } 
-        // La función mostrarVistaArtista ahora determina por sí misma si es vista de cliente
         mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); 
     }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
@@ -1742,7 +1712,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
         document.getElementById('drive-status').textContent = ''; 
         
-        // --- MODIFICACIÓN: SI ES CLIENTE, OCULTAR SUBIDA ---
         const token = localStorage.getItem('token');
         const payload = JSON.parse(atob(token.split('.')[1]));
         const isClient = payload.role.toLowerCase() === 'cliente';
@@ -1840,8 +1809,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let p = user.permisos || []; const role = user.role ? user.role.toLowerCase() : 'cliente';
         let html = '';
         if (role === 'cliente') { 
-            // Para el cliente, al hacer click en "Mis Proyectos", llamamos a irAVistaArtista sin ID
-            // La función ahora detectará automáticamente el ID del cliente
             html = `<div class="nav-group mb-3">
                         <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
                         <a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
