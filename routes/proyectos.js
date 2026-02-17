@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js
+// ARCHIVO: routes/proyectos.js (CORREGIDO)
 // ==========================================
 const express = require('express');
 const router = express.Router();
@@ -12,46 +12,35 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 // ------------------------------------------------------------------
-// FUNCIÓN INTELIGENTE: FILTRO DE USUARIO
-// Conecta el Usuario logueado con su perfil de Artista
+// FUNCIÓN INTELIGENTE: FILTRO DE USUARIO (SECCIÓN CORREGIDA)
+// Ahora confía en el artistaId del token de sesión.
 // ------------------------------------------------------------------
 const getFiltroUsuario = async (req) => {
-    // 1. Filtro base: no mostrar lo borrado (isDeleted no debe ser true)
+    // 1. Filtro base: no mostrar lo borrado
     let filtro = { isDeleted: { $ne: true } };
 
-    // 2. Si es ADMIN, STAFF o INGENIERO, ven todo.
-    if (!req.user.role || req.user.role !== 'cliente') {
+    // 2. Si NO es un cliente (admin, ingeniero, etc.), puede ver todo.
+    if (req.user.role !== 'cliente') {
         return filtro;
     }
 
-    // 3. LOGICA PARA CLIENTES
-    // Buscamos al Artista usando el ID del usuario conectado
-    let artistaVinculado = await Artista.findOne({ usuarioId: req.user.id });
-
-    // Fallback: Si no tiene usuarioId vinculado, buscamos por correo
-    if (!artistaVinculado) {
-        // console.log(`Buscando artista por correo para: ${req.user.email}`);
-        artistaVinculado = await Artista.findOne({ 
-            correo: { $regex: new RegExp(`^${req.user.email}$`, 'i') }
-        });
-    }
-
-    // 4. Aplicar el filtro
-    if (artistaVinculado) {
-        filtro.artista = artistaVinculado._id;
-        // Guardamos el ID en el request para validaciones posteriores
-        req.user.artistaId = artistaVinculado._id; 
+    // 3. LOGICA PARA CLIENTES: Usar el artistaId del token
+    // El login ya hizo el trabajo de encontrar el artista correcto.
+    if (req.user.artistaId) {
+        filtro.artista = new mongoose.Types.ObjectId(req.user.artistaId);
     } else {
-        // SEGURIDAD: Es cliente pero no encontramos su Artista.
-        // Asignamos un ID falso para que la consulta no devuelva nada, en lugar de devolver todo.
+        // SEGURIDAD: Es cliente pero no tiene artista vinculado en el token.
+        // Asignamos un ID falso para que la consulta no devuelva nada.
+        console.warn(`WARN: El cliente ${req.user.username} no tiene artistaId en su token.`);
         filtro.artista = new mongoose.Types.ObjectId(); 
     }
 
     return filtro;
 };
 
+
 // ------------------------------------------------------------------
-// RUTAS GET (LECTURA)
+// RUTAS GET (LECTURA) - Sin cambios
 // ------------------------------------------------------------------
 
 // 1. Todos los proyectos (Dashboard general)
@@ -139,7 +128,7 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. Por ID de Artista (ESTA ES LA RUTA QUE ARREGLA TU ERROR EN EL FRONTEND)
+// 6. Por ID de Artista (Vista de Artista)
 router.get('/por-artista/:id', async (req, res) => {
     try {
         // Seguridad: Si es cliente, verificar que pide SU propio historial
@@ -180,7 +169,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// RUTAS POST/PUT (ESCRITURA)
+// RUTAS POST/PUT (ESCRITURA) - Sin cambios
 // ------------------------------------------------------------------
 
 // 8. Crear Proyecto
@@ -286,7 +275,7 @@ router.put('/:id/documentos', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// RUTAS BORRADO Y PAPELERA
+// RUTAS BORRADO Y PAPELERA - Sin cambios
 // ------------------------------------------------------------------
 
 router.delete('/:id', async (req, res) => {
