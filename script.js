@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(activeSection === 'gestion-usuarios') renderPaginatedList('usuarios', query);
     }
 
-    // --- CARGAR LOGO Y CONFIG (CORREGIDO FAVICON) ---
+    // --- CARGAR LOGO Y CONFIG ---
     async function loadInitialConfig() {
         try {
             const config = await fetchAPI('/api/configuracion');
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
-        // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS ---
+        // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS (ADMIN) ---
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
         if (datosBancariosBtn) {
             if (payload.role && payload.role.toLowerCase() === 'cliente') {
@@ -742,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // --- EDICIÓN USUARIOS (ACTUALIZADO CON SELECT ARTISTA) ---
+    // --- EDICIÓN USUARIOS ---
     async function abrirModalEditarUsuario(itemStr) {
         const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
         
@@ -774,7 +774,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectArtista.innerHTML = '<option value="">Error al cargar</option>';
             }
         }
-        // -----------------------------------
         
         document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false);
         if (item.permisos && Array.isArray(item.permisos)) {
@@ -791,7 +790,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = document.getElementById('editUsuarioId').value;
         const pass = document.getElementById('editUsuarioPass').value;
         
-        // Obtenemos el artista seleccionado
         const artistaSelect = document.getElementById('editUsuarioArtista');
         const artistaId = artistaSelect ? artistaSelect.value : null;
 
@@ -803,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             email: document.getElementById('editUsuarioEmail').value,
             role: document.getElementById('editUsuarioRole').value,
             permisos: permisos,
-            artistaId: artistaId // <--- Enviamos esto al backend
+            artistaId: artistaId 
         };
         if(pass) body.password = pass;
 
@@ -1105,11 +1103,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
 
         if (esCliente) {
-            // --- CLIENTE: OCULTAR SELECCIÓN DE ARTISTA ---
+            // --- CLIENTE: MODIFICACIÓN CRÍTICA ---
+            // 1. Ocultar el selector para evitar ruido visual y "Público General"
             artistaSelectContainer.style.display = 'none';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
             
-            // Añadir mensaje visual si no existe
+            // 2. Forzar el valor del select al ID del artista del cliente
+            const select = document.getElementById('proyectoArtista');
+            // Creamos una única opción forzada, sin llamar a cargarOpcionesParaSelect
+            select.innerHTML = `<option value="${payload.artistaId}" selected>${payload.username}</option>`;
+
+            // 3. Mostrar mensaje visual
             if (!document.getElementById('info-artista-cliente')) {
                  const infoArtistaEl = document.createElement('p');
                  infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${payload.username}</strong>`;
@@ -1118,12 +1122,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
             }
         } else {
-            // --- ADMIN: MOSTRAR TODO ---
+            // --- ADMIN: MOSTRAR TODO NORMAL ---
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
             if (document.getElementById('info-artista-cliente')) {
                 document.getElementById('info-artista-cliente').remove();
             }
+            // Solo cargamos la lista completa si es ADMIN
             cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true);
         }
 
@@ -1374,11 +1379,46 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cargarPagosPendientes() {
         const tabla = document.getElementById('tablaPendientesBody'); tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
         await fetchAPI('/api/proyectos'); 
-        const pendientes = localCache.proyectos.filter(p => { const pagado = p.montoPagado || 0; return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; });
+        
+        // --- FILTRO DE CLIENTES ---
+        const token = localStorage.getItem('token');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const isClient = payload.role.toLowerCase() === 'cliente';
+
+        const pendientes = localCache.proyectos.filter(p => { 
+            // Si es cliente, solo sus proyectos
+            if (isClient && (!p.artista || p.artista._id !== payload.artistaId)) return false;
+
+            const pagado = p.montoPagado || 0; 
+            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; 
+        });
+
         if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
+        
         tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button><button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button></td></tr>`; }).join('');
     }
-    async function cargarHistorialPagos() { const tablaBody = document.getElementById('tablaPagosBody'); tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; try { const pagos = await fetchAPI('/api/proyectos/pagos/todos'); tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } }
+    async function cargarHistorialPagos() { 
+        const tablaBody = document.getElementById('tablaPagosBody'); 
+        tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
+        
+        const token = localStorage.getItem('token');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const isClient = payload.role.toLowerCase() === 'cliente';
+
+        try { 
+            let pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
+            
+            // --- FILTRO CLIENTES ---
+            if (isClient) {
+                // Asumiendo que 'artista' en pagos es el nombre. Si no, necesitaríamos filtrar en backend.
+                // Filtrado por nombre (puede ser impreciso, mejor filtrar en backend).
+                // Intentaremos filtrar por lógica local si el objeto trae ID
+                 pagos = pagos.filter(p => p.artista === payload.nombre || p.artista === payload.username);
+            }
+
+            tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
+        } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } 
+    }
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) {
         try {
@@ -1470,13 +1510,15 @@ document.addEventListener('DOMContentLoaded', () => {
         contenido.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
-            let html = `<div class="card mb-4">
+            
+            // --- FIX MODO OSCURO: Usamos style variables o clases que se adapten ---
+            let html = `<div class="card mb-4" style="background-color: var(--card-bg, #fff); color: var(--text-color, #000);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
                                     <div>
                                         <p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
-                                        <p class="mb-1 text-muted"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
-                                        <p class="mb-0 text-muted"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
+                                        <p class="mb-1"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
+                                        <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                                     </div>`;
             if (!isClientView) { 
                 html += `<div class="btn-group mt-2 mt-md-0">
@@ -1494,6 +1536,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if (!isClientView) {
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
+                        // --- AQUÍ ELIMINAMOS EL BOTÓN BORRAR SI ES VISTA CLIENTE ---
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
 
@@ -1576,8 +1619,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); 
         modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
         document.getElementById('drive-status').textContent = ''; 
-        document.getElementById('drive-file-input').value = ''; 
-        document.getElementById('btn-drive-upload').onclick = subirADrive; 
+        
+        // --- MODIFICACIÓN: SI ES CLIENTE, OCULTAR SUBIDA ---
+        const token = localStorage.getItem('token');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const isClient = payload.role.toLowerCase() === 'cliente';
+        
+        const uploadBtn = document.getElementById('btn-drive-upload');
+        const fileInput = document.getElementById('drive-file-input');
+        
+        if (isClient) {
+            if(uploadBtn) uploadBtn.style.display = 'none';
+            if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'none';
+        } else {
+             if(uploadBtn) uploadBtn.style.display = 'block';
+             if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'block';
+             uploadBtn.onclick = subirADrive; 
+        }
+
         new bootstrap.Modal(modalEl).show(); 
     }
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
@@ -1662,6 +1721,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html = `<div class="nav-group mb-3">
                         <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div>
                         <a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista('${user.artistaId}', '${escapeHTML(user.username)}', '')"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a>
+                        <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Mis Pagos</a>
                     </div>`; 
         } else {
             const isSuperAdmin = role === 'admin'; 
