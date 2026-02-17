@@ -1395,7 +1395,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (pendientes.length === 0) { tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; return; }
         
-        tabla.innerHTML = pendientes.map(p => { const deuda = p.total - (p.montoPagado || 0); const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions"><button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button><button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button></td></tr>`; }).join('');
+        tabla.innerHTML = pendientes.map(p => { 
+            const deuda = p.total - (p.montoPagado || 0); 
+            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; 
+            const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; 
+            
+            // --- BOTONES POR ROL ---
+            let buttons = '';
+            if (isClient) {
+                // El cliente solo ve estado, no cobra
+                buttons = `<button class="btn btn-sm btn-outline-info" onclick="app.compartirRecordatorioPago('${p._id}')"><i class="bi bi-whatsapp"></i> Preguntar</button>`;
+            } else {
+                buttons = `<button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button>
+                           <button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button>`;
+            }
+
+            return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions">${buttons}</td></tr>`; 
+        }).join('');
     }
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
@@ -1410,13 +1426,19 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // --- FILTRO CLIENTES ---
             if (isClient) {
-                // Asumiendo que 'artista' en pagos es el nombre. Si no, necesitaríamos filtrar en backend.
-                // Filtrado por nombre (puede ser impreciso, mejor filtrar en backend).
-                // Intentaremos filtrar por lógica local si el objeto trae ID
                  pagos = pagos.filter(p => p.artista === payload.nombre || p.artista === payload.username);
             }
 
-            tablaBody.innerHTML = pagos.length ? pagos.map(p => `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions"><button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
+            tablaBody.innerHTML = pagos.length ? pagos.map(p => {
+                // --- BOTONES POR ROL ---
+                let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
+                
+                if (!isClient) {
+                    buttons += `<button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button>`;
+                }
+
+                return `<tr><td>${new Date(p.fecha).toLocaleDateString()}</td><td class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td><td>$${p.monto.toFixed(2)}</td><td>${escapeHTML(p.metodo)}</td><td class="table-actions">${buttons}</td></tr>`;
+            }).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
         } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } 
     }
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
@@ -1511,8 +1533,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
-            // --- FIX MODO OSCURO: Usamos style variables o clases que se adapten ---
-            let html = `<div class="card mb-4" style="background-color: var(--card-bg, #fff); color: var(--text-color, #000);">
+            // --- FIX MODO OSCURO: Se eliminan estilos fijos y se usan variables ---
+            // Si el tema está bien configurado en CSS, esto tomará el color correcto.
+            // Forzamos style="color: var(--text-color)" para asegurar que la letra se vea.
+            let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
                                     <div>
@@ -1525,7 +1549,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`; 
+            } else {
+                 // --- CLIENTE: BOTÓN NUEVO PROYECTO SOLO ---
+                 html += `<div class="btn-group mt-2 mt-md-0">
+                            <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
+                        </div>`;
             }
+
             html += `</div></div></div><h3>Historial de Proyectos</h3>`;
             if (proyectos.length) { 
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
