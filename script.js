@@ -340,6 +340,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         
+        // --- FIX SEGURIDAD VISUAL: Asignar data-role y renderizar Sidebar INMEDIATAMENTE ---
+        // Esto previene que se muestren opciones de administrador mientras carga el resto
+        const role = payload.role ? payload.role.toLowerCase() : 'cliente';
+        document.body.setAttribute('data-role', role);
+
+        renderSidebar(payload); // Renderizamos el menú antes de mostrar el wrapper
+        
         if (!configCache) await loadInitialConfig();
         
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
@@ -347,24 +354,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS (ADMIN) ---
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
         if (datosBancariosBtn) {
-            if (payload.role && payload.role.toLowerCase() === 'cliente') {
+            if (role === 'cliente') {
                 datosBancariosBtn.style.display = 'none';
             } else {
                 datosBancariosBtn.style.display = 'block';
             }
         }
-
-        renderSidebar(payload);
         
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
         DOMElements.loginContainer.style.display = 'none'; 
+        
+        // Se muestra el contenedor principal ahora que el DOM y el sidebar están listos
         DOMElements.appWrapper.style.display = 'flex'; 
 
         const hashSection = location.hash.replace('#', '');
         
         // --- LÓGICA DE REDIRECCIÓN ---
-        if (payload.role && payload.role.toLowerCase() === 'cliente') {
+        if (role === 'cliente') {
              if(payload.artistaId) {
                  await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username, true);
                  mostrarSeccion('vista-artista', false); 
@@ -1413,6 +1420,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<tr><td><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td>$${p.total.toFixed(2)}</td><td>$${(p.montoPagado || 0).toFixed(2)}</td><td style="color:var(--danger-color); font-weight:700;">$${deuda.toFixed(2)}</td><td class="table-actions">${buttons}</td></tr>`; 
         }).join('');
     }
+    
+    // --- FIX HISTORIAL PAGOS CLIENTE ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -1426,10 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isClient) {
                 // --- LÓGICA ROBUSTA PARA CLIENTES ---
-                // Buscamos los pagos directamente en los proyectos locales del usuario
-                // en lugar de depender del endpoint global que a veces filtra mal por nombre.
-                
-                // Aseguramos que tenemos proyectos cargados
+                // Si la caché está vacía, forzamos la descarga de proyectos
                 if (!localCache.proyectos || localCache.proyectos.length === 0) {
                      await fetchAPI('/api/proyectos');
                 }
@@ -1460,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
-                // --- BOTONES POR ROL ---
+                // --- FIX BOTÓN REIMPRIMIR PARA TODOS ---
                 let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
                 
                 if (!isClient) {
@@ -1471,6 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
         } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } 
     }
+    
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) {
         try {
