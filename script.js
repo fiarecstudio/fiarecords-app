@@ -1403,8 +1403,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- BOTONES POR ROL ---
             let buttons = '';
             if (isClient) {
-                // El cliente solo ve estado, no cobra
-                buttons = `<button class="btn btn-sm btn-outline-info" onclick="app.compartirRecordatorioPago('${p._id}')"><i class="bi bi-whatsapp"></i> Preguntar</button>`;
+                // ELIMINADO EL BOTÓN "PREGUNTAR" - AHORA ESTÁ VACÍO
+                buttons = '';
             } else {
                 buttons = `<button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button>
                            <button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button>`;
@@ -1422,11 +1422,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const isClient = payload.role.toLowerCase() === 'cliente';
 
         try { 
-            let pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
-            
-            // --- FILTRO CLIENTES ---
+            let pagos = [];
+
             if (isClient) {
-                 pagos = pagos.filter(p => p.artista === payload.nombre || p.artista === payload.username);
+                // --- LÓGICA ROBUSTA PARA CLIENTES ---
+                // Buscamos los pagos directamente en los proyectos locales del usuario
+                // en lugar de depender del endpoint global que a veces filtra mal por nombre.
+                
+                // Aseguramos que tenemos proyectos cargados
+                if (!localCache.proyectos || localCache.proyectos.length === 0) {
+                     await fetchAPI('/api/proyectos');
+                }
+
+                const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === payload.artistaId);
+                
+                misProyectos.forEach(proj => {
+                    if (proj.pagos && proj.pagos.length > 0) {
+                        proj.pagos.forEach(pago => {
+                            pagos.push({
+                                fecha: pago.fecha || new Date().toISOString(),
+                                artista: payload.username, // Nombre visual
+                                monto: pago.monto,
+                                metodo: pago.metodo,
+                                proyectoId: proj._id,
+                                pagoId: pago._id
+                            });
+                        });
+                    }
+                });
+
+                // Ordenamos por fecha descendente
+                pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+            } else {
+                // --- LÓGICA ADMIN (API GLOBAL) ---
+                pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
             }
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
@@ -1534,8 +1564,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
             // --- FIX MODO OSCURO: Se eliminan estilos fijos y se usan variables ---
-            // Si el tema está bien configurado en CSS, esto tomará el color correcto.
-            // Forzamos style="color: var(--text-color)" para asegurar que la letra se vea.
             let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
@@ -1566,7 +1594,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if (!isClientView) {
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
-                        // --- AQUÍ ELIMINAMOS EL BOTÓN BORRAR SI ES VISTA CLIENTE ---
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
 
