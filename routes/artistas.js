@@ -1,16 +1,35 @@
+// ==========================================
+// ARCHIVO: routes/artistas.js (CORREGIDO Y BLINDADO)
+// ==========================================
 const express = require('express');
 const router = express.Router();
 const Artista = require('../models/Artista');
 const Usuario = require('../models/Usuario'); 
 const auth = require('../middleware/auth');
-const bcrypt = require('bcryptjs'); // <--- NUEVO: Necesario para encriptar pass
+const bcrypt = require('bcryptjs'); 
 
 router.use(auth);
 
-// Obtener todos
+// ==========================================
+// OBTENER ARTISTAS (CON SEGURIDAD PARA CLIENTES)
+// ==========================================
 router.get('/', async (req, res) => {
     try {
-        const artistas = await Artista.find({ isDeleted: false }).sort({ nombreArtistico: 1, nombre: 1 });
+        let filtro = { isDeleted: false };
+
+        // --- MODIFICACIÓN CLAVE: BLINDAJE ---
+        // Si el usuario es 'cliente', forzamos el filtro para que SOLO traiga su propio ID.
+        if (req.user.role === 'cliente') {
+            if (req.user.artistaId) {
+                filtro._id = req.user.artistaId;
+            } else {
+                // Si es cliente pero no tiene vínculo, devolvemos lista vacía por seguridad
+                return res.json([]); 
+            }
+        }
+        // -------------------------------------
+
+        const artistas = await Artista.find(filtro).sort({ nombreArtistico: 1, nombre: 1 });
         res.json(artistas);
     } catch (err) { res.status(500).json({ error: 'Error al obtener artistas' }); }
 });
@@ -18,9 +37,8 @@ router.get('/', async (req, res) => {
 // Crear uno nuevo
 router.post('/', async (req, res) => {
     try {
-        // Nota: Agrego password aquí por si lo mandas al crear, aunque normalmente se crea sin pass al inicio
         const { nombre, nombreArtistico, telefono, correo, password } = req.body;
-        const nuevoArtista = new Artista({ nombre, nombreArtistico, telefono, correo, password }); // El modelo debería manejar el hash si tiene pre-save, si no, habría que hashear aquí también.
+        const nuevoArtista = new Artista({ nombre, nombreArtistico, telefono, correo, password }); 
         await nuevoArtista.save();
         res.status(201).json(nuevoArtista);
     } catch (err) { res.status(400).json({ error: 'Error al crear el artista' }); }
@@ -29,6 +47,12 @@ router.post('/', async (req, res) => {
 // Obtener por ID
 router.get('/:id', async (req, res) => {
     try {
+        // --- SEGURIDAD EXTRA ---
+        // Si un cliente intenta consultar un ID que no es el suyo, bloqueamos.
+        if (req.user.role === 'cliente' && req.user.artistaId !== req.params.id) {
+            return res.status(403).json({ error: 'No autorizado' });
+        }
+
         const artista = await Artista.findById(req.params.id);
         if (!artista) return res.status(404).json({ error: 'Artista no encontrado' });
         res.json(artista);
@@ -40,6 +64,12 @@ router.get('/:id', async (req, res) => {
 // ==========================================
 router.put('/:id', async (req, res) => {
     try {
+        // --- SEGURIDAD EXTRA ---
+        // El cliente solo puede editar su propio perfil (si la interfaz lo permite)
+        if (req.user.role === 'cliente' && req.user.artistaId !== req.params.id) {
+             return res.status(403).json({ error: 'No autorizado' });
+        }
+
         const { nombre, nombreArtistico, telefono, correo, password } = req.body;
         const artistaId = req.params.id;
 
@@ -51,7 +81,7 @@ router.put('/:id', async (req, res) => {
         let datosUpdate = { nombre, nombreArtistico, telefono, correo };
 
         // ---------------------------------------------------------
-        // A. MANEJO DE CONTRASEÑA (NUEVO)
+        // A. MANEJO DE CONTRASEÑA (TU LÓGICA ORIGINAL)
         // ---------------------------------------------------------
         if (password && password.trim() !== "") {
             // Encriptamos la contraseña
@@ -73,7 +103,7 @@ router.put('/:id', async (req, res) => {
         }
 
         // ---------------------------------------------------------
-        // B. LÓGICA DE SINCRONIZACIÓN DE CORREO (TU CÓDIGO ORIGINAL MEJORADO)
+        // B. LÓGICA DE SINCRONIZACIÓN DE CORREO (TU LÓGICA ORIGINAL)
         // ---------------------------------------------------------
         if (artistaActual.usuarioId && correo) {
             const usuarioVinculado = await Usuario.findById(artistaActual.usuarioId);
@@ -112,8 +142,13 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Rutas Papelera y Delete (Sin cambios, solo las incluyo para que el archivo esté completo)
+// ==========================================
+// RUTAS DE BORRADO Y PAPELERA (PROTEGIDAS)
+// ==========================================
+
 router.delete('/:id', async (req, res) => {
+    // Cliente NO puede borrar artistas
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
         await Artista.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
@@ -121,6 +156,8 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.get('/papelera/all', async (req, res) => {
+    // Cliente NO ve la papelera
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
         const artistas = await Artista.find({ isDeleted: true });
         res.json(artistas);
@@ -128,6 +165,8 @@ router.get('/papelera/all', async (req, res) => {
 });
 
 router.put('/:id/restaurar', async (req, res) => {
+    // Cliente NO puede restaurar
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
         await Artista.findByIdAndUpdate(req.params.id, { isDeleted: false });
         res.json({ message: 'Restaurado' });
@@ -135,6 +174,8 @@ router.put('/:id/restaurar', async (req, res) => {
 });
 
 router.delete('/:id/permanente', async (req, res) => {
+    // Cliente NO puede borrar permanente
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
         await Artista.findByIdAndDelete(req.params.id);
         res.status(204).send();
@@ -142,6 +183,8 @@ router.delete('/:id/permanente', async (req, res) => {
 });
 
 router.delete('/papelera/vaciar', async (req, res) => {
+    // Cliente NO puede vaciar papelera
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
         await Artista.deleteMany({ isDeleted: true });
         res.status(204).send();
