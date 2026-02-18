@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
         apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
         clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
         discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-        scope: 'https://www.googleapis.com/auth/drive.file'
+        // Scope completo para poder gestionar carpetas libremente
+        scope: 'https://www.googleapis.com/auth/drive'
     };
 
     let tokenClient;
@@ -294,33 +295,116 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-    // --- GOOGLE DRIVE ---
+    // --- GOOGLE DRIVE (LÓGICA REAL) ---
     function initializeGapiClient() { gapi.load('client', async () => { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs, }); gapiInited = true; }); }
     function initializeGisClient() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '', }); gisInited = true; }
     if (typeof gapi !== 'undefined') initializeGapiClient();
     if (typeof google !== 'undefined') initializeGisClient();
 
+    // Función auxiliar para buscar o crear carpeta
+    async function buscarOCrearCarpeta(nombreCarpeta) {
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreCarpeta}' and trashed=false`;
+        try {
+            const response = await gapi.client.drive.files.list({
+                q: q,
+                fields: 'files(id, name)',
+                spaces: 'drive'
+            });
+            
+            const files = response.result.files;
+            if (files && files.length > 0) {
+                console.log('Carpeta encontrada:', files[0].id);
+                return files[0].id; // Retorna ID existente
+            } else {
+                // Crear carpeta si no existe
+                const fileMetadata = {
+                    'name': nombreCarpeta,
+                    'mimeType': 'application/vnd.google-apps.folder'
+                };
+                const createRes = await gapi.client.drive.files.create({
+                    resource: fileMetadata,
+                    fields: 'id'
+                });
+                console.log('Carpeta creada:', createRes.result.id);
+                return createRes.result.id; // Retorna ID nuevo
+            }
+        } catch (err) {
+            console.error('Error buscando/creando carpeta:', err);
+            throw new Error('No se pudo gestionar la carpeta del artista.');
+        }
+    }
+
+    // Función principal de subida
     async function subirADrive() {
-        if (!gapiInited || !gisInited) return showToast('Error: Librerías Google no cargadas', 'error');
-        const fileInput = document.getElementById('drive-file-input');
-        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo', 'warning');
+        if (!gapiInited || !gisInited) return showToast('Error: Librerías Google no cargadas. Recarga la página.', 'error');
         
+        const fileInput = document.getElementById('drive-file-input');
+        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo para subir.', 'warning');
+        
+        const file = fileInput.files[0];
+        const artistName = document.getElementById('delivery-artist-name').value || 'General';
+        const statusSpan = document.getElementById('drive-status');
+
+        // Pedir token de acceso
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
+            
             try {
-                showToast('Subiendo archivo...', 'info');
-                setTimeout(() => {
-                    document.getElementById('delivery-link-input').value = "https://drive.google.com/file/d/example";
-                    saveDeliveryLink();
-                    showToast('Archivo vinculado (Demo)', 'success');
-                }, 1500);
+                if(statusSpan) statusSpan.textContent = 'Procesando carpeta...';
+                showLoader();
+
+                // 1. Obtener ID de la carpeta del artista
+                const folderId = await buscarOCrearCarpeta(artistName);
+
+                if(statusSpan) statusSpan.textContent = 'Subiendo archivo...';
+
+                // 2. Preparar la subida del archivo (Multipart upload)
+                const metadata = {
+                    'name': file.name,
+                    'parents': [folderId]
+                };
+
+                const accessToken = gapi.client.getToken().access_token;
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', file);
+
+                // Usamos fetch directo para la subida
+                const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name', {
+                    method: 'POST',
+                    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                    body: form
+                });
+
+                const fileData = await uploadRes.json();
+
+                if (fileData.error) throw new Error(fileData.error.message);
+
+                // 3. Éxito
+                console.log('Archivo subido:', fileData);
+                document.getElementById('delivery-link-input').value = fileData.webViewLink;
+                
+                // Guardar automáticamente el link en la base de datos
+                await saveDeliveryLink(); 
+                
+                showToast('¡Archivo subido exitosamente!', 'success');
+                if(statusSpan) statusSpan.textContent = 'Subida completada.';
+
             } catch (err) {
                 console.error(err);
-                showToast('Error al subir', 'error');
+                showToast('Error al subir: ' + err.message, 'error');
+                if(statusSpan) statusSpan.textContent = 'Error en subida.';
+            } finally {
+                hideLoader();
             }
         };
 
-        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({ prompt: '' }); } else { tokenClient.requestAccessToken({ prompt: '' }); }
+        // Solicitar permisos de escritura si no los tiene, o usar token existente
+        if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({prompt: 'consent'});
+        } else {
+            tokenClient.requestAccessToken({prompt: ''});
+        }
     }
 
     // --- INICIALIZACIÓN ---
@@ -1432,10 +1516,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; 
             const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; 
             
-            // --- BOTONES POR ROL (PENDIENTES) ---
+            // --- BOTONES POR ROL ---
             let buttons = '';
             if (isClient) {
-                // El cliente NO ve botones en la tabla de deudas pendientes
+                // ELIMINADO EL BOTÓN "PREGUNTAR" - AHORA ESTÁ VACÍO
                 buttons = '';
             } else {
                 buttons = `<button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button>
@@ -1446,7 +1530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     
-    // --- CORRECCIÓN IMAGEN 3: Historial de Pagos y Botón Imprimir ---
+    // --- FIX HISTORIAL PAGOS CLIENTE & BOTON IMPRIMIR ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -1459,9 +1543,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isClient) {
                 // --- LÓGICA ROBUSTA PARA CLIENTES ---
+                // Si la caché está vacía, forzamos la descarga de proyectos
                 if (!localCache.proyectos || localCache.proyectos.length === 0) {
                      await fetchAPI('/api/proyectos');
                 }
+
                 const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === userInfo.artistaId);
                 
                 misProyectos.forEach(proj => {
@@ -1469,7 +1555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         proj.pagos.forEach(pago => {
                             pagos.push({
                                 fecha: pago.fecha || new Date().toISOString(),
-                                artista: userInfo.username, 
+                                artista: userInfo.username, // Nombre visual
                                 monto: pago.monto,
                                 metodo: pago.metodo,
                                 proyectoId: proj._id,
@@ -1478,6 +1564,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                 });
+
+                // Ordenamos por fecha descendente
                 pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             } else {
@@ -1486,9 +1574,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
-                // --- BOTÓN DE IMPRIMIR: SIEMPRE VISIBLE PARA EL CLIENTE EN EL HISTORIAL ---
+                // --- BOTÓN REIMPRIMIR (DISPONIBLE PARA TODOS) ---
                 let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
                 
+                // --- BOTONES EXTRA SOLO PARA ADMIN ---
                 if (!isClient) {
                     buttons += `<button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button>`;
                 }
@@ -1583,8 +1672,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast('Error al generar recibo.', 'error'); } 
     }
 
+    // --- FIX NAVEGACIÓN CLIENTE: Verificación robusta del rol ---
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
+        // Obtenemos el rol REAL del usuario logueado en este momento
         const userInfo = getUserRoleAndId();
+        // Si el usuario es cliente, forzamos isClientView a true sin importar los argumentos
         const isClientView = (userInfo.role === 'cliente');
 
         document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
@@ -1593,6 +1685,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
+            // --- FIX MODO OSCURO: Se eliminan estilos fijos y se usan variables ---
             let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
@@ -1602,11 +1695,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                                     </div>`;
             if (!isClientView) { 
+                // VISTA ADMIN
                 html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`; 
             } else {
+                 // VISTA CLIENTE
                  html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`;
@@ -1621,6 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
                     }
                     if (!isClientView) {
+                        // SOLO ADMIN ve borrar y entrega
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
@@ -1644,18 +1740,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
+        // Si no se pasa ID (ej: navegación cliente), buscar el propio
         const userInfo = getUserRoleAndId();
         
         if (!artistaId) {
+            // Si es cliente, usa su propio ID
             if (userInfo.role === 'cliente' && userInfo.artistaId) {
                 artistaId = userInfo.artistaId;
+                // Si no se pasaron nombres, usamos los del token o placeholder
                 if (!artistaNombre) artistaNombre = userInfo.username;
             } else {
+                // Si es admin y no pasó ID, hay que buscar
                 const artistas = await fetchAPI('/api/artistas'); 
                 const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
                 if (artista) artistaId = artista._id; else return;
             }
         } 
+        // La función mostrarVistaArtista ahora determina por sí misma si es vista de cliente
         mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); 
     }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
@@ -1712,6 +1813,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
         document.getElementById('drive-status').textContent = ''; 
         
+        // --- MODIFICACIÓN: SI ES CLIENTE, OCULTAR SUBIDA ---
         const token = localStorage.getItem('token');
         const payload = JSON.parse(atob(token.split('.')[1]));
         const isClient = payload.role.toLowerCase() === 'cliente';
