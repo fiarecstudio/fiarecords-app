@@ -74,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
-    // --- NUEVA UTILIDAD DE SEGURIDAD ---
     // Recupera rol y datos del token para validaciones visuales
     function getUserRoleAndId() {
         const token = localStorage.getItem('token');
@@ -178,7 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // GET Offline Cache Logic
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url.includes('/artistas')) return localCache.artistas;
@@ -260,11 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
                 
-                // 1. Logos en App y Login
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
                 if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
 
-                // 2. --- FIX FAVICON (ICONO DE PESTAÑA) ---
                 let link = document.querySelector("link[rel~='icon']");
                 if (!link) {
                     link = document.createElement('link');
@@ -272,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementsByTagName('head')[0].appendChild(link);
                 }
                 link.href = logoSrc;
-                // -----------------------------------------
 
                 localStorage.setItem('cached_logo_path', logoSrc);
                 configCache = config;
@@ -295,12 +290,57 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-    // --- NUEVA LÓGICA DE GOOGLE DRIVE (ORGANIZADA) ---
+    // ============================================
+    // GOOGLE DRIVE: INICIALIZACIÓN ROBUSTA Y LÓGICA
+    // ============================================
 
-    // 1. Obtener o crear la carpeta MAESTRA "FIA_RECORDS_STUDIO"
+    // 1. Funciones de Inicialización
+    window.initializeGapiClient = function() {
+        gapi.load('client', async () => {
+            try {
+                await gapi.client.init({
+                    apiKey: GAP_CONFIG.apiKey,
+                    discoveryDocs: GAP_CONFIG.discoveryDocs,
+                });
+                gapiInited = true;
+                console.log("GAPI Initialized");
+            } catch (error) {
+                console.error("Error init GAPI", error);
+            }
+        });
+    }
+
+    window.initializeGisClient = function() {
+        try {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GAP_CONFIG.clientId,
+                scope: GAP_CONFIG.scope,
+                callback: '', 
+            });
+            gisInited = true;
+            console.log("GIS Initialized");
+        } catch (error) {
+            console.error("Error init GIS", error);
+        }
+    }
+
+    // 2. Comprobador de Carga (Fix para "Servicios no cargados")
+    // Intenta inicializar cada 500ms hasta que las librerías existan
+    let checkGoogleLibsInterval = setInterval(() => {
+        if (typeof gapi !== 'undefined' && !gapiInited) {
+            initializeGapiClient();
+        }
+        if (typeof google !== 'undefined' && !gisInited) {
+            initializeGisClient();
+        }
+        if (gapiInited && gisInited) {
+            clearInterval(checkGoogleLibsInterval);
+        }
+    }, 500);
+
+    // 3. Lógica de Carpetas
     async function obtenerCarpetaMaestra() {
         const nombreMaestra = "FIA_RECORDS_STUDIO";
-        // Buscamos solo en la raíz (no dentro de otras carpetas) y que no esté borrada
         const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreMaestra}' and trashed=false and 'root' in parents`;
         
         try {
@@ -308,9 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const files = response.result.files;
             
             if (files && files.length > 0) {
-                return files[0].id; // Retorna ID existente
+                return files[0].id;
             } else {
-                // Crear carpeta maestra
                 const fileMetadata = {
                     'name': nombreMaestra,
                     'mimeType': 'application/vnd.google-apps.folder'
@@ -320,13 +359,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('Error carpeta maestra:', err);
-            throw new Error('Error al conectar con Drive (Carpeta Maestra).');
+            throw new Error('Error de conexión con Drive.');
         }
     }
 
-    // 2. Obtener o crear carpeta del ARTISTA dentro de la Maestra
     async function buscarOCrearCarpetaArtista(nombreArtista, idMaestra) {
-        // Buscamos la carpeta con el nombre del artista DENTRO de la carpeta maestra
         const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreArtista}' and trashed=false and '${idMaestra}' in parents`;
         
         try {
@@ -339,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fileMetadata = {
                     'name': nombreArtista,
                     'mimeType': 'application/vnd.google-apps.folder',
-                    'parents': [idMaestra] // Importante: Se crea DENTRO de la maestra
+                    'parents': [idMaestra]
                 };
                 const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
                 return createRes.result.id;
@@ -350,9 +387,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. Función principal de subida
+    // 4. Función Principal de Subida
     async function subirADrive() {
-        if (!gapiInited || !gisInited) return showToast('Error: Servicios de Google no cargados. Refresca.', 'error');
+        if (!gapiInited || !gisInited) {
+            // Intento final de inicializar si falló el automático
+            if(typeof gapi !== 'undefined') initializeGapiClient();
+            if(typeof google !== 'undefined') initializeGisClient();
+            return showToast('Cargando servicios de Google... Intenta de nuevo en 5 segundos.', 'info');
+        }
         
         const fileInput = document.getElementById('drive-file-input');
         if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'warning');
@@ -361,27 +403,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
         const statusSpan = document.getElementById('drive-status');
 
-        // Pedir autorización
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
             
             try {
-                if(statusSpan) statusSpan.textContent = 'Organizando carpetas...';
-                statusSpan.style.color = 'var(--primary-color)';
+                if(statusSpan) {
+                    statusSpan.textContent = 'Organizando carpetas...';
+                    statusSpan.style.color = 'var(--primary-color)';
+                }
                 showLoader();
 
-                // A. Obtener ID Maestra
                 const idMaestra = await obtenerCarpetaMaestra();
-
-                // B. Obtener ID Artista (Dentro de Maestra)
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
                 if(statusSpan) statusSpan.textContent = 'Subiendo archivo...';
 
-                // C. Subir Archivo
                 const metadata = {
                     'name': file.name,
-                    'parents': [folderId] // Se guarda en la carpeta del artista
+                    'parents': [folderId]
                 };
 
                 const accessToken = gapi.client.getToken().access_token;
@@ -398,24 +437,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fileData = await uploadRes.json();
                 if (fileData.error) throw new Error(fileData.error.message);
 
-                // D. Éxito y Guardado
                 console.log('Link obtenido:', fileData.webViewLink);
                 
-                // 1. Poner visualmente en el input
                 const linkInput = document.getElementById('delivery-link-input');
-                linkInput.value = fileData.webViewLink;
+                if(linkInput) linkInput.value = fileData.webViewLink;
                 
-                // 2. Guardar en BD inmediatamente
-                if(statusSpan) statusSpan.textContent = 'Guardando enlace...';
-                await saveDeliveryLink(); // Esta función guarda en BD y cierra el modal
-                
-                // Nota: saveDeliveryLink cierra el modal, así que el toast es suficiente
-                
+                if(statusSpan) {
+                    statusSpan.textContent = '¡Guardado con éxito!';
+                    statusSpan.style.color = 'var(--success-color)';
+                }
+
+                await saveDeliveryLink(); 
+                showToast('Archivo subido y enlace guardado.', 'success');
+
             } catch (err) {
                 console.error(err);
                 showToast('Error: ' + err.message, 'error');
                 if(statusSpan) {
-                    statusSpan.textContent = 'Falló la subida.';
+                    statusSpan.textContent = 'Error en la subida.';
                     statusSpan.style.color = 'var(--danger-color)';
                 }
             } finally {
@@ -423,7 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // Solicitar token si no existe
         if (gapi.client.getToken() === null) {
             tokenClient.requestAccessToken({prompt: 'consent'});
         } else {
@@ -466,7 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         
-        // --- FIX SEGURIDAD VISUAL ---
         const role = payload.role ? payload.role.toLowerCase() : 'cliente';
         document.body.setAttribute('data-role', role);
 
@@ -476,7 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
-        // --- CLIENTE: OCULTAR BOTÓN DATOS BANCARIOS (ADMIN) ---
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
         if (datosBancariosBtn) {
             if (role === 'cliente') {
@@ -489,13 +525,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isInitialized) { initAppEventListeners(payload); isInitialized = true; }
 
         DOMElements.loginContainer.style.display = 'none'; 
-        
-        // Se muestra el contenedor principal ahora que el DOM y el sidebar están listos
         DOMElements.appWrapper.style.display = 'flex'; 
 
         const hashSection = location.hash.replace('#', '');
         
-        // --- LÓGICA DE REDIRECCIÓN ---
         if (role === 'cliente') {
              if(payload.artistaId) {
                  await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username);
@@ -668,13 +701,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- SISTEMA DE PAGINACIÓN ---
-    // --- CORRECCIÓN IMAGEN 2: Seguridad en Listados ---
     async function renderPaginatedList(endpoint, filterText = null) {
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
         const listEl = document.getElementById(listId);
         if(!listEl) return;
 
-        // VERIFICACIÓN DE ROL PARA SEGURIDAD VISUAL
         const userInfo = getUserRoleAndId();
         const isClient = (userInfo.role === 'cliente');
 
@@ -724,7 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
             const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`;
 
-            // --- SEGURIDAD: SI ES CLIENTE, LOS BOTONES NO SE GENERAN ---
             let buttonsHtml = '';
             if (!isClient) {
                 buttonsHtml = `<div class="btn-group">
@@ -896,12 +926,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editUsuarioRole').value = item.role;
         document.getElementById('editUsuarioPass').value = ''; 
 
-        // --- CARGAR SELECTOR DE ARTISTAS ---
         const selectArtista = document.getElementById('editUsuarioArtista');
         if (selectArtista) {
             selectArtista.innerHTML = '<option value="">Cargando...</option>';
             try {
-                // Usamos caché o pedimos a la API
                 let artistas = localCache.artistas;
                 if (!artistas || artistas.length === 0) {
                     artistas = await fetchAPI('/api/artistas');
