@@ -295,73 +295,102 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-    // --- GOOGLE DRIVE (LÓGICA REAL) ---
-    function initializeGapiClient() { gapi.load('client', async () => { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs, }); gapiInited = true; }); }
-    function initializeGisClient() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '', }); gisInited = true; }
-    if (typeof gapi !== 'undefined') initializeGapiClient();
-    if (typeof google !== 'undefined') initializeGisClient();
+// --- CONFIGURACIÓN GOOGLE DRIVE ---
+    const GAP_CONFIG = {
+        apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
+        clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+        // Scope completo para poder gestionar carpetas libremente
+        scope: 'https://www.googleapis.com/auth/drive'
+    };
 
-    // Función auxiliar para buscar o crear carpeta
-    async function buscarOCrearCarpeta(nombreCarpeta) {
-        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreCarpeta}' and trashed=false`;
+    // --- NUEVA LÓGICA DE GOOGLE DRIVE (ORGANIZADA) ---
+
+    // 1. Obtener o crear la carpeta MAESTRA "FIA_RECORDS_STUDIO"
+    async function obtenerCarpetaMaestra() {
+        const nombreMaestra = "FIA_RECORDS_STUDIO";
+        // Buscamos solo en la raíz (no dentro de otras carpetas) y que no esté borrada
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreMaestra}' and trashed=false and 'root' in parents`;
+        
         try {
-            const response = await gapi.client.drive.files.list({
-                q: q,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            
+            const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
             const files = response.result.files;
+            
             if (files && files.length > 0) {
-                console.log('Carpeta encontrada:', files[0].id);
                 return files[0].id; // Retorna ID existente
             } else {
-                // Crear carpeta si no existe
+                // Crear carpeta maestra
                 const fileMetadata = {
-                    'name': nombreCarpeta,
+                    'name': nombreMaestra,
                     'mimeType': 'application/vnd.google-apps.folder'
                 };
-                const createRes = await gapi.client.drive.files.create({
-                    resource: fileMetadata,
-                    fields: 'id'
-                });
-                console.log('Carpeta creada:', createRes.result.id);
-                return createRes.result.id; // Retorna ID nuevo
+                const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+                return createRes.result.id;
             }
         } catch (err) {
-            console.error('Error buscando/creando carpeta:', err);
-            throw new Error('No se pudo gestionar la carpeta del artista.');
+            console.error('Error carpeta maestra:', err);
+            throw new Error('Error al conectar con Drive (Carpeta Maestra).');
         }
     }
 
-    // Función principal de subida
+    // 2. Obtener o crear carpeta del ARTISTA dentro de la Maestra
+    async function buscarOCrearCarpetaArtista(nombreArtista, idMaestra) {
+        // Buscamos la carpeta con el nombre del artista DENTRO de la carpeta maestra
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreArtista}' and trashed=false and '${idMaestra}' in parents`;
+        
+        try {
+            const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+            const files = response.result.files;
+            
+            if (files && files.length > 0) {
+                return files[0].id;
+            } else {
+                const fileMetadata = {
+                    'name': nombreArtista,
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [idMaestra] // Importante: Se crea DENTRO de la maestra
+                };
+                const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+                return createRes.result.id;
+            }
+        } catch (err) {
+            console.error('Error carpeta artista:', err);
+            throw new Error('No se pudo crear la carpeta del artista.');
+        }
+    }
+
+    // 3. Función principal de subida
     async function subirADrive() {
-        if (!gapiInited || !gisInited) return showToast('Error: Librerías Google no cargadas. Recarga la página.', 'error');
+        if (!gapiInited || !gisInited) return showToast('Error: Servicios de Google no cargados. Refresca.', 'error');
         
         const fileInput = document.getElementById('drive-file-input');
-        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo para subir.', 'warning');
+        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'warning');
         
         const file = fileInput.files[0];
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
         const statusSpan = document.getElementById('drive-status');
 
-        // Pedir token de acceso
+        // Pedir autorización
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
             
             try {
-                if(statusSpan) statusSpan.textContent = 'Procesando carpeta...';
+                if(statusSpan) statusSpan.textContent = 'Organizando carpetas...';
+                statusSpan.style.color = 'var(--primary-color)';
                 showLoader();
 
-                // 1. Obtener ID de la carpeta del artista
-                const folderId = await buscarOCrearCarpeta(artistName);
+                // A. Obtener ID Maestra
+                const idMaestra = await obtenerCarpetaMaestra();
+
+                // B. Obtener ID Artista (Dentro de Maestra)
+                const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
                 if(statusSpan) statusSpan.textContent = 'Subiendo archivo...';
 
-                // 2. Preparar la subida del archivo (Multipart upload)
+                // C. Subir Archivo
                 const metadata = {
                     'name': file.name,
-                    'parents': [folderId]
+                    'parents': [folderId] // Se guarda en la carpeta del artista
                 };
 
                 const accessToken = gapi.client.getToken().access_token;
@@ -369,7 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', file);
 
-                // Usamos fetch directo para la subida
                 const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name', {
                     method: 'POST',
                     headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
@@ -377,29 +405,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const fileData = await uploadRes.json();
-
                 if (fileData.error) throw new Error(fileData.error.message);
 
-                // 3. Éxito
-                console.log('Archivo subido:', fileData);
-                document.getElementById('delivery-link-input').value = fileData.webViewLink;
+                // D. Éxito y Guardado
+                console.log('Link obtenido:', fileData.webViewLink);
                 
-                // Guardar automáticamente el link en la base de datos
-                await saveDeliveryLink(); 
+                // 1. Poner visualmente en el input
+                const linkInput = document.getElementById('delivery-link-input');
+                linkInput.value = fileData.webViewLink;
                 
-                showToast('¡Archivo subido exitosamente!', 'success');
-                if(statusSpan) statusSpan.textContent = 'Subida completada.';
-
+                // 2. Guardar en BD inmediatamente
+                if(statusSpan) statusSpan.textContent = 'Guardando enlace...';
+                await saveDeliveryLink(); // Esta función guarda en BD y cierra el modal
+                
+                // Nota: saveDeliveryLink cierra el modal, así que el toast es suficiente
+                
             } catch (err) {
                 console.error(err);
-                showToast('Error al subir: ' + err.message, 'error');
-                if(statusSpan) statusSpan.textContent = 'Error en subida.';
+                showToast('Error: ' + err.message, 'error');
+                if(statusSpan) {
+                    statusSpan.textContent = 'Falló la subida.';
+                    statusSpan.style.color = 'var(--danger-color)';
+                }
             } finally {
                 hideLoader();
             }
         };
 
-        // Solicitar permisos de escritura si no los tiene, o usar token existente
+        // Solicitar token si no existe
         if (gapi.client.getToken() === null) {
             tokenClient.requestAccessToken({prompt: 'consent'});
         } else {
