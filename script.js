@@ -402,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = fileInput.files[0];
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
         const statusSpan = document.getElementById('drive-status');
+        const linkInput = document.getElementById('delivery-link-input');
 
         tokenClient.callback = async (resp) => {
             if (resp.error) throw resp;
@@ -416,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const idMaestra = await obtenerCarpetaMaestra();
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
-                if(statusSpan) statusSpan.textContent = 'Subiendo archivo...';
+                if(statusSpan) statusSpan.textContent = `Subiendo "${file.name}" (No cierres)...`;
 
                 const metadata = {
                     'name': file.name,
@@ -428,7 +429,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', file);
 
-                const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name', {
+                // A. Subida del archivo
+                const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
                     method: 'POST',
                     headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
                     body: form
@@ -437,18 +439,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fileData = await uploadRes.json();
                 if (fileData.error) throw new Error(fileData.error.message);
 
-                console.log('Link obtenido:', fileData.webViewLink);
+                // B. Obtener el LINK explícitamente usando el ID
+                if(statusSpan) statusSpan.textContent = 'Generando enlace público...';
                 
-                const linkInput = document.getElementById('delivery-link-input');
-                if(linkInput) linkInput.value = fileData.webViewLink;
+                const getFileRes = await gapi.client.drive.files.get({
+                    fileId: fileData.id,
+                    fields: 'webViewLink, webContentLink'
+                });
+
+                const finalLink = getFileRes.result.webViewLink;
+                console.log('Link final generado:', finalLink);
+
+                // C. Mostrar el link en el input
+                if(linkInput) {
+                    linkInput.value = finalLink;
+                    linkInput.style.borderColor = '#10b981'; // Feedback visual
+                    setTimeout(() => linkInput.style.borderColor = '', 2000);
+                }
                 
                 if(statusSpan) {
-                    statusSpan.textContent = '¡Guardado con éxito!';
+                    statusSpan.textContent = '¡Listo! Enlace generado.';
                     statusSpan.style.color = 'var(--success-color)';
                 }
 
-                await saveDeliveryLink(); 
-                showToast('Archivo subido y enlace guardado.', 'success');
+                // D. Guardar en BD (sin cerrar el modal para ver el link)
+                await saveDeliveryLink(false); 
 
             } catch (err) {
                 console.error(err);
@@ -1885,14 +1900,28 @@ document.addEventListener('DOMContentLoaded', () => {
         new bootstrap.Modal(modalEl).show(); 
     }
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
-    async function saveDeliveryLink() { 
+    async function saveDeliveryLink(cerrarModal = true) { 
         const projectId = document.getElementById('delivery-project-id').value; 
         const enlace = document.getElementById('delivery-link-input').value; 
         try { 
             await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); 
-            showToast('Enlace de entrega guardado.', 'success'); 
-            closeDeliveryModal(); 
-        } catch (e) { showToast(`Error al guardar el enlace`, 'error'); } 
+            
+            // Actualizar caché local para que si cierras y abres, el link siga ahí
+            const proyectoCache = localCache.proyectos.find(p => p._id === projectId);
+            if (proyectoCache) proyectoCache.enlaceEntrega = enlace;
+
+            // Actualizar historial caché TAMBIÉN
+            const proyectoHistorial = historialCacheados.find(p => p._id === projectId);
+            if (proyectoHistorial) proyectoHistorial.enlaceEntrega = enlace;
+
+            showToast('Enlace guardado correctamente.', 'success'); 
+            
+            if (cerrarModal) {
+                closeDeliveryModal(); 
+            }
+        } catch (e) { 
+            showToast(`Error al guardar el enlace: ${e.message}`, 'error'); 
+        } 
     }
 
     // --- SETUP Y MENÚ ---
