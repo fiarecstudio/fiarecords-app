@@ -134,6 +134,7 @@
 
     <div class="main-content">
         <header class="main-header d-flex justify-content-between align-items-center p-3">
+            <!-- BOTÓN CORREGIDO: Se eliminó el onclick en línea para evitar conflictos con script.js -->
             <button id="hamburger-menu" class="btn btn-light d-md-none">
                 <i class="bi bi-list fs-4"></i>
             </button>
@@ -401,6 +402,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 id="vista-artista-nombre">Artista</h2>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccion('gestion-artistas')">← Volver</button>
                     </div>
                     <div class="card-body" id="vista-artista-contenido"></div>
                 </div>
@@ -497,58 +499,37 @@
     </div>
   </div>
 
-  <!-- Modal Entrega / Google Drive (CORREGIDO Y LISTO PARA INTEGRAR) -->
-    <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Entrega de Proyecto</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <!-- Campos ocultos para la lógica -->
-                    <input type="hidden" id="delivery-project-id">
-                    <input type="hidden" id="delivery-artist-name">
-                    <input type="hidden" id="delivery-project-name">
-                    
-                    <!-- Contenedor para subida a Google Drive (DISEÑO MEJORADO) -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Subir Archivos a Google Drive</label>
-                        <!-- Usamos esta clase para aplicar los estilos de modo oscuro -->
-                        <div class="drive-upload-container">
-                            
-                            <!-- Input de archivo (con 'multiple' para subir varios) -->
-                            <input type="file" id="drive-file-input" class="form-control mb-3" multiple>
-                            
-                            <!-- Botón para iniciar la subida -->
-                            <button id="btn-drive-upload" class="btn btn-primary w-100" onclick="app.subirADrive()">
-                                <i class="bi bi-cloud-arrow-up-fill"></i> Subir y Generar Enlace
-                            </button>
-                            
-                            <!-- Indicador de estado -->
-                            <div id="drive-status" class="mt-2 small fw-bold text-muted"></div>
-                        </div>
-                    </div>
-
-                    <!-- Campo para el enlace generado o manual -->
-                    <div class="mb-3">
-                        <label for="delivery-link-input" class="form-label">Enlace de Entrega (Carpeta)</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
-                            <input type="text" class="form-control" id="delivery-link-input" placeholder="El enlace aparecerá aquí...">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <!-- Este botón guarda si pegas un link manualmente -->
-                    <button type="button" class="btn btn-success" onclick="app.saveDeliveryLink()">
-                        <i class="bi bi-save"></i> Guardar Enlace Manual
-                    </button>
-                </div>
-            </div>
+  <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Entrega de Material</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
+        <div class="modal-body">
+           <input type="hidden" id="delivery-project-id">
+           <div class="mb-3"><label>Artista</label><input type="text" id="delivery-artist-name" class="form-control" readonly></div>
+           <div class="mb-3"><label>Proyecto</label><input type="text" id="delivery-project-name" class="form-control" readonly></div>
+           
+           <div class="alert alert-light border">
+               <h6><i class="bi bi-google"></i> Google Drive</h6>
+               <input type="file" id="drive-file-input" class="form-control mb-2">
+               <button id="btn-drive-upload" class="btn btn-primary w-100">
+                   <span id="drive-btn-text">Subir y Obtener Link</span>
+               </button>
+               <div id="drive-status" class="small mt-2 fw-bold"></div>
+           </div>
+           
+           <label>Enlace Externo</label>
+           <input type="url" id="delivery-link-input" class="form-control mb-3" placeholder="https://...">
+           
+           <div class="d-flex gap-2">
+               <button class="btn btn-secondary flex-grow-1" onclick="app.saveDeliveryLink()">Guardar Link</button>
+           </div>
+        </div>
+      </div>
     </div>
+  </div>
 
   <div class="modal fade" id="modalEditarServicio" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -670,9 +651,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
-  <!-- Scripts de Google para Drive -->
-  <script async defer src="https://apis.google.com/js/api.js" onload="initializeGapiClient()"></script>
-  <script async defer src="https://accounts.google.com/gsi/client" onload="initializeGisClient()"></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
 
   <script src="script.js"></script>
 </body>
