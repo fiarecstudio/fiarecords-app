@@ -1,778 +1,659 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FiaRecords Studio - Sistema de Gestión</title>
-    
-    <!-- Favicon (Se actualizará dinámicamente con JS si hay logo) -->
-    <link rel="icon" href="favicon.ico">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  
+  <title>Fia Records Estudio de Grabación</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  
+  <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
 
-    <!-- Fuentes Google -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <!-- Flatpickr (Calendario Inputs) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    
-    <!-- FullCalendar -->
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
-    <!-- Tu Hoja de Estilos -->
-    <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- LOADER (Pantalla de Carga) -->
-    <div id="loader-overlay">
-        <div class="text-center">
-            <div class="spinner mb-3"></div>
-            <div class="text-white fw-bold">Procesando...</div>
+  <div id="loader-overlay"><div class="spinner"></div></div>
+
+  <div id="login-container">
+    <div class="login-card">
+        <div class="text-center mb-4">
+          <img id="login-logo" class="logo-dinamico img-fluid" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
         </div>
+
+        <div id="login-view">
+            <h3 class="text-center mb-3">Iniciar Sesión</h3>
+            <form id="login-form">
+              <div class="mb-3">
+                <label for="username" class="form-label">Usuario</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input type="text" id="username" class="form-control" required>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label for="password" class="form-label">Contraseña</label>
+                <div class="input-group">
+                  <input type="password" id="password" class="form-control" required>
+                  <span class="input-group-text" id="toggle-password" style="cursor:pointer;"><i class="bi bi-eye"></i></span>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100 mt-2">Entrar al Estudio</button>
+            </form>
+            <div class="text-center mt-3 small">
+                <a href="#" onclick="app.toggleAuth('register')">Crear Cuenta</a> | <a href="#" onclick="app.toggleAuth('recover')">¿Olvidaste contraseña?</a>
+            </div>
+        </div>
+
+        <div id="register-view" style="display:none;">
+            <h3 class="text-center mb-3">Crear Cuenta</h3>
+            <form id="register-form" onsubmit="app.registerUser(event)">
+                <div class="mb-2"><label>Usuario</label><input type="text" id="reg-username" class="form-control" required></div>
+                <div class="mb-2"><label>Email</label><input type="email" id="reg-email" class="form-control" required></div>
+                <div class="mb-2"><label>Nombre Artístico</label><input type="text" id="reg-artistname" class="form-control" required></div>
+                <div class="mb-3">
+                    <label>Contraseña</label>
+                    <div class="input-group">
+                        <input type="password" id="reg-password" class="form-control" required>
+                        <span class="input-group-text" id="toggle-password-reg" style="cursor:pointer;"><i class="bi bi-eye"></i></span>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Registrarse</button>
+            </form>
+            <div class="text-center mt-3"><a href="#" onclick="app.toggleAuth('login')">← Volver</a></div>
+        </div>
+
+        <div id="recover-view" style="display:none;">
+            <h3 class="text-center mb-3">Recuperar</h3>
+            <p class="small text-center">Ingresa tu correo para restablecer.</p>
+            <form id="recover-form" onsubmit="app.recoverPassword(event)">
+                <div class="mb-3"><input type="email" id="rec-email" class="form-control" placeholder="Correo" required></div>
+                <button type="submit" class="btn btn-primary w-100">Enviar Enlace</button>
+            </form>
+            <div class="text-center mt-3"><a href="#" onclick="app.toggleAuth('login')">← Volver</a></div>
+        </div>
+
+        <div id="reset-password-view" style="display:none;">
+            <h3 class="text-center mb-3">Nueva Contraseña</h3>
+            <form id="reset-form" onsubmit="app.resetPassword(event)">
+                <input type="hidden" id="reset-token">
+                <div class="mb-3">
+                    <label>Nueva Contraseña</label>
+                    <input type="password" id="new-password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Guardar</button>
+            </form>
+            <div class="text-center mt-3"><a href="#" onclick="app.toggleAuth('login')">Cancelar</a></div>
+        </div>
+
+        <p id="login-error" class="text-danger text-center mt-3 small"></p>
     </div>
+  </div>
+  
+  <div id="app-wrapper" style="display: none;"> 
+    <nav class="sidebar">
+      <div class="sidebar-header">
+          <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
+      </div>
+      
+      <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" href="#" onclick="app.mostrarSeccion('registrar-proyecto')">
+        <i class="bi bi-plus-circle me-2"></i>
+        <span>Nuevo Proyecto</span>
+      </a>
+      
+      <div class="sidebar-nav" id="sidebar-nav-container">
+        </div>
+      
+      <div class="sidebar-footer mt-auto">
+        <div class="theme-toggle-container mb-3 px-2">
+          <span class="small"><i class="bi bi-moon"></i> Modo Oscuro</span>
+          <label class="theme-switch">
+            <input type="checkbox" id="theme-switch" onchange="document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', this.checked ? 'dark' : 'light')"/>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <button id="logout-button" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+          <i class="bi bi-box-arrow-left"></i> Salir
+        </button>
+      </div>
+    </nav>
+    
+    <div id="sidebar-overlay"></div>
 
-    <!-- =========================================
-         1. CONTENEDOR DE LOGIN / REGISTRO
-         ========================================= -->
-    <div id="login-container">
-        <div class="login-card">
-            <div class="text-center mb-4">
-                <!-- Logo del Login -->
-                <img src="" id="login-logo" alt="FiaRecords" class="logo-dinamico mb-3" style="max-height: 80px;">
-                <h4 class="fw-bold">Bienvenido</h4>
-                <p class="text-muted small">Ingresa a tu cuenta para continuar</p>
+    <div class="main-content">
+        <header class="main-header d-flex justify-content-between align-items-center p-3">
+            <!-- BOTÓN CORREGIDO: Se eliminó el onclick en línea para evitar conflictos con script.js -->
+            <button id="hamburger-menu" class="btn btn-light d-md-none">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            
+            <div id="welcome-user" class="fw-bold fs-5"></div>
+              
+            <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="globalSearch" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
+                </div>
             </div>
+              
+            <div class="header-actions d-flex align-items-center gap-2">
+              <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
+                  <div class="status-indicator-dot"></div>
+                  <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
+              </div>
 
-            <!-- Alerta de Errores -->
-            <div id="login-error" class="text-danger text-center mb-3 small fw-bold"></div>
+              <button class="btn btn-outline-secondary rounded-circle p-2" title="Datos Bancarios" data-bs-toggle="modal" data-bs-target="#modalDatosBancarios">
+                <i class="bi bi-bank fs-5"></i>
+              </button>
+            </div>
+        </header>
 
-            <!-- VISTA: LOGIN -->
-            <div id="login-view">
-                <form id="login-form">
-                    <div class="mb-3">
-                        <label class="form-label">Usuario</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-person"></i></span>
-                            <input type="text" id="username" class="form-control" required placeholder="Tu usuario">
+        <main class="p-3 p-md-4">
+            
+            <section id="dashboard" class="active section-view">
+                <h2 class="mb-3">Resumen General</h2>
+                <div class="grid-container">
+                    <div class="card kpi-card border-start border-4 border-success p-3">
+                      <div class="d-flex justify-content-between">
+                        <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
+                        <i class="bi bi-currency-dollar fs-1 text-success"></i>
+                      </div>
+                    </div>
+                    <div class="card kpi-card border-start border-4 border-primary p-3">
+                      <div class="d-flex justify-content-between">
+                        <div><h3 class="mb-0" id="kpi-proyectos-activos">0</h3><small class="text-muted">Proyectos Activos</small></div>
+                        <i class="bi bi-sliders fs-1 text-primary"></i>
+                      </div>
+                    </div>
+                    <div class="card kpi-card border-start border-4 border-warning p-3">
+                      <div class="d-flex justify-content-between">
+                        <div><h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3><small class="text-muted">Por Cobrar</small></div>
+                        <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+                      </div>
+                    </div>
+                </div>
+                <div class="card mt-4 p-3 shadow-sm">
+                    <h3>Tendencia de Ingresos</h3>
+                    <div style="height: 350px;"><canvas id="incomeChart"></canvas></div>
+                </div>
+            </section>
+
+            <section id="agenda" class="section-view">
+                <div class="card p-3"><div id="calendario"></div></div>
+            </section>
+
+            <section id="cotizaciones" class="section-view">
+              <div class="card">
+                <div class="card-header"><h2>Cotizaciones Pendientes</h2></div>
+                <div class="table-responsive">
+                  <table class="table table-hover">
+                    <thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                    <tbody id="tablaCotizacionesBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <section id="flujo-trabajo" class="section-view">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>Flujo de Trabajo</h2>
+                    <div id="filtrosFlujo"></div>
+                </div>
+                <div class="kanban-board" id="kanbanBoard"></div>
+            </section>
+
+            <section id="pagos" class="section-view">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2>Gestión de Pagos</h2>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary active" onclick="document.getElementById('vista-pagos-pendientes').style.display='block'; document.getElementById('vista-pagos-historial').style.display='none';">Pendientes</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('vista-pagos-pendientes').style.display='none'; document.getElementById('vista-pagos-historial').style.display='block';">Historial</button>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div id="vista-pagos-pendientes">
+                        <h4 class="text-warning"><i class="bi bi-exclamation-circle"></i> Saldos Pendientes</h4>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
+                                <tbody id="tablaPendientesBody"></tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                            <input type="password" id="password" class="form-control" required placeholder="••••••">
-                            <button class="btn btn-outline-secondary" type="button" id="toggle-password"><i class="bi bi-eye"></i></button>
+
+                    <div id="vista-pagos-historial" style="display:none;">
+                        <h4>Historial Completo</h4>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Fecha</th><th>Proyecto</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
+                                <tbody id="tablaPagosBody"></tbody>
+                            </table>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 mb-3">Iniciar Sesión</button>
-                    <div class="d-flex justify-content-between text-muted small">
-                        <a href="#" onclick="app.toggleAuth('recover')" class="text-decoration-none">¿Olvidaste tu contraseña?</a>
-                        <a href="#" onclick="app.toggleAuth('register')" class="text-decoration-none">Crear cuenta</a>
-                    </div>
-                </form>
-            </div>
+                </div>
+              </div>
+            </section>
 
-            <!-- VISTA: REGISTRO (Clientes) -->
-            <div id="register-view" style="display: none;">
-                <form onsubmit="app.registerUser(event)">
-                    <h5 class="text-center mb-3">Crear Cuenta</h5>
-                    <div class="mb-2">
-                        <input type="text" id="reg-username" class="form-control" required placeholder="Usuario">
-                    </div>
-                    <div class="mb-2">
-                        <input type="email" id="reg-email" class="form-control" required placeholder="Correo Electrónico">
-                    </div>
-                    <div class="mb-2">
-                        <input type="text" id="reg-artistname" class="form-control" required placeholder="Nombre Artístico">
-                    </div>
-                    <div class="mb-3 input-group">
-                        <input type="password" id="reg-password" class="form-control" required placeholder="Contraseña">
-                        <button class="btn btn-outline-secondary" type="button" id="toggle-password-reg"><i class="bi bi-eye"></i></button>
-                    </div>
-                    <button type="submit" class="btn btn-success w-100 mb-2">Registrarse</button>
-                    <button type="button" class="btn btn-light w-100" onclick="app.toggleAuth('login')">Volver al Login</button>
-                </form>
-            </div>
+            <section id="registrar-proyecto" class="section-view">
+              <div class="card" style="max-width: 800px; margin: auto;">
+                <div class="card-header bg-primary text-white"><h2><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2></div>
+                <div class="card-body">
+                    <form id="formProyecto" onsubmit="return false;">
+                        <label>Artista/Cliente</label>
+                        <div class="d-flex gap-2 mb-3">
+                            <select id="proyectoArtista" class="form-select"><option value="publico_general">Público General</option></select>
+                            <button type="button" id="btnNuevoArtista" class="btn btn-secondary" onclick="document.getElementById('nuevoArtistaContainer').style.display='block'"><i class="bi bi-person-plus"></i></button>
+                        </div>
+                        
+                        <div id="nuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display: none;">
+                            <label>Nombre Nuevo Artista</label>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="nombreNuevoArtista" class="form-control" placeholder="Nombre">
+                                <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success" onclick="app.registrarNuevoArtistaDesdeFormulario()">Guardar</button>
+                            </div>
+                        </div>
 
-            <!-- VISTA: RECUPERAR CONTRASEÑA -->
-            <div id="recover-view" style="display: none;">
-                <form onsubmit="app.recoverPassword(event)">
-                    <h5 class="text-center mb-3">Recuperar Acceso</h5>
-                    <p class="small text-muted text-center">Ingresa tu correo para recibir instrucciones.</p>
-                    <div class="mb-3">
-                        <input type="email" id="rec-email" class="form-control" required placeholder="tucorreo@ejemplo.com">
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100 mb-2">Enviar Correo</button>
-                    <button type="button" class="btn btn-light w-100" onclick="app.toggleAuth('login')">Cancelar</button>
-                </form>
-            </div>
+                        <div class="mb-3">
+                            <label>Nombre Proyecto (Opcional)</label>
+                            <input type="text" id="nombreProyecto" class="form-control">
+                        </div>
 
-            <!-- VISTA: RESET PASSWORD (Token) -->
-            <div id="reset-password-view" style="display: none;">
-                <form onsubmit="app.resetPassword(event)">
-                    <h5 class="text-center mb-3">Nueva Contraseña</h5>
-                    <input type="hidden" id="reset-token">
-                    <div class="mb-3">
-                        <input type="password" id="new-password" class="form-control" required placeholder="Nueva contraseña">
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="esAlbum">
+                            <label class="form-check-label" for="esAlbum">Es un Disco/EP Completo</label>
+                        </div>
+
+                        <hr>
+                        <h5>Servicios</h5>
+                        <div class="row g-2 mb-3">
+                            <div class="col-8"><select id="proyectoServicio" class="form-select"></select></div>
+                            <div class="col-2"><input type="number" id="proyectoUnidades" class="form-control" value="1" min="1"></div>
+                            <div class="col-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100" onclick="app.agregarAProyecto()"><i class="bi bi-plus"></i></button></div>
+                        </div>
+                        <ul id="listaProyectoActual" class="list-group mb-3"></ul>
+
+                        <div class="d-flex justify-content-end align-items-center mb-3">
+                            <label class="me-2">Descuento ($):</label>
+                            <input type="number" id="proyectoDescuento" class="form-control" style="width: 100px;">
+                        </div>
+                        <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><label>Fecha Inicio</label><input type="text" id="fechaProyecto" class="form-control"></div>
+                            <div class="col-6"><label>Hora</label><input type="time" id="horaProyecto" class="form-control"></div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Cotizar</button>
+                            <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1" onclick="app.enviarAFlujoDirecto()"><i class="bi bi-check-circle"></i> Agendar</button>
+                        </div>
+                    </form>
+                </div>
+              </div>
+            </section>
+
+            <section id="gestion-artistas" class="section-view">
+              <div class="card">
+                <div class="card-header"><h2>Gestión de Artistas</h2></div>
+                <div class="card-body">
+                  <form id="formArtistas" class="mb-4">
+                    <input type="hidden" id="idArtista">
+                    <div class="row g-2">
+                        <div class="col-md-6"><input type="text" id="nombreArtista" class="form-control" placeholder="Nombre Real" required></div>
+                        <div class="col-md-6"><input type="text" id="nombreArtisticoArtista" class="form-control" placeholder="Nombre Artístico"></div>
+                        <div class="col-md-6"><input type="tel" id="telefonoArtista" class="form-control" placeholder="Teléfono"></div>
+                        <div class="col-md-6"><input type="email" id="correoArtista" class="form-control" placeholder="Correo"></div>
                     </div>
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                  </form>
+                  <h3>Directorio</h3>
+                  <ul id="listaArtistas" class="list-group"></ul>
+                </div>
+              </div>
+            </section>
+
+            <section id="historial-proyectos" class="section-view">
+                <div class="card">
+                    <div class="card-header"><h2>Historial de Proyectos</h2></div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                                <tbody id="tablaHistorialBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="gestion-servicios" class="section-view">
+                <div class="card">
+                    <div class="card-header"><h2>Gestión de Servicios</h2></div>
+                    <div class="card-body">
+                        <form id="formServicios" class="mb-4">
+                            <input type="hidden" id="idServicio">
+                            <div class="row g-2">
+                                <div class="col-md-8"><input type="text" id="nombreServicio" class="form-control" placeholder="Nombre Servicio" required></div>
+                                <div class="col-md-4"><input type="number" id="precioServicio" class="form-control" placeholder="Precio" step="0.01" required></div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="submit" class="btn btn-primary">Crear Nuevo</button>
+                            </div>
+                        </form>
+                        <ul id="listaServicios" class="list-group"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="gestion-usuarios" class="section-view">
+                <div class="card">
+                    <div class="card-header"><h2>Usuarios del Sistema</h2></div>
+                    <div class="card-body">
+                        <form id="formUsuarios" class="mb-4">
+                            <input type="hidden" id="idUsuario">
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-6"><input type="text" id="usernameUsuario" class="form-control" placeholder="Usuario" required></div>
+                                <div class="col-md-6"><input type="email" id="emailUsuario" class="form-control" placeholder="Email"></div>
+                                <div class="col-md-6">
+                                    <select id="roleUsuario" class="form-select">
+                                        <option value="admin">Admin</option>
+                                        <option value="ingeniero">Ingeniero</option>
+                                        <option value="diseñador">Diseñador</option>
+                                        <option value="cliente">Cliente</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6"><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña"></div>
+                            </div>
+                            <div class="mb-2 p-2 border rounded bg-light permisos-container">
+                                <label class="fw-bold mb-2">Permisos (Creación):</label>
+                                <div class="permissions-grid d-flex flex-wrap gap-3">
+                                    <label><input type="checkbox" name="user_permisos" value="dashboard"> Dashboard</label>
+                                    <label><input type="checkbox" name="user_permisos" value="agenda"> Agenda</label>
+                                    <label><input type="checkbox" name="user_permisos" value="flujo-trabajo"> Flujo</label>
+                                    <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotizaciones</label>
+                                    <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios</label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Crear Usuario</button>
+                        </form>
+                        <ul id="listaUsuarios" class="list-group"></ul>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="vista-artista" class="section-view">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 id="vista-artista-nombre">Artista</h2>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccion('gestion-artistas')">← Volver</button>
+                    </div>
+                    <div class="card-body" id="vista-artista-contenido"></div>
+                </div>
+            </section>
+
+            <section id="papelera-reciclaje" class="section-view">
+                <div class="card">
+                    <div class="card-header"><h2>Papelera de Reciclaje</h2></div>
+                    <div class="card-body">
+                        <h5 class="mt-3">Proyectos Eliminados</h5>
+                        <ul id="papeleraProyectos" class="list-group mb-3"></ul>
+                        
+                        <h5 class="mt-3">Artistas Eliminados</h5>
+                        <ul id="papeleraArtistas" class="list-group mb-3"></ul>
+                        
+                        <h5 class="mt-3">Servicios Eliminados</h5>
+                        <ul id="papeleraServicios" class="list-group mb-3"></ul>
+                        
+                        <h5 class="mt-3">Usuarios Eliminados</h5>
+                        <ul id="papeleraUsuarios" class="list-group mb-3"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="configuracion" class="section-view">
+              <div class="card">
+                <div class="card-header"><h2>Configuración</h2></div>
+                <div class="card-body">
+                    <h5>Firma Digital para PDF</h5>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
+                        <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Cambiar Firma</button>
+                        <input type="file" id="firma-input" hidden accept="image/*">
+                        <input type="file" id="logo-input" hidden accept="image/*">
+                    </div>
+                    
+                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info mb-3"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
+                </div>
+              </div>
+            </section>
+
+        </main>
+    </div>
+  </div>
+
+  <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Artista</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formEditarArtista" onsubmit="app.guardarEdicionArtista(event)">
+            <input type="hidden" id="editArtistId">
+            <div class="mb-2"><label>Nombre Real</label><input type="text" id="editArtistNombre" class="form-control" required></div>
+            <div class="mb-2"><label>Nombre Artístico</label><input type="text" id="editArtistNombreArtístico" class="form-control"></div>
+            <div class="row g-2">
+                <div class="col-6"><label>Teléfono</label><input type="tel" id="editArtistTelefono" class="form-control"></div>
+                <div class="col-6"><label>Correo</label><input type="email" id="editArtistCorreo" class="form-control"></div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 mt-3">Guardar Cambios</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalDatosBancarios" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-credit-card"></i> Datos Bancarios</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-datos-bancarios">
+             <div class="mb-3"><label>Banco</label><input type="text" id="banco" class="form-control"></div>
+             <div class="mb-3"><label>Titular</label><input type="text" id="titular" class="form-control"></div>
+             <div class="row g-2">
+                 <div class="col-6"><label>Tarjeta</label><input type="text" id="tarjeta" class="form-control"></div>
+                 <div class="col-6"><label>CLABE</label><input type="text" id="clabe" class="form-control"></div>
+             </div>
+          </form>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-danger" onclick="app.generarDatosBancariosPDF()">📄 PDF</button>
+                <button type="button" class="btn btn-outline-success" onclick="app.compartirDatosBancariosWhatsApp()">💬 Whats</button>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="app.guardarDatosBancarios()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Entrega de Material</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+           <input type="hidden" id="delivery-project-id">
+           <div class="mb-3"><label>Artista</label><input type="text" id="delivery-artist-name" class="form-control" readonly></div>
+           <div class="mb-3"><label>Proyecto</label><input type="text" id="delivery-project-name" class="form-control" readonly></div>
+           
+           <div class="alert alert-light border">
+               <h6><i class="bi bi-google"></i> Google Drive</h6>
+               <input type="file" id="drive-file-input" class="form-control mb-2">
+               <button id="btn-drive-upload" class="btn btn-primary w-100">
+                   <span id="drive-btn-text">Subir y Obtener Link</span>
+               </button>
+               <div id="drive-status" class="small mt-2 fw-bold"></div>
+           </div>
+           
+           <label>Enlace Externo</label>
+           <input type="url" id="delivery-link-input" class="form-control mb-3" placeholder="https://...">
+           
+           <div class="d-flex gap-2">
+               <button class="btn btn-secondary flex-grow-1" onclick="app.saveDeliveryLink()">Guardar Link</button>
+           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEditarServicio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ Editar Servicio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarServicio">
+                    <input type="hidden" id="editServicioId">
+                    <div class="mb-3"><label>Nombre</label><input type="text" class="form-control" id="editServicioNombre" required></div>
+                    <div class="mb-3"><label>Precio</label><input type="number" class="form-control" id="editServicioPrecio" required step="0.01"></div>
                     <button type="submit" class="btn btn-primary w-100">Actualizar</button>
                 </form>
             </div>
         </div>
     </div>
+  </div>
 
-    <!-- =========================================
-         2. APLICACIÓN PRINCIPAL (WRAPPER)
-         ========================================= -->
-    <div id="app-wrapper">
-        
-        <!-- SIDEBAR (Menú Lateral) -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <!-- Logo Principal -->
-                <img src="" id="app-logo" alt="FiaRecords" class="logo-dinamico mb-2">
-                <!-- Input oculto para cambiar logo (Admin) -->
-                <input type="file" id="logo-input" accept="image/*" style="display: none;">
+  <div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">👤 Editar Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-
-            <!-- Contenedor Dinámico de Enlaces (Se llena con JS según rol) -->
-            <nav class="sidebar-nav" id="sidebar-nav-container">
-                <!-- JS inyecta aquí los botones -->
-            </nav>
-
-            <!-- Footer del Sidebar -->
-            <div class="mt-auto pt-3 border-top border-secondary">
-                <div class="theme-toggle-container mb-2">
-                    <span class="small"><i class="bi bi-moon-stars"></i> Modo Oscuro</span>
-                    <label class="theme-switch">
-                        <input type="checkbox" id="theme-switch">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button id="logout-button" class="btn btn-danger w-100 btn-sm">
-                    <i class="bi bi-box-arrow-left"></i> Salir
-                </button>
-            </div>
-        </aside>
-
-        <!-- Overlay para móvil -->
-        <div id="sidebar-overlay"></div>
-
-        <!-- CONTENIDO PRINCIPAL -->
-        <div class="main-content">
-            
-            <!-- Header Superior -->
-            <header class="main-header">
-                <div class="d-flex align-items-center gap-3">
-                    <button class="btn btn-light d-md-none" id="hamburger-menu">
-                        <i class="bi bi-list fs-4"></i>
-                    </button>
-                    <h5 class="m-0 fw-bold" id="welcome-user">Hola, Usuario</h5>
-                </div>
-                
-                <div class="d-flex align-items-center gap-3">
-                    <!-- Buscador Global -->
-                    <div class="search-box position-relative d-none d-md-block">
-                        <input type="text" class="form-control pe-5" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
-                        <i class="bi bi-search position-absolute top-50 end-0 translate-middle-y me-3 text-muted"></i>
-                    </div>
-                    <!-- Status Conexión -->
-                    <div id="connection-status" class="connection-status status-online" title="Estado de conexión">
-                        <span class="status-dot"></span>
-                        <span id="connection-text" class="d-none d-sm-inline small fw-bold">En Línea</span>
-                    </div>
-                </div>
-            </header>
-
-            <!-- ÁREA DE SECCIONES (MAIN) -->
-            <main>
-                
-                <!-- 1. DASHBOARD (Stats) -->
-                <section id="dashboard" class="active">
-                    <h3 class="mb-4">Panel de Control</h3>
-                    <div class="grid-container">
-                        <div class="card kpi-card border-primary">
-                            <div class="text-muted small text-uppercase">Ingresos (Mes)</div>
-                            <div class="fs-2 fw-bold text-primary" id="kpi-ingresos-mes">$0.00</div>
-                            <i class="bi bi-currency-dollar position-absolute top-0 end-0 m-3 fs-1 text-primary opacity-25"></i>
-                        </div>
-                        <div class="card kpi-card border-success">
-                            <div class="text-muted small text-uppercase">Proyectos Activos</div>
-                            <div class="fs-2 fw-bold text-success" id="kpi-proyectos-activos">0</div>
-                            <i class="bi bi-music-note-beamed position-absolute top-0 end-0 m-3 fs-1 text-success opacity-25"></i>
-                        </div>
-                        <div class="card kpi-card border-warning">
-                            <div class="text-muted small text-uppercase">Por Cobrar</div>
-                            <div class="fs-2 fw-bold text-warning" id="kpi-proyectos-por-cobrar">0</div>
-                            <i class="bi bi-exclamation-circle position-absolute top-0 end-0 m-3 fs-1 text-warning opacity-25"></i>
-                        </div>
-                    </div>
+            <div class="modal-body">
+                <form id="formEditarUsuario" onsubmit="app.guardarEdicionUsuario(event)">
+                    <input type="hidden" id="editUsuarioId">
                     
-                    <div class="card" style="height: 400px;">
-                        <h5 class="card-title">Resumen Financiero Anual</h5>
-                        <div style="flex:1; position: relative;">
-                            <canvas id="incomeChart"></canvas>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 2. AGENDA -->
-                <section id="agenda">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3>Agenda del Estudio</h3>
-                        <button class="btn btn-primary" onclick="app.mostrarSeccion('registrar-proyecto')"><i class="bi bi-plus-lg"></i> Agendar Cita</button>
-                    </div>
-                    <div class="card p-3">
-                        <div id="calendario"></div>
-                    </div>
-                </section>
-
-                <!-- 3. FLUJO DE TRABAJO (KANBAN) -->
-                <section id="flujo-trabajo">
-                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                        <h3>Flujo de Trabajo</h3>
-                        <div class="btn-group" id="filtrosFlujo">
-                            <!-- JS llena los filtros -->
-                        </div>
-                    </div>
-                    <div class="kanban-board" id="kanbanBoard">
-                        <!-- JS llena las columnas -->
-                    </div>
-                </section>
-
-                <!-- 4. COTIZACIONES -->
-                <section id="cotizaciones">
-                    <h3>Cotizaciones Pendientes</h3>
-                    <div class="card">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Cliente / Artista</th>
-                                        <th>Total</th>
-                                        <th>Fecha</th>
-                                        <th class="text-end">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaCotizacionesBody">
-                                    <!-- JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 5. HISTORIAL DE PROYECTOS -->
-                <section id="historial-proyectos">
-                    <h3>Historial Completo</h3>
-                    <div class="card">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Artista</th>
-                                        <th>Total</th>
-                                        <th>Pagado</th>
-                                        <th>Fecha</th>
-                                        <th class="text-end">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaHistorialBody">
-                                    <!-- JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 6. GESTIÓN DE PAGOS -->
-                <section id="pagos">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3>Gestión de Pagos</h3>
-                        <div class="btn-group">
-                            <button class="btn btn-outline-primary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes</button>
-                            <button class="btn btn-outline-primary" onclick="app.mostrarSeccionPagos('historial', this)">Historial</button>
-                        </div>
-                    </div>
-
-                    <!-- Vista: Saldos Pendientes -->
-                    <div id="vista-pagos-pendientes">
-                        <div class="alert alert-warning d-flex align-items-center" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <div><strong>Saldos Pendientes:</strong> Proyectos que aún tienen deuda.</div>
-                        </div>
-                        <div class="card">
-                            <div class="table-responsive">
-                                <table class="table table-hover align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th>Proyecto</th>
-                                            <th>Total</th>
-                                            <th>Pagado</th>
-                                            <th>Restante</th>
-                                            <th class="text-end">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tablaPendientesBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Vista: Historial de Pagos -->
-                    <div id="vista-pagos-historial" style="display: none;">
-                        <div class="card">
-                            <div class="table-responsive">
-                                <table class="table table-hover align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th>Fecha</th>
-                                            <th>Artista</th>
-                                            <th>Monto</th>
-                                            <th>Método</th>
-                                            <th class="text-end">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tablaPagosBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 7. REGISTRAR PROYECTO -->
-                <section id="registrar-proyecto">
-                    <h3>Nuevo Proyecto</h3>
-                    <div class="row">
-                        <!-- Columna Izquierda: Formulario -->
-                        <div class="col-lg-8">
-                            <div class="card">
-                                <form id="formProyecto" onsubmit="event.preventDefault();">
-                                    
-                                    <!-- Selección de Artista -->
-                                    <div class="mb-3">
-                                        <label class="form-label">Artista / Cliente</label>
-                                        <div class="input-group">
-                                            <select id="proyectoArtista" class="form-select" required></select>
-                                            <button class="btn btn-outline-secondary" type="button" id="btnNuevoArtista" onclick="document.getElementById('nuevoArtistaContainer').style.display = 'block'">
-                                                <i class="bi bi-person-plus"></i> Nuevo
-                                            </button>
-                                        </div>
-                                        <!-- Formulario rápido nuevo artista -->
-                                        <div id="nuevoArtistaContainer" class="mt-2 p-3 border rounded bg-light" style="display: none;">
-                                            <label class="small fw-bold">Nombre Nuevo Artista</label>
-                                            <div class="input-group input-group-sm">
-                                                <input type="text" id="nombreNuevoArtista" class="form-control">
-                                                <button class="btn btn-success" onclick="app.registrarNuevoArtistaDesdeFormulario()">Guardar</button>
-                                                <button class="btn btn-secondary" onclick="document.getElementById('nuevoArtistaContainer').style.display = 'none'">Cancelar</button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label">Nombre del Proyecto (Canción/Álbum)</label>
-                                        <input type="text" id="nombreProyecto" class="form-control" required placeholder="Ej: Mi Nueva Canción">
-                                    </div>
-
-                                    <div class="mb-3 form-check">
-                                        <input type="checkbox" class="form-check-input" id="esAlbum">
-                                        <label class="form-check-label" for="esAlbum">Es un Álbum / EP (Varios temas)</label>
-                                    </div>
-
-                                    <div class="row g-2 mb-3">
-                                        <div class="col-md-6">
-                                            <label class="form-label">Fecha de Inicio</label>
-                                            <input type="text" id="fechaProyecto" class="form-control bg-white" placeholder="Seleccionar fecha">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">Hora (Opcional)</label>
-                                            <input type="time" id="horaProyecto" class="form-control">
-                                        </div>
-                                    </div>
-
-                                    <hr>
-
-                                    <!-- Agregar Servicios -->
-                                    <h5 class="mb-3">Servicios</h5>
-                                    <div class="row g-2 align-items-end mb-3">
-                                        <div class="col-8">
-                                            <select id="proyectoServicio" class="form-select"></select>
-                                        </div>
-                                        <div class="col-2">
-                                            <input type="number" id="proyectoUnidades" class="form-control" value="1" min="1">
-                                        </div>
-                                        <div class="col-2">
-                                            <button class="btn btn-primary w-100" onclick="app.agregarAProyecto()"><i class="bi bi-plus-lg"></i></button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Lista de items agregados -->
-                                    <ul id="listaProyectoActual" class="list-group mb-3"></ul>
-
-                                    <div class="d-flex justify-content-end align-items-center gap-3">
-                                        <div class="input-group w-auto">
-                                            <span class="input-group-text">Descuento $</span>
-                                            <input type="number" id="proyectoDescuento" class="form-control" value="0" style="max-width: 100px;">
-                                        </div>
-                                        <h4 class="m-0">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
-                                    </div>
-
-                                    <div class="mt-4 d-flex justify-content-end gap-2">
-                                        <button class="btn btn-outline-primary" onclick="app.generarCotizacion()">
-                                            <i class="bi bi-file-earmark-text"></i> Solo Cotizar
-                                        </button>
-                                        <button class="btn btn-success" onclick="app.enviarAFlujoDirecto()">
-                                            <i class="bi bi-check-lg"></i> Agendar Proyecto
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                        <!-- Columna Derecha: Ayuda/Info (Opcional) -->
-                        <div class="col-lg-4 d-none d-lg-block">
-                            <div class="card bg-light border-0">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-info-circle"></i> Información</h6>
-                                    <p class="small text-muted">
-                                        Si seleccionas "Solo Cotizar", el proyecto se guardará en la sección de Cotizaciones y no aparecerá en el flujo de trabajo hasta que sea aprobado.
-                                    </p>
-                                    <p class="small text-muted">
-                                        Si seleccionas "Agendar Proyecto", pasará directamente al estado "Agendado".
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 8. GESTIÓN (ARTISTAS, SERVICIOS, USUARIOS) -->
-                <section id="gestion-artistas">
-                    <h3>Gestión de Artistas</h3>
-                    <div class="card">
-                        <form id="formArtistas" class="mb-4">
-                            <div class="row g-2">
-                                <div class="col-md-6"><input type="text" name="nombreArtista" class="form-control" placeholder="Nombre Real" required></div>
-                                <div class="col-md-6"><input type="text" name="nombreArtisticoArtista" class="form-control" placeholder="Nombre Artístico" required></div>
-                                <div class="col-md-6"><input type="text" name="telefonoArtista" class="form-control" placeholder="Teléfono"></div>
-                                <div class="col-md-6"><input type="email" name="correoArtista" class="form-control" placeholder="Correo"></div>
-                                <div class="col-12"><button type="submit" class="btn btn-primary">Guardar</button></div>
-                            </div>
-                        </form>
-                        <h5>Directorio</h5>
-                        <ul id="listaArtistas" class="list-group list-group-flush"></ul>
-                    </div>
-                </section>
-
-                <section id="gestion-servicios">
-                    <h3>Gestión de Servicios</h3>
-                    <div class="card">
-                        <form id="formServicios" class="mb-4">
-                            <div class="input-group">
-                                <input type="text" name="nombreServicio" class="form-control" placeholder="Nombre del servicio" required>
-                                <input type="number" name="precioServicio" class="form-control" placeholder="Precio" required step="0.01">
-                                <button type="submit" class="btn btn-primary">Agregar</button>
-                            </div>
-                        </form>
-                        <ul id="listaServicios" class="list-group list-group-flush"></ul>
-                    </div>
-                </section>
-
-                <section id="gestion-usuarios">
-                    <h3>Gestión de Usuarios</h3>
-                    <div class="card">
-                        <form id="formUsuarios" class="mb-4">
-                            <div class="row g-2">
-                                <div class="col-md-6"><input type="text" id="usernameUsuario" class="form-control" placeholder="Usuario" required></div>
-                                <div class="col-md-6"><input type="email" id="emailUsuario" class="form-control" placeholder="Email" required></div>
-                                <div class="col-md-6"><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña" required></div>
-                                <div class="col-md-6">
-                                    <select id="roleUsuario" class="form-select">
-                                        <option value="Cliente">Cliente</option>
-                                        <option value="Admin">Admin</option>
-                                        <option value="Editor">Editor</option>
-                                    </select>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label small">Permisos Adicionales (Opcional)</label>
-                                    <div class="permisos-container">
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" name="user_permisos" value="dashboard"> <label class="form-check-label">Dashboard</label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" name="user_permisos" value="agenda"> <label class="form-check-label">Agenda</label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" name="user_permisos" value="pagos"> <label class="form-check-label">Pagos</label>
-                                        </div>
-                                        <!-- Más permisos según se necesite -->
-                                    </div>
-                                </div>
-                                <div class="col-12"><button type="submit" class="btn btn-primary">Crear Usuario</button></div>
-                            </div>
-                        </form>
-                        <ul id="listaUsuarios" class="list-group list-group-flush"></ul>
-                    </div>
-                </section>
-
-                <!-- 9. CONFIGURACIÓN -->
-                <section id="configuracion">
-                    <h3>Configuración del Sistema</h3>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <h5 class="card-title">Firma Digital (PDFs)</h5>
-                                <div class="text-center py-3">
-                                    <img id="firma-preview-img" src="" alt="Firma" class="img-fluid mb-2" style="max-height: 100px;">
-                                    <input type="file" id="firma-input" class="form-control" accept="image/*">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <h5 class="card-title">Datos Bancarios</h5>
-                                <p class="small text-muted">Estos datos aparecerán al compartir información de pago.</p>
-                                <button class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modalDatosBancarios">Editar Datos</button>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-outline-danger w-50" onclick="app.generarDatosBancariosPDF()"><i class="bi bi-file-pdf"></i> PDF</button>
-                                    <button class="btn btn-outline-success w-50" onclick="app.compartirDatosBancariosWhatsApp()"><i class="bi bi-whatsapp"></i> Compartir</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 10. VISTA ARTISTA (PERFIL CLIENTE) -->
-                <section id="vista-artista">
-                    <div class="d-flex align-items-center mb-3">
-                        <h2 id="vista-artista-nombre" class="m-0 text-primary">Artista</h2>
-                    </div>
-                    <div id="vista-artista-contenido">
-                        <!-- JS Carga aquí el historial -->
-                    </div>
-                </section>
-
-                <!-- 11. PAPELERA -->
-                <section id="papelera-reciclaje">
-                    <h3>Papelera de Reciclaje</h3>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <div class="card h-100">
-                                <h5 class="card-title text-danger">Proyectos Eliminados</h5>
-                                <ul id="papeleraProyectos" class="list-group list-group-flush small"></ul>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card h-100">
-                                <h5 class="card-title text-danger">Artistas Eliminados</h5>
-                                <ul id="papeleraArtistas" class="list-group list-group-flush small"></ul>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-            </main>
-        </div>
-    </div>
-
-    <!-- =========================================
-         MODALES
-         ========================================= -->
-
-    <!-- Modal Evento (Agenda) -->
-    <div class="modal fade" id="event-modal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modal-event-title">Detalle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="modal-event-id">
-                    <p><strong>Fecha Actual:</strong> <span id="modal-event-date"></span></p>
-                    <p><strong>Total:</strong> <span id="modal-event-total"></span></p>
-                    <p><strong>Estatus:</strong> <span id="modal-event-status"></span></p>
-                    <p><strong>Servicios:</strong></p>
-                    <ul id="modal-event-services" class="small text-muted"></ul>
-                    
-                    <hr>
-                    <label class="form-label fw-bold">Reprogramar:</label>
-                    <div class="row g-2">
-                        <div class="col-7">
-                            <input type="text" id="edit-event-date" class="form-control" placeholder="Nueva fecha">
-                        </div>
-                        <div class="col-5">
-                            <input type="time" id="edit-event-time" class="form-control">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-danger me-auto" onclick="app.cancelarCita(document.getElementById('modal-event-id').value)">Cancelar Cita</button>
-                    <button type="button" class="btn btn-primary" onclick="app.actualizarHorarioProyecto()">Guardar Cambio</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Entrega / Google Drive (ACTUALIZADO) -->
-    <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Entrega de Proyecto</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="delivery-project-id">
-                    <input type="hidden" id="delivery-artist-name">
-                    <input type="hidden" id="delivery-project-name">
-                    
-                    <!-- SECCIÓN GOOGLE DRIVE CON ESTILO NUEVO -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Subir Archivos (Google Drive)</label>
-                        <div class="drive-upload-container">
-                            <div class="mb-3">
-                                <i class="bi bi-google" style="font-size: 2rem; color: #4285F4;"></i>
-                                <i class="bi bi-drive" style="font-size: 2rem; color: #34A853; margin-left: 5px;"></i>
-                            </div>
-                            <!-- Input de archivo estilizado -->
-                            <input type="file" id="drive-file-input" class="form-control mb-3">
-                            <button id="btn-drive-upload" class="btn btn-primary w-100" onclick="app.subirADrive()">
-                                <i class="bi bi-cloud-arrow-up-fill"></i> Subir y Generar Enlace
-                            </button>
-                            <div id="drive-status" class="mt-3 small fw-bold text-muted">Esperando archivo...</div>
-                        </div>
+                        <label class="form-label">Usuario</label>
+                        <input type="text" class="form-control" id="editUsuarioName" required>
                     </div>
-
+                    
                     <div class="mb-3">
-                        <label for="delivery-link-input" class="form-label">Enlace de Entrega</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
-                            <input type="text" class="form-control" id="delivery-link-input" placeholder="El enlace aparecerá aquí...">
-                        </div>
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editUsuarioEmail">
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-success" onclick="app.saveDeliveryLink()">
-                        <i class="bi bi-save"></i> Guardar Cambios
-                    </button>
-                </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
+                        <select class="form-select" id="editUsuarioRole">
+                            <option value="cliente">Cliente</option>
+                            <option value="admin">Admin</option>
+                            <option value="ingeniero">Ingeniero</option>
+                            <option value="diseñador">Diseñador</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3 p-2 bg-light border rounded">
+                        <label class="form-label text-primary fw-bold">🎵 Vincular con Artista</label>
+                        <select class="form-select" id="editUsuarioArtista">
+                            <option value="">-- Cargando Artistas... --</option>
+                        </select>
+                        <div class="form-text small">Selecciona el artista para que este usuario vea sus proyectos.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña (Opcional)</label>
+                        <input type="password" class="form-control" id="editUsuarioPass" placeholder="Dejar vacío para no cambiar">
+                    </div>
+                    
+                    <div class="mb-3 permisos-container" id="editUsuarioPermisosContainer">
+                         <label class="fw-bold d-block mb-2">Permisos:</label>
+                         <div class="d-flex flex-wrap gap-2">
+                            <label><input type="checkbox" value="dashboard"> Dash</label>
+                            <label><input type="checkbox" value="agenda"> Agenda</label>
+                            <label><input type="checkbox" value="flujo-trabajo"> Flujo</label>
+                            <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
+                            <label><input type="checkbox" value="pagos"> Pagos</label>
+                            <label><input type="checkbox" value="gestion-usuarios"> Users</label>
+                         </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">Actualizar</button>
+                </form>
             </div>
         </div>
     </div>
+  </div>
 
-    <!-- Modal Datos Bancarios -->
-    <div class="modal fade" id="modalDatosBancarios" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Editar Datos Bancarios</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2"><label>Banco</label><input type="text" id="banco" class="form-control"></div>
-                    <div class="mb-2"><label>Titular</label><input type="text" id="titular" class="form-control"></div>
-                    <div class="mb-2"><label>No. Tarjeta</label><input type="text" id="tarjeta" class="form-control"></div>
-                    <div class="mb-2"><label>CLABE</label><input type="text" id="clabe" class="form-control"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" onclick="app.guardarDatosBancarios()">Guardar</button>
-                </div>
-            </div>
+  <div class="modal fade" id="event-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modal-event-title">Detalle Evento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-    </div>
-
-    <!-- Modales de Edición (Artistas, Servicios, Usuarios) -->
-    <div class="modal fade" id="edit-artist-modal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Editar Artista</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <form id="formEditarArtista">
-                        <input type="hidden" id="editArtistId">
-                        <div class="mb-2"><input type="text" id="editArtistNombre" class="form-control" placeholder="Nombre Real" required></div>
-                        <div class="mb-2"><input type="text" id="editArtistNombreArtístico" class="form-control" placeholder="Nombre Artístico" required></div>
-                        <div class="mb-2"><input type="text" id="editArtistTelefono" class="form-control" placeholder="Teléfono"></div>
-                        <div class="mb-2"><input type="email" id="editArtistCorreo" class="form-control" placeholder="Correo"></div>
-                        <button type="submit" class="btn btn-primary w-100">Guardar Cambios</button>
-                    </form>
-                </div>
-            </div>
+        <div class="modal-body">
+           <input type="hidden" id="modal-event-id">
+           <div class="mb-3">
+               <strong>Fecha:</strong> <span id="modal-event-date"></span><br>
+               <strong>Estado:</strong> <span id="modal-event-status"></span><br>
+               <strong>Total:</strong> <span id="modal-event-total"></span>
+           </div>
+           <div class="mb-3"><strong>Servicios:</strong><ul id="modal-event-services" class="ps-3 small"></ul></div>
+           <hr>
+           <h6>Re-agendar</h6>
+           <div class="d-flex gap-2 mb-3">
+               <input type="text" id="edit-event-date" class="form-control" placeholder="Fecha">
+               <input type="time" id="edit-event-time" class="form-control">
+           </div>
+           <button class="btn btn-sm btn-outline-primary w-100" onclick="app.actualizarHorarioProyecto()">Guardar Cambio</button>
+           <hr>
+           <button class="btn btn-danger w-100" onclick="app.cancelarCita(document.getElementById('modal-event-id').value)">Cancelar Cita</button>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="modal fade" id="modalEditarServicio" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Editar Servicio</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <form id="formEditarServicio">
-                        <input type="hidden" id="editServicioId">
-                        <div class="mb-3"><input type="text" id="editServicioNombre" class="form-control" required></div>
-                        <div class="mb-3"><input type="number" id="editServicioPrecio" class="form-control" step="0.01" required></div>
-                        <button type="submit" class="btn btn-primary w-100">Guardar</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
 
-    <div class="modal fade" id="modalEditarUsuario" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Editar Usuario</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <form id="formEditarUsuario">
-                        <input type="hidden" id="editUsuarioId">
-                        <div class="mb-2"><label>Usuario</label><input type="text" id="editUsuarioName" class="form-control" required></div>
-                        <div class="mb-2"><label>Email</label><input type="email" id="editUsuarioEmail" class="form-control"></div>
-                        <div class="mb-2"><label>Nueva Contraseña (Dejar vacío si no cambia)</label><input type="password" id="editUsuarioPass" class="form-control"></div>
-                        <div class="mb-2"><label>Rol</label>
-                            <select id="editUsuarioRole" class="form-select">
-                                <option value="Cliente">Cliente</option>
-                                <option value="Admin">Admin</option>
-                                <option value="Editor">Editor</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Vincular a Artista (Opcional)</label>
-                            <select id="editUsuarioArtista" class="form-select"></select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Permisos</label>
-                            <div class="permisos-container" id="editUsuarioPermisosContainer">
-                                <div class="form-check"><input class="form-check-input" type="checkbox" value="dashboard"> Dashboard</div>
-                                <div class="form-check"><input class="form-check-input" type="checkbox" value="agenda"> Agenda</div>
-                                <div class="form-check"><input class="form-check-input" type="checkbox" value="pagos"> Pagos</div>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Actualizar</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- SCRIPTS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
-    
-    <!-- Google APIs (Drive) -->
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
-
-    <!-- Tu Script Principal -->
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
