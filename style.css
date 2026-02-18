@@ -221,7 +221,7 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
 main { flex: 1; overflow-y: auto; padding: 2rem; }
 
 /* =========================================
-   5. SISTEMA DE LOGIN (VISIBILIDAD Y ESTILOS)
+   5. SISTEMA DE LOGIN
    ========================================= */
 #login-container {
     display: none !important; 
@@ -257,9 +257,8 @@ body.auth-visible #app-wrapper {
 }
 
 /* =========================================
-   6. COMPONENTES ESPECÍFICOS
+   6. COMPONENTES ESPECÍFICOS (CARDS & KANBAN)
    ========================================= */
-/* Cards */
 .card {
     background-color: var(--card-background);
     border: 1px solid var(--border-color);
@@ -269,11 +268,9 @@ body.auth-visible #app-wrapper {
     padding: 1.5rem;
 }
 
-/* KPI Cards */
 .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 .kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center;}
 
-/* Kanban */
 .kanban-board { 
     display: flex; 
     overflow-x: auto; 
@@ -325,10 +322,6 @@ body.auth-visible #app-wrapper {
     z-index: 10; 
 }
 
-.project-card-body {
-    flex-grow: 1; 
-}
-
 .project-card-footer {
     display: flex;
     justify-content: space-between;
@@ -344,31 +337,18 @@ body.auth-visible #app-wrapper {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* =========================================
-   7. RESPONSIVE (MÓVIL)
+   7. RESPONSIVE
    ========================================= */
 @media (max-width: 768px) {
     .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 85%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.2); transition: left 0.3s ease; }
     .sidebar.show { left: 0; }
-    
-    #sidebar-overlay { 
-        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px);
-    }
+    #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px); }
     #sidebar-overlay.show { display: block; }
-
-    .search-box { display: none; }
     main { padding: 1rem; }
-    
-    .table-responsive thead { display: none; }
-    .table-responsive tr { display: block; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
-    .table-responsive td { display: flex; justify-content: space-between; padding: 0.5rem 0; border: none; border-bottom: 1px dashed var(--border-color); align-items: center; }
-    .table-responsive td:last-child { border-bottom: none; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
-
-    #app-wrapper {
-        display: block; 
-    }
+    .table-responsive tr { display: block; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background: var(--card-background); }
 }
 
-/* Switch Theme */
+/* Switch Theme Toggle */
 .theme-toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--secondary-button-bg); border-radius: 8px; margin-top: auto; }
 .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
 .theme-switch input { opacity: 0; width: 0; height: 0; }
@@ -380,80 +360,24 @@ input:checked + .slider:before { transform: translateX(20px); }
 /* =========================================
    8. LÓGICA DE SECCIONES (SPA)
    ========================================= */
-main > section {
-    display: none;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-main > section.active {
-    display: block;
-    opacity: 1;
-    transform: translateY(0);
-    animation: fadeIn 0.4s ease-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+main > section { display: none; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
+main > section.active { display: block; opacity: 1; transform: translateY(0); animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* =========================================
    9. PAGINACIÓN
    ========================================= */
-.pagination-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 0;
-    margin-top: 1rem;
-    border-top: 1px solid var(--border-color);
-}
-
-.pagination-btn {
-    background-color: var(--secondary-button-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-color-dark);
-    padding: 0.4rem 0.8rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.pagination-btn:hover:not(:disabled) {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-.pagination-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.pagination-info {
-    font-size: 0.9rem;
-    color: var(--text-color-light);
-}
+.pagination-controls { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-top: 1rem; border-top: 1px solid var(--border-color); }
+.pagination-btn { background-color: var(--secondary-button-bg); border: 1px solid var(--border-color); color: var(--text-color-dark); padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; }
+.pagination-btn:hover:not(:disabled) { background-color: var(--primary-color); color: white; }
 
 /* =========================================
-   10. FIX MODO OSCURO GLOBAL (CORRECCIÓN IMPORTANTE)
+   10. FIX MODO OSCURO GLOBAL (ACTUALIZADO)
    ========================================= */
-/* Esto arregla que los inputs y modales se vean oscuros con letra oscura */
-
 body.dark-mode .modal-content {
-    background-color: #1f2937; /* Fondo gris oscuro */
-    color: #f3f4f6; /* Texto blanco suave */
+    background-color: #1f2937;
+    color: #f3f4f6;
     border: 1px solid #374151;
-}
-
-body.dark-mode .modal-header,
-body.dark-mode .modal-footer {
-    border-color: #374151;
-}
-
-body.dark-mode .btn-close {
-    filter: invert(1) grayscale(100%) brightness(200%); /* Hace la X blanca */
 }
 
 body.dark-mode .form-control, 
@@ -461,37 +385,34 @@ body.dark-mode .form-select,
 body.dark-mode input[type="text"],
 body.dark-mode input[type="number"],
 body.dark-mode textarea {
-    background-color: #111827; /* Fondo muy oscuro para inputs */
+    background-color: #111827; 
     border-color: #4b5563;
-    color: #ffffff; /* Texto blanco puro */
+    color: #ffffff;
 }
 
-body.dark-mode .form-control::placeholder {
-    color: #9ca3af; /* Placeholder gris claro */
-}
-
-body.dark-mode .form-control:focus {
+/* --- FIX ESPECÍFICO PARA DRIVE / FILE INPUTS --- */
+body.dark-mode input[type="file"] {
+    color: #f3f4f6; /* Texto blanco suave para el nombre del archivo */
     background-color: #111827;
-    color: #ffffff;
-    border-color: #6366f1;
 }
 
-body.dark-mode .list-group-item {
-    background-color: #1f2937;
-    color: #f3f4f6;
-    border-color: #374151;
-}
-
-/* Fix específico para tablas en modo oscuro */
-body.dark-mode .table {
-    color: #f3f4f6;
-}
-body.dark-mode .table thead th {
-    background-color: #111827;
-    color: #ffffff;
-    border-color: #374151;
-}
-body.dark-mode .table-hover tbody tr:hover {
-    color: #ffffff;
+/* Mejora la visibilidad del botón "Elegir Archivo" en Dark Mode */
+body.dark-mode input[type="file"]::file-selector-button {
     background-color: #374151;
+    color: #ffffff;
+    border: 1px solid #4b5563;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    margin-right: 15px;
+    transition: all 0.2s;
 }
+
+body.dark-mode input[type="file"]::file-selector-button:hover {
+    background-color: #4b5563;
+}
+
+/* Fix para tablas y placeholders en Dark Mode */
+body.dark-mode .table { color: #f3f4f6; }
+body.dark-mode .table thead th { background-color: #111827; color: #ffffff; border-color: #374151; }
+body.dark-mode .form-control::placeholder { color: #9ca3af; }
+body.dark-mode .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
