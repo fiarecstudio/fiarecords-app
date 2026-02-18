@@ -20,12 +20,13 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <div id="loader-overlay"><div class="spinner"></div></div>
 
+  <!-- LOGIN CONTAINER -->
   <div id="login-container">
     <div class="login-card">
         <div class="text-center mb-4">
@@ -101,6 +102,7 @@
     </div>
   </div>
   
+  <!-- APP WRAPPER -->
   <div id="app-wrapper" style="display: none;"> 
     <nav class="sidebar">
       <div class="sidebar-header">
@@ -134,7 +136,6 @@
 
     <div class="main-content">
         <header class="main-header d-flex justify-content-between align-items-center p-3">
-            <!-- BOTÓN CORREGIDO: Se eliminó el onclick en línea para evitar conflictos con script.js -->
             <button id="hamburger-menu" class="btn btn-light d-md-none">
                 <i class="bi bi-list fs-4"></i>
             </button>
@@ -402,7 +403,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 id="vista-artista-nombre">Artista</h2>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccion('gestion-artistas')">← Volver</button>
+                        <!-- Botón Volver eliminado intencionalmente por seguridad visual -->
                     </div>
                     <div class="card-body" id="vista-artista-contenido"></div>
                 </div>
@@ -499,33 +500,53 @@
     </div>
   </div>
 
+  <!-- MODAL ENTREGA / GOOGLE DRIVE CORREGIDO -->
   <div class="modal fade" id="delivery-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Entrega de Material</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title">Entrega de Proyecto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-           <input type="hidden" id="delivery-project-id">
-           <div class="mb-3"><label>Artista</label><input type="text" id="delivery-artist-name" class="form-control" readonly></div>
-           <div class="mb-3"><label>Proyecto</label><input type="text" id="delivery-project-name" class="form-control" readonly></div>
-           
-           <div class="alert alert-light border">
-               <h6><i class="bi bi-google"></i> Google Drive</h6>
-               <input type="file" id="drive-file-input" class="form-control mb-2">
-               <button id="btn-drive-upload" class="btn btn-primary w-100">
-                   <span id="drive-btn-text">Subir y Obtener Link</span>
-               </button>
-               <div id="drive-status" class="small mt-2 fw-bold"></div>
-           </div>
-           
-           <label>Enlace Externo</label>
-           <input type="url" id="delivery-link-input" class="form-control mb-3" placeholder="https://...">
-           
-           <div class="d-flex gap-2">
-               <button class="btn btn-secondary flex-grow-1" onclick="app.saveDeliveryLink()">Guardar Link</button>
-           </div>
+          <input type="hidden" id="delivery-project-id">
+          <input type="hidden" id="delivery-artist-name">
+          <input type="hidden" id="delivery-project-name">
+          
+          <!-- CONTENEDOR DRIVE CORREGIDO (CLASE DRIVE-UPLOAD-CONTAINER) -->
+          <div class="mb-3">
+              <label class="form-label fw-bold">Subir Archivos (Google Drive)</label>
+              <div class="drive-upload-container">
+                  <div class="mb-3">
+                      <i class="bi bi-google" style="font-size: 2rem; color: #4285F4;"></i>
+                      <i class="bi bi-drive" style="font-size: 2rem; color: #34A853; margin-left: 5px;"></i>
+                  </div>
+                  
+                  <!-- INPUT CON MULTIPLE -->
+                  <input type="file" id="drive-file-input" class="form-control mb-3" multiple>
+                  
+                  <!-- BOTÓN CON ONCLICK EXPLÍCITO -->
+                  <button id="btn-drive-upload" class="btn btn-primary w-100" onclick="app.subirADrive()">
+                      <i class="bi bi-cloud-arrow-up-fill"></i> Subir y Generar Enlace
+                  </button>
+                  
+                  <div id="drive-status" class="mt-3 small fw-bold text-muted">Esperando archivo...</div>
+              </div>
+          </div>
+
+          <div class="mb-3">
+              <label for="delivery-link-input" class="form-label">Enlace de Entrega (Carpeta)</label>
+              <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                  <input type="text" class="form-control" id="delivery-link-input" placeholder="El enlace aparecerá aquí al subir...">
+              </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-success" onclick="app.saveDeliveryLink()">
+              <i class="bi bi-save"></i> Guardar Cambios
+          </button>
         </div>
       </div>
     </div>
@@ -651,6 +672,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
+  <!-- Google APIs (Drive) -->
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
 

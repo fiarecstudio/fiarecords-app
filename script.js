@@ -324,8 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 2. Comprobador de Carga (Fix para "Servicios no cargados")
-    // Intenta inicializar cada 500ms hasta que las librerías existan
+    // 2. Comprobador de Carga
     let checkGoogleLibsInterval = setInterval(() => {
         if (typeof gapi !== 'undefined' && !gapiInited) {
             initializeGapiClient();
@@ -387,19 +386,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 4. Función Principal de Subida
+    // 4. Función Principal de Subida MÚLTIPLE
     async function subirADrive() {
         if (!gapiInited || !gisInited) {
-            // Intento final de inicializar si falló el automático
             if(typeof gapi !== 'undefined') initializeGapiClient();
             if(typeof google !== 'undefined') initializeGisClient();
             return showToast('Cargando servicios de Google... Intenta de nuevo en 5 segundos.', 'info');
         }
         
         const fileInput = document.getElementById('drive-file-input');
-        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona un archivo primero.', 'warning');
+        if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona al menos un archivo.', 'warning');
         
-        const file = fileInput.files[0];
+        const files = fileInput.files; // Ahora obtenemos la lista completa
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
         const statusSpan = document.getElementById('drive-status');
         const linkInput = document.getElementById('delivery-link-input');
@@ -414,57 +412,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 showLoader();
 
+                // 1. Obtener/Crear Carpetas UNA SOLA VEZ
                 const idMaestra = await obtenerCarpetaMaestra();
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
-                if(statusSpan) statusSpan.textContent = `Subiendo "${file.name}" (No cierres)...`;
-
-                const metadata = {
-                    'name': file.name,
-                    'parents': [folderId]
-                };
-
-                const accessToken = gapi.client.getToken().access_token;
-                const form = new FormData();
-                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                form.append('file', file);
-
-                // A. Subida del archivo
-                const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-                    method: 'POST',
-                    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-                    body: form
-                });
-
-                const fileData = await uploadRes.json();
-                if (fileData.error) throw new Error(fileData.error.message);
-
-                // --- CAMBIO IMPORTANTE: OBTENER LINK DE LA CARPETA, NO DEL ARCHIVO ---
-                if(statusSpan) statusSpan.textContent = 'Generando enlace del proyecto...';
+                // 2. Obtener el enlace de la CARPETA (No del archivo, para ver todos)
+                if(statusSpan) statusSpan.textContent = 'Generando enlace de carpeta...';
                 
-                // Pedimos el link de la carpeta del artista (folderId), no del archivo (fileData.id)
                 const getFolderRes = await gapi.client.drive.files.get({
-                    fileId: folderId, // <--- ID DE LA CARPETA
+                    fileId: folderId,
                     fields: 'webViewLink'
                 });
+                const folderLink = getFolderRes.result.webViewLink;
 
-                const finalLink = getFolderRes.result.webViewLink;
-                console.log('Link de la carpeta generado:', finalLink);
+                // 3. Subir Archivos en Bucle
+                const accessToken = gapi.client.getToken().access_token;
 
-                // C. Mostrar el link en el input
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
+
+                    const metadata = {
+                        'name': file.name,
+                        'parents': [folderId] // Todos van a la carpeta del artista
+                    };
+
+                    const form = new FormData();
+                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                    form.append('file', file);
+
+                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+                        method: 'POST',
+                        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                        body: form
+                    });
+                }
+
+                // 4. Mostrar el link de la carpeta en el input
                 if(linkInput) {
-                    linkInput.value = finalLink;
+                    linkInput.value = folderLink;
                     linkInput.style.borderColor = '#10b981'; 
                     setTimeout(() => linkInput.style.borderColor = '', 2000);
                 }
                 
                 if(statusSpan) {
-                    statusSpan.textContent = '¡Listo! Enlace del proyecto generado.';
+                    statusSpan.textContent = '¡Todos los archivos subidos!';
                     statusSpan.style.color = 'var(--success-color)';
                 }
 
-                // D. Guardar en BD (sin cerrar el modal para ver el link)
+                // 5. Guardar el Link de la Carpeta en BD
                 await saveDeliveryLink(false); 
+
+                showToast(`¡${files.length} archivos subidos con éxito!`, 'success');
 
             } catch (err) {
                 console.error(err);
