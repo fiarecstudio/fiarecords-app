@@ -439,26 +439,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fileData = await uploadRes.json();
                 if (fileData.error) throw new Error(fileData.error.message);
 
-                // B. Obtener el LINK explícitamente usando el ID
-                if(statusSpan) statusSpan.textContent = 'Generando enlace público...';
+                // --- CAMBIO IMPORTANTE: OBTENER LINK DE LA CARPETA, NO DEL ARCHIVO ---
+                if(statusSpan) statusSpan.textContent = 'Generando enlace del proyecto...';
                 
-                const getFileRes = await gapi.client.drive.files.get({
-                    fileId: fileData.id,
-                    fields: 'webViewLink, webContentLink'
+                // Pedimos el link de la carpeta del artista (folderId), no del archivo (fileData.id)
+                const getFolderRes = await gapi.client.drive.files.get({
+                    fileId: folderId, // <--- ID DE LA CARPETA
+                    fields: 'webViewLink'
                 });
 
-                const finalLink = getFileRes.result.webViewLink;
-                console.log('Link final generado:', finalLink);
+                const finalLink = getFolderRes.result.webViewLink;
+                console.log('Link de la carpeta generado:', finalLink);
 
                 // C. Mostrar el link en el input
                 if(linkInput) {
                     linkInput.value = finalLink;
-                    linkInput.style.borderColor = '#10b981'; // Feedback visual
+                    linkInput.style.borderColor = '#10b981'; 
                     setTimeout(() => linkInput.style.borderColor = '', 2000);
                 }
                 
                 if(statusSpan) {
-                    statusSpan.textContent = '¡Listo! Enlace generado.';
+                    statusSpan.textContent = '¡Listo! Enlace del proyecto generado.';
                     statusSpan.style.color = 'var(--success-color)';
                 }
 
