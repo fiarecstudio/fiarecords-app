@@ -295,15 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', theme);
     }
 
-// --- CONFIGURACIÓN GOOGLE DRIVE ---
-    const GAP_CONFIG = {
-        apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
-        clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-        // Scope completo para poder gestionar carpetas libremente
-        scope: 'https://www.googleapis.com/auth/drive'
-    };
-
     // --- NUEVA LÓGICA DE GOOGLE DRIVE (ORGANIZADA) ---
 
     // 1. Obtener o crear la carpeta MAESTRA "FIA_RECORDS_STUDIO"
