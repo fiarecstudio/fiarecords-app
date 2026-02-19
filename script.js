@@ -841,22 +841,25 @@ document.addEventListener('DOMContentLoaded', () => {
         } 
     }
 
-    const cargarOpcionesParaProyecto = () => {
+   const cargarOpcionesParaProyecto = () => {
         const userInfo = getUserRoleAndId();
         const esCliente = userInfo.role === 'cliente';
 
         const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
 
-        // --- OCULTAR DESCUENTOS PARA CLIENTES ---
+        // --- CONTENEDOR DEL DESCUENTO ---
         const containerDescuento = document.getElementById('containerDescuento');
 
         if (esCliente) {
             artistaSelectContainer.style.display = 'none';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
             
-            // Ocultar campo descuento y resetear a 0
-            if(containerDescuento) containerDescuento.style.display = 'none';
+            // SOLUCIÓN: Usar clases de Bootstrap para ocultar a la fuerza
+            if(containerDescuento) {
+                containerDescuento.classList.remove('d-flex');
+                containerDescuento.classList.add('d-none');
+            }
             document.getElementById('proyectoDescuento').value = 0;
 
             const select = document.getElementById('proyectoArtista');
@@ -873,8 +876,11 @@ document.addEventListener('DOMContentLoaded', () => {
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
             
-            // Mostrar campo descuento
-            if(containerDescuento) containerDescuento.style.display = 'flex';
+            // SOLUCIÓN: Volver a mostrar si es administrador
+            if(containerDescuento) {
+                containerDescuento.classList.remove('d-none');
+                containerDescuento.classList.add('d-flex');
+            }
 
             if (document.getElementById('info-artista-cliente')) {
                 document.getElementById('info-artista-cliente').remove();
