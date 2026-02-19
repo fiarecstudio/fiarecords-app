@@ -181,7 +181,7 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
    ========================================= */
 #app-wrapper { 
     display: flex; 
-    height: 100vh; 
+    height: 100dvh; /* Mejor soporte móvil */
     overflow: hidden; 
 }
 
@@ -218,7 +218,7 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
 /* Main Content */
 .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); }
 .main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); padding: 1rem; display: flex; align-items: center; justify-content: space-between;}
-main { flex: 1; overflow-y: auto; padding: 2rem; }
+main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 
 /* =========================================
    5. SISTEMA DE LOGIN
@@ -337,15 +337,37 @@ body.auth-visible #app-wrapper {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* =========================================
-   7. RESPONSIVE
+   7. RESPONSIVE (ARREGLO DEFINITIVO)
    ========================================= */
 @media (max-width: 768px) {
+    #app-wrapper { height: 100dvh; }
     .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 85%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.2); transition: left 0.3s ease; }
     .sidebar.show { left: 0; }
     #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px); }
     #sidebar-overlay.show { display: block; }
-    main { padding: 1rem; }
-    .table-responsive tr { display: block; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; background: var(--card-background); }
+    main { padding: 1rem; overflow-x: hidden; }
+
+    /* Fix para evitar el Scroll Horizontal (Tablas Convertidas en Tarjetas) */
+    .table-responsive { border: none; overflow: hidden; }
+    .table thead { display: none; }
+    .table tbody, .table tr, .table td { display: block; width: 100%; }
+    .table tbody tr { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.5rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
+    .table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px dashed var(--border-color);
+        padding: 0.75rem 0.5rem;
+        text-align: right;
+    }
+    .table tbody td:last-child { border-bottom: none; }
+    /* Usa el data-label para mostrar qué significa cada fila */
+    .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
+    .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+
+    /* Flujo de Trabajo Apilado Hacia Abajo */
+    .kanban-board { flex-direction: column; overflow-x: hidden; min-height: auto; align-items: stretch; gap: 1rem; }
+    .kanban-column { width: 100%; min-width: 100%; margin-bottom: 0; }
 }
 
 /* Switch Theme Toggle */
@@ -392,7 +414,7 @@ body.dark-mode textarea {
 
 /* --- FIX ESPECÍFICO PARA DRIVE / FILE INPUTS --- */
 body.dark-mode input[type="file"] {
-    color: #f3f4f6; /* Texto blanco suave para el nombre del archivo */
+    color: #f3f4f6;
     background-color: #111827;
 }
 
