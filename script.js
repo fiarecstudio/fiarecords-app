@@ -722,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filtrarFlujo(filtroActual);
         } catch (e) { showToast(`Error: ${e.message}`, 'error'); } 
     }
-javascript
+
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial...</td></tr>`; 
