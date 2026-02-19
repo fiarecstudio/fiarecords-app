@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
                     
+                    // Asegurar Favicon
                     let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
                     link.type = 'image/png';
                     link.rel = 'icon';
@@ -255,8 +256,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNCIONES AUXILIARES ---
     function filtrarTablas(query) {
         query = query.toLowerCase();
-        document.querySelectorAll('section.active tbody tr').forEach(row => { const text = row.innerText.toLowerCase(); row.style.display = text.includes(query) ? '' : 'none'; });
-        document.querySelectorAll('section.active .project-card').forEach(card => { const text = card.innerText.toLowerCase(); card.style.display = text.includes(query) ? 'flex' : 'none'; });
+        
+        document.querySelectorAll('section.active tbody tr').forEach(row => { 
+            const text = row.innerText.toLowerCase(); 
+            row.style.display = text.includes(query) ? '' : 'none'; 
+        });
+        
+        document.querySelectorAll('section.active .project-card').forEach(card => { 
+            const text = card.innerText.toLowerCase(); 
+            card.style.display = text.includes(query) ? 'flex' : 'none'; 
+        });
+        
         const activeSection = document.querySelector('section.active').id;
         if(activeSection === 'gestion-artistas') renderPaginatedList('artistas', query);
         if(activeSection === 'gestion-servicios') renderPaginatedList('servicios', query);
@@ -270,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
+                if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
                 fetchPublicLogo();
                 configCache = config;
             }
@@ -590,6 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
     
+    // --- NUEVO: GUARDAR SERVICIO CON VISIBILIDAD ---
     async function saveItem(e, type) { 
         e.preventDefault(); const form = e.target; let body; 
         if (type === 'servicios') { 
@@ -606,6 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
     async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     
+    // --- NUEVO: EDITAR SERVICIO CON VISIBILIDAD ---
     function abrirModalEditarServicio(id, nombre, precio, visible) { 
         document.getElementById('editServicioId').value = id; 
         document.getElementById('editServicioNombre').value = nombre; 
@@ -613,7 +626,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true');
         new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); 
     }
-    
     async function guardarEdicionServicio(e) { 
         e.preventDefault(); 
         const id = document.getElementById('editServicioId').value; 
@@ -836,10 +848,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
 
+        // --- OCULTAR DESCUENTOS PARA CLIENTES ---
+        const containerDescuento = document.getElementById('containerDescuento');
+
         if (esCliente) {
             artistaSelectContainer.style.display = 'none';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
             
+            // Ocultar campo descuento y resetear a 0
+            if(containerDescuento) containerDescuento.style.display = 'none';
+            document.getElementById('proyectoDescuento').value = 0;
+
             const select = document.getElementById('proyectoArtista');
             select.innerHTML = `<option value="${userInfo.artistaId}" selected>${userInfo.username}</option>`;
 
@@ -853,6 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
+            
+            // Mostrar campo descuento
+            if(containerDescuento) containerDescuento.style.display = 'flex';
+
             if (document.getElementById('info-artista-cliente')) {
                 document.getElementById('info-artista-cliente').remove();
             }
@@ -1179,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     
-    // --- FIX HISTORIAL PAGOS (SEGURO Y ROBUSTO) ---
+    // --- HISTORIAL PAGOS CORREGIDO ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -1244,6 +1267,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
         } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } 
     }
+    
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) {
         try {
@@ -1392,7 +1416,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
         const userInfo = getUserRoleAndId();
-        
         if (!artistaId) {
             if (userInfo.role === 'cliente' && userInfo.artistaId) {
                 artistaId = userInfo.artistaId;
@@ -1484,30 +1507,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const enlace = document.getElementById('delivery-link-input').value; 
         try { 
             await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); 
-            
             const proyectoCache = localCache.proyectos.find(p => p._id === projectId);
             if (proyectoCache) proyectoCache.enlaceEntrega = enlace;
-
             const proyectoHistorial = historialCacheados.find(p => p._id === projectId);
             if (proyectoHistorial) proyectoHistorial.enlaceEntrega = enlace;
-
             showToast('Enlace guardado correctamente.', 'success'); 
-            
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
                 const nombreActual = document.getElementById('vista-artista-nombre').textContent;
                 irAVistaArtista(null, nombreActual, '');
             }
-
-            if (cerrarModal) {
-                closeDeliveryModal(); 
-            }
-        } catch (e) { 
-            showToast(`Error al guardar el enlace: ${e.message}`, 'error'); 
-        } 
+            if (cerrarModal) { closeDeliveryModal(); }
+        } catch (e) { showToast(`Error al guardar el enlace: ${e.message}`, 'error'); } 
     }
 
-    // --- SETUP Y MENÚ ---
     function setupMobileMenu() {
         const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay');
         const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); };
@@ -1517,32 +1530,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function initAppEventListeners(payload) {
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });
-        
         document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
-        
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); });
-        
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista);
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio);
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario);
-        
         document.getElementById('firma-input').addEventListener('change', subirFirma); 
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
-        
         const modalDatosBancarios = document.getElementById('modalDatosBancarios');
         if (modalDatosBancarios) {
             modalDatosBancarios.addEventListener('show.bs.modal', function () {
                 cargarDatosBancariosEnModal();
             });
         }
-
         setupCustomization(payload);
         setupMobileMenu();
-
-        if (DOMElements.logoutButton) { 
-            DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; 
-        }
-
+        if (DOMElements.logoutButton) { DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; }
         window.addEventListener('online', OfflineManager.updateIndicator);
         window.addEventListener('offline', OfflineManager.updateIndicator);
         OfflineManager.updateIndicator();
@@ -1617,57 +1620,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EXPORTS GLOBALES ---
     window.app = {
-        eliminarItem,
-        restaurarItem,
-        eliminarPermanente,
-        cambiarProceso,
-        filtrarFlujo,
-        eliminarProyecto,
-        quitarDeProyecto,
-        agregarAProyecto,
-        cambiarAtributo,
-        aprobarCotizacion,
-        generarCotizacionPDF,
-        compartirPorWhatsApp,
-        registrarPago,
-        reimprimirRecibo,
-        compartirRecordatorioPago,
-        eliminarPago,
-        mostrarVistaArtista,
-        irAVistaArtista,
-        guardarDatosBancarios,
-        generarDatosBancariosPDF,
-        compartirDatosBancariosWhatsApp,
-        openDeliveryModal,
-        saveDeliveryLink,
-        editarInfoProyecto,
-        filtrarTablas,
-        actualizarHorarioProyecto,
-        cargarAgenda,
-        cancelarCita,
-        subirADrive,
-        syncNow: OfflineManager.syncNow,
-        mostrarSeccion,
-        mostrarSeccionPagos,
-        cargarPagos,
-        nuevoProyectoParaArtista,
-        abrirModalEditarArtista,
-        abrirModalEditarServicio,
-        abrirModalEditarUsuario,
-        guardarEdicionArtista,
-        guardarEdicionServicio,
-        guardarEdicionUsuario,
-        generarReciboPDF,
-        cerrarSesionConfirmacion,
-        registrarNuevoArtistaDesdeFormulario,
-        generarCotizacion,
-        enviarAFlujoDirecto,
-        toggleAuth,
-        registerUser,
-        recoverPassword,
-        resetPassword,
-        showResetPasswordView,
-        changePage,
+        eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
+        quitarDeProyecto, agregarAProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF,
+        compartirPorWhatsApp, registrarPago, reimprimirRecibo, compartirRecordatorioPago, eliminarPago,
+        mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
+        compartirDatosBancariosWhatsApp, openDeliveryModal, saveDeliveryLink, editarInfoProyecto,
+        filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
+        syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
+        nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
+        guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
+        cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
+        enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
+        showResetPasswordView, changePage
     };
 });
 
