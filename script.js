@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let logoBase64 = null;
     let preseleccionArtistaId = null;
 
-    // Estado de Paginación Global
     const paginationState = {
         artistas: { page: 1, limit: 10, filter: '' },
         servicios: { page: 1, limit: 10, filter: '' },
@@ -83,6 +82,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
                     if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
+                    
+                    let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+                    link.type = 'image/png';
+                    link.rel = 'icon';
+                    link.href = logoSrc;
+                    document.getElementsByTagName('head')[0].appendChild(link);
+                    
                     localStorage.setItem('cached_logo_path', logoSrc);
                 }
             }
@@ -224,9 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_URL}${url}`, { ...options, headers });
             
             if (res.status === 401 && !isPublic) { showLogin(); throw new Error('Sesión expirada.'); }
-            if (res.status === 401 && url.includes('/configuracion')) { return null; }
-            if (res.status === 204) return { ok: true };
             
+            if (res.status === 401 && url.includes('/configuracion')) { return null; }
+
+            if (res.status === 204) return { ok: true };
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
@@ -263,23 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (config && config.logoPath) { 
                 const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
                 if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
-                if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
-                let link = document.querySelector("link[rel~='icon']");
-                if (!link) {
-                    link = document.createElement('link');
-                    link.rel = 'icon';
-                    document.getElementsByTagName('head')[0].appendChild(link);
-                }
-                link.href = logoSrc;
-                localStorage.setItem('cached_logo_path', logoSrc);
+                fetchPublicLogo();
                 configCache = config;
             }
         } catch (e) { 
-            const cachedLogo = localStorage.getItem('cached_logo_path');
-            if(cachedLogo) {
-                if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
-                if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
-            }
             configCache = { firmaPos: { cotizacion: { vAlign: 'bottom', hAlign: 'right', w: 50, h: 20, offsetX: 0, offsetY: 0 } } }; 
         }
     }
@@ -495,6 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleAuth('login');
         document.body.style.opacity = '1';
         document.body.style.visibility = 'visible';
+        fetchPublicLogo();
     }
 
     function setupAuthListeners() {
@@ -564,11 +559,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const page = paginationState[endpoint].page; const limit = paginationState[endpoint].limit; const start = (page - 1) * limit; const end = start + limit; const paginatedItems = filteredData.slice(start, end); const totalPages = Math.ceil(filteredData.length / limit);
         listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => {
             let displayName, editAction;
-            if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre}`; editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; } else if (endpoint === 'usuarios') { displayName = `${item.username} (${item.role})`; editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; } else { displayName = `${item.nombre} - $${item.precio.toFixed(2)}`; editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}')`; }
+            if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre}`; editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; } 
+            else if (endpoint === 'usuarios') { displayName = `${item.username} (${item.role})`; editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; } 
+            else { 
+                const vis = item.visible !== false; 
+                displayName = `${item.nombre} - $${item.precio.toFixed(2)} ${vis ? '' : '<span class="badge bg-warning text-dark ms-2">Oculto</span>'}`; 
+                editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; 
+            }
             const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : '';
             const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`;
             let buttonsHtml = ''; if (!isClient) { buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; }
-            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${escapeHTML(displayName)}</span>${buttonsHtml}</li>`;
+            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`;
         }).join('') : `<li class="list-group-item">No hay resultados.</li>`;
         renderPaginationControls(listEl, endpoint, page, totalPages);
     }
@@ -588,17 +589,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
-    async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value) }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] = []; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+    
+    async function saveItem(e, type) { 
+        e.preventDefault(); const form = e.target; let body; 
+        if (type === 'servicios') { 
+            const vis = document.getElementById('visibleServicio');
+            body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; 
+        } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } 
+        try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] = []; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } 
+    }
+    
     async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] = []; renderPaginatedList(endpoint); } catch (e) { showToast(e.message, 'error'); } } }); }
     async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } }
     async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanentemente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
 
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
-    async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas = []; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
-    function abrirModalEditarServicio(id, nombre, precio) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
-    async function guardarEdicionServicio(e) { e.preventDefault(); const id = document.getElementById('editServicioId').value; const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value) }; try { await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Servicio actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide(); localCache.servicios = []; renderPaginatedList('servicios'); } catch (e) { showToast(e.message, 'error'); } }
+    async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
+    
+    function abrirModalEditarServicio(id, nombre, precio, visible) { 
+        document.getElementById('editServicioId').value = id; 
+        document.getElementById('editServicioNombre').value = nombre; 
+        document.getElementById('editServicioPrecio').value = precio; 
+        document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true');
+        new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); 
+    }
+    
+    async function guardarEdicionServicio(e) { 
+        e.preventDefault(); 
+        const id = document.getElementById('editServicioId').value; 
+        const body = { 
+            nombre: document.getElementById('editServicioNombre').value, 
+            precio: parseFloat(document.getElementById('editServicioPrecio').value),
+            visible: document.getElementById('editServicioVisible').checked
+        }; 
+        try { await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Servicio actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide(); localCache.servicios =[]; renderPaginatedList('servicios'); } catch (e) { showToast(e.message, 'error'); } 
+    }
+    
     async function abrirModalEditarUsuario(itemStr) { const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"')); document.getElementById('editUsuarioId').value = item._id; document.getElementById('editUsuarioName').value = item.username; document.getElementById('editUsuarioEmail').value = item.email || ''; document.getElementById('editUsuarioRole').value = item.role; document.getElementById('editUsuarioPass').value = ''; const selectArtista = document.getElementById('editUsuarioArtista'); if (selectArtista) { selectArtista.innerHTML = '<option value="">Cargando...</option>'; try { let artistas = localCache.artistas; if (!artistas || artistas.length === 0) { artistas = await fetchAPI('/api/artistas'); localCache.artistas = artistas; } let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>'; artistas.forEach(a => { const selected = (item.artistaId === a._id) ? 'selected' : ''; opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`; }); selectArtista.innerHTML = opts; } catch (e) { selectArtista.innerHTML = '<option value="">Error al cargar</option>'; } } document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false); if (item.permisos && Array.isArray(item.permisos)) { item.permisos.forEach(p => { const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`); if(chk) chk.checked = true; }); } new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show(); }
-    async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios = []; renderPaginatedList('usuarios'); } catch (e) { showToast(e.message, 'error'); } }
+    async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios =[]; renderPaginatedList('usuarios'); } catch (e) { showToast(e.message, 'error'); } }
 
     async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
     async function guardarDatosBancarios() { const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; try { await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) }); configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
@@ -777,8 +805,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (addPublicoGeneral) { 
                 const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); 
             } 
+            
+            const user = getUserRoleAndId();
+
             data.forEach(item => { 
-                const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); 
+                if (selectId === 'proyectoServicio' && user.role === 'cliente') {
+                    if (item.visible === false) return; 
+                }
+
+                const option = document.createElement('option'); 
+                option.value = item[valueField]; 
+                option.textContent = textFieldFn(item); 
+                option.dataset.precio = item.precio || 0; 
+                select.appendChild(option); 
             }); 
             if (selectId === 'proyectoArtista' && preseleccionArtistaId) { 
                 select.value = preseleccionArtistaId; preseleccionArtistaId = null; 
@@ -1140,6 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     
+    // --- FIX HISTORIAL PAGOS (SEGURO Y ROBUSTO) ---
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -1148,21 +1188,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const isClient = userInfo.role === 'cliente';
 
         try { 
+            // Siempre pedimos los datos más frescos
+            const proyectosFresh = await fetchAPI('/api/proyectos');
             let pagos = [];
 
             if (isClient) {
-                if (!localCache.proyectos || localCache.proyectos.length === 0) {
-                     await fetchAPI('/api/proyectos');
-                }
-
-                const misProyectos = localCache.proyectos.filter(p => p.artista && p.artista._id === userInfo.artistaId);
-                
+                const misProyectos = proyectosFresh.filter(p => p.artista && p.artista._id === userInfo.artistaId);
                 misProyectos.forEach(proj => {
                     if (proj.pagos && proj.pagos.length > 0) {
                         proj.pagos.forEach(pago => {
                             pagos.push({
                                 fecha: pago.fecha || new Date().toISOString(),
-                                artista: userInfo.username, 
+                                artista: proj.nombreProyecto || 'Proyecto', 
                                 monto: pago.monto,
                                 metodo: pago.metodo,
                                 proyectoId: proj._id,
@@ -1171,12 +1208,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                 });
-
-                pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
             } else {
-                pagos = await fetchAPI('/api/proyectos/pagos/todos'); 
+                proyectosFresh.forEach(proj => {
+                    if (proj.pagos && proj.pagos.length > 0) {
+                        proj.pagos.forEach(pago => {
+                            pagos.push({
+                                fecha: pago.fecha || new Date().toISOString(),
+                                artista: proj.artista ? (proj.artista.nombreArtistico || proj.artista.nombre) : 'Público General',
+                                monto: pago.monto,
+                                metodo: pago.metodo,
+                                proyectoId: proj._id,
+                                pagoId: pago._id
+                            });
+                        });
+                    }
+                });
             }
+
+            pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             tablaBody.innerHTML = pagos.length ? pagos.map(p => {
                 let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
@@ -1186,16 +1235,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 return `<tr>
-                    <td data-label="Fecha">${new Date(p.fecha).toLocaleDateString()}</td>
-                    <td data-label="Artista" class="clickable-artist" ondblclick="app.irAVistaArtista(null, '${escapeHTML(p.artista)}', '')">${escapeHTML(p.artista)}</td>
-                    <td data-label="Monto">$${p.monto.toFixed(2)}</td>
-                    <td data-label="Método">${escapeHTML(p.metodo)}</td>
-                    <td data-label="Acciones" class="table-actions">${buttons}</td>
-                </tr>`;
+                            <td data-label="Fecha">${new Date(p.fecha).toLocaleDateString()}</td>
+                            <td data-label="Proyecto">${escapeHTML(p.artista)}</td>
+                            <td data-label="Monto">$${p.monto.toFixed(2)}</td>
+                            <td data-label="Método">${escapeHTML(p.metodo)}</td>
+                            <td data-label="Acciones" class="table-actions">${buttons}</td>
+                        </tr>`;
             }).join('') : `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
         } catch (e) { tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; } 
     }
-    
+```
+
+### PARTE 2 DE 2 (Pégalo debajo de la Parte 1 en `script.js`)
+
+```javascript
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(proyecto, pago); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) {
         try {
@@ -1281,11 +1334,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast('Error al generar recibo.', 'error'); } 
     }
 
-    // --- FIX NAVEGACIÓN CLIENTE: Verificación robusta del rol ---
+    // --- VISTA ARTISTA ---
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
-        // Obtenemos el rol REAL del usuario logueado en este momento
         const userInfo = getUserRoleAndId();
-        // Si el usuario es cliente, forzamos isClientView a true sin importar los argumentos
         const isClientView = (userInfo.role === 'cliente');
 
         document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
@@ -1294,7 +1345,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
-            // --- FIX MODO OSCURO: Se eliminan estilos fijos y se usan variables ---
             let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap">
@@ -1304,13 +1354,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
                                     </div>`;
             if (!isClientView) { 
-                // VISTA ADMIN
                 html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`; 
             } else {
-                 // VISTA CLIENTE
                  html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
                         </div>`;
@@ -1325,7 +1373,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`;
                     }
                     if (!isClientView) {
-                        // SOLO ADMIN ve borrar y entrega
                         accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>`;
                         accionesHtml += `<button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`;
                     }
@@ -1349,23 +1396,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { 
-        // Si no se pasa ID (ej: navegación cliente), buscar el propio
         const userInfo = getUserRoleAndId();
         
         if (!artistaId) {
-            // Si es cliente, usa su propio ID
             if (userInfo.role === 'cliente' && userInfo.artistaId) {
                 artistaId = userInfo.artistaId;
-                // Si no se pasaron nombres, usamos los del token o placeholder
                 if (!artistaNombre) artistaNombre = userInfo.username;
             } else {
-                // Si es admin y no pasó ID, hay que buscar
                 const artistas = await fetchAPI('/api/artistas'); 
                 const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); 
                 if (artista) artistaId = artista._id; else return;
             }
         } 
-        // La función mostrarVistaArtista ahora determina por sí misma si es vista de cliente
         mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); 
     }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
@@ -1413,6 +1455,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { showToast(`Error al editar`, 'error'); } 
         }
     }
+    
     function openDeliveryModal(projectId, artistName, projectName) { 
         const modalEl = document.getElementById('delivery-modal'); 
         modalEl.querySelector('#delivery-project-id').value = projectId; 
@@ -1422,7 +1465,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
         document.getElementById('drive-status').textContent = ''; 
         
-        // --- MODIFICACIÓN: SI ES CLIENTE, OCULTAR SUBIDA ---
         const token = localStorage.getItem('token');
         const payload = JSON.parse(atob(token.split('.')[1]));
         const isClient = payload.role.toLowerCase() === 'cliente';
@@ -1448,17 +1490,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try { 
             await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); 
             
-            // Actualizar caché local para que si cierras y abres, el link siga ahí
             const proyectoCache = localCache.proyectos.find(p => p._id === projectId);
             if (proyectoCache) proyectoCache.enlaceEntrega = enlace;
 
-            // Actualizar historial caché TAMBIÉN
             const proyectoHistorial = historialCacheados.find(p => p._id === projectId);
             if (proyectoHistorial) proyectoHistorial.enlaceEntrega = enlace;
 
             showToast('Enlace guardado correctamente.', 'success'); 
             
-            // Recargar para mostrar botón inmediatamente
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
                 const nombreActual = document.getElementById('vista-artista-nombre').textContent;
@@ -1495,7 +1534,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('firma-input').addEventListener('change', subirFirma); 
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual);
         
-        // Listener para cargar datos bancarios al abrir el modal
         const modalDatosBancarios = document.getElementById('modalDatosBancarios');
         if (modalDatosBancarios) {
             modalDatosBancarios.addEventListener('show.bs.modal', function () {
