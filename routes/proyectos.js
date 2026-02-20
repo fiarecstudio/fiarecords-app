@@ -218,7 +218,7 @@ router.post('/', async (req, res) => {
                     <h2 style="color: #6366f1;">¡Proyecto Agendado!</h2>
                     <p>Hola,</p>
                     <p>Tu proyecto <strong>${guardado.nombreProyecto || 'Sin nombre'}</strong> ha sido confirmado.</p>
-                    <p><strong>Fecha (CDMX):</strong> ${fechaFmt}</p>
+                    <p><strong>Fecha :</strong> ${fechaFmt}</p>
                     <p>Te esperamos en el estudio.</p>
                 </div>
             `;
