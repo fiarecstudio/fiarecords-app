@@ -53,9 +53,9 @@ body.dark-mode {
 body { font-family: 'Inter', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); font-size: 15px; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; margin: 0; }
 h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; color: var(--text-color-dark); }
 
-/* SOLUCIÓN AL LOGO */
-.logo-dinamico { max-width: 160px; max-height: 70px; object-fit: contain; transition: all 0.3s; filter: invert(1) grayscale(100%) brightness(0); }
-body.dark-mode .logo-dinamico { filter: none; }
+/* SOLUCIÓN AL LOGO (Siempre negro en modo claro, blanco en oscuro) */
+.logo-dinamico { max-width: 160px; max-height: 70px; object-fit: contain; transition: all 0.3s; filter: brightness(0); }
+body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 
 /* BOOTSTRAP OVERRIDES */
 .form-control, .form-select { background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-color-dark); border-radius: 12px; padding: 0.75rem 1rem; }
@@ -117,6 +117,29 @@ body.auth-visible #app-wrapper { display: none !important; }
 #loader-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
 .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Ajuste para que en PC se acomoden todas las columnas en la pantalla sin scroll */
+@media (min-width: 1024px) {
+    .kanban-board {
+        overflow-x: hidden; 
+        justify-content: space-between;
+        gap: 0.4rem; 
+        width: 100%;
+    }
+    .kanban-column {
+        flex: 1 1 0; 
+        min-width: 0; 
+        width: auto;
+        padding: 0.5rem;
+    }
+    .kanban-column h3 {
+        font-size: 0.9rem; 
+    }
+    .project-card {
+        padding: 0.75rem;
+        font-size: 0.85rem;
+    }
+}
 
 /* =========================================
    RESPONSIVE (TABLAS MÓVILES)
