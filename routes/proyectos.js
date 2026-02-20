@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js (FINAL Y COMPLETO CON NOTIFICACIONES)
+// ARCHIVO: routes/proyectos.js (CORREGIDO HORARIO MÉXICO)
 // ==========================================
 const express = require('express');
 const router = express.Router();
@@ -10,7 +10,7 @@ const auth = require('../middleware/auth');
 const { google } = require('googleapis');
 
 // ============================================================
-// 1. CONFIGURACIÓN API GMAIL (Para envíos automáticos)
+// CONFIGURACIÓN API GMAIL
 // ============================================================
 const OAuth2 = google.auth.OAuth2;
 
@@ -24,7 +24,6 @@ const createTransporter = async () => {
     return oauth2Client;
 };
 
-// Codificación del correo para Gmail API
 const makeBody = (to, from, subject, message) => {
     const str = [
         `To: ${to}`,
@@ -39,9 +38,8 @@ const makeBody = (to, from, subject, message) => {
     return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
-// Función para enviar correo sin bloquear el servidor
 const enviarNotificacion = async (emailDestino, asunto, htmlContent) => {
-    if (!emailDestino) return; 
+    if (!emailDestino) return;
     try {
         const authClient = await createTransporter();
         const gmail = google.gmail({ version: 'v1', auth: authClient });
@@ -55,7 +53,6 @@ const enviarNotificacion = async (emailDestino, asunto, htmlContent) => {
     }
 };
 
-// Helper para buscar el correo del artista basado en el ID
 const getArtistaEmail = async (artistaId) => {
     if (!artistaId) return null;
     try {
@@ -64,32 +61,35 @@ const getArtistaEmail = async (artistaId) => {
     } catch(e) { return null; }
 };
 
-// Middleware de autenticación
+// Helper para formatear fecha a México
+const formatearFechaMexico = (fechaIso) => {
+    return new Date(fechaIso).toLocaleString('es-MX', { 
+        timeZone: 'America/Mexico_City', // FORZAMOS HORARIO DE MÉXICO
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: 'numeric', 
+        minute: 'numeric',
+        hour12: true 
+    });
+};
+
 router.use(auth);
 
-// ------------------------------------------------------------------
-// 2. FILTROS DE SEGURIDAD (CLIENTE VS ADMIN)
-// ------------------------------------------------------------------
+// --- FILTRO DE USUARIO ---
 const getFiltroUsuario = async (req) => {
     let filtro = { isDeleted: { $ne: true } };
-
-    if (req.user.role !== 'cliente') {
-        return filtro; // Admin ve todo
-    }
-
+    if (req.user.role !== 'cliente') return filtro;
     if (req.user.artistaId) {
         filtro.artista = new mongoose.Types.ObjectId(req.user.artistaId);
     } else {
-        filtro.artista = new mongoose.Types.ObjectId(); // ID falso para no devolver nada si no hay match
+        filtro.artista = new mongoose.Types.ObjectId(); 
     }
-
     return filtro;
 };
 
-// ------------------------------------------------------------------
-// 3. RUTAS GET (LECTURA)
-// ------------------------------------------------------------------
-
+// --- RUTAS GET ---
 router.get('/', async (req, res) => {
     try {
         const filtro = await getFiltroUsuario(req);
@@ -103,9 +103,7 @@ router.get('/agenda', async (req, res) => {
         const filtro = await getFiltroUsuario(req);
         filtro.estatus = { $ne: 'Cancelado' };
         filtro.proceso = { $ne: 'Completo' };
-
         const proyectos = await Proyecto.find(filtro).populate('artista');
-        
         const eventos = proyectos.map(p => ({
             id: p._id,
             title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Sin Nombre'),
@@ -145,9 +143,7 @@ router.get('/pagos/todos', async (req, res) => {
     try {
         const filtro = await getFiltroUsuario(req);
         filtro["pagos.0"] = { $exists: true }; 
-
         const proyectos = await Proyecto.find(filtro).populate('artista');
-        
         let todosPagos = [];
         proyectos.forEach(p => {
             if (p.pagos && p.pagos.length > 0) {
@@ -180,7 +176,6 @@ router.get('/por-artista/:id', async (req, res) => {
             artista: req.params.id, 
             isDeleted: { $ne: true } 
         }).populate('artista').sort({ fecha: -1 });
-        
         res.json(proyectos);
     } catch (e) { res.status(500).json({ error: 'Error al obtener historial.' }); }
 });
@@ -189,7 +184,6 @@ router.get('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
         if (!proyecto) return res.status(404).json({ error: 'No encontrado' });
-
         if (req.user.role === 'cliente') {
             const filtro = await getFiltroUsuario(req);
             if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) {
@@ -200,41 +194,36 @@ router.get('/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ------------------------------------------------------------------
-// 4. RUTAS POST/PUT (CON NOTIFICACIONES INTEGRADAS)
-// ------------------------------------------------------------------
+// --- RUTAS POST/PUT ---
 
 router.post('/', async (req, res) => {
     try {
         if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
-        
         let datos = { ...req.body, isDeleted: false };
         if (req.user.role === 'cliente') {
             const filtro = await getFiltroUsuario(req);
             if (filtro.artista) { datos.artista = filtro.artista; } 
             else { return res.status(400).json({ error: 'Error: Sin perfil de artista.' }); }
         }
-        
         const nuevo = new Proyecto(datos);
         const guardado = await nuevo.save();
 
-        // NOTIFICACIÓN: Si se crea directamente como 'Agendado'
+        // NOTIFICACIÓN: Agendado directo
         if (guardado.proceso === 'Agendado' && guardado.artista) {
             const email = await getArtistaEmail(guardado.artista);
-            const fechaFmt = new Date(guardado.fecha).toLocaleString('es-MX', { dateStyle: 'full', timeStyle: 'short' });
+            const fechaFmt = formatearFechaMexico(guardado.fecha);
             
             const htmlContent = `
                 <div style="font-family: Arial, sans-serif; color: #333;">
                     <h2 style="color: #6366f1;">¡Proyecto Agendado!</h2>
                     <p>Hola,</p>
                     <p>Tu proyecto <strong>${guardado.nombreProyecto || 'Sin nombre'}</strong> ha sido confirmado.</p>
-                    <p><strong>Fecha:</strong> ${fechaFmt}</p>
-                    <p>Nos vemos en el estudio.</p>
+                    <p><strong>Fecha (CDMX):</strong> ${fechaFmt}</p>
+                    <p>Te esperamos en el estudio.</p>
                 </div>
             `;
             enviarNotificacion(email, "📅 Cita Confirmada - Fia Records", htmlContent);
         }
-
         res.status(201).json(guardado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -242,27 +231,25 @@ router.post('/', async (req, res) => {
 router.put('/:id/proceso', async (req, res) => {
     try {
         if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-        
         const updateData = { proceso: req.body.proceso };
         if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago';
         
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('artista');
         
-        // NOTIFICACIÓN: Si se mueve a 'Agendado' (Aprobación de Cotización)
+        // NOTIFICACIÓN: Cotización Aprobada
         if (req.body.proceso === 'Agendado' && actualizado.artista) {
             const email = actualizado.artista.correo;
-            const fechaFmt = new Date(actualizado.fecha).toLocaleString('es-MX', { dateStyle: 'full', timeStyle: 'short' });
+            const fechaFmt = formatearFechaMexico(actualizado.fecha);
             
             const htmlContent = `
                 <div style="font-family: Arial, sans-serif;">
                     <h2 style="color: #10b981;">¡Cotización Aprobada!</h2>
                     <p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> ya está en nuestra agenda.</p>
-                    <p><strong>Fecha:</strong> ${fechaFmt}</p>
+                    <p><strong>Fecha (CDMX):</strong> ${fechaFmt}</p>
                 </div>
             `;
             enviarNotificacion(email, "✅ Tu cita ha sido confirmada", htmlContent);
         }
-
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -271,7 +258,7 @@ router.put('/:id/estatus', async (req, res) => {
     try {
         const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { estatus: req.body.estatus }, { new: true }).populate('artista');
         
-        // NOTIFICACIÓN: Si se CANCELA
+        // NOTIFICACIÓN: Cancelación
         if (req.body.estatus === 'Cancelado' && actualizado.artista) {
             const email = actualizado.artista.correo;
             const htmlContent = `
@@ -283,23 +270,20 @@ router.put('/:id/estatus', async (req, res) => {
             `;
             enviarNotificacion(email, "❌ Cita Cancelada - Fia Records", htmlContent);
         }
-
         res.json(actualizado);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Actualizar Fecha (Reagendar)
 router.put('/:id/fecha', async (req, res) => {
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true }).populate('artista');
     
-    // Notificación Cambio de Fecha
+    // NOTIFICACIÓN: Cambio de Fecha
     if (actualizado.artista) {
         const email = actualizado.artista.correo;
-        const fechaFmt = new Date(req.body.fecha).toLocaleString('es-MX', { dateStyle: 'full', timeStyle: 'short' });
-        enviarNotificacion(email, "📅 Cambio de Horario", `<p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> se movió al: <strong>${fechaFmt}</strong>.</p>`);
+        const fechaFmt = formatearFechaMexico(req.body.fecha);
+        enviarNotificacion(email, "📅 Cambio de Horario", `<p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> se movió al: <strong>${fechaFmt}</strong> (Hora CDMX).</p>`);
     }
-    
     res.json(actualizado);
 });
 
@@ -309,11 +293,11 @@ router.put('/:id/nombre', async (req, res) => {
     res.json(actualizado);
 });
 
-// NOTIFICACIÓN: Entrega de Material (Link Drive)
 router.put('/:id/enlace-entrega', async (req, res) => {
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true }).populate('artista');
     
+    // NOTIFICACIÓN: Entrega de Material
     if (req.body.enlace && actualizado.artista) {
         const email = actualizado.artista.correo;
         const htmlEntrega = `
@@ -330,31 +314,25 @@ router.put('/:id/enlace-entrega', async (req, res) => {
         `;
         enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", htmlEntrega);
     }
-    
     res.json(actualizado);
 });
 
 router.post('/:id/pagos', async (req, res) => {
     try {
         if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-
         const proyecto = await Proyecto.findById(req.params.id).populate('artista');
         if (!proyecto) return res.status(404).json({ error: 'No encontrado' });
-
+        
         const nuevoPago = {
             monto: req.body.monto,
             metodo: req.body.metodo,
             fecha: new Date(),
-            artista: proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'
+            artista: proyecto.artista ? proyecto.artista.nombre : 'General'
         };
-
         proyecto.pagos.push(nuevoPago);
         proyecto.montoPagado = (proyecto.montoPagado || 0) + parseFloat(req.body.monto);
         
-        if (proyecto.montoPagado >= (proyecto.total - (proyecto.descuento || 0))) {
-            proyecto.estatus = 'Pagado';
-        }
-
+        if (proyecto.montoPagado >= (proyecto.total - (proyecto.descuento || 0))) { proyecto.estatus = 'Pagado'; }
         await proyecto.save();
         res.json(proyecto);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -371,48 +349,30 @@ router.put('/:id/documentos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ------------------------------------------------------------------
-// 5. RUTAS DE BORRADO Y PAPELERA
-// ------------------------------------------------------------------
-
+// --- RUTAS BORRADO ---
 router.delete('/:id', async (req, res) => {
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-    try {
-        await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true });
-        res.status(204).send();
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/papelera/all', async (req, res) => {
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-    try {
-        const proyectos = await Proyecto.find({ isDeleted: true }).populate('artista');
-        res.json(proyectos);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { const proyectos = await Proyecto.find({ isDeleted: true }).populate('artista'); res.json(proyectos); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.put('/:id/restaurar', async (req, res) => {
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-    try {
-        await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false });
-        res.status(204).send();
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete('/:id/permanente', async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' });
-    try {
-        await Proyecto.findByIdAndDelete(req.params.id);
-        res.status(204).send();
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { await Proyecto.findByIdAndDelete(req.params.id); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete('/papelera/vaciar', async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' });
-    try {
-        await Proyecto.deleteMany({ isDeleted: true });
-        res.status(204).send();
-    } catch (err) { res.status(500).json({ error: "Error" }); }
+    try { await Proyecto.deleteMany({ isDeleted: true }); res.status(204).send(); } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
 router.delete('/:id/pagos/:pagoId', async (req, res) => {
