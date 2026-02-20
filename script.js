@@ -848,19 +848,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const artistaSelectContainer = document.querySelector('#proyectoArtista').parentElement;
         const btnNuevoArtista = document.getElementById('btnNuevoArtista');
 
-        // --- CONTENEDOR DEL DESCUENTO ---
+        // --- CONTENEDOR DEL DESCUENTO Y BOTÓN COTIZAR ---
         const containerDescuento = document.getElementById('containerDescuento');
+        const btnGenerarCotizacion = document.getElementById('btnGenerarCotizacion');
 
         if (esCliente) {
             artistaSelectContainer.style.display = 'none';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'none';
             
-            // SOLUCIÓN: Usar clases de Bootstrap para ocultar a la fuerza
+            // Ocultar descuento
             if(containerDescuento) {
                 containerDescuento.classList.remove('d-flex');
                 containerDescuento.classList.add('d-none');
             }
             document.getElementById('proyectoDescuento').value = 0;
+
+            // Ocultar botón de Cotizar
+            if(btnGenerarCotizacion) {
+                btnGenerarCotizacion.classList.add('d-none');
+            }
 
             const select = document.getElementById('proyectoArtista');
             select.innerHTML = `<option value="${userInfo.artistaId}" selected>${userInfo.username}</option>`;
@@ -873,13 +879,19 @@ document.addEventListener('DOMContentLoaded', () => {
                  artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
             }
         } else {
+            // VISTA ADMINISTRADOR
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
             
-            // SOLUCIÓN: Volver a mostrar si es administrador
+            // Mostrar descuento
             if(containerDescuento) {
                 containerDescuento.classList.remove('d-none');
                 containerDescuento.classList.add('d-flex');
+            }
+
+            // Mostrar botón de Cotizar
+            if(btnGenerarCotizacion) {
+                btnGenerarCotizacion.classList.remove('d-none');
             }
 
             if (document.getElementById('info-artista-cliente')) {
