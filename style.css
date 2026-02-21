@@ -204,7 +204,7 @@ body.dark-mode .btn-close { filter: invert(1) grayscale(100%) brightness(200%); 
    ========================================= */
 .project-card {
     position: relative !important; 
-    overflow: hidden !important; /* Evita que cualquier elemento se desborde */
+    /* Quitamos el overflow: hidden para que no ampute el botón */
 }
 
 /* Ajusta cualquier botón rojo (eliminar) dentro de la tarjeta */
@@ -212,15 +212,20 @@ body.dark-mode .btn-close { filter: invert(1) grayscale(100%) brightness(200%); 
 .project-card button[onclick*="eliminar"] {
     font-size: 0.8rem !important;
     padding: 0.3rem 0.6rem !important;
-    white-space: normal !important; /* Permite que el texto baje a otra línea si es muy largo */
+    white-space: normal !important; 
     max-width: 100%;
     margin-top: 5px;
+    z-index: 10;
+    position: relative;
 }
 
-/* Si el botón es un icono en la esquina superior */
+/* Si el botón es un icono (la X) en la esquina superior */
 .project-card .btn-close {
     position: absolute !important;
-    top: 10px !important;
-    right: 10px !important;
-    z-index: 10;
+    top: 8px !important;
+    right: 12px !important; /* Más separado de la orilla */
+    z-index: 20;
+    background-color: var(--card-background); /* Le da un fondito para que resalte */
+    border-radius: 50%; /* Lo hace redondito */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2); /* Sombrita para que no se pierda */
 }
