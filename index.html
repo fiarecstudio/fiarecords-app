@@ -139,25 +139,16 @@
     <div id="sidebar-overlay"></div>
 
     <div class="main-content">
-        <!-- HEADER MEJORADO -->
+        <!-- HEADER LIMPIO (Sin botón de volver) -->
         <header class="main-header d-flex flex-column p-3 gap-2">
-            
-            <!-- FILA 1: Controles, Título y Acciones -->
             <div class="d-flex justify-content-between align-items-center w-100">
                 <div class="d-flex align-items-center gap-2">
-                    <!-- BOTÓN REGRESAR (Se oculta/muestra con JS) -->
-                    <button id="btn-global-back" class="btn-back-custom" style="display: none;" onclick="app.irAlDashboard()" title="Volver al Inicio">
-                        <i class="bi bi-arrow-left"></i>
-                    </button>
-
                     <button id="hamburger-menu" class="btn btn-light d-md-none">
                         <i class="bi bi-list fs-4"></i>
                     </button>
-                    
                     <div id="welcome-user" class="fw-bold fs-5 text-truncate" style="max-width: 150px;"></div>
                 </div>
                   
-                <!-- BUSCADOR PC (Solo visible en pantallas medianas/grandes) -->
                 <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
@@ -177,14 +168,12 @@
                 </div>
             </div>
 
-            <!-- FILA 2: BUSCADOR MÓVIL (Solo visible en pantallas pequeñas) -->
             <div class="search-box-mobile w-100 d-md-none">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                     <input type="text" id="globalSearchMobile" class="form-control border-start-0" placeholder="Buscar..." onkeyup="app.filtrarTablas(this.value)">
                 </div>
             </div>
-
         </header>
 
         <main class="p-3 p-md-4">
@@ -192,7 +181,6 @@
             <section id="dashboard" class="active section-view">
                 <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
-                    <!-- TARJETAS CON REDIRECCIÓN -->
                     <div class="card kpi-card border-start border-4 border-success p-3" onclick="app.mostrarSeccion('historial-proyectos')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
@@ -219,13 +207,17 @@
             </section>
 
             <section id="agenda" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card p-3"><div id="calendario"></div></div>
             </section>
 
             <section id="cotizaciones" class="section-view">
               <div class="card">
-                <div class="card-header"><h2>Cotizaciones Pendientes</h2></div>
-                <div class="table-responsive">
+                <div class="card-header border-0 pb-0 pt-3">
+                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                    <h2>Cotizaciones Pendientes</h2>
+                </div>
+                <div class="table-responsive p-3">
                   <table class="table table-hover">
                     <thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead>
                     <tbody id="tablaCotizacionesBody"></tbody>
@@ -235,6 +227,7 @@
             </section>
 
             <section id="flujo-trabajo" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>Flujo de Trabajo</h2>
                     <div id="filtrosFlujo"></div>
@@ -244,11 +237,14 @@
 
             <section id="pagos" class="section-view">
               <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <h2 class="mb-0">Gestión de Pagos</h2>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-outline-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial</button>
+                <div class="card-header pt-3 pb-0 border-0">
+                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+                        <h2 class="mb-0">Gestión de Pagos</h2>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary active" onclick="app.mostrarSeccionPagos('pendientes', this)">Pendientes</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccionPagos('historial', this)">Historial</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -278,7 +274,10 @@
 
             <section id="registrar-proyecto" class="section-view">
               <div class="card" style="max-width: 800px; margin: auto;">
-                <div class="card-header bg-primary text-white"><h2><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2></div>
+                <div class="card-header bg-primary text-white d-flex align-items-center gap-3">
+                    <button class="btn text-white p-0 d-flex align-items-center" onclick="app.irAlDashboard()" title="Volver"><i class="bi bi-arrow-left fs-4"></i></button>
+                    <h2 class="mb-0 text-white"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2>
+                </div>
                 <div class="card-body">
                     <form id="formProyecto" onsubmit="return false;">
                         <label>Artista/Cliente</label>
@@ -314,7 +313,6 @@
                         </div>
                         <ul id="listaProyectoActual" class="list-group mb-3"></ul>
 
-                        <!-- AQUÍ SE AGREGA EL ID PARA PODER OCULTARLO EN CLIENTES -->
                         <div id="containerDescuento" class="d-flex justify-content-end align-items-center mb-3">
                             <label class="me-2">Descuento ($):</label>
                             <input type="number" id="proyectoDescuento" class="form-control" style="width: 100px;">
@@ -338,7 +336,10 @@
 
             <section id="gestion-artistas" class="section-view">
               <div class="card">
-                <div class="card-header"><h2>Gestión de Artistas</h2></div>
+                <div class="card-header pt-3 pb-0 border-0">
+                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                    <h2>Gestión de Artistas</h2>
+                </div>
                 <div class="card-body">
                   <form id="formArtistas" class="mb-4">
                     <input type="hidden" id="idArtista">
@@ -360,7 +361,10 @@
 
             <section id="historial-proyectos" class="section-view">
                 <div class="card">
-                    <div class="card-header"><h2>Historial de Proyectos</h2></div>
+                    <div class="card-header pt-3 pb-0 border-0">
+                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                        <h2>Historial de Proyectos</h2>
+                    </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-hover">
@@ -374,7 +378,10 @@
 
             <section id="gestion-servicios" class="section-view">
                 <div class="card">
-                    <div class="card-header"><h2>Gestión de Servicios</h2></div>
+                    <div class="card-header pt-3 pb-0 border-0">
+                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                        <h2>Gestión de Servicios</h2>
+                    </div>
                     <div class="card-body">
                         <form id="formServicios" class="mb-4">
                             <input type="hidden" id="idServicio">
@@ -399,7 +406,10 @@
 
             <section id="gestion-usuarios" class="section-view">
                 <div class="card">
-                    <div class="card-header"><h2>Usuarios del Sistema</h2></div>
+                    <div class="card-header pt-3 pb-0 border-0">
+                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                        <h2>Usuarios del Sistema</h2>
+                    </div>
                     <div class="card-body">
                         <form id="formUsuarios" class="mb-4">
                             <input type="hidden" id="idUsuario">
@@ -436,17 +446,16 @@
             
             <section id="vista-artista" class="section-view">
                 <div class="card">
-                    <div class="card-header">
-                        <h2 id="vista-artista-nombre">Artista</h2>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccion('gestion-artistas')">← Volver</button>
-                    </div>
                     <div class="card-body" id="vista-artista-contenido"></div>
                 </div>
             </section>
 
             <section id="papelera-reciclaje" class="section-view">
                 <div class="card">
-                    <div class="card-header"><h2>Papelera de Reciclaje</h2></div>
+                    <div class="card-header pt-3 pb-0 border-0">
+                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                        <h2>Papelera de Reciclaje</h2>
+                    </div>
                     <div class="card-body">
                         <h5 class="mt-3">Proyectos Eliminados</h5>
                         <ul id="papeleraProyectos" class="list-group mb-3"></ul>
@@ -462,7 +471,10 @@
 
             <section id="configuracion" class="section-view">
               <div class="card">
-                <div class="card-header"><h2>Configuración</h2></div>
+                <div class="card-header pt-3 pb-0 border-0">
+                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                    <h2>Configuración</h2>
+                </div>
                 <div class="card-body">
                     <h5>Firma Digital para PDF</h5>
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">

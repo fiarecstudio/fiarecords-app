@@ -253,7 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function filtrarTablas(query) {
         query = query.toLowerCase();
         
-        // Sincronizar inputs visualmente
         const inputPC = document.getElementById('globalSearchPC');
         const inputMobile = document.getElementById('globalSearchMobile');
         if(document.activeElement === inputPC && inputMobile) inputMobile.value = query;
@@ -303,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================
-    // GOOGLE DRIVE (Sin cambios)
+    // GOOGLE DRIVE
     // ============================================
     window.initializeGapiClient = function() {
         gapi.load('client', async () => {
@@ -555,23 +554,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const seccionActiva = document.getElementById(id);
         const linkActivo = document.querySelector(`.nav-link-sidebar[data-seccion="${id}"]`);
         
-        // --- LOGICA BOTÓN REGRESAR ---
-        const btnBack = document.getElementById('btn-global-back');
-        if (btnBack) {
-            // Si es dashboard o la vista principal del cliente, ocultamos el botón
-            if (id === 'dashboard' || (id === 'vista-artista' && document.body.getAttribute('data-role') === 'cliente')) {
-                btnBack.style.display = 'none';
-            } else {
-                btnBack.style.display = 'inline-flex'; // inline-flex para centrar el icono
-            }
-        }
-
         if (seccionActiva) {
             seccionActiva.classList.add('active');
             if(linkActivo) linkActivo.classList.add('active');
             if (updateHistory && `#${id}` !== window.location.hash) { history.pushState(null, null, `#${id}`); }
             
-            // Limpiar buscadores visualmente
             if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = '';
             if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = '';
 
@@ -1509,25 +1496,34 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showToast('Error al generar recibo.', 'error'); } 
     }
 
-    // --- VISTA ARTISTA ---
+    // --- VISTA ARTISTA MODIFICADA CON EL BOTÓN ---
     async function mostrarVistaArtista(artistaId, nombre, nombreArtistico) {
         const userInfo = getUserRoleAndId();
         const isClientView = (userInfo.role === 'cliente');
 
-        document.getElementById('vista-artista-nombre').textContent = `${escapeHTML(nombreArtistico || nombre)}`;
+        // Ya no usamos estos elementos fijos del HTML viejo, generamos todo nuevo
         const contenido = document.getElementById('vista-artista-contenido');
         contenido.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
-            let html = `<div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start flex-wrap">
-                                    <div>
-                                        <p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
-                                        <p class="mb-1"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
-                                        <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
-                                    </div>`;
+            // --- AQUÍ ESTÁ EL CAMBIO CLAVE: Insertamos el botón VOLVER al principio del HTML ---
+            let html = `
+                <div class="mb-3">
+                    ${!isClientView ? `<button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>` : ''}
+                    <h2 class="mb-0">${escapeHTML(nombreArtistico || nombre)}</h2>
+                </div>
+
+                <div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap">
+                            <div>
+                                <p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
+                                <p class="mb-1"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
+                                <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
+                            </div>`;
+            
             if (!isClientView) { 
                 html += `<div class="btn-group mt-2 mt-md-0">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
@@ -1540,6 +1536,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             html += `</div></div></div><h3>Historial de Proyectos</h3>`;
+            
             if (proyectos.length) { 
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 

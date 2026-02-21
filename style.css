@@ -104,30 +104,35 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
     min-height: 70px;
 }
 
-/* BOTÓN REGRESAR ESTILIZADO */
-.btn-back-custom {
+/* --- BOTÓN VOLVER INLINE (NUEVO ESTILO) --- */
+.btn-back-inline {
+    background: none;
+    border: none;
+    color: var(--primary-color); /* Color del tema */
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0;
+    margin-bottom: 1rem; /* Espacio antes de la tarjeta */
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px; /* Bordes suaves */
-    background-color: var(--input-bg);
-    border: 1px solid var(--border-color);
-    color: var(--primary-color);
-    transition: all 0.3s ease;
+    gap: 8px; /* Espacio entre flecha y texto */
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.btn-back-custom:hover {
-    background-color: var(--primary-color);
-    color: white;
-    transform: translateX(-3px); /* Pequeña animación hacia atrás */
-    box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);
+.btn-back-inline:hover {
+    color: var(--primary-hover);
+    transform: translateX(-4px); /* Animación hacia atrás */
 }
 
-.btn-back-custom i {
+.btn-back-inline i {
     font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* En modo oscuro, un color un poco más brillante para que resalte */
+body.dark-mode .btn-back-inline {
+    color: #818cf8;
 }
 
 /* AJUSTES BUSCADOR MÓVIL */
