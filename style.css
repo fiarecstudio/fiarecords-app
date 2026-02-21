@@ -54,10 +54,7 @@ body { font-family: 'Inter', sans-serif; background-color: var(--background-colo
 h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; color: var(--text-color-dark); }
 
 /* --- LOGO DINÁMICO (LÓGICA BLANCO/NEGRO) --- */
-/* En modo normal: brightness(0) vuelve la imagen completamente NEGRA */
 .logo-dinamico { max-width: 160px; max-height: 70px; object-fit: contain; transition: all 0.3s; filter: brightness(0); }
-
-/* En modo oscuro: brightness(0) la hace negra, invert(1) la invierte a BLANCO */
 body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 
 /* BOOTSTRAP OVERRIDES */
@@ -98,7 +95,49 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
 .nav-link-sidebar.active { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); font-weight: 700; border-left: 3px solid var(--primary-color); }
 .nav-link-sidebar i { font-size: 1.1rem; }
 .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); }
-.main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); padding: 1rem; display: flex; align-items: center; justify-content: space-between;}
+
+/* --- HEADER & BUSCADOR --- */
+.main-header { 
+    background-color: var(--card-background); 
+    border-bottom: 1px solid var(--border-color); 
+    /* Altura automática para permitir crecimiento en móvil */
+    min-height: 70px;
+}
+
+/* BOTÓN REGRESAR ESTILIZADO */
+.btn-back-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px; /* Bordes suaves */
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--primary-color);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-back-custom:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: translateX(-3px); /* Pequeña animación hacia atrás */
+    box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);
+}
+
+.btn-back-custom i {
+    font-size: 1.2rem;
+}
+
+/* AJUSTES BUSCADOR MÓVIL */
+.search-box-mobile .input-group-text {
+    background-color: var(--input-bg);
+}
+.search-box-mobile input {
+    background-color: var(--input-bg);
+}
+
 main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 
 /* SISTEMA DE LOGIN */
@@ -111,21 +150,17 @@ body.auth-visible #app-wrapper { display: none !important; }
 .card { background-color: var(--card-background); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-sm); margin-bottom: 1.5rem; padding: 1.5rem; }
 .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 
-/* --- KPI CARD INTERACTIVA (HOVER) --- */
+/* KPI CARD INTERACTIVA */
 .kpi-card { 
     position: relative; 
     overflow: hidden; 
     display: flex; 
     flex-direction: column; 
     justify-content: center;
-    cursor: pointer; /* Cambia a manita */
-    transition: transform 0.2s, box-shadow 0.2s; /* Animación suave */
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-
-.kpi-card:hover {
-    transform: translateY(-5px); /* Se levanta un poco */
-    box-shadow: var(--shadow-md); /* Aumenta la sombra */
-}
+.kpi-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); }
 
 .kanban-board { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; min-height: 400px; align-items: flex-start; }
 .kanban-column { min-width: 300px; width: 300px; background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; border: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 0.8rem; }
@@ -137,32 +172,15 @@ body.auth-visible #app-wrapper { display: none !important; }
 .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Ajuste para que en PC se acomoden todas las columnas en la pantalla sin scroll */
+/* Ajuste para PC */
 @media (min-width: 1024px) {
-    .kanban-board {
-        overflow-x: hidden; 
-        justify-content: space-between;
-        gap: 0.4rem; 
-        width: 100%;
-    }
-    .kanban-column {
-        flex: 1 1 0; 
-        min-width: 0; 
-        width: auto;
-        padding: 0.5rem;
-    }
-    .kanban-column h3 {
-        font-size: 0.9rem; 
-    }
-    .project-card {
-        padding: 0.75rem;
-        font-size: 0.85rem;
-    }
+    .kanban-board { overflow-x: hidden; justify-content: space-between; gap: 0.4rem; width: 100%; }
+    .kanban-column { flex: 1 1 0; min-width: 0; width: auto; padding: 0.5rem; }
+    .kanban-column h3 { font-size: 0.9rem; }
+    .project-card { padding: 0.75rem; font-size: 0.85rem; }
 }
 
-/* =========================================
-   RESPONSIVE (TABLAS MÓVILES)
-   ========================================= */
+/* RESPONSIVE MÓVIL */
 @media (max-width: 768px) {
     #app-wrapper { height: 100dvh; }
     .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 85%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.2); transition: left 0.3s ease; }
@@ -171,22 +189,20 @@ body.auth-visible #app-wrapper { display: none !important; }
     #sidebar-overlay.show { display: block; }
     main { padding: 1rem; overflow-x: hidden; }
 
-    /* ¡Adiós Scroll Horizontal! Convertir a tarjetas */
     .table-responsive { border: none; overflow: hidden; }
     .table thead { display: none; }
     .table tbody, .table tr, .table td { display: block; width: 100%; }
     .table tbody tr { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.5rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
-    .table tbody td {
-        display: flex; justify-content: space-between; align-items: center;
-        border-bottom: 1px dashed var(--border-color); padding: 0.75rem 0.5rem; text-align: right;
-    }
+    .table tbody td { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding: 0.75rem 0.5rem; text-align: right; }
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
     .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
 
-    /* Kanban en Móvil */
     .kanban-board { flex-direction: column; overflow-x: hidden; min-height: auto; align-items: stretch; gap: 1rem; }
     .kanban-column { width: 100%; min-width: 100%; margin-bottom: 0; }
+    
+    /* Ajuste texto bienvenida en móvil muy pequeño */
+    #welcome-user { font-size: 0.9rem; }
 }
 
 .theme-toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--secondary-button-bg); border-radius: 8px; margin-top: auto; }
@@ -218,42 +234,8 @@ body.dark-mode .table thead th { background-color: #111827; color: #ffffff; bord
 body.dark-mode .form-control::placeholder { color: #9ca3af; }
 
 /* ALINEACIÓN PERFECTA DE BOTONES */
-.project-card {
-    position: relative !important; 
-    padding-bottom: 1rem !important; 
-}
-
-.project-card-footer {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 8px !important; 
-    margin-top: auto;
-}
-
-.project-card button[onclick*="eliminar"],
-.project-card .btn-danger,
-.project-card-footer button {
-    position: static !important; 
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    height: 32px !important; 
-    min-width: 32px !important; 
-    padding: 0 0.6rem !important; 
-    border-radius: 6px !important;
-    font-size: 0.9rem !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    border: none !important;
-    margin: 0 !important;
-}
-
-.project-card button[onclick*="eliminar"],
-.project-card .btn-danger {
-    background-color: var(--danger-color) !important;
-    color: white !important;
-}
-
-.project-card .btn-close {
-    display: none !important;
-}
+.project-card { position: relative !important; padding-bottom: 1rem !important; }
+.project-card-footer { display: flex !important; align-items: center !important; justify-content: flex-end !important; gap: 8px !important; margin-top: auto; }
+.project-card button[onclick*="eliminar"], .project-card .btn-danger, .project-card-footer button { position: static !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; height: 32px !important; min-width: 32px !important; padding: 0 0.6rem !important; border-radius: 6px !important; font-size: 0.9rem !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important; border: none !important; margin: 0 !important; }
+.project-card button[onclick*="eliminar"], .project-card .btn-danger { background-color: var(--danger-color) !important; color: white !important; }
+.project-card .btn-close { display: none !important; }

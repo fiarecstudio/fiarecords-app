@@ -253,6 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function filtrarTablas(query) {
         query = query.toLowerCase();
         
+        // Sincronizar inputs visualmente
+        const inputPC = document.getElementById('globalSearchPC');
+        const inputMobile = document.getElementById('globalSearchMobile');
+        if(document.activeElement === inputPC && inputMobile) inputMobile.value = query;
+        if(document.activeElement === inputMobile && inputPC) inputPC.value = query;
+        
         document.querySelectorAll('section.active tbody tr').forEach(row => { 
             const text = row.innerText.toLowerCase(); 
             row.style.display = text.includes(query) ? '' : 'none'; 
@@ -297,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================
-    // GOOGLE DRIVE
+    // GOOGLE DRIVE (Sin cambios)
     // ============================================
     window.initializeGapiClient = function() {
         gapi.load('client', async () => {
@@ -545,17 +551,45 @@ document.addEventListener('DOMContentLoaded', () => {
     async function mostrarSeccion(id, updateHistory = true) {
         document.querySelectorAll('main > section').forEach(sec => sec.classList.remove('active'));
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active'));
+        
         const seccionActiva = document.getElementById(id);
         const linkActivo = document.querySelector(`.nav-link-sidebar[data-seccion="${id}"]`);
+        
+        // --- LOGICA BOTÓN REGRESAR ---
+        const btnBack = document.getElementById('btn-global-back');
+        if (btnBack) {
+            // Si es dashboard o la vista principal del cliente, ocultamos el botón
+            if (id === 'dashboard' || (id === 'vista-artista' && document.body.getAttribute('data-role') === 'cliente')) {
+                btnBack.style.display = 'none';
+            } else {
+                btnBack.style.display = 'inline-flex'; // inline-flex para centrar el icono
+            }
+        }
+
         if (seccionActiva) {
             seccionActiva.classList.add('active');
             if(linkActivo) linkActivo.classList.add('active');
             if (updateHistory && `#${id}` !== window.location.hash) { history.pushState(null, null, `#${id}`); }
+            
+            // Limpiar buscadores visualmente
+            if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = '';
+            if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = '';
+
             if(id === 'gestion-artistas') renderPaginatedList('artistas');
             if(id === 'gestion-servicios') renderPaginatedList('servicios');
             if(id === 'gestion-usuarios') renderPaginatedList('usuarios');
             const loadDataActions = { 'dashboard': cargarDashboard, 'agenda': cargarAgenda, 'cotizaciones': cargarCotizaciones, 'flujo-trabajo': cargarFlujoDeTrabajo, 'pagos': cargarPagos, 'registrar-proyecto': cargarOpcionesParaProyecto, 'historial-proyectos': cargarHistorial, 'papelera-reciclaje': cargarPapelera, 'configuracion': cargarConfiguracion, 'vista-artista': () => { } };
             if(loadDataActions[id]) await loadDataActions[id]();
+        }
+    }
+
+    // --- NUEVA FUNCIÓN PARA EL BOTÓN DE REGRESAR ---
+    function irAlDashboard() {
+        const role = document.body.getAttribute('data-role');
+        if (role === 'cliente') {
+            mostrarSeccion('vista-artista');
+        } else {
+            mostrarSeccion('dashboard');
         }
     }
 
@@ -1760,7 +1794,7 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
-        showResetPasswordView, changePage
+        showResetPasswordView, changePage, irAlDashboard // Exportamos la nueva función
     };
 });
 

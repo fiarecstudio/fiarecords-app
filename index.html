@@ -139,30 +139,52 @@
     <div id="sidebar-overlay"></div>
 
     <div class="main-content">
-        <header class="main-header d-flex justify-content-between align-items-center p-3">
-            <button id="hamburger-menu" class="btn btn-light d-md-none">
-                <i class="bi bi-list fs-4"></i>
-            </button>
+        <!-- HEADER MEJORADO -->
+        <header class="main-header d-flex flex-column p-3 gap-2">
             
-            <div id="welcome-user" class="fw-bold fs-5"></div>
-              
-            <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                    <input type="text" id="globalSearch" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
+            <!-- FILA 1: Controles, Título y Acciones -->
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="d-flex align-items-center gap-2">
+                    <!-- BOTÓN REGRESAR (Se oculta/muestra con JS) -->
+                    <button id="btn-global-back" class="btn-back-custom" style="display: none;" onclick="app.irAlDashboard()" title="Volver al Inicio">
+                        <i class="bi bi-arrow-left"></i>
+                    </button>
+
+                    <button id="hamburger-menu" class="btn btn-light d-md-none">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
+                    
+                    <div id="welcome-user" class="fw-bold fs-5 text-truncate" style="max-width: 150px;"></div>
+                </div>
+                  
+                <!-- BUSCADOR PC (Solo visible en pantallas medianas/grandes) -->
+                <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="globalSearchPC" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
+                    </div>
+                </div>
+                  
+                <div class="header-actions d-flex align-items-center gap-2">
+                  <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
+                      <div class="status-indicator-dot"></div>
+                      <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
+                  </div>
+    
+                  <button class="btn btn-outline-secondary rounded-circle p-2" title="Datos Bancarios" data-bs-toggle="modal" data-bs-target="#modalDatosBancarios">
+                    <i class="bi bi-bank fs-5"></i>
+                  </button>
                 </div>
             </div>
-              
-            <div class="header-actions d-flex align-items-center gap-2">
-              <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
-                  <div class="status-indicator-dot"></div>
-                  <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
-              </div>
 
-              <button class="btn btn-outline-secondary rounded-circle p-2" title="Datos Bancarios" data-bs-toggle="modal" data-bs-target="#modalDatosBancarios">
-                <i class="bi bi-bank fs-5"></i>
-              </button>
+            <!-- FILA 2: BUSCADOR MÓVIL (Solo visible en pantallas pequeñas) -->
+            <div class="search-box-mobile w-100 d-md-none">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="globalSearchMobile" class="form-control border-start-0" placeholder="Buscar..." onkeyup="app.filtrarTablas(this.value)">
+                </div>
             </div>
+
         </header>
 
         <main class="p-3 p-md-4">
@@ -170,23 +192,19 @@
             <section id="dashboard" class="active section-view">
                 <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
-                    <!-- TARJETA INGRESOS (Redirige a Historial de Proyectos) -->
+                    <!-- TARJETAS CON REDIRECCIÓN -->
                     <div class="card kpi-card border-start border-4 border-success p-3" onclick="app.mostrarSeccion('historial-proyectos')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
                         <i class="bi bi-currency-dollar fs-1 text-success"></i>
                       </div>
                     </div>
-
-                    <!-- TARJETA ACTIVOS (Redirige a Flujo de Trabajo) -->
                     <div class="card kpi-card border-start border-4 border-primary p-3" onclick="app.mostrarSeccion('flujo-trabajo')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-proyectos-activos">0</h3><small class="text-muted">Proyectos Activos</small></div>
                         <i class="bi bi-sliders fs-1 text-primary"></i>
                       </div>
                     </div>
-
-                    <!-- TARJETA POR COBRAR (Redirige a Pagos/Pendientes) -->
                     <div class="card kpi-card border-start border-4 border-warning p-3" onclick="app.mostrarSeccion('pagos')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3><small class="text-muted">Por Cobrar</small></div>
