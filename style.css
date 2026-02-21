@@ -199,36 +199,33 @@ body.dark-mode .table thead th { background-color: #111827; color: #ffffff; bord
 body.dark-mode .form-control::placeholder { color: #9ca3af; }
 
 /* =========================================
-   NUEVA CORRECCIÓN: BOTÓN ELIMINAR ABAJO EN LA TARJETA
+   NUEVA CORRECCIÓN: BOTÓN ELIMINAR ABAJO (SÓLO EL BOTE DE BASURA)
    ========================================= */
 .project-card {
     position: relative !important; 
-    padding-bottom: 3.5rem !important; /* Creamos un margen especial abajo para que el botón no estorbe */
+    padding-bottom: 3.5rem !important; /* Espacio abajo para que no estorbe */
 }
 
-/* Movemos el botón a la esquina inferior derecha y le damos un diseño bonito */
-.project-card .btn-close, 
-.project-card button[onclick*="eliminar"] {
+/* Movemos el botón a la esquina inferior derecha y usamos SU PROPIO icono de basura */
+.project-card button[onclick*="eliminar"],
+.project-card .btn-danger {
     position: absolute !important;
-    top: auto !important; /* Quitamos la instrucción de ir arriba */
-    bottom: 12px !important; /* Lo pegamos abajo */
-    right: 12px !important; /* Lo pegamos a la derecha */
+    top: auto !important; 
+    bottom: 12px !important; 
+    right: 12px !important; 
     z-index: 20;
-    background-color: var(--danger-color) !important; /* Color rojito */
-    opacity: 1 !important;
+    background-color: var(--danger-color) !important; /* Fondo rojo */
+    color: white !important; /* Icono blanco */
     border-radius: 6px !important;
-    width: 28px !important;
-    height: 28px !important;
+    padding: 0.3rem 0.6rem !important; /* Espacio interno para que se vea rectangular o cuadrado bonito */
+    font-size: 0.9rem !important;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-    
-    /* Le ponemos una X blanca nítida usando código SVG directo */
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23fff'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") !important;
-    background-size: 12px !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
+    border: none !important;
+    background-image: none !important; /* Aquí anulamos la X blanca anterior */
+    margin: 0 !important;
 }
 
-/* Anulamos algunos filtros automáticos de dark mode que arruinan la tachita */
-body.dark-mode .project-card .btn-close {
-    filter: none !important;
+/* Ocultamos cualquier botón 'btn-close' extra que se haya duplicado sin querer */
+.project-card .btn-close {
+    display: none !important;
 }
