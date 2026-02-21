@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: routes/proyectos.js (CORREGIDO HORARIO MÉXICO)
+// ARCHIVO: routes/proyectos.js (CORREGIDO PARA PERSISTENCIA DE DRIVE)
 // ==========================================
 const express = require('express');
 const router = express.Router();
@@ -293,28 +293,55 @@ router.put('/:id/nombre', async (req, res) => {
     res.json(actualizado);
 });
 
+// --- RUTA CLAVE PARA GUARDAR EL LINK DE DRIVE ---
 router.put('/:id/enlace-entrega', async (req, res) => {
-    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
-    const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true }).populate('artista');
-    
-    // NOTIFICACIÓN: Entrega de Material
-    if (req.body.enlace && actualizado.artista) {
-        const email = actualizado.artista.correo;
-        const htmlEntrega = `
-            <div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-                <h2 style="color: #6366f1;">¡Tu material está listo! 🎵</h2>
-                <p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado y exportado.</p>
-                <br>
-                <a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                   DESCARGAR AHORA
-                </a>
-                <br><br>
-                <p style="font-size: 12px; color: #666;">O copia este enlace: <a href="${req.body.enlace}">${req.body.enlace}</a></p>
-            </div>
-        `;
-        enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", htmlEntrega);
+    // Permitimos que el cliente guarde su propio link si sube archivos, o el admin
+    // Verificamos permisos básicos
+    try {
+        const proyecto = await Proyecto.findById(req.params.id);
+        if(!proyecto) return res.status(404).json({error: "No existe el proyecto"});
+
+        // Si es cliente, verificar que sea SU proyecto
+        if(req.user.role === 'cliente') {
+             const filtro = await getFiltroUsuario(req);
+             if(!proyecto.artista || proyecto.artista.toString() !== filtro.artista.toString()) {
+                 return res.status(403).json({ error: 'No autorizado' });
+             }
+        }
+
+        // GUARDAR EN BASE DE DATOS
+        const actualizado = await Proyecto.findByIdAndUpdate(
+            req.params.id, 
+            { enlaceEntrega: req.body.enlace }, 
+            { new: true }
+        ).populate('artista');
+        
+        // NOTIFICACIÓN: Entrega de Material
+        if (req.body.enlace && actualizado.artista) {
+            const email = actualizado.artista.correo;
+            const htmlEntrega = `
+                <div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <h2 style="color: #6366f1;">¡Tu material está listo! 🎵</h2>
+                    <p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado y exportado.</p>
+                    <br>
+                    <a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                       DESCARGAR AHORA
+                    </a>
+                    <br><br>
+                    <p style="font-size: 12px; color: #666;">O copia este enlace: <a href="${req.body.enlace}">${req.body.enlace}</a></p>
+                </div>
+            `;
+            // Si lo sube el admin, notifica al cliente. Si lo sube el cliente, no se auto-notifica.
+            if(req.user.role !== 'cliente') {
+                enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", htmlEntrega);
+            }
+        }
+        res.json(actualizado);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Error al guardar el enlace" });
     }
-    res.json(actualizado);
 });
 
 router.post('/:id/pagos', async (req, res) => {

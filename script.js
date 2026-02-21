@@ -1,3 +1,4 @@
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- VARIABLES GLOBALES ---
     let isInitialized = false;
@@ -355,6 +356,24 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { throw new Error('No se pudo crear la carpeta del artista.'); }
     }
 
+    // --- NUEVO: FUNCIÓN PARA HACER CARPETA PÚBLICA ---
+    async function hacerCarpetaPublica(fileId) {
+        try {
+            await gapi.client.drive.permissions.create({
+                fileId: fileId,
+                resource: {
+                    role: 'reader',
+                    type: 'anyone'
+                }
+            });
+            console.log("Carpeta hecha pública correctamente:", fileId);
+        } catch (error) {
+            console.error("Error al hacer pública la carpeta:", error);
+            // No lanzamos error para no detener el flujo, pero avisamos en consola
+        }
+    }
+
+    // --- MODIFICADO: SUBIR Y GUARDAR PERSISTENTEMENTE ---
     async function subirADrive() {
         if (!gapiInited || !gisInited) {
             if(typeof gapi !== 'undefined') initializeGapiClient();
@@ -378,6 +397,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const idMaestra = await obtenerCarpetaMaestra();
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
+
+                // --- PASO CRÍTICO: HACER CARPETA PÚBLICA ---
+                if(statusSpan) statusSpan.textContent = 'Configurando permisos públicos...';
+                await hacerCarpetaPublica(folderId);
 
                 if(statusSpan) statusSpan.textContent = 'Generando enlace de carpeta...';
                 
@@ -403,15 +426,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
+                // --- ACTUALIZAR INPUT ---
                 if(linkInput) {
                     linkInput.value = folderLink;
                     linkInput.style.borderColor = '#10b981'; 
                     setTimeout(() => linkInput.style.borderColor = '', 2000);
                 }
                 
-                if(statusSpan) { statusSpan.textContent = '¡Todos los archivos subidos!'; statusSpan.style.color = 'var(--success-color)'; }
+                if(statusSpan) { statusSpan.textContent = '¡Archivos subidos y enlace público!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                await saveDeliveryLink(false); 
+                // --- PASO CRÍTICO: GUARDAR EN BD AUTOMÁTICAMENTE ---
+                await saveDeliveryLink(false); // false = No cerrar modal aún, para que el usuario vea el éxito
                 showToast(`¡${files.length} archivos subidos con éxito!`, 'success');
 
                 // Recargar interfaz
