@@ -1,4 +1,4 @@
-// models/Configuracion.js (Versión Actualizada)
+// models/Configuracion.js
 const mongoose = require('mongoose');
 
 const FirmaPosicionSchema = new mongoose.Schema({
@@ -12,8 +12,15 @@ const FirmaPosicionSchema = new mongoose.Schema({
 
 const ConfiguracionSchema = new mongoose.Schema({
     singletonId: { type: String, default: 'main_config', unique: true }, 
-    logoPath: String,
+    
+    // CAMBIO: Ahora guardamos la cadena Base64 completa aquí
+    logoBase64: { type: String, default: null },
+    firmaBase64: { type: String, default: null },
+    
+    // Mantenemos estos por compatibilidad momentánea, pero ya no se usarán para persistencia
+    logoPath: String, 
     firmaPath: String,
+
     firmaPos: {
         cotizacion: { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) },
         recibo:     { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) },
@@ -23,7 +30,7 @@ const ConfiguracionSchema = new mongoose.Schema({
     datosBancarios: {
         banco: String,
         titular: String,
-        tarjeta: String, // Campo actualizado (antes numeroCuenta)
+        tarjeta: String, 
         clabe: String
     }
 });

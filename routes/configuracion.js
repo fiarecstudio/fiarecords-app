@@ -1,50 +1,37 @@
-// ==========================================
-// ARCHIVO: routes/configuracion.js (PROTEGIDO)
-// ==========================================
+// routes/configuracion.js
 const express = require('express');
 const router = express.Router();
 const Configuracion = require('../models/Configuracion');
 const auth = require('../middleware/auth');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = 'uploads/';
-        if (!fs.existsSync(uploadPath)){
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        const newFilename = file.fieldname === 'logoFile' ? 'logo' : 'firma';
-        cb(null, newFilename + path.extname(file.originalname));
-    }
+// CAMBIO: Usamos memoryStorage para no depender del disco duro del servidor
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 2 * 1024 * 1024 } // Límite de 2MB para no saturar la BD
 });
-const upload = multer({ storage });
 
 // Ruta pública (sin auth) para que el login pueda ver el logo
 router.get('/public/logo', async (req, res) => {
     try {
         const config = await Configuracion.findOne({ singletonId: 'main_config' });
-        res.json({ filePath: config ? config.logoPath : null });
+        // Devolvemos el Base64 directo
+        res.json({ logoBase64: config ? config.logoBase64 : null });
     } catch (err) { res.status(500).json({ error: 'Error al obtener el logo' }); }
 });
 
 // A partir de aquí, todo requiere login
 router.use(auth);
 
-// Middleware para verificar si es ADMIN
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
-        return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de administrador.' });
+        return res.status(403).json({ error: 'Acceso denegado.' });
     }
 };
 
-// Obtener configuración (Clientes pueden ver, pero no editar)
 router.get('/', async (req, res) => {
     try {
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
@@ -56,24 +43,14 @@ router.get('/', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al obtener la configuración.' }); }
 });
 
-router.get('/defaults', (req, res) => {
-    try {
-        const defaultConfig = new Configuracion();
-        res.json(defaultConfig.firmaPos);
-    } catch (err) { res.status(500).json({ error: 'Error al obtener los valores predeterminados.' }); }
-});
-
-// --- RUTAS PROTEGIDAS (SOLO ADMIN) ---
-
 router.put('/firma-pos', isAdmin, async (req, res) => {
     try {
         const { firmaPos } = req.body;
         const config = await Configuracion.findOneAndUpdate({ singletonId: 'main_config' }, { $set: { firmaPos: firmaPos } }, { new: true, upsert: true });
         res.json(config);
-    } catch (err) { res.status(500).json({ error: 'Error al guardar la posición de la firma.' }); }
+    } catch (err) { res.status(500).json({ error: 'Error al guardar posición.' }); }
 });
 
-// PROTEGER DATOS BANCARIOS: Solo admin puede modificar
 router.put('/datos-bancarios', isAdmin, async (req, res) => {
     try {
         const { datosBancarios } = req.body;
@@ -83,27 +60,41 @@ router.put('/datos-bancarios', isAdmin, async (req, res) => {
             { new: true, upsert: true }
         );
         res.json(config);
-    } catch (err) {
-        res.status(500).json({ error: 'Error al guardar los datos bancarios.' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Error al guardar datos bancarios.' }); }
 });
 
+// --- SUBIDA DE IMÁGENES A BASE DE DATOS (Base64) ---
+
 router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
+    if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
     try {
-        const filePath = `/${req.file.path.replace(/\\/g, "/")}`;
-        const config = await Configuracion.findOneAndUpdate({ singletonId: 'main_config' }, { $set: { firmaPath: filePath } }, { new: true, upsert: true });
-        res.json({ message: 'Firma guardada.', filePath: config.firmaPath });
-    } catch (err) { res.status(500).json({ error: 'Error al guardar la ruta de la firma.' }); }
+        // Convertir buffer a Base64
+        const b64 = Buffer.from(req.file.buffer).toString('base64');
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+        const config = await Configuracion.findOneAndUpdate(
+            { singletonId: 'main_config' }, 
+            { $set: { firmaBase64: dataURI } }, // Guardamos el string largo
+            { new: true, upsert: true }
+        );
+        res.json({ message: 'Firma guardada en BD.', firmaBase64: config.firmaBase64 });
+    } catch (err) { res.status(500).json({ error: 'Error al guardar firma.' }); }
 });
 
 router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
+    if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
     try {
-        const filePath = `/${req.file.path.replace(/\\/g, "/")}`;
-        await Configuracion.findOneAndUpdate({ singletonId: 'main_config' }, { $set: { logoPath: filePath } }, { new: true, upsert: true });
-        res.json({ message: 'Logo guardado.', filePath });
-    } catch (err) { res.status(500).json({ error: 'Error al guardar el logo.' }); }
+        // Convertir buffer a Base64
+        const b64 = Buffer.from(req.file.buffer).toString('base64');
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+        const config = await Configuracion.findOneAndUpdate(
+            { singletonId: 'main_config' }, 
+            { $set: { logoBase64: dataURI } }, // Guardamos el string largo
+            { new: true, upsert: true }
+        );
+        res.json({ message: 'Logo guardado en BD.', logoBase64: config.logoBase64 });
+    } catch (err) { res.status(500).json({ error: 'Error al guardar logo.' }); }
 });
 
 module.exports = router;

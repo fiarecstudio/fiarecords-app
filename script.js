@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- VARIABLES GLOBALES ---
     let isInitialized = false;
     let proyectoActual = {};
-    let logoBase64 = null;
+    let logoBase64 = null; // Aquí vivirá el logo cargado de BD
     let preseleccionArtistaId = null;
 
     const paginationState = {
@@ -72,18 +72,22 @@ document.addEventListener('DOMContentLoaded', () => {
         Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
-    // --- CARGAR LOGO PÚBLICO INMEDIATAMENTE ---
+    // --- CARGAR LOGO PÚBLICO (BASE64) ---
     async function fetchPublicLogo() {
         try {
             const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
             if (res.ok) {
                 const data = await res.json();
-                if (data && data.filePath) {
-                    const logoSrc = data.filePath + `?t=${new Date().getTime()}`;
+                // CAMBIO: Usamos logoBase64 directamente
+                if (data && data.logoBase64) {
+                    const logoSrc = data.logoBase64;
                     if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
                     
-                    // Asegurar Favicon
+                    // Guardar en variable global para PDFs
+                    logoBase64 = logoSrc;
+
+                    // Favicon Dinámico
                     let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
                     link.type = 'image/png';
                     link.rel = 'icon';
@@ -118,19 +122,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function showLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'flex'; }
     function hideLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'none'; }
     
+    // CAMBIO: Simplificado porque ya tenemos el Base64 en memoria o caché
     async function preloadLogoForPDF() {
-        if(!DOMElements.appLogo) return;
-        const imgUrl = DOMElements.appLogo.src;
-        try {
-            const response = await fetch(imgUrl);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            const promise = new Promise((resolve) => {
-                reader.onloadend = () => { logoBase64 = reader.result; resolve(); };
-            });
-            reader.readAsDataURL(blob);
-            await promise;
-        } catch (e) { console.warn("No se pudo precargar logo"); }
+        // Si ya tenemos el logo en la variable global (cargado por fetchPublicLogo), no hacemos nada
+        if (logoBase64) return;
+
+        // Si no, intentamos leerlo del src de la imagen
+        if(DOMElements.appLogo && DOMElements.appLogo.src.startsWith('data:image')) {
+            logoBase64 = DOMElements.appLogo.src;
+        } else {
+             // Fallback: intentamos cargar de nuevo
+             await fetchPublicLogo();
+        }
     }
 
     // --- OFFLINE MANAGER ---
@@ -277,11 +280,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadInitialConfig() {
         try {
             const config = await fetchAPI('/api/configuracion');
-            if (config && config.logoPath) { 
-                const logoSrc = config.logoPath + `?t=${new Date().getTime()}`;
-                if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
-                if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
-                fetchPublicLogo();
+            if (config) { 
+                // CAMBIO: Cargar Logo desde Base64
+                if (config.logoBase64) {
+                    const logoSrc = config.logoBase64;
+                    if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
+                    if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
+                    logoBase64 = logoSrc; // Variable Global
+                } else {
+                     // Fallback si no hay logo en BD
+                     fetchPublicLogo();
+                }
                 configCache = config;
             }
         } catch (e) { 
@@ -433,9 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if(cachedLogo) {
             if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
             if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
+            logoBase64 = cachedLogo;
         }
 
-        fetchPublicLogo();
+        await fetchPublicLogo();
         await loadInitialConfig();
         setTimeout(preloadLogoForPDF, 2000);
         applyTheme(localStorage.getItem('theme') || 'light');
@@ -646,8 +656,41 @@ document.addEventListener('DOMContentLoaded', () => {
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
 
     async function cargarDashboard() { try { const stats = await fetchAPI('/api/dashboard/stats'); document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`; document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; const ctx = document.getElementById('incomeChart').getContext('2d'); if (chartInstance) chartInstance.destroy(); const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; const dataValues = stats.monthlyIncome || Array(12).fill(0); chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } }); } catch (e) { console.error("Error cargando dashboard:", e); } }
-    async function cargarConfiguracion() { try { if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath + `?t=${new Date().getTime()}`; } firmaPreview.src = firmaSrc; const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (e) { showToast('Error al cargar configuración.', 'error'); } }
-    async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.filePath + `?t=${new Date().getTime()}`; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaPath = data.filePath; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
+    
+    // CAMBIO: Cargar firma desde Base64
+    async function cargarConfiguracion() { 
+        try { 
+            if (!configCache) await loadInitialConfig(); 
+            const firmaPreview = document.getElementById('firma-preview-img'); 
+            let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; 
+            if (configCache && configCache.firmaBase64) { 
+                firmaSrc = configCache.firmaBase64; 
+            } else if (configCache && configCache.firmaPath) {
+                // Compatibilidad
+                firmaSrc = configCache.firmaPath;
+            }
+            firmaPreview.src = firmaSrc; 
+            const db = configCache.datosBancarios || {}; 
+            document.getElementById('banco').value = db.banco || ''; 
+            document.getElementById('titular').value = db.titular || ''; 
+            document.getElementById('tarjeta').value = db.tarjeta || ''; 
+            document.getElementById('clabe').value = db.clabe || ''; 
+        } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
+    }
+    
+    async function subirFirma(event) { 
+        const file = event.target.files[0]; 
+        if (!file) return; 
+        const formData = new FormData(); 
+        formData.append('firmaFile', file); 
+        try { 
+            const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); 
+            showToast('¡Firma subida!', 'success'); 
+            const newSrc = data.firmaBase64; 
+            document.getElementById('firma-preview-img').src = newSrc; 
+            if (configCache) configCache.firmaBase64 = data.firmaBase64; 
+        } catch (e) { showToast(`Error al subir la firma`, 'error'); } 
+    }
 
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
@@ -1314,28 +1357,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- PDF ---
+    // CAMBIO: Ahora usamos firmaBase64 directamente si existe
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
-        const firmaPath = (configCache && configCache.firmaPath) ? configCache.firmaPath : null; 
+        let firmaSrc = null;
+        if (configCache) {
+             if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64;
+             else if (configCache.firmaPath) firmaSrc = configCache.firmaPath;
+        }
+
         try {
-            if (firmaPath) {
-                const response = await fetch(firmaPath); 
-                if (!response.ok) throw new Error('No se pudo cargar la imagen de la firma.'); 
-                const firmaImg = await response.blob(); 
-                const reader = new FileReader(); 
-                reader.readAsDataURL(firmaImg); 
-                reader.onloadend = function () { 
-                    try { 
-                        const base64data = reader.result;
-                        const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
-                        pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
-                        pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
-                        pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
-                        pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
-                    } catch (e) { console.error("Error firma PDF:", e); } finally { pdf.save(finalFileName); } 
-                } 
-            } else { pdf.save(finalFileName); }
-        } catch (e) { pdf.save(finalFileName); } 
+            if (firmaSrc) {
+                // Si ya es Base64 (data:image...), lo usamos directo
+                let base64data = firmaSrc;
+                
+                // Si es una ruta (compatibilidad), la cargamos
+                if (!firmaSrc.startsWith('data:image')) {
+                     const response = await fetch(firmaSrc); 
+                     if (!response.ok) throw new Error('No se pudo cargar la firma.'); 
+                     const firmaImg = await response.blob(); 
+                     const reader = new FileReader(); 
+                     const promise = new Promise((resolve) => {
+                        reader.onloadend = () => { resolve(reader.result); };
+                        reader.readAsDataURL(firmaImg); 
+                     });
+                     base64data = await promise;
+                }
+                
+                const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
+                pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
+                pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
+                pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
+                pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
+            }
+            pdf.save(finalFileName);
+        } catch (e) { 
+            console.error("Error firma PDF:", e); 
+            pdf.save(finalFileName); 
+        } 
     }
+
     async function generarCotizacionPDF(proyectoIdOrObject) { 
         try { 
             const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
@@ -1581,9 +1641,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const formData = new FormData(); 
                     formData.append('logoFile', file); 
                     try { 
+                        // CAMBIO: Ahora esperamos logoBase64
                         await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
                         showToast('Logo actualizado!', 'success'); 
+                        // Recargar todo
                         await loadInitialConfig(); 
+                        // Forzar actualización visual inmediata
+                        const config = await fetchAPI('/api/configuracion');
+                        if(config.logoBase64) {
+                             DOMElements.appLogo.src = config.logoBase64;
+                        }
                     } catch (e) { showToast(`Error al subir logo`, 'error'); } 
                 }; 
             } 
