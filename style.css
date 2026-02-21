@@ -197,35 +197,38 @@ body.dark-mode input::file-selector-button:hover { background-color: #4b5563; }
 body.dark-mode .table { color: #f3f4f6; }
 body.dark-mode .table thead th { background-color: #111827; color: #ffffff; border-color: #374151; }
 body.dark-mode .form-control::placeholder { color: #9ca3af; }
-body.dark-mode .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
 /* =========================================
-   CORRECCIÓN: BOTÓN ELIMINAR EN KANBAN
+   NUEVA CORRECCIÓN: BOTÓN ELIMINAR ABAJO EN LA TARJETA
    ========================================= */
 .project-card {
     position: relative !important; 
-    /* Quitamos el overflow: hidden para que no ampute el botón */
+    padding-bottom: 3.5rem !important; /* Creamos un margen especial abajo para que el botón no estorbe */
 }
 
-/* Ajusta cualquier botón rojo (eliminar) dentro de la tarjeta */
-.project-card .btn-danger, 
+/* Movemos el botón a la esquina inferior derecha y le damos un diseño bonito */
+.project-card .btn-close, 
 .project-card button[onclick*="eliminar"] {
-    font-size: 0.8rem !important;
-    padding: 0.3rem 0.6rem !important;
-    white-space: normal !important; 
-    max-width: 100%;
-    margin-top: 5px;
-    z-index: 10;
-    position: relative;
+    position: absolute !important;
+    top: auto !important; /* Quitamos la instrucción de ir arriba */
+    bottom: 12px !important; /* Lo pegamos abajo */
+    right: 12px !important; /* Lo pegamos a la derecha */
+    z-index: 20;
+    background-color: var(--danger-color) !important; /* Color rojito */
+    opacity: 1 !important;
+    border-radius: 6px !important;
+    width: 28px !important;
+    height: 28px !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    
+    /* Le ponemos una X blanca nítida usando código SVG directo */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23fff'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") !important;
+    background-size: 12px !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
 }
 
-/* Si el botón es un icono (la X) en la esquina superior */
-.project-card .btn-close {
-    position: absolute !important;
-    top: 8px !important;
-    right: 12px !important; /* Más separado de la orilla */
-    z-index: 20;
-    background-color: var(--card-background); /* Le da un fondito para que resalte */
-    border-radius: 50%; /* Lo hace redondito */
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2); /* Sombrita para que no se pierda */
+/* Anulamos algunos filtros automáticos de dark mode que arruinan la tachita */
+body.dark-mode .project-card .btn-close {
+    filter: none !important;
 }
