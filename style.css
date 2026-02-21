@@ -110,7 +110,23 @@ body.auth-visible #app-wrapper { display: none !important; }
 /* COMPONENTES */
 .card { background-color: var(--card-background); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-sm); margin-bottom: 1.5rem; padding: 1.5rem; }
 .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-.kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center;}
+
+/* --- KPI CARD INTERACTIVA (HOVER) --- */
+.kpi-card { 
+    position: relative; 
+    overflow: hidden; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center;
+    cursor: pointer; /* Cambia a manita */
+    transition: transform 0.2s, box-shadow 0.2s; /* Animación suave */
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px); /* Se levanta un poco */
+    box-shadow: var(--shadow-md); /* Aumenta la sombra */
+}
+
 .kanban-board { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; min-height: 400px; align-items: flex-start; }
 .kanban-column { min-width: 300px; width: 300px; background-color: var(--secondary-button-bg); border-radius: 12px; padding: 1rem; border: 1px solid var(--border-color); flex-shrink: 0; display: flex; flex-direction: column; gap: 0.8rem; }
 .kanban-column h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0; text-align: center; opacity: 0.8; }

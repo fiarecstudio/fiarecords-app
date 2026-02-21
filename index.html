@@ -9,10 +9,8 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
-  <!-- LOGO DINÁMICO: El script de abajo evita el parpadeo al recargar -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
   <script>
-      // Script de carga instantánea de logo (evita el icono por defecto)
       (function() {
           const savedLogo = localStorage.getItem('cached_logo_path');
           if(savedLogo) {
@@ -172,19 +170,24 @@
             <section id="dashboard" class="active section-view">
                 <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
-                    <div class="card kpi-card border-start border-4 border-success p-3">
+                    <!-- TARJETA INGRESOS (Redirige a Historial de Proyectos) -->
+                    <div class="card kpi-card border-start border-4 border-success p-3" onclick="app.mostrarSeccion('historial-proyectos')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
                         <i class="bi bi-currency-dollar fs-1 text-success"></i>
                       </div>
                     </div>
-                    <div class="card kpi-card border-start border-4 border-primary p-3">
+
+                    <!-- TARJETA ACTIVOS (Redirige a Flujo de Trabajo) -->
+                    <div class="card kpi-card border-start border-4 border-primary p-3" onclick="app.mostrarSeccion('flujo-trabajo')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-proyectos-activos">0</h3><small class="text-muted">Proyectos Activos</small></div>
                         <i class="bi bi-sliders fs-1 text-primary"></i>
                       </div>
                     </div>
-                    <div class="card kpi-card border-start border-4 border-warning p-3">
+
+                    <!-- TARJETA POR COBRAR (Redirige a Pagos/Pendientes) -->
+                    <div class="card kpi-card border-start border-4 border-warning p-3" onclick="app.mostrarSeccion('pagos')">
                       <div class="d-flex justify-content-between">
                         <div><h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3><small class="text-muted">Por Cobrar</small></div>
                         <i class="bi bi-hourglass-split fs-1 text-warning"></i>
