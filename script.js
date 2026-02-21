@@ -78,13 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
             if (res.ok) {
                 const data = await res.json();
-                // CAMBIO: Usamos logoBase64 directamente
                 if (data && data.logoBase64) {
                     const logoSrc = data.logoBase64;
                     if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
                     
-                    // Guardar en variable global para PDFs
                     logoBase64 = logoSrc;
 
                     // Favicon Dinámico
@@ -122,16 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function showLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'flex'; }
     function hideLoader() { const l = document.getElementById('loader-overlay'); if(l) l.style.display = 'none'; }
     
-    // CAMBIO: Simplificado porque ya tenemos el Base64 en memoria o caché
     async function preloadLogoForPDF() {
-        // Si ya tenemos el logo en la variable global (cargado por fetchPublicLogo), no hacemos nada
         if (logoBase64) return;
-
-        // Si no, intentamos leerlo del src de la imagen
         if(DOMElements.appLogo && DOMElements.appLogo.src.startsWith('data:image')) {
             logoBase64 = DOMElements.appLogo.src;
         } else {
-             // Fallback: intentamos cargar de nuevo
              await fetchPublicLogo();
         }
     }
@@ -281,14 +274,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const config = await fetchAPI('/api/configuracion');
             if (config) { 
-                // CAMBIO: Cargar Logo desde Base64
                 if (config.logoBase64) {
                     const logoSrc = config.logoBase64;
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc; 
                     if(DOMElements.loginLogo) DOMElements.loginLogo.src = logoSrc;
-                    logoBase64 = logoSrc; // Variable Global
+                    logoBase64 = logoSrc; 
                 } else {
-                     // Fallback si no hay logo en BD
                      fetchPublicLogo();
                 }
                 configCache = config;
@@ -652,7 +643,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
     async function guardarDatosBancarios() { const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; try { await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) }); configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
-    function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''], ['Titular:', db.titular || ''], ['Número de Tarjeta:', db.tarjeta || ''], ['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
+    
+    // --- FUNCIÓN NUEVA: DIBUJAR LOGO SIN DEFORMAR ---
+    function dibujarLogoEnPDF(pdf, logoData) {
+        if (!logoData) return;
+        
+        // 1. Obtener dimensiones originales del logo
+        const imgProps = pdf.getImageProperties(logoData);
+        const originalWidth = imgProps.width;
+        const originalHeight = imgProps.height;
+        
+        // 2. Definir el "espacio" máximo disponible en el encabezado (mm)
+        // Antes era 40x15 fijo. Ahora es un límite.
+        const maxBoxWidth = 50; 
+        const maxBoxHeight = 25; 
+        
+        let finalWidth = maxBoxWidth;
+        let finalHeight = (originalHeight * maxBoxWidth) / originalWidth;
+
+        // 3. Ajustar si la altura se pasa del límite
+        if (finalHeight > maxBoxHeight) {
+            finalHeight = maxBoxHeight;
+            finalWidth = (originalWidth * maxBoxHeight) / originalHeight;
+        }
+
+        // 4. Dibujar
+        pdf.addImage(logoData, 'PNG', 14, 15, finalWidth, finalHeight);
+    }
+    
+    function generarDatosBancariosPDF() { 
+        if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); 
+        const db = configCache.datosBancarios; 
+        const { jsPDF } = window.jspdf; 
+        const pdf = new jsPDF(); 
+        
+        // CAMBIO: Usamos la función inteligente
+        if (logoBase64) { 
+            dibujarLogoEnPDF(pdf, logoBase64);
+        } 
+        
+        pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); 
+        const data = [['Banco:', db.banco || ''], ['Titular:', db.titular || ''], ['Número de Tarjeta:', db.tarjeta || ''], ['CLABE Interbancaria:', db.clabe || '']]; 
+        pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); 
+        pdf.save("FiaRecords_DatosBancarios.pdf"); 
+    }
+    
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
 
     async function cargarDashboard() { try { const stats = await fetchAPI('/api/dashboard/stats'); document.getElementById('kpi-ingresos-mes').textContent = `$${(stats.ingresosMes || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`; document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; const ctx = document.getElementById('incomeChart').getContext('2d'); if (chartInstance) chartInstance.destroy(); const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; const dataValues = stats.monthlyIncome || Array(12).fill(0); chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } }); } catch (e) { console.error("Error cargando dashboard:", e); } }
@@ -666,7 +701,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (configCache && configCache.firmaBase64) { 
                 firmaSrc = configCache.firmaBase64; 
             } else if (configCache && configCache.firmaPath) {
-                // Compatibilidad
                 firmaSrc = configCache.firmaPath;
             }
             firmaPreview.src = firmaSrc; 
@@ -1401,7 +1435,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
             const { jsPDF } = window.jspdf; 
             const pdf = new jsPDF(); 
-            if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
+            
+            // CAMBIO: Usamos la función inteligente
+            if (logoBase64) { 
+                dibujarLogoEnPDF(pdf, logoBase64);
+            } 
+            
             pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); 
             pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); 
             pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); 
@@ -1422,7 +1461,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
             if (!pago) return showToast('No hay pagos.', 'error');
             const saldoRestante = proyecto.total - proyecto.montoPagado; 
-            if (logoBase64) { pdf.addImage(logoBase64, 'PNG', 14, 15, 40, 15); } 
+            
+            // CAMBIO: Usamos la función inteligente
+            if (logoBase64) { 
+                dibujarLogoEnPDF(pdf, logoBase64);
+            } 
+            
             pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); 
             pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); 
             pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${proyecto.total.toFixed(2)}`], ['Monto de este Recibo:', `$${pago.monto.toFixed(2)} (${pago.metodo})`], ['Saldo Restante:', `$${saldoRestante.toFixed(2)}`]] }); 
