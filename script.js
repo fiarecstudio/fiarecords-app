@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- VARIABLES GLOBALES ---
     let isInitialized = false;
@@ -369,11 +368,10 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Carpeta hecha pública correctamente:", fileId);
         } catch (error) {
             console.error("Error al hacer pública la carpeta:", error);
-            // No lanzamos error para no detener el flujo, pero avisamos en consola
         }
     }
 
-    // --- MODIFICADO: SUBIR Y GUARDAR PERSISTENTEMENTE ---
+    // --- MODIFICADO: SUBIR Y GUARDAR PERSISTENTEMENTE (CON SEGURIDAD) ---
     async function subirADrive() {
         if (!gapiInited || !gisInited) {
             if(typeof gapi !== 'undefined') initializeGapiClient();
@@ -398,7 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const idMaestra = await obtenerCarpetaMaestra();
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
-                // --- PASO CRÍTICO: HACER CARPETA PÚBLICA ---
                 if(statusSpan) statusSpan.textContent = 'Configurando permisos públicos...';
                 await hacerCarpetaPublica(folderId);
 
@@ -426,7 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // --- ACTUALIZAR INPUT ---
                 if(linkInput) {
                     linkInput.value = folderLink;
                     linkInput.style.borderColor = '#10b981'; 
@@ -435,15 +431,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Archivos subidos y enlace público!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                // --- PASO CRÍTICO: GUARDAR EN BD AUTOMÁTICAMENTE ---
-                await saveDeliveryLink(false); // false = No cerrar modal aún, para que el usuario vea el éxito
+                await saveDeliveryLink(false); 
                 showToast(`¡${files.length} archivos subidos con éxito!`, 'success');
 
-                // Recargar interfaz
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
-                    const nombreActual = document.getElementById('vista-artista-nombre').textContent;
-                    irAVistaArtista(null, nombreActual, '');
+                    // CORRECCIÓN AQUÍ: Verificamos si existe el elemento antes de leerlo
+                    const nombreEl = document.getElementById('vista-artista-nombre');
+                    if (nombreEl) {
+                        const nombreActual = nombreEl.textContent;
+                        irAVistaArtista(null, nombreActual, '');
+                    }
                 }
 
             } catch (err) {
@@ -1537,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let html = `
                 <div class="mb-3">
                     ${!isClientView ? `<button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>` : ''}
-                    <h2 class="mb-0">${escapeHTML(nombreArtistico || nombre)}</h2>
+                    <h2 class="mb-0" id="vista-artista-nombre">${escapeHTML(nombreArtistico || nombre)}</h2>
                 </div>
 
                 <div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
