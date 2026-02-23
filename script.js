@@ -2,6 +2,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
+    
+    // --- NUEVO: CONFIGURACIÓN DE HORARIOS ---
+    const HORARIO_APERTURA = 10; // 10:00 AM
+    const HORARIO_CIERRE = 20;   // 08:00 PM (20:00)
+
     let isInitialized = false;
     let proyectoActual = {};
     let logoBase64 = null; 
@@ -85,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(DOMElements.appLogo) DOMElements.appLogo.src = logoSrc;
                     logoBase64 = logoSrc;
                     
-                    // Favicon Dinámico
                     let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
                     link.type = 'image/png'; link.rel = 'icon'; link.href = logoSrc;
                     document.getElementsByTagName('head')[0].appendChild(link);
@@ -223,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
                 if (url.includes('/pagos')) return localCache.pagos;
-                // Devolvemos estructura segura para el dashboard offline
                 if (url.includes('/dashboard/stats')) return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
             }
         }
@@ -308,7 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { throw new Error('No se pudo crear la carpeta del artista.'); }
     }
 
-    // Función para hacer la carpeta pública (FEATURE NUEVA)
     async function hacerCarpetaPublica(fileId) {
         try {
             await gapi.client.drive.permissions.create({
@@ -342,7 +344,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const idMaestra = await obtenerCarpetaMaestra();
                 const folderId = await buscarOCrearCarpetaArtista(artistName, idMaestra);
 
-                // HACER PÚBLICA AUTOMÁTICAMENTE
                 if(statusSpan) statusSpan.textContent = 'Configurando permisos públicos...';
                 await hacerCarpetaPublica(folderId);
 
@@ -352,7 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
 
-                // Subida
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
@@ -373,11 +373,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                // GUARDADO AUTOMÁTICO EN DB
                 await saveDeliveryLink(false); 
                 showToast(`¡${files.length} archivos subidos con éxito!`, 'success');
 
-                // Recargar interfaz
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
                     const nombreEl = document.getElementById('vista-artista-nombre');
@@ -460,7 +458,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardIngresos = kpiIngresos ? kpiIngresos.closest('.card') : null;
             const chartContainer = document.getElementById('incomeChart').parentElement.parentElement; 
 
-            // Seguridad Visual: Ocultar si el backend dice que no mostremos financieros
             if (stats.showFinancials === false) {
                 if(cardIngresos) cardIngresos.style.display = 'none';
                 if(chartContainer) chartContainer.style.display = 'none';
@@ -486,30 +483,73 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 7. GESTIÓN DE PROYECTOS Y AGENDA (CON VALIDACIONES)
+    // 7. GESTIÓN DE PROYECTOS Y AGENDA (CON SELECTOR DE HORARIOS)
     // ==================================================================
     
-    // Función Nueva: Verificar Disponibilidad en Agenda
+    // Función Nueva: Verificar Disponibilidad y llenar SELECT
     async function verificarDisponibilidad() {
         const fechaInput = document.getElementById('fechaProyecto');
+        const horaSelect = document.getElementById('horaProyecto'); // SELECT
+        const alertaDiv = document.getElementById('alerta-disponibilidad');
+
         let fecha = fechaInput.value;
         if(fechaInput._flatpickr && fechaInput._flatpickr.selectedDates[0]) {
-             fecha = fechaInput._flatpickr.selectedDates[0].toISOString();
+             const d = fechaInput._flatpickr.selectedDates[0];
+             const offset = d.getTimezoneOffset();
+             const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+             fecha = localDate.toISOString().split('T')[0];
         }
-        const alertaDiv = document.getElementById('alerta-disponibilidad');
-        if (!fecha) return;
+
+        if (!fecha) {
+            horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>';
+            horaSelect.disabled = true;
+            return;
+        }
+
+        // Bloquear UI mientras carga
+        horaSelect.innerHTML = '<option value="">Buscando horarios...</option>';
+        horaSelect.disabled = true;
+        alertaDiv.style.display = 'none';
 
         try {
             const ocupados = await fetchAPI(`/api/proyectos/disponibilidad?fecha=${fecha}`);
-            horariosOcupadosDelDia = ocupados; // Guardar para validación al guardar
-            if (ocupados.length > 0) {
-                const listaHoras = ocupados.map(o => `<b>${o.hora}</b>`).join(', ');
-                alertaDiv.style.display = 'block';
-                alertaDiv.innerHTML = `<i class="bi bi-clock-history"></i> <strong>Horarios ocupados hoy:</strong> ${listaHoras}`;
-            } else {
-                alertaDiv.style.display = 'none'; alertaDiv.innerHTML = '';
+            
+            // Creamos lista simple de ocupados: ["14:00", "16:00"]
+            const ocupadosSimples = ocupados.map(o => {
+                const h = o.hora || o.start || o;
+                return h.toString().substring(0, 5);
+            });
+
+            horaSelect.innerHTML = '<option value="">Selecciona una hora disponible</option>';
+            let hayCupo = false;
+
+            for (let h = HORARIO_APERTURA; h < HORARIO_CIERRE; h++) {
+                const horaStr = `${h.toString().padStart(2, '0')}:00`;
+                
+                // Solo agregar si NO está ocupado
+                if (!ocupadosSimples.includes(horaStr)) {
+                    const option = document.createElement('option');
+                    option.value = horaStr;
+                    option.textContent = `${horaStr} hrs - Disponible`;
+                    horaSelect.appendChild(option);
+                    hayCupo = true;
+                }
             }
-        } catch (e) { console.error("Error verificando disponibilidad", e); }
+
+            if (!hayCupo) {
+                horaSelect.innerHTML = '<option value="">Día Completo / Cerrado</option>';
+                alertaDiv.textContent = 'Lo sentimos, no hay horarios disponibles para este día.';
+                alertaDiv.style.display = 'block';
+            } else {
+                horaSelect.disabled = false;
+            }
+            
+            horariosOcupadosDelDia = ocupados;
+
+        } catch (e) { 
+            console.error("Error verificando disponibilidad", e); 
+            horaSelect.innerHTML = '<option value="">Error de conexión</option>';
+        }
     }
 
     async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
@@ -557,17 +597,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); 
         
-        // Agregar listener para fecha
+        // Agregar listener para fecha que active el filtro de hora
         const fp = flatpickr("#fechaProyecto", { 
             defaultDate: "today", 
             locale: "es",
+            minDate: "today",
             onChange: function(selectedDates, dateStr, instance) {
-                verificarDisponibilidad();
+                verificarDisponibilidad(); // <--- AQUÍ SE DISPARA
             }
         });
         
-        // Verificar disponibilidad inicial
-        setTimeout(verificarDisponibilidad, 500);
+        // Resetear select de hora
+        const horaSelect = document.getElementById('horaProyecto');
+        horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>';
+        horaSelect.disabled = true;
 
         proyectoActual = {}; mostrarProyectoActual(); document.getElementById('formProyecto').reset();
     }
@@ -579,26 +622,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function guardarProyecto(procesoDestino) {
         const artistaSelect = document.getElementById('proyectoArtista'); const artistaId = artistaSelect.value; 
         const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; 
-        const horaInput = document.getElementById('horaProyecto').value;
-        if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
+        const horaInput = document.getElementById('horaProyecto').value; // AHORA LEE EL SELECT
 
-        // BLOQUEO DE HORARIO (Validación de Agenda)
-        if (horaInput && horariosOcupadosDelDia.length > 0) {
-            const horaSimple = horaInput.substring(0, 5); 
-            const conflicto = horariosOcupadosDelDia.find(h => h.hora === horaSimple);
-            if (conflicto) { 
-                Swal.fire({ title: '¡Horario Ocupado!', text: `Ya existe un proyecto a las ${horaSimple}: "${conflicto.proyecto}".`, icon: 'error' }); 
-                return null; 
-            }
-        }
-        
+        if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
+        if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
+
         let fechaFinal = new Date(fechaInput); 
         if (horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); }
+        
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
+        
         const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
         const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
         const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
         const total = Math.max(0, subtotal - descuento);
+        
         const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoDestino, esAlbum: document.getElementById('esAlbum').checked };
         try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error al guardar: ${error.message}`, 'error'); return null; }
     }
@@ -610,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openEventModal(info) { const props = info.event.extendedProps; document.getElementById('modal-event-id').value = info.event.id; document.getElementById('modal-event-title').textContent = info.event.title; document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); document.getElementById('modal-event-total').textContent = `$${(props.total || 0).toFixed(2)}`; document.getElementById('modal-event-status').textContent = props.estatus; document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); flatpickr("#edit-event-date", { defaultDate: info.event.start, locale: "es" }); const hours = String(info.event.start.getHours()).padStart(2, '0'); const minutes = String(info.event.start.getMinutes()).padStart(2, '0'); document.getElementById('edit-event-time').value = `${hours}:${minutes}`; new bootstrap.Modal(document.getElementById('event-modal')).show(); }
     async function cancelarCita(id) { Swal.fire({ title: '¿Cancelar esta cita?', text: "La fecha se liberará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, cancelar', cancelButtonText: 'No', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cita cancelada.', 'info'); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); if(document.getElementById('agenda').classList.contains('active')) cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) cargarFlujoDeTrabajo(); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } } }); }
     async function actualizarHorarioProyecto() { const id = document.getElementById('modal-event-id').value; const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0]; const newTimeInput = document.getElementById('edit-event-time').value; if (!newDateInput) return showToast("Selecciona una nueva fecha", "error"); let finalDate = new Date(newDateInput); if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); } try { await cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Horario actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); cargarAgenda(); } catch (e) { showToast("Error al actualizar", "error"); } }
-    async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
+    async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); verificarDisponibilidad(); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function aprobarCotizacion(id) { Swal.fire({ title: '¿Aprobar?', text: "Se agendará.", icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, aprobar', cancelButtonText: 'Cancelar' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } } }); }
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${proyecto.total.toFixed(2)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
@@ -832,8 +870,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function resetPassword(e) { e.preventDefault(); const token = document.getElementById('reset-token').value; const password = document.getElementById('new-password').value; try { const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: password }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Contraseña actualizada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function registerUser(e) { e.preventDefault(); const username = document.getElementById('reg-username').value; const email = document.getElementById('reg-email').value; const password = document.getElementById('reg-password').value; const nombreArtistico = document.getElementById('reg-artistname').value; try { const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Cuenta creada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function recoverPassword(e) { e.preventDefault(); const email = document.getElementById('rec-email').value; try { const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('Correo enviado.', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
-
-    function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
     function initAppEventListeners(payload) { 
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 

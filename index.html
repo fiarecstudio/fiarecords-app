@@ -9,7 +9,6 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
-  <!-- LOGO DINÁMICO: Evita parpadeo al recargar -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
   <script>
       (function() {
@@ -35,9 +34,6 @@
 
   <div id="loader-overlay"><div class="spinner"></div></div>
 
-  <!-- ============================================== -->
-  <!-- VISTA DE AUTENTICACIÓN (LOGIN / REGISTRO)      -->
-  <!-- ============================================== -->
   <div id="login-container">
     <div class="login-card">
         <div class="text-center mb-4">
@@ -112,12 +108,8 @@
     </div>
   </div>
   
-  <!-- ============================================== -->
-  <!-- APLICACIÓN PRINCIPAL (APP WRAPPER)             -->
-  <!-- ============================================== -->
   <div id="app-wrapper" style="display: none;"> 
     
-    <!-- BARRA LATERAL (SIDEBAR) -->
     <nav class="sidebar">
       <div class="sidebar-header">
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
@@ -148,9 +140,7 @@
     <div id="sidebar-overlay"></div>
 
     <div class="main-content">
-        <!-- HEADER LIMPIO Y BUSCADOR MÓVIL/PC -->
         <header class="main-header d-flex flex-column p-3 gap-2">
-            <!-- Fila 1: Menú, Usuario, Buscador PC y Banco -->
             <div class="d-flex justify-content-between align-items-center w-100">
                 <div class="d-flex align-items-center gap-2">
                     <button id="hamburger-menu" class="btn btn-light d-md-none">
@@ -178,7 +168,6 @@
                 </div>
             </div>
 
-            <!-- Fila 2: Buscador solo visible en móvil -->
             <div class="search-box-mobile w-100 d-md-none">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
@@ -187,7 +176,6 @@
             </div>
         </header>
 
-        <!-- SECCIONES PRINCIPALES -->
         <main class="p-3 p-md-4">
             
             <section id="dashboard" class="active section-view">
@@ -332,20 +320,20 @@
                         
                         <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
 
-                        <!-- FECHA Y HORA CON VALIDACIÓN DE DISPONIBILIDAD -->
                         <div class="row g-2 mb-3">
                             <div class="col-12 col-md-6">
                                 <label>Fecha Inicio</label>
-                                <input type="text" id="fechaProyecto" class="form-control" onchange="app.verificarDisponibilidad()">
+                                <input type="text" id="fechaProyecto" class="form-control" placeholder="Selecciona una fecha...">
                             </div>
                             <div class="col-12 col-md-6">
                                 <label>Hora</label>
-                                <input type="time" id="horaProyecto" class="form-control">
+                                <select id="horaProyecto" class="form-select" disabled>
+                                    <option value="">← Primero elige una fecha</option>
+                                </select>
                             </div>
                         </div>
                         
-                        <!-- ALERTA DISPONIBILIDAD -->
-                        <div id="alerta-disponibilidad" class="alert alert-warning small py-2" style="display:none;"></div>
+                        <div id="alerta-disponibilidad" class="alert alert-danger small py-2" style="display:none; font-weight:bold;"></div>
 
                         <div class="d-flex flex-wrap gap-2 mt-3">
                             <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Cotizar</button>
@@ -457,7 +445,6 @@
                                     <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotizaciones</label>
                                     <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
                                     <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios</label>
-                                    <!-- NUEVO CHECKBOX ARTISTAS/SERVICIOS -->
                                     <label><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
                                     <label><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
                                 </div>
@@ -472,8 +459,7 @@
             <section id="vista-artista" class="section-view">
                 <div class="card">
                     <div class="card-body" id="vista-artista-contenido">
-                        <!-- Esto se llena por JavaScript -->
-                    </div>
+                        </div>
                 </div>
             </section>
 
@@ -518,8 +504,6 @@
     </div>
   </div>
 
-  <!-- MODALES DEL SISTEMA -->
-  
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
@@ -659,7 +643,6 @@
                             <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
                             <label><input type="checkbox" value="pagos"> Pagos</label>
                             <label><input type="checkbox" value="gestion-usuarios"> Users</label>
-                            <!-- NUEVO CHECKBOX ARTISTAS -->
                             <label><input type="checkbox" value="gestion-artistas"> Artistas</label>
                             <label><input type="checkbox" value="gestion-servicios"> Servicios</label>
                          </div>
