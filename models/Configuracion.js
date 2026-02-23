@@ -1,4 +1,3 @@
-// models/Configuracion.js
 const mongoose = require('mongoose');
 
 const FirmaPosicionSchema = new mongoose.Schema({
@@ -13,13 +12,20 @@ const FirmaPosicionSchema = new mongoose.Schema({
 const ConfiguracionSchema = new mongoose.Schema({
     singletonId: { type: String, default: 'main_config', unique: true }, 
     
-    // CAMBIO: Ahora guardamos la cadena Base64 completa aquí
+    // Imágenes en Base64 para persistencia robusta
     logoBase64: { type: String, default: null },
     firmaBase64: { type: String, default: null },
     
-    // Mantenemos estos por compatibilidad momentánea, pero ya no se usarán para persistencia
+    // Rutas legacy (por compatibilidad)
     logoPath: String, 
     firmaPath: String,
+
+    // --- CONFIGURACIÓN DE HORARIOS ---
+    horario: {
+        inicio: { type: String, default: "10:00" }, 
+        fin: { type: String, default: "22:00" },    
+        diasLaborales: { type: [Number], default: [1,2,3,4,5,6] } // 1=Lun, 6=Sab
+    },
 
     firmaPos: {
         cotizacion: { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) },

@@ -1,6 +1,3 @@
-// ==========================================
-// ARCHIVO: routes/dashboard.js (CORREGIDO GRÁFICA ANUAL)
-// ==========================================
 const express = require('express');
 const router = express.Router();
 const Proyecto = require('../models/Proyecto');
@@ -10,15 +7,47 @@ router.use(auth);
 
 router.get('/stats', async (req, res) => {
     try {
+        const isAdmin = req.user.role === 'admin'; 
+
+        // 1. DATOS OPERATIVOS (Para todos los usuarios)
+        // Proyectos Activos (No cotizaciones, no completados, no cancelados)
+        const proyectosActivos = await Proyecto.countDocuments({
+            isDeleted: false,
+            proceso: { $nin: ['Cotizacion', 'Completo'] },
+            estatus: { $ne: 'Cancelado' }
+        });
+
+        // Proyectos Por Cobrar (Cálculo manual para precisión)
+        const todosProyectos = await Proyecto.find({ 
+            isDeleted: false, 
+            estatus: { $nin: ['Cotizacion', 'Cancelado'] } 
+        });
+        
+        let proyectosPorCobrar = 0;
+        todosProyectos.forEach(p => {
+            // Si el total es mayor a lo pagado (con margen de error de $1 peso)
+            if ((p.total - (p.montoPagado || 0)) > 1) {
+                proyectosPorCobrar++;
+            }
+        });
+
+        // SI NO ES ADMIN: Retornamos solo lo operativo y una bandera para ocultar lo financiero
+        if (!isAdmin) {
+            return res.json({
+                showFinancials: false, // Bandera para el Frontend
+                proyectosActivos,
+                proyectosPorCobrar
+            });
+        }
+
+        // --- DATOS FINANCIEROS (SOLO ADMIN) ---
         const ahora = new Date();
         const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
         const finMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59);
-        
-        // Inicio y fin del AÑO ACTUAL para la gráfica
         const inicioAnio = new Date(ahora.getFullYear(), 0, 1);
         const finAnio = new Date(ahora.getFullYear(), 11, 31, 23, 59, 59);
 
-        // --- 1. INGRESOS DEL MES ACTUAL ---
+        // Ingresos Mes Actual
         const ingresosMesData = await Proyecto.aggregate([
             { $match: { isDeleted: false, 'pagos.0': { $exists: true } } },
             { $unwind: '$pagos' },
@@ -27,50 +56,21 @@ router.get('/stats', async (req, res) => {
         ]);
         const ingresosMes = ingresosMesData.length > 0 ? ingresosMesData[0].total : 0;
 
-        // --- 2. PROYECTOS ACTIVOS ---
-        const proyectosActivos = await Proyecto.countDocuments({
-            isDeleted: false,
-            proceso: { $nin: ['Cotizacion', 'Completo'] },
-            estatus: { $ne: 'Cancelado' }
-        });
-
-        // --- 3. PROYECTOS POR COBRAR ---
-        // (Total del proyecto - Lo que han pagado > 0)
-        // Nota: Hacemos esto en JS porque calcular campos calculados en Mongo simple es complejo
-        const todosProyectos = await Proyecto.find({ 
-            isDeleted: false, 
-            estatus: { $nin: ['Cotizacion', 'Cancelado'] } 
-        });
-        
-        let proyectosPorCobrar = 0;
-        todosProyectos.forEach(p => {
-            const descuento = p.descuento || 0;
-            const totalReal = p.total; 
-            // A veces el total ya incluye el descuento dependiendo de cómo lo guardes, 
-            // pero asumiremos la lógica de tu frontend: (total - pagado > 0)
-            if ((totalReal - (p.montoPagado || 0)) > 1) { // > 1 para evitar decimales residuales
-                proyectosPorCobrar++;
-            }
-        });
-
-        // --- 4. DATOS PARA LA GRÁFICA (TENDENCIA ANUAL) ---
+        // Tendencia Anual (Gráfica)
         const ingresosAnuales = await Proyecto.aggregate([
             { $match: { isDeleted: false, 'pagos.0': { $exists: true } } },
             { $unwind: '$pagos' },
             { $match: { 'pagos.fecha': { $gte: inicioAnio, $lte: finAnio } } },
             { 
                 $group: { 
-                    _id: { $month: "$pagos.fecha" }, // Devuelve 1 para Enero, 2 para Feb...
+                    _id: { $month: "$pagos.fecha" }, 
                     total: { $sum: '$pagos.monto' } 
                 } 
             }
         ]);
 
-        // Inicializar arreglo de 12 ceros
+        // Mapear resultado de Mongo (1..12) a Arreglo (0..11)
         let monthlyIncome = Array(12).fill(0);
-
-        // Llenar el arreglo con lo que encontró la base de datos
-        // Mongo devuelve _id: 1 para Enero, pero el array empieza en índice 0
         ingresosAnuales.forEach(item => {
             if (item._id >= 1 && item._id <= 12) {
                 monthlyIncome[item._id - 1] = item.total;
@@ -78,14 +78,15 @@ router.get('/stats', async (req, res) => {
         });
 
         res.json({
+            showFinancials: true,
             ingresosMes,
             proyectosActivos,
             proyectosPorCobrar,
-            monthlyIncome // <--- ESTO ES LO QUE FALTABA
+            monthlyIncome
         });
 
     } catch (error) {
-        console.error("Error en /api/dashboard/stats:", error);
+        console.error("Error Dashboard:", error);
         res.status(500).json({ error: 'Error al calcular estadísticas' });
     }
 });

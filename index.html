@@ -9,6 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
+  <!-- LOGO DINÁMICO: Evita parpadeo al recargar -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
   <script>
       (function() {
@@ -34,6 +35,9 @@
 
   <div id="loader-overlay"><div class="spinner"></div></div>
 
+  <!-- ============================================== -->
+  <!-- VISTA DE AUTENTICACIÓN (LOGIN / REGISTRO)      -->
+  <!-- ============================================== -->
   <div id="login-container">
     <div class="login-card">
         <div class="text-center mb-4">
@@ -108,7 +112,12 @@
     </div>
   </div>
   
+  <!-- ============================================== -->
+  <!-- APLICACIÓN PRINCIPAL (APP WRAPPER)             -->
+  <!-- ============================================== -->
   <div id="app-wrapper" style="display: none;"> 
+    
+    <!-- BARRA LATERAL (SIDEBAR) -->
     <nav class="sidebar">
       <div class="sidebar-header">
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
@@ -139,8 +148,9 @@
     <div id="sidebar-overlay"></div>
 
     <div class="main-content">
-        <!-- HEADER LIMPIO (Sin botón de volver) -->
+        <!-- HEADER LIMPIO Y BUSCADOR MÓVIL/PC -->
         <header class="main-header d-flex flex-column p-3 gap-2">
+            <!-- Fila 1: Menú, Usuario, Buscador PC y Banco -->
             <div class="d-flex justify-content-between align-items-center w-100">
                 <div class="d-flex align-items-center gap-2">
                     <button id="hamburger-menu" class="btn btn-light d-md-none">
@@ -168,6 +178,7 @@
                 </div>
             </div>
 
+            <!-- Fila 2: Buscador solo visible en móvil -->
             <div class="search-box-mobile w-100 d-md-none">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
@@ -176,6 +187,7 @@
             </div>
         </header>
 
+        <!-- SECCIONES PRINCIPALES -->
         <main class="p-3 p-md-4">
             
             <section id="dashboard" class="active section-view">
@@ -212,9 +224,9 @@
             </section>
 
             <section id="cotizaciones" class="section-view">
+              <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               <div class="card">
                 <div class="card-header border-0 pb-0 pt-3">
-                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                     <h2>Cotizaciones Pendientes</h2>
                 </div>
                 <div class="table-responsive p-3">
@@ -236,9 +248,9 @@
             </section>
 
             <section id="pagos" class="section-view">
+              <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               <div class="card">
                 <div class="card-header pt-3 pb-0 border-0">
-                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
                         <h2 class="mb-0">Gestión de Pagos</h2>
                         <div class="btn-group">
@@ -273,9 +285,9 @@
             </section>
 
             <section id="registrar-proyecto" class="section-view">
+              <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               <div class="card" style="max-width: 800px; margin: auto;">
                 <div class="card-header bg-primary text-white d-flex align-items-center gap-3">
-                    <button class="btn text-white p-0 d-flex align-items-center" onclick="app.irAlDashboard()" title="Volver"><i class="bi bi-arrow-left fs-4"></i></button>
                     <h2 class="mb-0 text-white"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2>
                 </div>
                 <div class="card-body">
@@ -320,12 +332,22 @@
                         
                         <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
 
+                        <!-- FECHA Y HORA CON VALIDACIÓN DE DISPONIBILIDAD -->
                         <div class="row g-2 mb-3">
-                            <div class="col-12 col-md-6"><label>Fecha Inicio</label><input type="text" id="fechaProyecto" class="form-control"></div>
-                            <div class="col-12 col-md-6"><label>Hora</label><input type="time" id="horaProyecto" class="form-control"></div>
+                            <div class="col-12 col-md-6">
+                                <label>Fecha Inicio</label>
+                                <input type="text" id="fechaProyecto" class="form-control" onchange="app.verificarDisponibilidad()">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label>Hora</label>
+                                <input type="time" id="horaProyecto" class="form-control">
+                            </div>
                         </div>
+                        
+                        <!-- ALERTA DISPONIBILIDAD -->
+                        <div id="alerta-disponibilidad" class="alert alert-warning small py-2" style="display:none;"></div>
 
-                        <div class="d-flex flex-wrap gap-2">
+                        <div class="d-flex flex-wrap gap-2 mt-3">
                             <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Cotizar</button>
                             <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1" onclick="app.enviarAFlujoDirecto()"><i class="bi bi-check-circle"></i> Agendar</button>
                         </div>
@@ -335,9 +357,9 @@
             </section>
 
             <section id="gestion-artistas" class="section-view">
+              <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               <div class="card">
                 <div class="card-header pt-3 pb-0 border-0">
-                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                     <h2>Gestión de Artistas</h2>
                 </div>
                 <div class="card-body">
@@ -360,9 +382,9 @@
             </section>
 
             <section id="historial-proyectos" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
                     <div class="card-header pt-3 pb-0 border-0">
-                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                         <h2>Historial de Proyectos</h2>
                     </div>
                     <div class="card-body">
@@ -377,9 +399,9 @@
             </section>
 
             <section id="gestion-servicios" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
                     <div class="card-header pt-3 pb-0 border-0">
-                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                         <h2>Gestión de Servicios</h2>
                     </div>
                     <div class="card-body">
@@ -405,9 +427,9 @@
             </section>
 
             <section id="gestion-usuarios" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
                     <div class="card-header pt-3 pb-0 border-0">
-                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                         <h2>Usuarios del Sistema</h2>
                     </div>
                     <div class="card-body">
@@ -435,6 +457,9 @@
                                     <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotizaciones</label>
                                     <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
                                     <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios</label>
+                                    <!-- NUEVO CHECKBOX ARTISTAS/SERVICIOS -->
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary">Crear Usuario</button>
@@ -446,14 +471,16 @@
             
             <section id="vista-artista" class="section-view">
                 <div class="card">
-                    <div class="card-body" id="vista-artista-contenido"></div>
+                    <div class="card-body" id="vista-artista-contenido">
+                        <!-- Esto se llena por JavaScript -->
+                    </div>
                 </div>
             </section>
 
             <section id="papelera-reciclaje" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
                     <div class="card-header pt-3 pb-0 border-0">
-                        <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                         <h2>Papelera de Reciclaje</h2>
                     </div>
                     <div class="card-body">
@@ -470,9 +497,9 @@
             </section>
 
             <section id="configuracion" class="section-view">
+              <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               <div class="card">
                 <div class="card-header pt-3 pb-0 border-0">
-                    <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                     <h2>Configuración</h2>
                 </div>
                 <div class="card-body">
@@ -491,6 +518,8 @@
     </div>
   </div>
 
+  <!-- MODALES DEL SISTEMA -->
+  
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
@@ -630,6 +659,9 @@
                             <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
                             <label><input type="checkbox" value="pagos"> Pagos</label>
                             <label><input type="checkbox" value="gestion-usuarios"> Users</label>
+                            <!-- NUEVO CHECKBOX ARTISTAS -->
+                            <label><input type="checkbox" value="gestion-artistas"> Artistas</label>
+                            <label><input type="checkbox" value="gestion-servicios"> Servicios</label>
                          </div>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Actualizar</button>
