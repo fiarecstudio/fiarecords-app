@@ -14,6 +14,13 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// --- NUEVO: Ruta Health Check (Para evitar Cold Starts en Render) ---
+// Esta ruta ligera responde "OK" rápidamente. Úsala en cron-job.org
+// para hacer ping cada 14 minutos y evitar que el servidor se duerma.
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // --- 2. Definición de Rutas de la API ---
 // Todas las peticiones que empiecen con /api serán manejadas aquí.
 app.use('/api/auth', require('./routes/auth')); 
