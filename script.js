@@ -485,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. GESTIÓN DE PROYECTOS Y AGENDA (CON SELECTOR DE HORARIOS)
     // ==================================================================
     
-    // --- FUNCIÓN VERIFICAR DISPONIBILIDAD (MODIFICADA PARA NUEVA API) ---
+    // --- FUNCIÓN VERIFICAR DISPONIBILIDAD ---
     async function verificarDisponibilidad() {
         const fechaInput = document.getElementById('fechaProyecto');
         const horaSelect = document.getElementById('horaProyecto'); // SELECT
@@ -635,7 +635,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); cargarOpcionesParaProyecto(); mostrarSeccion('cotizaciones'); } }
-    async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('Proyecto agendado.', 'success'); cargarOpcionesParaProyecto(); mostrarSeccion('flujo-trabajo'); } }
+    
+    // --- FUNCIÓN MODIFICADA: REDIRECCIÓN INTELIGENTE ---
+    async function enviarAFlujoDirecto() { 
+        const nuevoProyecto = await guardarProyecto('Agendado'); 
+        if (nuevoProyecto) { 
+            showToast('¡Proyecto agendado con éxito!', 'success'); 
+            cargarOpcionesParaProyecto(); 
+            
+            // Verificamos rol del usuario
+            const user = getUserRoleAndId();
+            if (user.role === 'cliente') {
+                // Si es cliente, lo mandamos a "Mi Espacio" (Vista Artista)
+                mostrarSeccion('vista-artista');
+            } else {
+                // Si es Admin/Ingeniero, lo mandamos al Kanban
+                mostrarSeccion('flujo-trabajo'); 
+            }
+        } 
+    }
+
     async function registrarNuevoArtistaDesdeFormulario() { const nombreInput = document.getElementById('nombreNuevoArtista'); const nombre = nombreInput.value.trim(); if (!nombre) { showToast('Introduce un nombre.', 'error'); return; } try { const nuevoArtista = await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre: nombre, nombreArtistico: nombre }) }); showToast('Artista guardado', 'success'); await cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); document.getElementById('proyectoArtista').value = nuevoArtista._id; document.getElementById('nuevoArtistaContainer').style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
 
     function openEventModal(info) { const props = info.event.extendedProps; document.getElementById('modal-event-id').value = info.event.id; document.getElementById('modal-event-title').textContent = info.event.title; document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); document.getElementById('modal-event-total').textContent = `$${(props.total || 0).toFixed(2)}`; document.getElementById('modal-event-status').textContent = props.estatus; document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); flatpickr("#edit-event-date", { defaultDate: info.event.start, locale: "es" }); const hours = String(info.event.start.getHours()).padStart(2, '0'); const minutes = String(info.event.start.getMinutes()).padStart(2, '0'); document.getElementById('edit-event-time').value = `${hours}:${minutes}`; new bootstrap.Modal(document.getElementById('event-modal')).show(); }

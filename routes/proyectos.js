@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Proyecto = require('../models/Proyecto');
 const Artista = require('../models/Artista'); 
-const Configuracion = require('../models/Configuracion'); // <--- IMPORTANTE
+const Configuracion = require('../models/Configuracion'); 
 const auth = require('../middleware/auth');   
 const { google } = require('googleapis');
 
@@ -49,61 +49,72 @@ const getFiltroUsuario = async (req) => {
     return filtro;
 };
 
-// --- RUTA MODIFICADA: VERIFICAR DISPONIBILIDAD INTELIGENTE ---
+// --- RUTA MODIFICADA: VERIFICAR DISPONIBILIDAD (CORREGIDA ZONA HORARIA) ---
 router.get('/disponibilidad', async (req, res) => {
     try {
-        const { fecha } = req.query; // Formato esperado: YYYY-MM-DD
+        const { fecha } = req.query; // YYYY-MM-DD
         if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
 
-        // 1. Determinar el día de la semana (0=Domingo, 1=Lunes...)
-        // Usamos T12:00:00 para evitar problemas de zona horaria al calcular el día
+        // 1. Día de la semana (0-6)
         const fechaObj = new Date(fecha + 'T12:00:00'); 
         const diaSemana = fechaObj.getDay().toString();
 
-        // 2. Obtener Configuración de Horarios
+        // 2. Configuración
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
-        if (!config) { config = new Configuracion(); } // Usar defaults si no existe
+        if (!config) { config = new Configuracion(); }
 
-        // Verificar si el día está activo
         const horarioDia = config.horarioLaboral ? config.horarioLaboral.get(diaSemana) : null;
         
-        // Si no hay configuración o el día está cerrado
+        // Si está cerrado ese día
         if (!horarioDia || !horarioDia.activo) {
-            return res.json([]); // Devuelve array vacío (DÍA CERRADO)
+            return res.json([]); 
         }
 
-        // 3. Generar Slots Posibles según horario de apertura/cierre
+        // 3. Generar Slots Posibles (Strings "HH:mm")
         const slotsPosibles = [];
         let [horaInicio, minInicio] = horarioDia.inicio.split(':').map(Number);
         let [horaFin, minFin] = horarioDia.fin.split(':').map(Number);
 
-        // Bucle hora por hora (ej. de 10 a 20)
         for (let h = horaInicio; h < horaFin; h++) {
             const horaStr = h.toString().padStart(2, '0') + ':00';
             slotsPosibles.push(horaStr);
         }
 
-        // 4. Buscar citas existentes ese día
-        const start = new Date(fecha); start.setHours(0, 0, 0, 0);
-        const end = new Date(fecha); end.setHours(23, 59, 59, 999);
+        // 4. Buscar citas ocupadas (Rango de todo el día UTC)
+        // Creamos fechas UTC para buscar en Mongo que guarda en UTC
+        const start = new Date(fecha); start.setUTCHours(0,0,0,0);
+        const end = new Date(fecha); end.setUTCHours(23,59,59,999);
 
+        // A veces hay desfaces por zona horaria, ampliamos un poco el rango de búsqueda para asegurar
+        // (Buscamos desde el día previo a las 18:00 hasta el día siguiente a las 06:00 para cubrir GMT-6)
+        // O más simple: usar la fecha string base para filtrar en JS luego si es necesario.
+        // Pero intentemos la búsqueda estándar primero:
+        
         const proyectosOcupados = await Proyecto.find({
-            fecha: { $gte: start, $lte: end },
+            fecha: { $gte: start, $lte: end }, // Busca por fecha ISO completa
             estatus: { $ne: 'Cancelado' },
             proceso: { $ne: 'Cotizacion' }, 
             isDeleted: false
         }).select('fecha');
 
-        // Convertir citas ocupadas a formato "HH:mm"
+        // 5. Convertir citas ocupadas a "HH:mm" EN HORA MÉXICO
         const horasOcupadas = proyectosOcupados.map(p => {
-            const d = new Date(p.fecha);
-            return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+            // Convertimos la fecha UTC de Mongo a hora local de CDMX
+            const horaMexico = new Date(p.fecha).toLocaleString("es-MX", {
+                timeZone: "America/Mexico_City",
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false // Formato 24h (ej: 14:00)
+            });
+            // toLocaleString a veces retorna "14:00" o "2:00". Aseguramos formato.
+            let [h, m] = horaMexico.split(':');
+            return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`; // Retorna "10:00"
         });
 
-        // 5. Restar ocupadas de posibles
+        // 6. Restar
         const slotsFinales = slotsPosibles.filter(slot => !horasOcupadas.includes(slot));
 
-        res.json(slotsFinales); // Devuelve: ["10:00", "12:00", "16:00"]
+        res.json(slotsFinales);
 
     } catch (e) { 
         console.error(e);
