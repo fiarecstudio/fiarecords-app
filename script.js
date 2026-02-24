@@ -3,15 +3,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
     
-    // --- NUEVO: CONFIGURACIÓN DE HORARIOS ---
-    const HORARIO_APERTURA = 10; // 10:00 AM
-    const HORARIO_CIERRE = 20;   // 08:00 PM (20:00)
+    // --- VARIABLES NUEVAS PARA HORARIOS ---
+    const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    let horariosOcupadosDelDia = []; 
 
     let isInitialized = false;
     let proyectoActual = {};
     let logoBase64 = null; 
     let preseleccionArtistaId = null;
-    let horariosOcupadosDelDia = []; // Variable crítica para la agenda
 
     const paginationState = {
         artistas: { page: 1, limit: 10, filter: '' },
@@ -486,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. GESTIÓN DE PROYECTOS Y AGENDA (CON SELECTOR DE HORARIOS)
     // ==================================================================
     
-    // Función Nueva: Verificar Disponibilidad y llenar SELECT
+    // --- FUNCIÓN VERIFICAR DISPONIBILIDAD (MODIFICADA PARA NUEVA API) ---
     async function verificarDisponibilidad() {
         const fechaInput = document.getElementById('fechaProyecto');
         const horaSelect = document.getElementById('horaProyecto'); // SELECT
@@ -494,10 +493,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let fecha = fechaInput.value;
         if(fechaInput._flatpickr && fechaInput._flatpickr.selectedDates[0]) {
+             // Ajuste zona horaria local para enviar string correcto YYYY-MM-DD
              const d = fechaInput._flatpickr.selectedDates[0];
-             const offset = d.getTimezoneOffset();
-             const localDate = new Date(d.getTime() - (offset * 60 * 1000));
-             fecha = localDate.toISOString().split('T')[0];
+             const year = d.getFullYear();
+             const month = String(d.getMonth() + 1).padStart(2, '0');
+             const day = String(d.getDate()).padStart(2, '0');
+             fecha = `${year}-${month}-${day}`;
         }
 
         if (!fecha) {
@@ -512,39 +513,31 @@ document.addEventListener('DOMContentLoaded', () => {
         alertaDiv.style.display = 'none';
 
         try {
-            const ocupados = await fetchAPI(`/api/proyectos/disponibilidad?fecha=${fecha}`);
+            // La API ahora devuelve ARRAY DE STRINGS DISPONIBLES (ej: ["10:00", "11:00"])
+            // Ya filtrado por día cerrado o citas ocupadas.
+            const horariosDisponibles = await fetchAPI(`/api/proyectos/disponibilidad?fecha=${fecha}`);
             
-            // Creamos lista simple de ocupados: ["14:00", "16:00"]
-            const ocupadosSimples = ocupados.map(o => {
-                const h = o.hora || o.start || o;
-                return h.toString().substring(0, 5);
-            });
+            horaSelect.innerHTML = ''; // Limpiar
 
-            horaSelect.innerHTML = '<option value="">Selecciona una hora disponible</option>';
-            let hayCupo = false;
-
-            for (let h = HORARIO_APERTURA; h < HORARIO_CIERRE; h++) {
-                const horaStr = `${h.toString().padStart(2, '0')}:00`;
-                
-                // Solo agregar si NO está ocupado
-                if (!ocupadosSimples.includes(horaStr)) {
-                    const option = document.createElement('option');
-                    option.value = horaStr;
-                    option.textContent = `${horaStr} hrs - Disponible`;
-                    horaSelect.appendChild(option);
-                    hayCupo = true;
-                }
-            }
-
-            if (!hayCupo) {
-                horaSelect.innerHTML = '<option value="">Día Completo / Cerrado</option>';
-                alertaDiv.textContent = 'Lo sentimos, no hay horarios disponibles para este día.';
+            if (horariosDisponibles.length === 0) {
+                // Si el array está vacío, es que el día está cerrado o todo lleno
+                horaSelect.innerHTML = '<option value="">No hay horarios / Día Cerrado</option>';
+                alertaDiv.textContent = 'Lo sentimos, no hay cupo disponible o el estudio no abre este día.';
                 alertaDiv.style.display = 'block';
             } else {
+                // Llenar el select con lo que mandó el servidor
+                const defaultOp = document.createElement('option');
+                defaultOp.value = ""; defaultOp.textContent = "-- Selecciona Hora --";
+                horaSelect.appendChild(defaultOp);
+
+                horariosDisponibles.forEach(hora => {
+                    const option = document.createElement('option');
+                    option.value = hora;
+                    option.textContent = `${hora} hrs - Disponible`;
+                    horaSelect.appendChild(option);
+                });
                 horaSelect.disabled = false;
             }
-            
-            horariosOcupadosDelDia = ocupados;
 
         } catch (e) { 
             console.error("Error verificando disponibilidad", e); 
@@ -838,7 +831,58 @@ document.addEventListener('DOMContentLoaded', () => {
     function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''], ['Titular:', db.titular || ''], ['Número de Tarjeta:', db.tarjeta || ''], ['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
-    async function cargarConfiguracion() { try { if (!configCache) await loadInitialConfig(); const firmaPreview = document.getElementById('firma-preview-img'); let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma'; if (configCache && configCache.firmaBase64) { firmaSrc = configCache.firmaBase64; } else if (configCache && configCache.firmaPath) { firmaSrc = configCache.firmaPath; } firmaPreview.src = firmaSrc; const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (e) { showToast('Error al cargar configuración.', 'error'); } }
+    async function cargarConfiguracion() { 
+        try { 
+            if (!configCache) await loadInitialConfig();
+            
+            // Cargar imágenes y banco (código existente)...
+            const firmaPreview = document.getElementById('firma-preview-img');
+            let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma';
+            if (configCache && configCache.firmaBase64) firmaSrc = configCache.firmaBase64; 
+            firmaPreview.src = firmaSrc; 
+            
+            const db = configCache.datosBancarios || {}; 
+            document.getElementById('banco').value = db.banco || ''; 
+            document.getElementById('titular').value = db.titular || ''; 
+            document.getElementById('tarjeta').value = db.tarjeta || ''; 
+            document.getElementById('clabe').value = db.clabe || ''; 
+
+            // --- NUEVO: CARGAR TABLA DE HORARIOS ---
+            const tbody = document.getElementById('tabla-horarios-body');
+            tbody.innerHTML = '';
+            
+            // Valores por defecto si no existe config
+            const horarios = configCache.horarioLaboral || {};
+            
+            DIAS_SEMANA.forEach((nombreDia, index) => {
+                // index coincida con getDay() de JS (0=Domingo, 1=Lunes...)
+                const h = horarios[index.toString()] || { activo: (index !== 0), inicio: "10:00", fin: "20:00" };
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${nombreDia}</strong></td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input check-dia-activo" type="checkbox" 
+                                   id="dia-activo-${index}" ${h.activo ? 'checked' : ''} 
+                                   onchange="app.toggleInputsHorario(${index})">
+                            <label class="form-check-label" for="dia-activo-${index}">Abierto</label>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="time" class="form-control input-hora" id="dia-inicio-${index}" 
+                               value="${h.inicio}" ${!h.activo ? 'disabled' : ''}>
+                    </td>
+                    <td>
+                        <input type="time" class="form-control input-hora" id="dia-fin-${index}" 
+                               value="${h.fin}" ${!h.activo ? 'disabled' : ''}>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
+    }
     async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General'; return `<tr><td data-label="Artista" class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '${escapeHTML(c.artista.nombreArtistico || '')}')"` : ''}>${escapeHTML(nombreArtista)}</td><td data-label="Total">$${c.total.toFixed(2)}</td><td data-label="Fecha">${new Date(c.createdAt).toLocaleDateString()}</td><td data-label="Acciones" class="table-actions"><button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button><button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Borrar"><i class="bi bi-trash"></i></button></td></tr>`; }).join('') : `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; } }
     async function cargarPapelera() { const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; for (const endpoint of endpoints) { const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; const listEl = document.getElementById(listId); if (!listEl) continue; try { const data = await fetchAPI(`/api/${endpoint}/papelera/all`); listEl.innerHTML = data.length ? data.map(item => { let displayName = item.nombre || item.username || item.nombreProyecto || 'Item sin nombre'; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${escapeHTML(displayName)}</span><div class="btn-group"><button class="btn btn-sm btn-outline-success" onclick="app.restaurarItem('${item._id}', '${endpoint}')"><i class="bi bi-arrow-counterclockwise"></i></button><button class="btn btn-sm btn-danger" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')"><i class="bi bi-x-octagon-fill"></i></button></div></li>`; }).join('') : `<li class="list-group-item">Papelera vacía.</li>`; } catch (e) { listEl.innerHTML = `<li class="list-group-item">Error al cargar la papelera.</li>`; } } }
     async function renderPaginatedList(endpoint, filterText = null) { const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; const listEl = document.getElementById(listId); if(!listEl) return; const userInfo = getUserRoleAndId(); const isClient = (userInfo.role === 'cliente'); let data = localCache[endpoint]; if (!data || data.length === 0) { try { data = await fetchAPI(`/api/${endpoint}`); localCache[endpoint] = data; } catch(e) { console.error("Error fetching " + endpoint); data = []; } } if (filterText !== null) { paginationState[endpoint].filter = filterText.toLowerCase(); paginationState[endpoint].page = 1; } const currentFilter = paginationState[endpoint].filter; let filteredData = data; if (currentFilter) { filteredData = data.filter(item => { const name = item.nombre || item.username || item.nombreArtistico || ''; return name.toLowerCase().includes(currentFilter); }); } const page = paginationState[endpoint].page; const limit = paginationState[endpoint].limit; const start = (page - 1) * limit; const end = start + limit; const paginatedItems = filteredData.slice(start, end); const totalPages = Math.ceil(filteredData.length / limit); listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { let displayName, editAction; if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre}`; editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; } else if (endpoint === 'usuarios') { displayName = `${item.username} (${item.role})`; editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; } else { const vis = item.visible !== false; displayName = `${item.nombre} - $${item.precio.toFixed(2)} ${vis ? '' : '<span class="badge bg-warning text-dark ms-2">Oculto</span>'}`; editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; } const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : ''; const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`; let buttonsHtml = ''; if (!isClient) { buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; } return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; }).join('') : `<li class="list-group-item">No hay resultados.</li>`; renderPaginationControls(listEl, endpoint, page, totalPages); }
@@ -870,6 +914,35 @@ document.addEventListener('DOMContentLoaded', () => {
     async function resetPassword(e) { e.preventDefault(); const token = document.getElementById('reset-token').value; const password = document.getElementById('new-password').value; try { const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: password }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Contraseña actualizada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function registerUser(e) { e.preventDefault(); const username = document.getElementById('reg-username').value; const email = document.getElementById('reg-email').value; const password = document.getElementById('reg-password').value; const nombreArtistico = document.getElementById('reg-artistname').value; try { const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Cuenta creada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function recoverPassword(e) { e.preventDefault(); const email = document.getElementById('rec-email').value; try { const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('Correo enviado.', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
+    
+    // --- NUEVAS FUNCIONES PARA HORARIOS ---
+    function toggleInputsHorario(index) {
+        const isChecked = document.getElementById(`dia-activo-${index}`).checked;
+        document.getElementById(`dia-inicio-${index}`).disabled = !isChecked;
+        document.getElementById(`dia-fin-${index}`).disabled = !isChecked;
+    }
+
+    async function guardarHorariosConfig(e) {
+        e.preventDefault();
+        const horarioLaboral = {};
+        for (let i = 0; i < 7; i++) {
+            horarioLaboral[i.toString()] = {
+                activo: document.getElementById(`dia-activo-${i}`).checked,
+                inicio: document.getElementById(`dia-inicio-${i}`).value,
+                fin: document.getElementById(`dia-fin-${i}`).value
+            };
+        }
+        try {
+            const res = await fetchAPI('/api/configuracion/horarios', {
+                method: 'PUT',
+                body: JSON.stringify({ horarioLaboral })
+            });
+            configCache.horarioLaboral = res.horarioLaboral; 
+            showToast('Horarios actualizados correctamente', 'success');
+        } catch (err) {
+            showToast('Error al guardar horarios', 'error');
+        }
+    }
     
     function initAppEventListeners(payload) { 
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
@@ -947,7 +1020,9 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
-        showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad
+        showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
+        // Nuevas:
+        toggleInputsHorario, guardarHorariosConfig
     };
 });
 

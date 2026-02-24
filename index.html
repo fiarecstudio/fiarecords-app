@@ -484,19 +484,52 @@
 
             <section id="configuracion" class="section-view">
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
-              <div class="card">
+              
+              <div class="card mb-4">
                 <div class="card-header pt-3 pb-0 border-0">
-                    <h2>Configuración</h2>
+                    <h2>Configuración General</h2>
                 </div>
                 <div class="card-body">
-                    <h5>Firma Digital para PDF</h5>
+                    <h5>Firma Digital y Logo</h5>
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
-                        <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Cambiar Firma</button>
+                        <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
+                        <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-secondary">Subir Logo</button>
+                        
                         <input type="file" id="firma-input" hidden accept="image/*">
                         <input type="file" id="logo-input" hidden accept="image/*">
                     </div>
-                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info mb-3"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
+                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
+                </div>
+              </div>
+
+              <!-- NUEVO CARD DE HORARIOS -->
+              <div class="card">
+                <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
+                    <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">Marca los días que trabajas y define la hora de apertura y cierre. Los clientes solo verán estos horarios disponibles.</p>
+                    <form id="form-horarios" onsubmit="app.guardarHorariosConfig(event)">
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Día</th>
+                                        <th>Estado</th>
+                                        <th>Apertura</th>
+                                        <th>Cierre</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-horarios-body">
+                                    <!-- Se llena con JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Guardar Horarios</button>
+                        </div>
+                    </form>
                 </div>
               </div>
             </section>

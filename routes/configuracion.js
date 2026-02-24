@@ -1,29 +1,28 @@
-// routes/configuracion.js
 const express = require('express');
 const router = express.Router();
 const Configuracion = require('../models/Configuracion');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 
-// CAMBIO: Usamos memoryStorage para no depender del disco duro del servidor
+// Configuración de Multer (Memoria) para subir imágenes
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage,
-    limits: { fileSize: 2 * 1024 * 1024 } // Límite de 2MB para no saturar la BD
+    limits: { fileSize: 2 * 1024 * 1024 } // Límite de 2MB
 });
 
-// Ruta pública (sin auth) para que el login pueda ver el logo
+// Ruta pública (sin auth) para obtener el logo en el Login
 router.get('/public/logo', async (req, res) => {
     try {
         const config = await Configuracion.findOne({ singletonId: 'main_config' });
-        // Devolvemos el Base64 directo
         res.json({ logoBase64: config ? config.logoBase64 : null });
     } catch (err) { res.status(500).json({ error: 'Error al obtener el logo' }); }
 });
 
-// A partir de aquí, todo requiere login
+// --- A PARTIR DE AQUÍ REQUIERE LOGIN ---
 router.use(auth);
 
+// Middleware para verificar si es Admin
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
@@ -32,6 +31,7 @@ const isAdmin = (req, res, next) => {
     }
 };
 
+// Obtener la configuración completa
 router.get('/', async (req, res) => {
     try {
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
@@ -43,14 +43,7 @@ router.get('/', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al obtener la configuración.' }); }
 });
 
-router.put('/firma-pos', isAdmin, async (req, res) => {
-    try {
-        const { firmaPos } = req.body;
-        const config = await Configuracion.findOneAndUpdate({ singletonId: 'main_config' }, { $set: { firmaPos: firmaPos } }, { new: true, upsert: true });
-        res.json(config);
-    } catch (err) { res.status(500).json({ error: 'Error al guardar posición.' }); }
-});
-
+// Guardar Datos Bancarios
 router.put('/datos-bancarios', isAdmin, async (req, res) => {
     try {
         const { datosBancarios } = req.body;
@@ -63,37 +56,51 @@ router.put('/datos-bancarios', isAdmin, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al guardar datos bancarios.' }); }
 });
 
-// --- SUBIDA DE IMÁGENES A BASE DE DATOS (Base64) ---
+// --- NUEVO: GUARDAR HORARIOS LABORALES ---
+router.put('/horarios', isAdmin, async (req, res) => {
+    try {
+        const { horarioLaboral } = req.body;
+        const config = await Configuracion.findOneAndUpdate(
+            { singletonId: 'main_config' },
+            { $set: { horarioLaboral: horarioLaboral } },
+            { new: true, upsert: true }
+        );
+        res.json(config);
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ error: 'Error al guardar horarios.' }); 
+    }
+});
 
+// Subida de Firma
 router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
     try {
-        // Convertir buffer a Base64
         const b64 = Buffer.from(req.file.buffer).toString('base64');
         const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' }, 
-            { $set: { firmaBase64: dataURI } }, // Guardamos el string largo
+            { $set: { firmaBase64: dataURI } },
             { new: true, upsert: true }
         );
-        res.json({ message: 'Firma guardada en BD.', firmaBase64: config.firmaBase64 });
+        res.json({ message: 'Firma guardada.', firmaBase64: config.firmaBase64 });
     } catch (err) { res.status(500).json({ error: 'Error al guardar firma.' }); }
 });
 
+// Subida de Logo
 router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
     try {
-        // Convertir buffer a Base64
         const b64 = Buffer.from(req.file.buffer).toString('base64');
         const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' }, 
-            { $set: { logoBase64: dataURI } }, // Guardamos el string largo
+            { $set: { logoBase64: dataURI } },
             { new: true, upsert: true }
         );
-        res.json({ message: 'Logo guardado en BD.', logoBase64: config.logoBase64 });
+        res.json({ message: 'Logo guardado.', logoBase64: config.logoBase64 });
     } catch (err) { res.status(500).json({ error: 'Error al guardar logo.' }); }
 });
 

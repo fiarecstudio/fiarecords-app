@@ -1,43 +1,38 @@
 const mongoose = require('mongoose');
 
-const FirmaPosicionSchema = new mongoose.Schema({
-    vAlign: { type: String, default: 'bottom' },
-    hAlign: { type: String, default: 'right' },
-    offsetX: { type: Number, default: 0 },
-    offsetY: { type: Number, default: 0 },
-    w: { type: Number, default: 50 },
-    h: { type: Number, default: 20 }
-});
-
 const ConfiguracionSchema = new mongoose.Schema({
-    singletonId: { type: String, default: 'main_config', unique: true }, 
+    // ID único para asegurar que solo haya una configuración
+    singletonId: { type: String, default: 'main_config', unique: true },
     
-    // Imágenes en Base64 para persistencia robusta
-    logoBase64: { type: String, default: null },
-    firmaBase64: { type: String, default: null },
-    
-    // Rutas legacy (por compatibilidad)
-    logoPath: String, 
-    firmaPath: String,
-
-    // --- CONFIGURACIÓN DE HORARIOS ---
-    horario: {
-        inicio: { type: String, default: "10:00" }, 
-        fin: { type: String, default: "22:00" },    
-        diasLaborales: { type: [Number], default: [1,2,3,4,5,6] } // 1=Lun, 6=Sab
-    },
-
-    firmaPos: {
-        cotizacion: { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) },
-        recibo:     { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) },
-        contrato:   { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'right', w: 50, h: 20 }) },
-        distribucion: { type: FirmaPosicionSchema, default: () => ({ vAlign: 'bottom', hAlign: 'left', w: 50, h: 20 }) }
-    },
+    // Configuración visual y bancaria (lo que ya tenías)
+    logoBase64: { type: String },
+    firmaBase64: { type: String },
+    firmaPos: { type: Object }, 
     datosBancarios: {
         banco: String,
         titular: String,
-        tarjeta: String, 
+        tarjeta: String,
         clabe: String
+    },
+
+    // --- NUEVO: HORARIOS DE TRABAJO ---
+    // Claves: "0" (Domingo) hasta "6" (Sábado)
+    horarioLaboral: {
+        type: Map,
+        of: new mongoose.Schema({
+            activo: { type: Boolean, default: true },   // ¿Abre ese día?
+            inicio: { type: String, default: "10:00" }, // Hora apertura HH:mm
+            fin: { type: String, default: "20:00" }     // Hora cierre HH:mm
+        }),
+        default: {
+            "0": { activo: false, inicio: "10:00", fin: "18:00" }, // Domingo cerrado por defecto
+            "1": { activo: true, inicio: "10:00", fin: "20:00" },  // Lunes
+            "2": { activo: true, inicio: "10:00", fin: "20:00" },
+            "3": { activo: true, inicio: "10:00", fin: "20:00" },
+            "4": { activo: true, inicio: "10:00", fin: "20:00" },
+            "5": { activo: true, inicio: "10:00", fin: "20:00" },
+            "6": { activo: true, inicio: "10:00", fin: "16:00" }   // Sábado horario corto
+        }
     }
 });
 
