@@ -265,7 +265,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.initializeGisClient = function() {
-        try { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '' }); gisInited = true; } catch (error) { console.error("Error init GIS", error); }
+        try { 
+            tokenClient = google.accounts.oauth2.initTokenClient({ 
+                client_id: GAP_CONFIG.clientId, 
+                scope: GAP_CONFIG.scope, 
+                callback: '',
+                // Intentar reducir prompts si el usuario ya está logueado en el navegador
+                prompt: '' 
+            }); 
+            gisInited = true; 
+        } catch (error) { console.error("Error init GIS", error); }
     }
 
     let checkGoogleLibsInterval = setInterval(() => {
@@ -404,7 +413,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally { hideLoader(); }
         };
 
-        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: 'consent'}); } 
+        // Solicitar token (Google pedirá permiso si no tiene uno válido en caché)
+        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: ''}); } 
         else { tokenClient.requestAccessToken({prompt: ''}); }
     }
 
@@ -420,6 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
             proyecto = historialCacheados.find(p => p._id === projectId);
         }
         
+        // Cargar el enlace guardado, si existe
         const linkActual = proyecto ? (proyecto.enlaceEntrega || '') : '';
         modalEl.querySelector('#delivery-link-input').value = linkActual; 
         document.getElementById('drive-status').textContent = ''; 
@@ -450,13 +461,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const projectId = document.getElementById('delivery-project-id').value; 
         const enlace = document.getElementById('delivery-link-input').value; 
         
-        if(!enlace || enlace.trim() === "") {
-            // Opcional: Mostrar advertencia si intenta guardar vacío, o permitir borrarlo.
-        }
-
         try { 
             // 1. Guardar en Base de Datos
-            const updatedProject = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
+            await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                 method: 'PUT', 
                 body: JSON.stringify({ enlace }) 
             }); 
@@ -478,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // 4. Refrescar vistas si están activas
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
-                // Pequeño truco para refrescar la vista del artista sin perder contexto
                 const nombreEl = document.getElementById('vista-artista-nombre');
                 if (nombreEl) {
                     const nombreActual = nombreEl.textContent;
@@ -947,101 +953,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
     }
     async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General'; return `<tr><td data-label="Artista" class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '${escapeHTML(c.artista.nombreArtistico || '')}')"` : ''}>${escapeHTML(nombreArtista)}</td><td data-label="Total">$${c.total.toFixed(2)}</td><td data-label="Fecha">${new Date(c.createdAt).toLocaleDateString()}</td><td data-label="Acciones" class="table-actions"><button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button><button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Borrar"><i class="bi bi-trash"></i></button></td></tr>`; }).join('') : `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; } }
-    
-    // MODIFICADA: cargarPapelera (Arregla "Item sin nombre")
-    async function cargarPapelera() { 
-        const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; 
-        
-        for (const endpoint of endpoints) { 
-            const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
-            const listEl = document.getElementById(listId); 
-            if (!listEl) continue; 
-            
-            try { 
-                const data = await fetchAPI(`/api/${endpoint}/papelera/all`); 
-                
-                listEl.innerHTML = data.length ? data.map(item => { 
-                    // LÓGICA DE NOMBRES CORREGIDA
-                    let displayName = 'Item sin nombre';
-                    
-                    if (endpoint === 'proyectos') {
-                        // Si es proyecto, intentamos armar un nombre descriptivo
-                        const nombreArt = item.artista ? (item.artista.nombreArtistico || item.artista.nombre) : 'Sin Artista';
-                        const nombreProj = item.nombreProyecto || 'Proyecto General';
-                        displayName = `${nombreProj} - ${nombreArt} (${new Date(item.fecha).toLocaleDateString()})`;
-                    } else {
-                        // Para servicios, artistas y usuarios
-                        displayName = item.nombre || item.username || item.nombreArtistico || item.nombreProyecto || 'Item sin nombre';
-                        if (endpoint === 'servicios' && item.precio) displayName += ` ($${item.precio})`;
-                        if (endpoint === 'usuarios') displayName += ` (${item.role})`;
-                    }
-
-                    return `
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>${escapeHTML(displayName)}</span>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-success" title="Restaurar" onclick="app.restaurarItem('${item._id}', '${endpoint}')">
-                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                                <button class="btn btn-sm btn-danger" title="Eliminar Definitivamente" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')">
-                                    <i class="bi bi-x-octagon-fill"></i>
-                                </button>
-                            </div>
-                        </li>`; 
-                }).join('') : `<li class="list-group-item text-muted">Papelera vacía.</li>`; 
-            } catch (e) { 
-                console.error(e);
-                listEl.innerHTML = `<li class="list-group-item text-danger">Error al cargar la papelera.</li>`; 
-            } 
-        } 
-    }
-
+    async function cargarPapelera() { const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos']; for (const endpoint of endpoints) { const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; const listEl = document.getElementById(listId); if (!listEl) continue; try { const data = await fetchAPI(`/api/${endpoint}/papelera/all`); listEl.innerHTML = data.length ? data.map(item => { let displayName = item.nombre || item.username || item.nombreProyecto || 'Item sin nombre'; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${escapeHTML(displayName)}</span><div class="btn-group"><button class="btn btn-sm btn-outline-success" onclick="app.restaurarItem('${item._id}', '${endpoint}')"><i class="bi bi-arrow-counterclockwise"></i></button><button class="btn btn-sm btn-danger" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')"><i class="bi bi-x-octagon-fill"></i></button></div></li>`; }).join('') : `<li class="list-group-item">Papelera vacía.</li>`; } catch (e) { listEl.innerHTML = `<li class="list-group-item">Error al cargar la papelera.</li>`; } } }
     async function renderPaginatedList(endpoint, filterText = null) { const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; const listEl = document.getElementById(listId); if(!listEl) return; const userInfo = getUserRoleAndId(); const isClient = (userInfo.role === 'cliente'); let data = localCache[endpoint]; if (!data || data.length === 0) { try { data = await fetchAPI(`/api/${endpoint}`); localCache[endpoint] = data; } catch(e) { console.error("Error fetching " + endpoint); data = []; } } if (filterText !== null) { paginationState[endpoint].filter = filterText.toLowerCase(); paginationState[endpoint].page = 1; } const currentFilter = paginationState[endpoint].filter; let filteredData = data; if (currentFilter) { filteredData = data.filter(item => { const name = item.nombre || item.username || item.nombreArtistico || ''; return name.toLowerCase().includes(currentFilter); }); } const page = paginationState[endpoint].page; const limit = paginationState[endpoint].limit; const start = (page - 1) * limit; const end = start + limit; const paginatedItems = filteredData.slice(start, end); const totalPages = Math.ceil(filteredData.length / limit); listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { let displayName, editAction; if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre}`; editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; } else if (endpoint === 'usuarios') { displayName = `${item.username} (${item.role})`; editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; } else { const vis = item.visible !== false; displayName = `${item.nombre} - $${item.precio.toFixed(2)} ${vis ? '' : '<span class="badge bg-warning text-dark ms-2">Oculto</span>'}`; editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; } const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : ''; const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`; let buttonsHtml = ''; if (!isClient) { buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; } return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; }).join('') : `<li class="list-group-item">No hay resultados.</li>`; renderPaginationControls(listEl, endpoint, page, totalPages); }
     function renderPaginationControls(container, endpoint, currentPage, totalPages) { let controls = container.parentNode.querySelector('.pagination-controls'); if(controls) controls.remove(); if (totalPages <= 1) return; controls = document.createElement('div'); controls.className = 'pagination-controls'; controls.innerHTML = `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="app.changePage('${endpoint}', -1)">Anterior</button><span class="pagination-info">Página ${currentPage} de ${totalPages}</span><button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage('${endpoint}', 1)">Siguiente</button>`; container.parentNode.appendChild(controls); }
     function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null); }
     function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
     async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { const vis = document.getElementById('visibleServicio'); body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] = []; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] = []; renderPaginatedList(endpoint); } catch (e) { showToast(e.message, 'error'); } } }); }
-    
-    // MODIFICADA: restaurarItem (Con recarga automática)
-    async function restaurarItem(id, endpoint) { 
-        try { 
-            await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); 
-            showToast('Elemento restaurado.', 'success'); 
-            
-            // Actualización AJAX:
-            cargarPapelera(); // Recarga la papelera visualmente
-            
-            // También limpiamos la caché local para que aparezca en las listas principales
-            localCache[endpoint] = []; 
-            
-        } catch (error) { showToast(error.message, 'error'); } 
-    }
-
-    // MODIFICADA: eliminarPermanente (Con recarga automática)
-    async function eliminarPermanente(id, endpoint) { 
-        Swal.fire({ 
-            title: '¿Eliminar Definitivamente?', 
-            text: "Esta acción no se puede deshacer.", 
-            icon: 'error', 
-            showCancelButton: true, 
-            confirmButtonText: 'Sí, borrar', 
-            cancelButtonText: 'Cancelar', 
-            confirmButtonColor: '#d33', 
-        }).then(async (result) => { 
-            if (result.isConfirmed) { 
-                try { 
-                    await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); 
-                    showToast('Eliminado permanentemente.', 'success'); 
-                    
-                    // Actualización AJAX:
-                    cargarPapelera(); 
-                    
-                } catch (error) { showToast(error.message, 'error'); } 
-            } 
-        }); 
-    }
-
+    async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } }
+    async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanentemente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
     async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     function abrirModalEditarServicio(id, nombre, precio, visible) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true'); new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
