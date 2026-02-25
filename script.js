@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
     
-    // --- VARIABLES NUEVAS PARA HORARIOS ---
     const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     let horariosOcupadosDelDia = []; 
 
@@ -49,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'http://localhost:5000'
         : '';
 
-    // Elementos DOM
     const DOMElements = {
         loginContainer: document.getElementById('login-container'),
         appWrapper: document.getElementById('app-wrapper'),
@@ -88,11 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(document.getElementById('login-logo')) document.getElementById('login-logo').src = logoSrc;
                     if(document.getElementById('app-logo')) document.getElementById('app-logo').src = logoSrc;
                     logoBase64 = logoSrc;
-                    
-                    let link = document.querySelector("link[rel*='icon']") || document.createElement('link');
-                    link.type = 'image/png'; link.rel = 'icon'; link.href = logoSrc;
-                    document.getElementsByTagName('head')[0].appendChild(link);
-                    
                     localStorage.setItem('cached_logo_path', logoSrc);
                 }
             }
@@ -231,7 +224,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Cola Offline para POST/PUT/DELETE
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -311,18 +303,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { throw new Error('No se pudo crear la carpeta del artista.'); }
     }
 
-    // --- NUEVA FUNCIÓN: CARPETA DE PROYECTO ---
     async function buscarOCrearCarpetaProyecto(nombreProyecto, idCarpetaArtista) {
-        // Limpiamos el nombre para evitar problemas
         const nombreLimpio = nombreProyecto.trim() || "Proyecto Sin Nombre";
         const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreLimpio}' and trashed=false and '${idCarpetaArtista}' in parents`;
-        
         try {
             const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
             const files = response.result.files;
             if (files && files.length > 0) { return files[0].id; } 
             else {
-                // Crear carpeta dentro de la del Artista
                 const fileMetadata = { 'name': nombreLimpio, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [idCarpetaArtista] };
                 const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
                 return createRes.result.id;
@@ -351,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const files = fileInput.files; 
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
-        const projectName = document.getElementById('delivery-project-name').value || 'Sin Nombre'; // Nombre del Proyecto
+        const projectName = document.getElementById('delivery-project-name').value || 'Sin Nombre';
         const statusSpan = document.getElementById('drive-status');
         const linkInput = document.getElementById('delivery-link-input');
 
@@ -361,18 +349,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(statusSpan) { statusSpan.textContent = 'Organizando carpetas...'; statusSpan.style.color = 'var(--primary-color)'; }
                 showLoader();
 
-                // 1. Carpeta Maestra
                 const idMaestra = await obtenerCarpetaMaestra();
-                
-                // 2. Carpeta Artista
                 const idArtista = await buscarOCrearCarpetaArtista(artistName, idMaestra);
-                await hacerCarpetaPublica(idArtista); // Asegurar que Artista es público
+                await hacerCarpetaPublica(idArtista); 
 
-                // 3. Carpeta Proyecto (NUEVO)
                 if(statusSpan) statusSpan.textContent = `Creando carpeta: ${projectName}...`;
                 const idProyecto = await buscarOCrearCarpetaProyecto(projectName, idArtista);
                 
-                // 4. Hacer pública la carpeta del Proyecto
                 if(statusSpan) statusSpan.textContent = 'Configurando permisos públicos...';
                 await hacerCarpetaPublica(idProyecto);
 
@@ -382,13 +365,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
 
-                // 5. Subir archivos a la carpeta del PROYECTO
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
-                    
-                    const metadata = { 'name': file.name, 'parents': [idProyecto] }; // <--- Destino: ID PROYECTO
-                    
+                    const metadata = { 'name': file.name, 'parents': [idProyecto] };
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', file);
@@ -398,15 +378,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if(linkInput) {
-                    linkInput.value = folderLink;
+                    linkInput.value = folderLink; // Ponemos el link en el input
                     linkInput.style.borderColor = '#10b981'; 
-                    setTimeout(() => linkInput.style.borderColor = '', 2000);
                 }
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                await saveDeliveryLink(false); 
-                showToast(`¡${files.length} archivos subidos con éxito!`, 'success');
+                // --- CLAVE: GUARDAR EL ENLACE EN LA BASE DE DATOS AQUÍ ---
+                await saveDeliveryLink(false); // false = no cerrar modal aún, para que veas que se guardó
+                showToast(`¡${files.length} archivos subidos y enlace guardado!`, 'success');
 
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
@@ -433,8 +413,15 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-project-id').value = projectId; 
         modalEl.querySelector('#delivery-artist-name').value = artistName; 
         modalEl.querySelector('#delivery-project-name').value = projectName; 
-        const proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId); 
-        modalEl.querySelector('#delivery-link-input').value = proyecto ? proyecto.enlaceEntrega || '' : ''; 
+        
+        // --- BÚSQUEDA ROBUSTA EN CACHÉ ---
+        let proyecto = localCache.proyectos.find(p => p._id === projectId);
+        if (!proyecto) {
+            proyecto = historialCacheados.find(p => p._id === projectId);
+        }
+        
+        const linkActual = proyecto ? (proyecto.enlaceEntrega || '') : '';
+        modalEl.querySelector('#delivery-link-input').value = linkActual; 
         document.getElementById('drive-status').textContent = ''; 
         
         const token = localStorage.getItem('token');
@@ -458,17 +445,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
 
+    // --- FUNCIÓN MODIFICADA: GUARDADO ROBUSTO DE LINK ---
     async function saveDeliveryLink(cerrarModal = true) { 
         const projectId = document.getElementById('delivery-project-id').value; 
         const enlace = document.getElementById('delivery-link-input').value; 
+        
+        if(!enlace || enlace.trim() === "") {
+            // Opcional: Mostrar advertencia si intenta guardar vacío, o permitir borrarlo.
+        }
+
         try { 
-            await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify({ enlace }) }); 
-            const proyectoCache = localCache.proyectos.find(p => p._id === projectId); if (proyectoCache) proyectoCache.enlaceEntrega = enlace;
-            const proyectoHistorial = historialCacheados.find(p => p._id === projectId); if (proyectoHistorial) proyectoHistorial.enlaceEntrega = enlace;
-            showToast('Enlace guardado.', 'success'); 
+            // 1. Guardar en Base de Datos
+            const updatedProject = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
+                method: 'PUT', 
+                body: JSON.stringify({ enlace }) 
+            }); 
             
+            // 2. Actualizar Caché Local (PROYECTOS ACTIVOS)
+            const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
+            if (indexCache !== -1) {
+                localCache.proyectos[indexCache].enlaceEntrega = enlace;
+            }
+
+            // 3. Actualizar Caché Historial (PROYECTOS COMPLETADOS)
+            const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
+            if (indexHistorial !== -1) {
+                historialCacheados[indexHistorial].enlaceEntrega = enlace;
+            }
+
+            showToast('Enlace guardado permanentemente.', 'success'); 
+            
+            // 4. Refrescar vistas si están activas
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
+                // Pequeño truco para refrescar la vista del artista sin perder contexto
                 const nombreEl = document.getElementById('vista-artista-nombre');
                 if (nombreEl) {
                     const nombreActual = nombreEl.textContent;
@@ -476,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(artistaId) mostrarVistaArtista(artistaId, nombreActual, ''); 
                 }
             }
+
             if (cerrarModal) { closeDeliveryModal(); }
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
