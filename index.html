@@ -112,6 +112,7 @@
     
     <nav class="sidebar">
       <div class="sidebar-header">
+          <!-- LOGO DINÁMICO (Clickeable si es admin mediante JS) -->
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
       </div>
       
@@ -463,6 +464,7 @@
                 </div>
             </section>
 
+            <!-- SECCIÓN PAPELERA MODIFICADA CON PAGINACIÓN Y USUARIOS -->
             <section id="papelera-reciclaje" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
@@ -470,14 +472,29 @@
                         <h2>Papelera de Reciclaje</h2>
                     </div>
                     <div class="card-body">
+                        <!-- PROYECTOS -->
                         <h5 class="mt-3">Proyectos Eliminados</h5>
-                        <ul id="papeleraProyectos" class="list-group mb-3"></ul>
+                        <ul id="papeleraProyectos" class="list-group mb-2"></ul>
+                        <!-- Controles Paginación Proyectos -->
+                        <div id="papeleraProyectosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
+
+                        <!-- ARTISTAS -->
                         <h5 class="mt-3">Artistas Eliminados</h5>
-                        <ul id="papeleraArtistas" class="list-group mb-3"></ul>
+                        <ul id="papeleraArtistas" class="list-group mb-2"></ul>
+                        <!-- Controles Paginación Artistas -->
+                        <div id="papeleraArtistasControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
+                        
+                        <!-- SERVICIOS -->
                         <h5 class="mt-3">Servicios Eliminados</h5>
-                        <ul id="papeleraServicios" class="list-group mb-3"></ul>
+                        <ul id="papeleraServicios" class="list-group mb-2"></ul>
+                        <!-- Controles Paginación Servicios -->
+                        <div id="papeleraServiciosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
+                        
+                        <!-- USUARIOS -->
                         <h5 class="mt-3">Usuarios Eliminados</h5>
-                        <ul id="papeleraUsuarios" class="list-group mb-3"></ul>
+                        <ul id="papeleraUsuarios" class="list-group mb-2"></ul>
+                        <!-- Controles Paginación Usuarios -->
+                        <div id="papeleraUsuariosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
                     </div>
                 </div>
             </section>
@@ -494,6 +511,8 @@
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
                         <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
+                        
+                        <!-- INPUT DE LOGO (REQUERIDO PARA CAMBIAR LOGO) -->
                         <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-secondary">Subir Logo</button>
                         
                         <input type="file" id="firma-input" hidden accept="image/*">
@@ -503,7 +522,7 @@
                 </div>
               </div>
 
-              <!-- NUEVO CARD DE HORARIOS -->
+              <!-- CARD DE HORARIOS -->
               <div class="card">
                 <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
                     <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
@@ -534,9 +553,18 @@
               </div>
             </section>
         </main>
+        
+        <!-- FOOTER NUEVO (PIE DE PÁGINA) -->
+        <footer class="main-footer text-center py-3 mt-auto">
+            <small class="text-muted">
+                &copy; <span id="footer-year"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
+            </small>
+        </footer>
+
     </div>
   </div>
 
+  <!-- MODALES -->
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
