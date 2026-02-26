@@ -49,28 +49,22 @@ const getFiltroUsuario = async (req) => {
     return filtro;
 };
 
-// --- RUTA MODIFICADA: VERIFICAR DISPONIBILIDAD (CORREGIDA ZONA HORARIA) ---
+// --- RUTA: VERIFICAR DISPONIBILIDAD (CORREGIDA ZONA HORARIA) ---
 router.get('/disponibilidad', async (req, res) => {
     try {
-        const { fecha } = req.query; // YYYY-MM-DD
+        const { fecha } = req.query; 
         if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
 
-        // 1. Día de la semana (0-6)
         const fechaObj = new Date(fecha + 'T12:00:00'); 
         const diaSemana = fechaObj.getDay().toString();
 
-        // 2. Configuración
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
         if (!config) { config = new Configuracion(); }
 
         const horarioDia = config.horarioLaboral ? config.horarioLaboral.get(diaSemana) : null;
         
-        // Si está cerrado ese día
-        if (!horarioDia || !horarioDia.activo) {
-            return res.json([]); 
-        }
+        if (!horarioDia || !horarioDia.activo) { return res.json([]); }
 
-        // 3. Generar Slots Posibles (Strings "HH:mm")
         const slotsPosibles = [];
         let [horaInicio, minInicio] = horarioDia.inicio.split(':').map(Number);
         let [horaFin, minFin] = horarioDia.fin.split(':').map(Number);
@@ -80,46 +74,28 @@ router.get('/disponibilidad', async (req, res) => {
             slotsPosibles.push(horaStr);
         }
 
-        // 4. Buscar citas ocupadas (Rango de todo el día UTC)
-        // Creamos fechas UTC para buscar en Mongo que guarda en UTC
         const start = new Date(fecha); start.setUTCHours(0,0,0,0);
         const end = new Date(fecha); end.setUTCHours(23,59,59,999);
 
-        // A veces hay desfaces por zona horaria, ampliamos un poco el rango de búsqueda para asegurar
-        // (Buscamos desde el día previo a las 18:00 hasta el día siguiente a las 06:00 para cubrir GMT-6)
-        // O más simple: usar la fecha string base para filtrar en JS luego si es necesario.
-        // Pero intentemos la búsqueda estándar primero:
-        
         const proyectosOcupados = await Proyecto.find({
-            fecha: { $gte: start, $lte: end }, // Busca por fecha ISO completa
+            fecha: { $gte: start, $lte: end }, 
             estatus: { $ne: 'Cancelado' },
             proceso: { $ne: 'Cotizacion' }, 
             isDeleted: false
         }).select('fecha');
 
-        // 5. Convertir citas ocupadas a "HH:mm" EN HORA MÉXICO
         const horasOcupadas = proyectosOcupados.map(p => {
-            // Convertimos la fecha UTC de Mongo a hora local de CDMX
             const horaMexico = new Date(p.fecha).toLocaleString("es-MX", {
-                timeZone: "America/Mexico_City",
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false // Formato 24h (ej: 14:00)
+                timeZone: "America/Mexico_City", hour: '2-digit', minute: '2-digit', hour12: false 
             });
-            // toLocaleString a veces retorna "14:00" o "2:00". Aseguramos formato.
             let [h, m] = horaMexico.split(':');
-            return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`; // Retorna "10:00"
+            return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
         });
 
-        // 6. Restar
         const slotsFinales = slotsPosibles.filter(slot => !horasOcupadas.includes(slot));
-
         res.json(slotsFinales);
 
-    } catch (e) { 
-        console.error(e);
-        res.status(500).json({ error: e.message }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/', async (req, res) => { try { const filtro = await getFiltroUsuario(req); const proyectos = await Proyecto.find(filtro).populate('artista').sort({ fecha: 1 }); res.json(proyectos); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -130,28 +106,33 @@ router.get('/pagos/todos', async (req, res) => { try { const filtro = await getF
 router.get('/por-artista/:id', async (req, res) => { try { if (req.user.role === 'cliente') { const filtroPropio = await getFiltroUsuario(req); if (filtroPropio.artista && filtroPropio.artista.toString() !== req.params.id) { return res.status(403).json({ error: 'No autorizado.' }); } } const proyectos = await Proyecto.find({ artista: req.params.id, isDeleted: { $ne: true } }).populate('artista').sort({ fecha: -1 }); res.json(proyectos); } catch (e) { res.status(500).json({ error: 'Error al obtener historial.' }); } });
 router.get('/:id', async (req, res) => { try { const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) { return res.status(403).json({ error: 'No autorizado.' }); } } res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-router.post('/', async (req, res) => {
-    try {
-        if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id;
-        let datos = { ...req.body, isDeleted: false };
-        if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (filtro.artista) { datos.artista = filtro.artista; } else { return res.status(400).json({ error: 'Error: Sin perfil de artista.' }); } }
-        const nuevo = new Proyecto(datos);
-        const guardado = await nuevo.save();
-        if (guardado.proceso === 'Agendado' && guardado.artista) { const email = await getArtistaEmail(guardado.artista); const fechaFmt = formatearFechaMexico(guardado.fecha); enviarNotificacion(email, "📅 Cita Confirmada - Fia Records", `<div style="font-family: Arial;"><h2>¡Proyecto Agendado!</h2><p>Tu proyecto <strong>${guardado.nombreProyecto}</strong> ha sido confirmado.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); }
-        res.status(201).json(guardado);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
+router.post('/', async (req, res) => { try { if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id; let datos = { ...req.body, isDeleted: false }; if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (filtro.artista) { datos.artista = filtro.artista; } else { return res.status(400).json({ error: 'Error: Sin perfil de artista.' }); } } const nuevo = new Proyecto(datos); const guardado = await nuevo.save(); if (guardado.proceso === 'Agendado' && guardado.artista) { const email = await getArtistaEmail(guardado.artista); const fechaFmt = formatearFechaMexico(guardado.fecha); enviarNotificacion(email, "📅 Cita Confirmada - Fia Records", `<div style="font-family: Arial;"><h2>¡Proyecto Agendado!</h2><p>Tu proyecto <strong>${guardado.nombreProyecto}</strong> ha sido confirmado.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.status(201).json(guardado); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.put('/:id/proceso', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const updateData = { proceso: req.body.proceso }; if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago'; const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('artista'); if (req.body.proceso === 'Agendado' && actualizado.artista) { const email = actualizado.artista.correo; const fechaFmt = formatearFechaMexico(actualizado.fecha); enviarNotificacion(email, "✅ Tu cita ha sido confirmada", `<div style="font-family: Arial;"><h2>¡Cotización Aprobada!</h2><p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> ya está en nuestra agenda.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.put('/:id/estatus', async (req, res) => { try { const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { estatus: req.body.estatus }, { new: true }).populate('artista'); if (req.body.estatus === 'Cancelado' && actualizado.artista) { const email = actualizado.artista.correo; enviarNotificacion(email, "❌ Cita Cancelada - Fia Records", `<div style="font-family: Arial;"><h2>Cita Cancelada</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido cancelado.</p></div>`); } res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.put('/:id/fecha', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true }).populate('artista'); if (actualizado.artista) { const email = actualizado.artista.correo; const fechaFmt = formatearFechaMexico(req.body.fecha); enviarNotificacion(email, "📅 Cambio de Horario", `<p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> se movió al: <strong>${fechaFmt}</strong> (Hora CDMX).</p>`); } res.json(actualizado); });
 router.put('/:id/nombre', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true }); res.json(actualizado); });
+
+// --- RUTA ACTUALIZADA: GUARDAR ENLACE ---
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
         if(!proyecto) return res.status(404).json({error: "No existe el proyecto"});
-        if(req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if(!proyecto.artista || proyecto.artista.toString() !== filtro.artista.toString()) { return res.status(403).json({ error: 'No autorizado' }); } }
-        const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { enlaceEntrega: req.body.enlace }, { new: true }).populate('artista');
+        
+        if(req.user.role === 'cliente') { 
+            const filtro = await getFiltroUsuario(req); 
+            if(!proyecto.artista || proyecto.artista.toString() !== filtro.artista.toString()) { 
+                return res.status(403).json({ error: 'No autorizado' }); 
+            } 
+        }
+        
+        // Guardar el enlace
+        const actualizado = await Proyecto.findByIdAndUpdate(
+            req.params.id, 
+            { enlaceEntrega: req.body.enlace }, 
+            { new: true }
+        ).populate('artista');
+        
+        // Enviar notificación si es un admin quien lo sube y hay artista vinculado
         if (req.body.enlace && actualizado.artista && req.user.role !== 'cliente') {
             const email = actualizado.artista.correo;
             enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", `<div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>¡Tu material está listo! 🎵</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado.</p><br><a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;">DESCARGAR AHORA</a></div>`);

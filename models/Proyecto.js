@@ -11,15 +11,15 @@ const PagoSchema = new mongoose.Schema({
     monto: Number,
     metodo: String, // Transferencia, Efectivo, Tarjeta
     fecha: { type: Date, default: Date.now },
-    usuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' } // Quién registró el pago
+    usuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' } 
 });
 
 const ProyectoSchema = new mongoose.Schema({
     artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' },
-    nombreProyecto: { type: String }, // Opcional, ej: nombre del EP o Single
+    nombreProyecto: { type: String }, 
     esAlbum: { type: Boolean, default: false },
     
-    fecha: { type: Date, required: true }, // Fecha agendada
+    fecha: { type: Date, required: true },
     
     items: [ItemSchema],
     
@@ -41,13 +41,13 @@ const ProyectoSchema = new mongoose.Schema({
 
     metodoPago: { type: String, default: 'Pendiente' },
     
-    // --- AQUÍ ESTABA EL FALTANTE ---
-    enlaceEntrega: { type: String, default: '' }, // <--- ESTO ES LO QUE HACÍA FALTA
+    // --- ESTE CAMPO ES EL QUE GUARDA EL LINK ---
+    enlaceEntrega: { type: String, default: '' }, 
     
     detallesContrato: { type: Object },
     detallesDistribucion: { type: Object },
 
-    pagos: [PagoSchema], // Historial de pagos parciales
+    pagos: [PagoSchema], 
 
     isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });

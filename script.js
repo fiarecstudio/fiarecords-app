@@ -270,8 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 client_id: GAP_CONFIG.clientId, 
                 scope: GAP_CONFIG.scope, 
                 callback: '',
-                // Intentar reducir prompts si el usuario ya está logueado en el navegador
-                prompt: '' 
+                prompt: '' // Intento de silenciar el prompt si ya hay sesión
             }); 
             gisInited = true; 
         } catch (error) { console.error("Error init GIS", error); }
@@ -393,8 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                // --- CLAVE: GUARDAR EL ENLACE EN LA BASE DE DATOS AQUÍ ---
-                await saveDeliveryLink(false); // false = no cerrar modal aún, para que veas que se guardó
+                // --- CLAVE: PASAR EL LINK DIRECTAMENTE (NO LEER DEL INPUT) ---
+                await saveDeliveryLink(false, folderLink); 
+                
                 showToast(`¡${files.length} archivos subidos y enlace guardado!`, 'success');
 
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
@@ -413,7 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally { hideLoader(); }
         };
 
-        // Solicitar token (Google pedirá permiso si no tiene uno válido en caché)
         if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: ''}); } 
         else { tokenClient.requestAccessToken({prompt: ''}); }
     }
@@ -456,10 +455,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
 
-    // --- FUNCIÓN MODIFICADA: GUARDADO ROBUSTO DE LINK ---
-    async function saveDeliveryLink(cerrarModal = true) { 
+    // --- FUNCIÓN MODIFICADA: RECIBA EL ENLACE DIRECTO (OPCIONAL) ---
+    async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null) { 
         const projectId = document.getElementById('delivery-project-id').value; 
-        const enlace = document.getElementById('delivery-link-input').value; 
+        // Si nos pasan el enlace directo, úsalo. Si no, lee del input.
+        const enlace = enlaceDirecto || document.getElementById('delivery-link-input').value; 
         
         try { 
             // 1. Guardar en Base de Datos
