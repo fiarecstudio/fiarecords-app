@@ -34,7 +34,18 @@
 
   <div id="loader-overlay"><div class="spinner"></div></div>
 
+  <!-- CONTENEDOR LOGIN -->
   <div id="login-container">
+    
+    <!-- NUEVO: INTERRUPTOR MODO OSCURO EN LOGIN -->
+    <div class="theme-toggle-login">
+      <span class="small me-2"><i class="bi bi-moon"></i> Modo Oscuro</span>
+      <label class="theme-switch">
+        <input type="checkbox" class="theme-switch-checkbox" onchange="app.toggleTheme(this.checked)"/>
+        <span class="slider"></span>
+      </label>
+    </div>
+
     <div class="login-card">
         <div class="text-center mb-4">
           <img id="login-logo" class="logo-dinamico img-fluid" src="https://placehold.co/180x80?text=Cargando..." alt="Logotipo">
@@ -106,13 +117,20 @@
 
         <p id="login-error" class="text-danger text-center mt-3 small"></p>
     </div>
+    
+    <!-- NUEVO: FOOTER EN LOGIN -->
+    <footer class="login-footer text-center">
+        <small class="text-muted">
+            &copy; <span class="footer-year-span"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
+        </small>
+    </footer>
+
   </div>
   
   <div id="app-wrapper" style="display: none;"> 
     
     <nav class="sidebar">
       <div class="sidebar-header">
-          <!-- LOGO DINÁMICO (Clickeable si es admin mediante JS) -->
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
       </div>
       
@@ -127,7 +145,8 @@
         <div class="theme-toggle-container mb-3 px-2">
           <span class="small"><i class="bi bi-moon"></i> Modo Oscuro</span>
           <label class="theme-switch">
-            <input type="checkbox" id="theme-switch" onchange="document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', this.checked ? 'dark' : 'light')"/>
+            <!-- MODIFICADO: AHORA USA LA CLASE Y LLAMA A app.toggleTheme -->
+            <input type="checkbox" class="theme-switch-checkbox" onchange="app.toggleTheme(this.checked)"/>
             <span class="slider"></span>
           </label>
         </div>
@@ -464,7 +483,6 @@
                 </div>
             </section>
 
-            <!-- SECCIÓN PAPELERA MODIFICADA CON PAGINACIÓN Y USUARIOS -->
             <section id="papelera-reciclaje" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
@@ -475,25 +493,21 @@
                         <!-- PROYECTOS -->
                         <h5 class="mt-3">Proyectos Eliminados</h5>
                         <ul id="papeleraProyectos" class="list-group mb-2"></ul>
-                        <!-- Controles Paginación Proyectos -->
                         <div id="papeleraProyectosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
 
                         <!-- ARTISTAS -->
                         <h5 class="mt-3">Artistas Eliminados</h5>
                         <ul id="papeleraArtistas" class="list-group mb-2"></ul>
-                        <!-- Controles Paginación Artistas -->
                         <div id="papeleraArtistasControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
                         
                         <!-- SERVICIOS -->
                         <h5 class="mt-3">Servicios Eliminados</h5>
                         <ul id="papeleraServicios" class="list-group mb-2"></ul>
-                        <!-- Controles Paginación Servicios -->
                         <div id="papeleraServiciosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
                         
                         <!-- USUARIOS -->
                         <h5 class="mt-3">Usuarios Eliminados</h5>
                         <ul id="papeleraUsuarios" class="list-group mb-2"></ul>
-                        <!-- Controles Paginación Usuarios -->
                         <div id="papeleraUsuariosControls" class="d-flex justify-content-between align-items-center mb-3 pagination-controls-mini"></div>
                     </div>
                 </div>
@@ -512,7 +526,7 @@
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
                         <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
                         
-                        <!-- INPUT DE LOGO (REQUERIDO PARA CAMBIAR LOGO) -->
+                        <!-- INPUT DE LOGO OCULTO -->
                         <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-secondary">Subir Logo</button>
                         
                         <input type="file" id="firma-input" hidden accept="image/*">
@@ -554,10 +568,10 @@
             </section>
         </main>
         
-        <!-- FOOTER NUEVO (PIE DE PÁGINA) -->
+        <!-- FOOTER EN EL PANEL PRINCIPAL (AÑO DINÁMICO POR CLASE) -->
         <footer class="main-footer text-center py-3 mt-auto">
             <small class="text-muted">
-                &copy; <span id="footer-year"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
+                &copy; <span class="footer-year-span"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
             </small>
         </footer>
 

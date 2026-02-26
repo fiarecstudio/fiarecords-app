@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: { page: 1, limit: 10, filter: '' }
     };
 
-    // --- NUEVO: ESTADO DE PAGINACIÓN PARA PAPELERA ---
+    // --- ESTADO DE PAGINACIÓN PARA PAPELERA ---
     const trashPagination = {
         proyectos: { page: 1, limit: 10 },
         artistas: { page: 1, limit: 10 },
@@ -38,14 +38,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Caché Local
     let localCache = {
-        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
+        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') ||[]),
         servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
         proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
         cotizaciones: [],
         historial:[],
         pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
         usuarios: [],
-        trash: { proyectos:[], artistas: [], servicios: [], usuarios:[] } // NUEVO: Cache para papelera
+        trash: { proyectos: [], artistas: [], servicios:[], usuarios:[] } 
     };
 
     let currentCalendar = null;
@@ -74,12 +74,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UTILIDADES
     // ==================================================================
     
-    // --- NUEVO: FUNCIÓN PARA AÑO DINÁMICO DEL FOOTER ---
+    // --- FUNCIÓN PARA AÑO DINÁMICO EN TODOS LOS FOOTERS ---
     function setupFooterYear() {
-        const footerYearEl = document.getElementById('footer-year');
-        if (footerYearEl) {
-            footerYearEl.textContent = new Date().getFullYear();
-        }
+        const currentYear = new Date().getFullYear();
+        document.querySelectorAll('.footer-year-span').forEach(el => {
+            el.textContent = currentYear;
+        });
+    }
+
+    // --- FUNCIÓN UNIFICADA PARA MODO OSCURO ---
+    function toggleTheme(isDark) {
+        document.body.classList.toggle('dark-mode', isDark);
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        
+        // Sincroniza todos los interruptores (Login y App) para que muestren el mismo estado
+        document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
+            chk.checked = isDark;
+        });
     }
 
     function safeDate(dateStr) {
@@ -160,13 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const config = await fetchAPI('/api/configuracion');
             if (config) { configCache = config; if(config.logoBase64) logoBase64 = config.logoBase64; }
         } catch (e) { configCache = {}; }
-    }
-
-    function applyTheme(theme) {
-        document.body.classList.toggle('dark-mode', theme === 'dark');
-        const switchEl = document.getElementById('theme-switch');
-        if(switchEl) switchEl.checked = (theme === 'dark');
-        localStorage.setItem('theme', theme);
     }
 
     // ==================================================================
@@ -252,11 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
                 if (url.includes('/pagos')) return localCache.pagos;
-                if (url.includes('/dashboard/stats')) return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome:[] };
+                if (url.includes('/dashboard/stats')) return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
             }
         }
 
-        if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+        if (options.method &&['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
                 OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
@@ -560,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function verificarDisponibilidad() {
         const fechaInput = document.getElementById('fechaProyecto');
-        const horaSelect = document.getElementById('horaProyecto'); // SELECT
+        const horaSelect = document.getElementById('horaProyecto');
         const alertaDiv = document.getElementById('alerta-disponibilidad');
 
         let fecha = fechaInput.value;
@@ -848,8 +852,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { let firmaSrc = null; if (configCache) { if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64; else if (configCache.firmaPath) firmaSrc = configCache.firmaPath; } try { if (firmaSrc) { let base64data = firmaSrc; if (!firmaSrc.startsWith('data:image')) { const response = await fetch(firmaSrc); if (!response.ok) throw new Error('No se pudo cargar la firma.'); const firmaImg = await response.blob(); const reader = new FileReader(); const promise = new Promise((resolve) => { reader.onloadend = () => { resolve(reader.result); }; reader.readAsDataURL(firmaImg); }); base64data = await promise; } const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20}; pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); } pdf.save(finalFileName); } catch (e) { console.error("Error firma PDF:", e); pdf.save(finalFileName); } }
-    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error al generar PDF", 'error'); } }
-    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); if (!pago) return showToast('No hay pagos.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`],['Saldo Restante:', `$${safeMoney(saldoRestante)}`]] }); const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar recibo.', 'error'); } }
+    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor:[0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error al generar PDF", 'error'); } }
+    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); if (!pago) return showToast('No hay pagos.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`], ['Saldo Restante:', `$${safeMoney(saldoRestante)}`]] }); const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar recibo.', 'error'); } }
 
     function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
@@ -883,9 +887,8 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.loginContainer.style.display = 'none'; 
         DOMElements.appWrapper.style.display = 'flex'; 
         
-        // Ejecuta configuración de logo y footer dinámico
+        // Ejecuta configuración de logo
         setupCustomization(payload);
-        setupFooterYear();
 
         const hashSection = location.hash.replace('#', '');
         if (role === 'cliente') {
@@ -934,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function filtrarTablas(query) { query = query.toLowerCase(); const inputPC = document.getElementById('globalSearchPC'); const inputMobile = document.getElementById('globalSearchMobile'); if(document.activeElement === inputPC && inputMobile) inputMobile.value = query; if(document.activeElement === inputMobile && inputPC) inputPC.value = query; document.querySelectorAll('section.active tbody tr').forEach(row => { const text = row.innerText.toLowerCase(); row.style.display = text.includes(query) ? '' : 'none'; }); document.querySelectorAll('section.active .project-card').forEach(card => { const text = card.innerText.toLowerCase(); card.style.display = text.includes(query) ? 'flex' : 'none'; }); const activeSection = document.querySelector('section.active').id; if(activeSection === 'gestion-artistas') renderPaginatedList('artistas', query); if(activeSection === 'gestion-servicios') renderPaginatedList('servicios', query); if(activeSection === 'gestion-usuarios') renderPaginatedList('usuarios', query); }
     async function guardarDatosBancarios() { const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; try { await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) }); configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
     async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
-    function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''], ['Titular:', db.titular || ''],['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
+    function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''],['Titular:', db.titular || ''], ['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
     async function cargarConfiguracion() { 
@@ -987,16 +990,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cargarCotizaciones() { const tablaBody = document.getElementById('tablaCotizacionesBody'); tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; try { const cotizaciones = await fetchAPI('/api/proyectos/cotizaciones'); tablaBody.innerHTML = cotizaciones.length ? cotizaciones.map(c => { const esArtistaRegistrado = c.artista && c.artista._id; const nombreArtista = esArtistaRegistrado ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General'; return `<tr><td data-label="Artista" class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '${escapeHTML(c.artista.nombreArtistico || '')}')"` : ''}>${escapeHTML(nombreArtista)}</td><td data-label="Total">$${safeMoney(c.total)}</td><td data-label="Fecha">${safeDate(c.createdAt)}</td><td data-label="Acciones" class="table-actions"><button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button><button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Borrar"><i class="bi bi-trash"></i></button></td></tr>`; }).join('') : `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`; } catch (e) { tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; } }
     
     // ==================================================================
-    // NUEVA LÓGICA DE PAPELERA (PAGINADA Y CON USUARIOS) - TEMA 1
+    // LÓGICA DE PAPELERA PAGINADA
     // ==================================================================
     async function cargarPapelera() {
-        const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos'];
+        const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
         for (const endpoint of endpoints) {
             try {
                 const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
-                localCache.trash[endpoint] = data; // Guardamos en memoria
-                trashPagination[endpoint].page = 1; // Reiniciamos la paginación a la página 1
-                renderTrashList(endpoint); // Renderizamos la primera página
+                localCache.trash[endpoint] = data; 
+                trashPagination[endpoint].page = 1; 
+                renderTrashList(endpoint); 
             } catch (e) {
                 console.error(`Error loading trash for ${endpoint}:`, e);
                 const listEl = document.getElementById(`papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
@@ -1014,7 +1017,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = localCache.trash[endpoint] ||[];
         const { page, limit } = trashPagination[endpoint];
         
-        // Calcular inicio y fin para el slice
         const start = (page - 1) * limit;
         const end = start + limit;
         const paginatedItems = items.slice(start, end);
@@ -1026,7 +1028,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Renderizar items de la página actual
         listEl.innerHTML = paginatedItems.map(item => {
             let displayName = 'Item sin nombre';
             if (endpoint === 'proyectos') {
@@ -1048,7 +1049,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </li>`;
         }).join('');
 
-        // Renderizar botones de paginación
         if (controlsEl) {
             if (totalPages > 1) {
                 controlsEl.innerHTML = `
@@ -1057,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn btn-sm btn-outline-secondary" ${page === totalPages ? 'disabled' : ''} onclick="app.changeTrashPage('${endpoint}', 1)">Siguiente</button>
                 `;
             } else {
-                controlsEl.innerHTML = ''; // Limpiar si no hay más de 1 página
+                controlsEl.innerHTML = ''; 
             }
         }
     }
@@ -1129,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function initAppEventListeners(payload) { 
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
-        document.getElementById('theme-switch').addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light')); 
+        // Eliminado el listener individual de #theme-switch ya que usamos la clase inline en el HTML
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
@@ -1146,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==================================================================
-    // NUEVO: ARREGLO PARA QUE EL LOGO SEA CLICKEABLE POR EL ADMIN - TEMA 3
+    // ARREGLO LOGO CLICKEABLE
     // ==================================================================
     function setupCustomization(payload) { 
         if (payload.role === 'admin') { 
@@ -1157,7 +1157,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 appLogo.style.cursor = 'pointer'; 
                 appLogo.title = 'Haz clic para cambiar el logo'; 
                 
-                // Evitamos asignar el evento varias veces si se llama setupCustomization más de una vez
                 appLogo.onclick = () => {
                     logoInput.click();
                 }; 
@@ -1171,7 +1170,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const res = await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
                         showToast('Logo actualizado!', 'success'); 
                         
-                        // Refrescar el logo en el front
                         if(res && res.logoBase64) { 
                             appLogo.src = res.logoBase64; 
                             document.getElementById('login-logo').src = res.logoBase64;
@@ -1212,10 +1210,17 @@ document.addEventListener('DOMContentLoaded', () => {
             logoBase64 = cachedLogo;
         }
 
+        // Carga inicial del año en todos los footers
+        setupFooterYear();
+
         await fetchPublicLogo();
         await loadInitialConfig();
         setTimeout(preloadLogoForPDF, 2000);
-        applyTheme(localStorage.getItem('theme') || 'light');
+        
+        // Carga y sincroniza el tema oscuro guardado
+        const savedTheme = localStorage.getItem('theme') === 'dark';
+        toggleTheme(savedTheme);
+        
         setupAuthListeners();
 
         const path = window.location.pathname;
@@ -1249,12 +1254,11 @@ document.addEventListener('DOMContentLoaded', () => {
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
-        toggleInputsHorario, guardarHorariosConfig,
-        changeTrashPage // Exportamos la función para los botones de paginación de la papelera
+        toggleInputsHorario, guardarHorariosConfig, changeTrashPage, 
+        toggleTheme // EXPORTAMOS EL TOGGLE THEME PARA QUE EL HTML LO PUEDA USAR
     };
 });
 
-// Registrar Service Worker
 if ('serviceWorker' in navigator) { 
     window.addEventListener('load', function () { 
         navigator.serviceWorker.register('sw.js').then(function (registration) { 
