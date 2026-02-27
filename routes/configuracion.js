@@ -4,34 +4,32 @@ const Configuracion = require('../models/Configuracion');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 
-// Configuración de Multer (Memoria) para subir imágenes
+// Configuración de Multer
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage,
-    limits: { fileSize: 2 * 1024 * 1024 } // Límite de 2MB
+    limits: { fileSize: 2 * 1024 * 1024 } // 2MB
 });
 
-// Ruta pública (sin auth) para obtener el logo en el Login
+// Ruta pública: obtener logo Y FAVICON
 router.get('/public/logo', async (req, res) => {
     try {
         const config = await Configuracion.findOne({ singletonId: 'main_config' });
-        res.json({ logoBase64: config ? config.logoBase64 : null });
-    } catch (err) { res.status(500).json({ error: 'Error al obtener el logo' }); }
+        res.json({ 
+            logoBase64: config ? config.logoBase64 : null,
+            faviconBase64: config ? config.faviconBase64 : null // <--- NUEVO
+        });
+    } catch (err) { res.status(500).json({ error: 'Error al obtener assets' }); }
 });
 
-// --- A PARTIR DE AQUÍ REQUIERE LOGIN ---
+// --- REQUERE LOGIN ---
 router.use(auth);
 
-// Middleware para verificar si es Admin
 const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
-        next();
-    } else {
-        return res.status(403).json({ error: 'Acceso denegado.' });
-    }
+    if (req.user && req.user.role === 'admin') next();
+    else return res.status(403).json({ error: 'Acceso denegado.' });
 };
 
-// Obtener la configuración completa
 router.get('/', async (req, res) => {
     try {
         let config = await Configuracion.findOne({ singletonId: 'main_config' });
@@ -40,68 +38,72 @@ router.get('/', async (req, res) => {
             await config.save();
         }
         res.json(config);
-    } catch (err) { res.status(500).json({ error: 'Error al obtener la configuración.' }); }
+    } catch (err) { res.status(500).json({ error: 'Error config' }); }
 });
 
-// Guardar Datos Bancarios
 router.put('/datos-bancarios', isAdmin, async (req, res) => {
     try {
-        const { datosBancarios } = req.body;
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' },
-            { $set: { datosBancarios: datosBancarios } },
+            { $set: { datosBancarios: req.body.datosBancarios } },
             { new: true, upsert: true }
         );
         res.json(config);
-    } catch (err) { res.status(500).json({ error: 'Error al guardar datos bancarios.' }); }
+    } catch (err) { res.status(500).json({ error: 'Error guardar banco' }); }
 });
 
-// --- NUEVO: GUARDAR HORARIOS LABORALES ---
 router.put('/horarios', isAdmin, async (req, res) => {
     try {
-        const { horarioLaboral } = req.body;
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' },
-            { $set: { horarioLaboral: horarioLaboral } },
+            { $set: { horarioLaboral: req.body.horarioLaboral } },
             { new: true, upsert: true }
         );
         res.json(config);
-    } catch (err) { 
-        console.error(err);
-        res.status(500).json({ error: 'Error al guardar horarios.' }); 
-    }
+    } catch (err) { res.status(500).json({ error: 'Error guardar horarios' }); }
 });
 
-// Subida de Firma
 router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
+    if (!req.file) return res.status(400).json({ error: 'No archivo' });
     try {
         const b64 = Buffer.from(req.file.buffer).toString('base64');
         const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' }, 
             { $set: { firmaBase64: dataURI } },
             { new: true, upsert: true }
         );
-        res.json({ message: 'Firma guardada.', firmaBase64: config.firmaBase64 });
-    } catch (err) { res.status(500).json({ error: 'Error al guardar firma.' }); }
+        res.json({ message: 'Firma guardada', firmaBase64: config.firmaBase64 });
+    } catch (err) { res.status(500).json({ error: 'Error subida' }); }
 });
 
-// Subida de Logo
 router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No se subió archivo.' });
+    if (!req.file) return res.status(400).json({ error: 'No archivo' });
     try {
         const b64 = Buffer.from(req.file.buffer).toString('base64');
         const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
         const config = await Configuracion.findOneAndUpdate(
             { singletonId: 'main_config' }, 
             { $set: { logoBase64: dataURI } },
             { new: true, upsert: true }
         );
-        res.json({ message: 'Logo guardado.', logoBase64: config.logoBase64 });
-    } catch (err) { res.status(500).json({ error: 'Error al guardar logo.' }); }
+        res.json({ message: 'Logo guardado', logoBase64: config.logoBase64 });
+    } catch (err) { res.status(500).json({ error: 'Error subida' }); }
+});
+
+// --- NUEVO: SUBIR FAVICON ---
+router.post('/upload-favicon', [isAdmin, upload.single('faviconFile')], async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No archivo' });
+    try {
+        const b64 = Buffer.from(req.file.buffer).toString('base64');
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+        const config = await Configuracion.findOneAndUpdate(
+            { singletonId: 'main_config' }, 
+            { $set: { faviconBase64: dataURI } },
+            { new: true, upsert: true }
+        );
+        res.json({ message: 'Favicon guardado', faviconBase64: config.faviconBase64 });
+    } catch (err) { res.status(500).json({ error: 'Error subida favicon' }); }
 });
 
 module.exports = router;

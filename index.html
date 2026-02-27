@@ -9,11 +9,16 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
+  <!-- FAVICON DINÁMICO -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
   <script>
       (function() {
+          const savedFavicon = localStorage.getItem('cached_favicon_path');
           const savedLogo = localStorage.getItem('cached_logo_path');
-          if(savedLogo) {
+          // Prioridad al favicon guardado, si no, usa el logo, si no, el default
+          if(savedFavicon) {
+              document.getElementById('dynamic-favicon').href = savedFavicon;
+          } else if (savedLogo) {
               document.getElementById('dynamic-favicon').href = savedLogo;
           }
       })();
@@ -241,6 +246,9 @@
                     <thead><tr><th>Artista</th><th>Total</th><th>Fecha</th><th>Acciones</th></tr></thead>
                     <tbody id="tablaCotizacionesBody"></tbody>
                   </table>
+                  
+                  <!-- PAGINACIÓN COTIZACIONES -->
+                  <div id="cotizacionesControls" class="d-flex justify-content-between align-items-center mt-3 pagination-controls-mini"></div>
                 </div>
               </div>
             </section>
@@ -275,6 +283,8 @@
                                 <thead><tr><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
                                 <tbody id="tablaPendientesBody"></tbody>
                             </table>
+                            <!-- PAGINACIÓN PAGOS PENDIENTES -->
+                            <div id="pagosPendientesControls" class="d-flex justify-content-between align-items-center mt-3 pagination-controls-mini"></div>
                         </div>
                     </div>
 
@@ -285,6 +295,8 @@
                                 <thead><tr><th>Fecha</th><th>Proyecto/Artista</th><th>Monto</th><th>Método</th><th>Acciones</th></tr></thead>
                                 <tbody id="tablaPagosBody"></tbody>
                             </table>
+                            <!-- PAGINACIÓN PAGOS HISTORIAL -->
+                            <div id="pagosHistorialControls" class="d-flex justify-content-between align-items-center mt-3 pagination-controls-mini"></div>
                         </div>
                     </div>
                 </div>
@@ -397,7 +409,6 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-hover">
-                                <!-- CAMBIO AQUÍ: Nuevas columnas Proyecto y Estado -->
                                 <thead>
                                     <tr>
                                         <th>Fecha</th>
@@ -411,6 +422,9 @@
                                 </thead>
                                 <tbody id="tablaHistorialBody"></tbody>
                             </table>
+                            
+                            <!-- PAGINACIÓN HISTORIAL -->
+                            <div id="historialControls" class="d-flex justify-content-between align-items-center mt-3 pagination-controls-mini"></div>
                         </div>
                     </div>
                 </div>
@@ -531,25 +545,33 @@
                     <h2>Configuración General</h2>
                 </div>
                 <div class="card-body">
-                    <h5>Firma Digital y Logo</h5>
+                    <h5>Logotipo y Firma</h5>
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
-                        <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
-                        <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-secondary">Subir Logo</button>
                         
+                        <!-- BOTONES DE CARGA CON FAVICON -->
+                        <div class="btn-group-vertical">
+                            <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-primary mb-1">Subir Logo Principal</button>
+                            <button onclick="document.getElementById('favicon-input').click()" class="btn btn-sm btn-outline-info mb-1">Subir Icono (Favicon)</button>
+                            <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
+                        </div>
+
+                        <!-- INPUTS OCULTOS -->
                         <input type="file" id="firma-input" hidden accept="image/*">
                         <input type="file" id="logo-input" hidden accept="image/*">
+                        <input type="file" id="favicon-input" hidden accept="image/*"> <!-- NUEVO INPUT -->
                     </div>
                     <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
                 </div>
               </div>
 
+              <!-- CARD DE HORARIOS -->
               <div class="card">
                 <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
                     <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
                 </div>
                 <div class="card-body">
-                    <p class="small text-muted">Marca los días que trabajas y define la hora de apertura y cierre. Los clientes solo verán estos horarios disponibles.</p>
+                    <p class="small text-muted">Marca los días que trabajas y define la hora de apertura y cierre.</p>
                     <form id="form-horarios" onsubmit="app.guardarHorariosConfig(event)">
                         <div class="table-responsive">
                             <table class="table align-middle">
@@ -561,8 +583,7 @@
                                         <th>Cierre</th>
                                     </tr>
                                 </thead>
-                                <tbody id="tabla-horarios-body">
-                                </tbody>
+                                <tbody id="tabla-horarios-body"></tbody>
                             </table>
                         </div>
                         <div class="text-end">
@@ -574,7 +595,7 @@
             </section>
         </main>
         
-        <!-- FOOTER EN EL PANEL PRINCIPAL -->
+        <!-- FOOTER EN PANEL PRINCIPAL -->
         <footer class="main-footer text-center py-3 mt-auto">
             <small class="text-muted">
                 &copy; <span class="footer-year-span"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
@@ -584,7 +605,7 @@
     </div>
   </div>
 
-  <!-- MODALES (Se mantienen igual) -->
+  <!-- MODALES SE MANTIENEN IGUAL -->
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
