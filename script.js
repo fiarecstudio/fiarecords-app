@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: { page: 1, limit: 10, filter: '' }
     };
 
-    // --- ESTADO DE PAGINACIÓN PARA PAPELERA ---
+    // ESTADO DE PAGINACIÓN PARA PAPELERA
     const trashPagination = {
         proyectos: { page: 1, limit: 10 },
         artistas: { page: 1, limit: 10 },
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         historial:[],
         pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
         usuarios: [],
-        trash: { proyectos: [], artistas: [], servicios:[], usuarios:[] } 
+        trash: { proyectos: [], artistas:[], servicios:[], usuarios:[] } 
     };
 
     let currentCalendar = null;
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UTILIDADES
     // ==================================================================
     
-    // --- FUNCIÓN PARA AÑO DINÁMICO EN TODOS LOS FOOTERS ---
+    // FUNCIÓN PARA AÑO DINÁMICO EN TODOS LOS FOOTERS
     function setupFooterYear() {
         const currentYear = new Date().getFullYear();
         document.querySelectorAll('.footer-year-span').forEach(el => {
@@ -82,12 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- FUNCIÓN UNIFICADA PARA MODO OSCURO ---
+    // FUNCIÓN UNIFICADA PARA MODO OSCURO
     function toggleTheme(isDark) {
         document.body.classList.toggle('dark-mode', isDark);
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
         
-        // Sincroniza todos los interruptores (Login y App) para que muestren el mismo estado
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             chk.checked = isDark;
         });
@@ -228,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==================================================================
-    // 4. FETCH API
+    // 4. FETCH API (MODIFICADO PARA ARREGLAR CACHÉ DE ARTISTAS)
     // ==================================================================
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
@@ -243,11 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // MODO OFFLINE (Comparaciones exactas para evitar bugs)
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
-                if (url.includes('/artistas')) return localCache.artistas;
-                if (url.includes('/servicios')) return localCache.servicios;
-                if (url.includes('/usuarios')) return localCache.usuarios;
+                if (url === '/api/artistas') return localCache.artistas;
+                if (url === '/api/servicios') return localCache.servicios;
+                if (url === '/api/usuarios') return localCache.usuarios;
                 if (url.includes('/proyectos')) {
                     if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
                     if (url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
@@ -255,8 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
-                if (url.includes('/pagos')) return localCache.pagos;
-                if (url.includes('/dashboard/stats')) return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
+                if (url === '/api/pagos/todos') return localCache.pagos;
+                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome:[] };
             }
         }
 
@@ -280,12 +280,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
+            // --- CORRECCIÓN DE CACHÉ ---
+            // Solo guarda en la caché global SI la URL es exactamente la de la lista completa
             if (!options.method || options.method === 'GET') {
-                if (url.includes('/artistas')) { localCache.artistas = Array.isArray(data) ? data :[]; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
-                if (url.includes('/servicios')) { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
-                if (url.includes('/usuarios')) { localCache.usuarios = data; }
-                if (url.includes('/proyectos') && !url.includes('agenda')) { if (Array.isArray(data) && url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); } }
-                if (url.includes('/pagos/todos')) { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
+                if (url === '/api/artistas') { 
+                    localCache.artistas = Array.isArray(data) ? data :[]; 
+                    localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
+                }
+                if (url === '/api/servicios') { 
+                    localCache.servicios = data; 
+                    localStorage.setItem('cache_servicios', JSON.stringify(data)); 
+                }
+                if (url === '/api/usuarios') { 
+                    localCache.usuarios = data; 
+                }
+                if (url === '/api/proyectos') { 
+                    localCache.proyectos = data; 
+                    localStorage.setItem('cache_proyectos', JSON.stringify(data)); 
+                }
+                if (url === '/api/pagos/todos') { 
+                    localCache.pagos = data; 
+                    localStorage.setItem('cache_pagos', JSON.stringify(data)); 
+                }
             }
             return data;
         } catch (e) { throw e; } finally { hideLoader(); }
@@ -1067,8 +1083,80 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTrashList(endpoint);
     }
     
-    // Listas normales de paginación
-    async function renderPaginatedList(endpoint, filterText = null) { const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; const listEl = document.getElementById(listId); if(!listEl) return; const userInfo = getUserRoleAndId(); const isClient = (userInfo.role === 'cliente'); let data = localCache[endpoint]; if (!data || data.length === 0) { try { data = await fetchAPI(`/api/${endpoint}`); localCache[endpoint] = data; } catch(e) { console.error("Error fetching " + endpoint); data =[]; } } if (filterText !== null) { paginationState[endpoint].filter = filterText.toLowerCase(); paginationState[endpoint].page = 1; } const currentFilter = paginationState[endpoint].filter; let filteredData = data; if (currentFilter) { filteredData = data.filter(item => { const name = item.nombre || item.username || item.nombreArtistico || ''; return name.toLowerCase().includes(currentFilter); }); } const page = paginationState[endpoint].page; const limit = paginationState[endpoint].limit; const start = (page - 1) * limit; const end = start + limit; const paginatedItems = filteredData.slice(start, end); const totalPages = Math.ceil(filteredData.length / limit); listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { let displayName, editAction; if (endpoint === 'artistas') { displayName = `${item.nombreArtistico || item.nombre}`; editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; } else if (endpoint === 'usuarios') { displayName = `${item.username} (${item.role})`; editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; } else { const vis = item.visible !== false; displayName = `${item.nombre} - $${item.precio.toFixed(2)} ${vis ? '' : '<span class="badge bg-warning text-dark ms-2">Oculto</span>'}`; editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; } const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : ''; const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`; let buttonsHtml = ''; if (!isClient) { buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; } return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; }).join('') : `<li class="list-group-item">No hay resultados.</li>`; renderPaginationControls(listEl, endpoint, page, totalPages); }
+    // ==================================================================
+    // LISTAS NORMALES CON CACHÉ CORREGIDA
+    // ==================================================================
+    async function renderPaginatedList(endpoint, filterText = null) { 
+        const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
+        const listEl = document.getElementById(listId); 
+        if(!listEl) return; 
+        
+        const userInfo = getUserRoleAndId(); 
+        const isClient = (userInfo.role === 'cliente'); 
+        
+        // --- SOLUCIÓN ERROR DE CARGA DE ARTISTAS ---
+        // Si hay internet y no estamos escribiendo en el buscador, forzamos a traer la lista fresca SIEMPRE.
+        if (navigator.onLine && filterText === null) {
+            try { 
+                localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
+            } catch(e) { console.error("Error fetching " + endpoint); }
+        } else if (!localCache[endpoint] || localCache[endpoint].length === 0) {
+            // Fallback por si la caché local está vacía
+            try { localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); } catch(e) {}
+        }
+        
+        let data = localCache[endpoint] ||[];
+        
+        if (filterText !== null) { 
+            paginationState[endpoint].filter = filterText.toLowerCase(); 
+            paginationState[endpoint].page = 1; 
+        } 
+        
+        const currentFilter = paginationState[endpoint].filter; 
+        let filteredData = data; 
+        
+        if (currentFilter) { 
+            filteredData = data.filter(item => { 
+                const name = item.nombre || item.username || item.nombreArtistico || ''; 
+                return name.toLowerCase().includes(currentFilter); 
+            }); 
+        } 
+        
+        const page = paginationState[endpoint].page; 
+        const limit = paginationState[endpoint].limit; 
+        const start = (page - 1) * limit; 
+        const end = start + limit; 
+        const paginatedItems = filteredData.slice(start, end); 
+        const totalPages = Math.ceil(filteredData.length / limit); 
+        
+        listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { 
+            let displayName, editAction; 
+            if (endpoint === 'artistas') { 
+                displayName = `${item.nombreArtistico || item.nombre}`; 
+                editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; 
+            } else if (endpoint === 'usuarios') { 
+                displayName = `${item.username} (${item.role})`; 
+                editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; 
+            } else { 
+                const vis = item.visible !== false; 
+                displayName = `${item.nombre} - $${item.precio.toFixed(2)} ${vis ? '' : '<span class="badge bg-warning text-dark ms-2">Oculto</span>'}`; 
+                editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; 
+            } 
+            
+            const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : ''; 
+            const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`; 
+            let buttonsHtml = ''; 
+            
+            if (!isClient) { 
+                buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
+            } 
+            
+            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; 
+        }).join('') : `<li class="list-group-item">No hay resultados.</li>`; 
+        
+        renderPaginationControls(listEl, endpoint, page, totalPages); 
+    }
+    
     function renderPaginationControls(container, endpoint, currentPage, totalPages) { let controls = container.parentNode.querySelector('.pagination-controls'); if(controls) controls.remove(); if (totalPages <= 1) return; controls = document.createElement('div'); controls.className = 'pagination-controls'; controls.innerHTML = `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="app.changePage('${endpoint}', -1)">Anterior</button><span class="pagination-info">Página ${currentPage} de ${totalPages}</span><button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage('${endpoint}', 1)">Siguiente</button>`; container.parentNode.appendChild(controls); }
     function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null); }
     function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
@@ -1128,9 +1216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function initAppEventListeners(payload) { 
-        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
-        // Eliminado el listener individual de #theme-switch ya que usamos la clase inline en el HTML
-        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
+        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario); 
@@ -1210,14 +1296,12 @@ document.addEventListener('DOMContentLoaded', () => {
             logoBase64 = cachedLogo;
         }
 
-        // Carga inicial del año en todos los footers
         setupFooterYear();
 
         await fetchPublicLogo();
         await loadInitialConfig();
         setTimeout(preloadLogoForPDF, 2000);
         
-        // Carga y sincroniza el tema oscuro guardado
         const savedTheme = localStorage.getItem('theme') === 'dark';
         toggleTheme(savedTheme);
         
@@ -1255,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', () => {
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, 
-        toggleTheme // EXPORTAMOS EL TOGGLE THEME PARA QUE EL HTML LO PUEDA USAR
+        toggleTheme 
     };
 });
 
