@@ -37,7 +37,7 @@
   <!-- CONTENEDOR LOGIN -->
   <div id="login-container">
     
-    <!-- NUEVO: INTERRUPTOR MODO OSCURO EN LOGIN -->
+    <!-- INTERRUPTOR MODO OSCURO EN LOGIN -->
     <div class="theme-toggle-login">
       <span class="small me-2"><i class="bi bi-moon"></i> Modo Oscuro</span>
       <label class="theme-switch">
@@ -118,7 +118,7 @@
         <p id="login-error" class="text-danger text-center mt-3 small"></p>
     </div>
     
-    <!-- NUEVO: FOOTER EN LOGIN -->
+    <!-- FOOTER EN LOGIN -->
     <footer class="login-footer text-center">
         <small class="text-muted">
             &copy; <span class="footer-year-span"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
@@ -145,7 +145,6 @@
         <div class="theme-toggle-container mb-3 px-2">
           <span class="small"><i class="bi bi-moon"></i> Modo Oscuro</span>
           <label class="theme-switch">
-            <!-- MODIFICADO: AHORA USA LA CLASE Y LLAMA A app.toggleTheme -->
             <input type="checkbox" class="theme-switch-checkbox" onchange="app.toggleTheme(this.checked)"/>
             <span class="slider"></span>
           </label>
@@ -398,7 +397,18 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-hover">
-                                <thead><tr><th>Artista</th><th>Total</th><th>Pagado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                                <!-- CAMBIO AQUÍ: Nuevas columnas Proyecto y Estado -->
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Artista</th>
+                                        <th>Proyecto</th>
+                                        <th>Total</th>
+                                        <th>Pagado</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
                                 <tbody id="tablaHistorialBody"></tbody>
                             </table>
                         </div>
@@ -525,8 +535,6 @@
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
                         <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
-                        
-                        <!-- INPUT DE LOGO OCULTO -->
                         <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-secondary">Subir Logo</button>
                         
                         <input type="file" id="firma-input" hidden accept="image/*">
@@ -536,7 +544,6 @@
                 </div>
               </div>
 
-              <!-- CARD DE HORARIOS -->
               <div class="card">
                 <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
                     <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
@@ -555,7 +562,6 @@
                                     </tr>
                                 </thead>
                                 <tbody id="tabla-horarios-body">
-                                    <!-- Se llena con JS -->
                                 </tbody>
                             </table>
                         </div>
@@ -568,7 +574,7 @@
             </section>
         </main>
         
-        <!-- FOOTER EN EL PANEL PRINCIPAL (AÑO DINÁMICO POR CLASE) -->
+        <!-- FOOTER EN EL PANEL PRINCIPAL -->
         <footer class="main-footer text-center py-3 mt-auto">
             <small class="text-muted">
                 &copy; <span class="footer-year-span"></span> Developed with <i class="bi bi-heart-fill text-danger"></i> by DAGX RESENDIZ
@@ -578,7 +584,7 @@
     </div>
   </div>
 
-  <!-- MODALES -->
+  <!-- MODALES (Se mantienen igual) -->
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">

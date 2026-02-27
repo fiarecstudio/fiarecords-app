@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
     
-    const DIAS_SEMANA =['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    let horariosOcupadosDelDia =[]; 
+    const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    let horariosOcupadosDelDia = []; 
 
     let isInitialized = false;
     let proyectoActual = {};
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const GAP_CONFIG = {
         apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
         clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
-        discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
         scope: 'https://www.googleapis.com/auth/drive'
     };
 
@@ -38,20 +38,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Caché Local
     let localCache = {
-        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') ||[]),
+        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
         servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
         proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
         cotizaciones: [],
-        historial:[],
+        historial: [],
         pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
         usuarios: [],
-        trash: { proyectos: [], artistas:[], servicios:[], usuarios:[] } 
+        trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] } 
     };
 
     let currentCalendar = null;
     let configCache = null;
     let chartInstance = null;
-    let historialCacheados =[]; 
+    let historialCacheados = []; 
 
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
@@ -74,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UTILIDADES
     // ==================================================================
     
-    // FUNCIÓN PARA AÑO DINÁMICO EN TODOS LOS FOOTERS
     function setupFooterYear() {
         const currentYear = new Date().getFullYear();
         document.querySelectorAll('.footer-year-span').forEach(el => {
@@ -82,11 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // FUNCIÓN UNIFICADA PARA MODO OSCURO
     function toggleTheme(isDark) {
         document.body.classList.toggle('dark-mode', isDark);
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             chk.checked = isDark;
         });
@@ -205,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (queue.length === 0) return;
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-            let newQueue =[];
+            let newQueue = [];
             for (const req of queue) {
                 try {
                     let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
@@ -227,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==================================================================
-    // 4. FETCH API (MODIFICADO PARA ARREGLAR CACHÉ DE ARTISTAS)
+    // 4. FETCH API
     // ==================================================================
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
@@ -242,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // MODO OFFLINE (Comparaciones exactas para evitar bugs)
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -250,17 +246,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (url === '/api/usuarios') return localCache.usuarios;
                 if (url.includes('/proyectos')) {
                     if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
-                    if (url.includes('completos')) return localCache.proyectos.filter(p => p.proceso === 'Completo' && p.estatus !== 'Cancelado' && !p.deleted);
+                    if (url.includes('completos')) return localCache.proyectos.filter(p => (p.proceso === 'Completo' || p.estatus === 'Cancelado') && !p.deleted);
                     if (url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i => i.nombre).join('\n') } }));
                     if (url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
                 if (url === '/api/pagos/todos') return localCache.pagos;
-                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome:[] };
+                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
             }
         }
 
-        if (options.method &&['POST', 'PUT', 'DELETE'].includes(options.method)) {
+        if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
                 OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
@@ -280,11 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // --- CORRECCIÓN DE CACHÉ ---
-            // Solo guarda en la caché global SI la URL es exactamente la de la lista completa
             if (!options.method || options.method === 'GET') {
                 if (url === '/api/artistas') { 
-                    localCache.artistas = Array.isArray(data) ? data :[]; 
+                    localCache.artistas = Array.isArray(data) ? data : []; 
                     localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
                 }
                 if (url === '/api/servicios') { 
@@ -371,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const files = response.result.files;
             if (files && files.length > 0) { return files[0].id; } 
             else {
-                const fileMetadata = { 'name': nombreLimpio, 'mimeType': 'application/vnd.google-apps.folder', 'parents':[idCarpetaArtista] };
+                const fileMetadata = { 'name': nombreLimpio, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [idCarpetaArtista] };
                 const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
                 return createRes.result.id;
             }
@@ -428,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
-                    const metadata = { 'name': file.name, 'parents':[idProyecto] };
+                    const metadata = { 'name': file.name, 'parents': [idProyecto] };
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', file);
@@ -561,11 +555,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const ctx = document.getElementById('incomeChart').getContext('2d'); 
                 if (chartInstance) chartInstance.destroy(); 
-                const labels =['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; 
+                const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; 
                 const dataValues = stats.monthlyIncome || Array(12).fill(0); 
                 chartInstance = new Chart(ctx, { 
                     type: 'line', 
-                    data: { labels: labels, datasets:[{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, 
+                    data: { labels: labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, 
                     options: { responsive: true, maintainAspectRatio: false } 
                 });
             }
@@ -739,8 +733,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     async function aprobarCotizacion(id) { Swal.fire({ title: '¿Aprobar?', text: "Se agendará.", icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, aprobar', cancelButtonText: 'Cancelar' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } } }); }
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${safeMoney(proyecto.total)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
-    const procesos =['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
-    async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if (!filtros.innerHTML) { const botonesFiltro =['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')]; filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join(''); try { await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error cargando flujo:", e); } }
+    const procesos = ['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
+    async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if (!filtros.innerHTML) { const botonesFiltro = ['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')]; filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join(''); try { await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error cargando flujo:", e); } }
     function filtrarFlujo(filtro) { 
         document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active', 'btn-primary')); 
         const activeBtn = Array.from(document.querySelectorAll('#filtrosFlujo button')).find(b => b.textContent === filtro); 
@@ -760,20 +754,55 @@ document.addEventListener('DOMContentLoaded', () => {
         } 
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    
+    // ==============================================================
+    // CARGAR HISTORIAL CON PROYECTOS COMPLETOS Y CANCELADOS - FIX 
+    // ==============================================================
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
-        tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial...</td></tr>`; 
+        tablaBody.innerHTML = `<tr><td colspan="7">Cargando historial...</td></tr>`; 
         try { 
+            // Ahora trae Completos Y Cancelados
             historialCacheados = await fetchAPI('/api/proyectos/completos'); 
-            tablaBody.innerHTML = historialCacheados.length ? historialCacheados.map(p => { 
+            
+            if (historialCacheados.length === 0) {
+                tablaBody.innerHTML = `<tr><td colspan="7" class="text-center">No hay proyectos.</td></tr>`; 
+                return;
+            }
+
+            tablaBody.innerHTML = historialCacheados.map(p => { 
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
-                return `<tr><td data-label="Artista" class="${p.artista ? 'clickable-artist' : ''}" ondblclick="app.irAVistaArtista('${p.artista ? p.artista._id : ''}', '${escapeHTML(artistaNombre)}', '')">${escapeHTML(artistaNombre)}</td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Acciones" class="table-actions"><button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button><button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button><button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Borrar"><i class="bi bi-trash"></i></button></td></tr>`; 
-            }).join('') : `<tr><td colspan="5" class="text-center">No hay proyectos.</td></tr>`; 
+                const esCancelado = p.estatus === 'Cancelado';
+                
+                // Badge de estado
+                const estadoBadge = esCancelado 
+                    ? `<span class="badge bg-secondary">Cancelado</span>` 
+                    : `<span class="badge bg-success">Completado</span>`;
+
+                // Fila con fondo ligeramente rojo si está cancelado (opcional, para resaltar)
+                const rowClass = esCancelado ? 'table-secondary' : '';
+
+                return `
+                <tr class="${rowClass}">
+                    <td data-label="Fecha">${safeDate(p.fecha)}</td>
+                    <td data-label="Artista" class="${p.artista ? 'clickable-artist' : ''}" ondblclick="app.irAVistaArtista('${p.artista ? p.artista._id : ''}', '${escapeHTML(artistaNombre)}', '')">${escapeHTML(artistaNombre)}</td>
+                    <td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td>
+                    <td data-label="Total">$${safeMoney(p.total)}</td>
+                    <td data-label="Pagado">$${safeMoney(p.montoPagado)}</td>
+                    <td data-label="Estado">${estadoBadge}</td>
+                    <td data-label="Acciones" class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
+                        <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`; 
+            }).join(''); 
         } catch (error) { 
             console.error(error);
-            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar historial.</td></tr>`; 
+            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error al cargar historial.</td></tr>`; 
         } 
     }
+
     async function eliminarProyecto(id, desdeCotizaciones = false) { Swal.fire({ title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
     
     // Función para manejar navegación y botón "VOLVER"
@@ -1084,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==================================================================
-    // LISTAS NORMALES CON CACHÉ CORREGIDA
+    // LISTAS NORMALES (ARTISTAS, SERVICIOS) - CON BOTÓN DE OJITO
     // ==================================================================
     async function renderPaginatedList(endpoint, filterText = null) { 
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
@@ -1094,14 +1123,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const userInfo = getUserRoleAndId(); 
         const isClient = (userInfo.role === 'cliente'); 
         
-        // --- SOLUCIÓN ERROR DE CARGA DE ARTISTAS ---
-        // Si hay internet y no estamos escribiendo en el buscador, forzamos a traer la lista fresca SIEMPRE.
+        // CACHÉ FIX: Si es Artistas o Servicios, recarga fresco si no estamos filtrando
         if (navigator.onLine && filterText === null) {
             try { 
                 localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
             } catch(e) { console.error("Error fetching " + endpoint); }
         } else if (!localCache[endpoint] || localCache[endpoint].length === 0) {
-            // Fallback por si la caché local está vacía
             try { localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); } catch(e) {}
         }
         
@@ -1131,9 +1158,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { 
             let displayName, editAction; 
+            let viewButton = ''; // Botón extra para "Ver"
+
             if (endpoint === 'artistas') { 
                 displayName = `${item.nombreArtistico || item.nombre}`; 
-                editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`; 
+                editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`;
+                // BOTÓN DE OJITO PARA ARTISTAS
+                viewButton = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')" title="Ver Perfil"><i class="bi bi-eye"></i></button>`;
             } else if (endpoint === 'usuarios') { 
                 displayName = `${item.username} (${item.role})`; 
                 editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; 
@@ -1148,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let buttonsHtml = ''; 
             
             if (!isClient) { 
-                buttonsHtml = `<div class="btn-group"><button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
+                buttonsHtml = `<div class="btn-group">${viewButton}<button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
             } 
             
             return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; 
@@ -1216,7 +1247,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function initAppEventListeners(payload) { 
-        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); });['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
+        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
+        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario); 
