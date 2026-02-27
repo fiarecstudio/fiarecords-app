@@ -756,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
-    // CARGAR HISTORIAL CON PROYECTOS COMPLETOS Y CANCELADOS - FIX 
+    // CARGAR HISTORIAL CON PROYECTOS COMPLETOS Y CANCELADOS (FIXED CLASS)
     // ==============================================================
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
@@ -779,8 +779,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `<span class="badge bg-secondary">Cancelado</span>` 
                     : `<span class="badge bg-success">Completado</span>`;
 
-                // Fila con fondo ligeramente rojo si está cancelado (opcional, para resaltar)
-                const rowClass = esCancelado ? 'table-secondary' : '';
+                // CLASE PERSONALIZADA PARA LA FILA CANCELADA (USADA EN CSS)
+                const rowClass = esCancelado ? 'fila-cancelada' : '';
 
                 return `
                 <tr class="${rowClass}">
@@ -1113,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==================================================================
-    // LISTAS NORMALES (ARTISTAS, SERVICIOS) - CON BOTÓN DE OJITO
+    // LISTAS NORMALES (ARTISTAS, SERVICIOS) - CON BOTÓN DE OJITO Y CACHÉ FIX
     // ==================================================================
     async function renderPaginatedList(endpoint, filterText = null) { 
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
