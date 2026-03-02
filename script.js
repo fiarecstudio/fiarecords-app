@@ -715,16 +715,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
     function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let subtotal = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; const total = subtotal - descuento; document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
 
+    // ==================================================================
+    // FUNCIÓN GUARDAR PROYECTO ACTUALIZADA
+    // ==================================================================
     async function guardarProyecto(procesoDestino) {
-        const artistaSelect = document.getElementById('proyectoArtista'); const artistaId = artistaSelect.value; 
+        const artistaSelect = document.getElementById('proyectoArtista'); 
+        const artistaId = artistaSelect.value; 
         const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; 
         const horaInput = document.getElementById('horaProyecto').value; 
 
-        if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
-        if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
+        let fechaFinal = new Date(); // Fecha por defecto para cotizaciones rápidas
 
-        let fechaFinal = new Date(fechaInput); 
-        if (horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); }
+        // Si NO es una Cotización, exigimos fecha y hora
+        if (procesoDestino !== 'Cotizacion') {
+            if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
+            if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
+            
+            fechaFinal = new Date(fechaInput); 
+            const [hours, minutes] = horaInput.split(':'); 
+            fechaFinal.setHours(hours);
+            fechaFinal.setMinutes(minutes);
+        } else {
+            // Si es cotización, la fecha/hora son opcionales
+            if (fechaInput) {
+                fechaFinal = new Date(fechaInput);
+                if (horaInput) {
+                    const [hours, minutes] = horaInput.split(':');
+                    fechaFinal.setHours(hours);
+                    fechaFinal.setMinutes(minutes);
+                }
+            }
+        }
         
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
         
@@ -733,8 +754,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
         const total = Math.max(0, subtotal - descuento);
         
-        const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoDestino, esAlbum: document.getElementById('esAlbum').checked };
-        try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error al guardar: ${error.message}`, 'error'); return null; }
+        // CORRECCIÓN DEL ERROR DE LA IMAGEN
+        // Si el destino es 'Cotizacion', el proceso en base de datos DEBE ser 'Solicitud'.
+        const procesoBD = procesoDestino === 'Cotizacion' ? 'Solicitud' : procesoDestino;
+
+        const body = { 
+            artista: artistaId === 'publico_general' ? null : artistaId, 
+            nombreProyecto: document.getElementById('nombreProyecto').value, 
+            items: items, 
+            total: total, 
+            descuento: descuento, 
+            estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', 
+            metodoPago: 'Pendiente', 
+            fecha: fechaFinal.toISOString(), 
+            prioridad: 'Normal', 
+            proceso: procesoBD, 
+            esAlbum: document.getElementById('esAlbum').checked 
+        };
+
+        try { 
+            return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); 
+        } catch (error) { 
+            showToast(`Error al guardar: ${error.message}`, 'error'); 
+            return null; 
+        }
     }
 
     async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); cargarOpcionesParaProyecto(); mostrarSeccion('cotizaciones'); } }
@@ -756,7 +799,57 @@ document.addEventListener('DOMContentLoaded', () => {
     async function actualizarHorarioProyecto() { const id = document.getElementById('modal-event-id').value; const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0]; const newTimeInput = document.getElementById('edit-event-time').value; if (!newDateInput) return showToast("Selecciona una nueva fecha", "error"); let finalDate = new Date(newDateInput); if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); } try { await cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Horario actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); cargarAgenda(); } catch (e) { showToast("Error al actualizar", "error"); } }
     async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); verificarDisponibilidad(); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
-    async function aprobarCotizacion(id) { Swal.fire({ title: '¿Aprobar?', text: "Se agendará.", icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, aprobar', cancelButtonText: 'Cancelar' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización aprobada!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } } }); }
+
+    // ==================================================================
+    // FUNCIÓN APROBAR COTIZACIÓN ACTUALIZADA
+    // ==================================================================
+    async function aprobarCotizacion(id) { 
+        Swal.fire({ 
+            title: 'Aprobar y Agendar', 
+            html: `
+                <p class="small text-muted mb-3">Selecciona el día y la hora para agendar este proyecto en el estudio:</p>
+                <input type="date" id="swal-fecha" class="form-control mb-2" min="${new Date().toISOString().split('T')[0]}">
+                <input type="time" id="swal-hora" class="form-control">
+            `, 
+            icon: 'calendar', 
+            showCancelButton: true, 
+            confirmButtonText: 'Sí, Agendar', 
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const fecha = document.getElementById('swal-fecha').value;
+                const hora = document.getElementById('swal-hora').value;
+                if (!fecha || !hora) {
+                    Swal.showValidationMessage('Debes seleccionar fecha y hora');
+                }
+                return { fecha, hora };
+            }
+        }).then(async (result) => { 
+            if(result.isConfirmed) { 
+                showLoader();
+                try { 
+                    const { fecha, hora } = result.value;
+                    let fechaFinal = new Date(fecha);
+                    const [h, m] = hora.split(':');
+                    fechaFinal.setHours(h);
+                    fechaFinal.setMinutes(m);
+                    fechaFinal.setSeconds(0);
+
+                    // Guardamos primero la fecha
+                    await fetchAPI(`/api/proyectos/${id}/fecha`, { method: 'PUT', body: JSON.stringify({ fecha: fechaFinal.toISOString() }) });
+                    // Cambiamos el proceso para que salte al tablero de flujo y calendario
+                    await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); 
+                    
+                    showToast('¡Cotización aprobada y agendada con éxito!', 'success'); 
+                    mostrarSeccion('flujo-trabajo'); 
+                } catch (error) { 
+                    showToast(`Error al aprobar: ${error.message}`, 'error'); 
+                } finally {
+                    hideLoader();
+                }
+            } 
+        }); 
+    }
+
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${safeMoney(proyecto.total)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
     const procesos =['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
     async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if (!filtros.innerHTML) { const botonesFiltro =['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')]; filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join(''); try { await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error cargando flujo:", e); } }
