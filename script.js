@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 5. GOOGLE DRIVE
+    // 5. GOOGLE DRIVE (CON DETECCIÓN DE AUDIO, VIDEO E IMAGEN)
     // ==================================================================
     window.initializeGapiClient = function() {
         gapi.load('client', async () => {
@@ -443,6 +443,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const folderLink = getFolderRes.result.webViewLink;
 
                 const accessToken = gapi.client.getToken().access_token;
+                
+                // Arreglo para guardar archivos multimedia
+                const uploadedFiles = [];
 
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
@@ -451,9 +454,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', file);
-                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+                    
+                    const resUpload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
                         method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form
                     });
+                    
+                    const fileData = await resUpload.json();
+                    
+                    // Identificar tipo de archivo
+                    const nombreLow = file.name.toLowerCase();
+                    let tipoArchivo = 'otro';
+                    if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
+                    else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
+                    else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
+
+                    // Solo guardamos si es multimedia
+                    if(tipoArchivo !== 'otro') {
+                        uploadedFiles.push({
+                            nombre: file.name,
+                            driveId: fileData.id,
+                            urlDirecta: `https://docs.google.com/uc?export=download&id=${fileData.id}`,
+                            tipo: tipoArchivo
+                        });
+                    }
                 }
 
                 if(linkInput) {
@@ -463,9 +486,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                await saveDeliveryLink(false, folderLink); 
+                await saveDeliveryLink(false, folderLink, uploadedFiles); 
                 
-                showToast(`¡${files.length} archivos subidos y enlace guardado!`, 'success');
+                showToast(`¡Archivos subidos y visor configurado!`, 'success');
 
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
@@ -523,27 +546,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
 
-    async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null) { 
+    async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null, archivosUpload = null) { 
         const projectId = document.getElementById('delivery-project-id').value; 
         const enlace = enlaceDirecto || document.getElementById('delivery-link-input').value; 
         
+        const payload = { enlace };
+        if (archivosUpload) {
+            payload.archivos = archivosUpload;
+        }
+
         try { 
             await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                 method: 'PUT', 
-                body: JSON.stringify({ enlace }) 
+                body: JSON.stringify(payload) 
             }); 
             
             const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
             if (indexCache !== -1) {
                 localCache.proyectos[indexCache].enlaceEntrega = enlace;
+                if(archivosUpload) localCache.proyectos[indexCache].archivos = archivosUpload;
             }
 
             const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
             if (indexHistorial !== -1) {
                 historialCacheados[indexHistorial].enlaceEntrega = enlace;
+                if(archivosUpload) historialCacheados[indexHistorial].archivos = archivosUpload;
             }
 
-            showToast('Enlace guardado permanentemente.', 'success'); 
+            showToast('Enlace y archivos guardados.', 'success'); 
             
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
@@ -558,6 +588,100 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cerrarModal) { closeDeliveryModal(); }
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
+
+    // ==========================================
+    // LOGICA DEL REPRODUCTOR / VISOR MULTIMEDIA
+    // ==========================================
+    function openPlayer(projectId) {
+        let proj = localCache.proyectos.find(p => p._id === projectId);
+        if(!proj) proj = historialCacheados.find(p => p._id === projectId);
+
+        if(!proj || !proj.archivos || proj.archivos.length === 0) {
+            return showToast('No hay archivos multimedia para este proyecto.', 'warning');
+        }
+
+        document.getElementById('player-project-name').textContent = proj.nombreProyecto || 'Proyecto';
+        const playlist = document.getElementById('playlist-container');
+        
+        playlist.innerHTML = proj.archivos.map(file => {
+            // Icono según el tipo
+            let icon = 'bi-file-earmark';
+            if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
+            if (file.tipo === 'video') icon = 'bi-film text-danger';
+            if (file.tipo === 'imagen') icon = 'bi-image text-success';
+
+            return `
+            <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
+                    style="background-color: transparent;" 
+                    onclick="app.playMedia('${file.urlDirecta}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
+                <i class="bi ${icon} me-3 fs-5"></i> 
+                <span class="text-truncate">${escapeHTML(file.nombre)}</span>
+            </button>`;
+        }).join('');
+
+        // Reproducir la primera pista automáticamente
+        const firstBtn = playlist.querySelector('.track-btn');
+        if(firstBtn) firstBtn.click();
+
+        new bootstrap.Modal(document.getElementById('player-modal')).show();
+    }
+
+    function playMedia(url, name, tipo, btnElement) {
+        document.getElementById('current-track-name').textContent = name;
+        const container = document.getElementById('media-container');
+        
+        // Limpiar contenedor
+        container.innerHTML = '';
+
+        if (tipo === 'audio') {
+            container.innerHTML = `
+                <div class="d-flex flex-column align-items-center w-100 p-3">
+                    <div style="width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #333 30%, #111 70%); border: 3px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.5); margin-bottom: 20px; animation: spin 4s linear infinite;">
+                        <div style="width: 20px; height: 20px; border-radius: 50%; background-color: var(--info-color, #0dcaf0);"></div>
+                    </div>
+                    <audio id="media-player" controls class="w-100" controlsList="nodownload" style="height: 40px; border-radius: 20px; outline: none;" src="${url}"></audio>
+                </div>
+            `;
+            const audio = document.getElementById('media-player');
+            audio.play().catch(e => console.log('Autoplay prevent', e));
+        } 
+        else if (tipo === 'video') {
+            container.innerHTML = `
+                <video id="media-player" controls class="w-100 h-100 object-fit-contain" controlsList="nodownload" src="${url}"></video>
+            `;
+            const video = document.getElementById('media-player');
+            video.play().catch(e => console.log('Autoplay prevent', e));
+        }
+        else if (tipo === 'imagen') {
+            container.innerHTML = `
+                <img src="${url}" alt="${name}" class="w-100 h-100 object-fit-contain" style="max-height: 400px;">
+            `;
+        }
+
+        // Actualizar UI del botón activo
+        document.querySelectorAll('.track-btn').forEach(b => {
+            b.classList.remove('active', 'bg-primary');
+            b.style.backgroundColor = 'transparent';
+        });
+        if(btnElement) {
+            btnElement.classList.add('active', 'bg-primary');
+            btnElement.style.backgroundColor = 'var(--primary-color)';
+        }
+    }
+
+    // Detener audio/video al cerrar el modal
+    document.addEventListener('DOMContentLoaded', () => {
+        const modalEl = document.getElementById('player-modal');
+        if(modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', () => {
+                const player = document.getElementById('media-player');
+                if(player && typeof player.pause === 'function') {
+                    player.pause();
+                }
+                document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>';
+            });
+        }
+    });
 
     // ==================================================================
     // 6. DASHBOARD SEGURO
@@ -715,18 +839,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
     function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let subtotal = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; const total = subtotal - descuento; document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
 
-    // ==================================================================
-    // FUNCIÓN GUARDAR PROYECTO ACTUALIZADA
-    // ==================================================================
     async function guardarProyecto(procesoDestino) {
         const artistaSelect = document.getElementById('proyectoArtista'); 
         const artistaId = artistaSelect.value; 
         const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; 
         const horaInput = document.getElementById('horaProyecto').value; 
 
-        let fechaFinal = new Date(); // Fecha por defecto para cotizaciones rápidas
+        let fechaFinal = new Date(); 
 
-        // Si NO es una Cotización, exigimos fecha y hora
         if (procesoDestino !== 'Cotizacion') {
             if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
             if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
@@ -736,7 +856,6 @@ document.addEventListener('DOMContentLoaded', () => {
             fechaFinal.setHours(hours);
             fechaFinal.setMinutes(minutes);
         } else {
-            // Si es cotización, la fecha/hora son opcionales
             if (fechaInput) {
                 fechaFinal = new Date(fechaInput);
                 if (horaInput) {
@@ -754,8 +873,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
         const total = Math.max(0, subtotal - descuento);
         
-        // CORRECCIÓN DEL ERROR DE LA IMAGEN
-        // Si el destino es 'Cotizacion', el proceso en base de datos DEBE ser 'Solicitud'.
         const procesoBD = procesoDestino === 'Cotizacion' ? 'Solicitud' : procesoDestino;
 
         const body = { 
@@ -800,9 +917,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); verificarDisponibilidad(); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
 
-    // ==================================================================
-    // FUNCIÓN APROBAR COTIZACIÓN ACTUALIZADA
-    // ==================================================================
     async function aprobarCotizacion(id) { 
         Swal.fire({ 
             title: 'Aprobar y Agendar', 
@@ -834,9 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fechaFinal.setMinutes(m);
                     fechaFinal.setSeconds(0);
 
-                    // Guardamos primero la fecha
                     await fetchAPI(`/api/proyectos/${id}/fecha`, { method: 'PUT', body: JSON.stringify({ fecha: fechaFinal.toISOString() }) });
-                    // Cambiamos el proceso para que salte al tablero de flujo y calendario
                     await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); 
                     
                     showToast('¡Cotización aprobada y agendada con éxito!', 'success'); 
@@ -874,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
-    // CARGAR HISTORIAL (CON PAGINACIÓN)
+    // CARGAR HISTORIAL (BOTÓN VISOR)
     // ==============================================================
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
@@ -906,11 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tablaBody.innerHTML = paginatedItems.map(p => { 
             const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
             const esCancelado = p.estatus === 'Cancelado';
-            
-            const estadoBadge = esCancelado 
-                ? `<span class="badge bg-secondary">Cancelado</span>` 
-                : `<span class="badge bg-success">Completado</span>`;
-
+            const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
             const rowClass = esCancelado ? 'fila-cancelada' : '';
 
             return `
@@ -922,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td data-label="Pagado">$${safeMoney(p.montoPagado)}</td>
                 <td data-label="Estado">${estadoBadge}</td>
                 <td data-label="Acciones" class="table-actions">
+                    ${p.archivos && p.archivos.length > 0 ? `<button class="btn btn-sm btn-info text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>` : ''}
                     <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
                     <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
@@ -997,8 +1106,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
                     let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
-                    if (p.enlaceEntrega) accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Archivos"><i class="bi bi-cloud-download"></i></a>`; 
+                    
+                    if (p.archivos && p.archivos.length > 0) {
+                        accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
+                    }
+
+                    if (p.enlaceEntrega) accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Carpeta"><i class="bi bi-cloud-download"></i></a>`; 
                     if (!isClientView) { accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button><button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`; } 
+                    
                     html += `<tr><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Estado"><span class="badge" style="background-color: var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})">${p.proceso}</span></td><td data-label="Acciones" class="table-actions">${accionesHtml}</td></tr>`; 
                 }); 
                 html += '</tbody></table></div>'; 
@@ -1316,7 +1431,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const userInfo = getUserRoleAndId(); 
         const isClient = (userInfo.role === 'cliente'); 
         
-        // CACHÉ FIX: Si es Artistas o Servicios, recarga fresco si no estamos filtrando
         if (navigator.onLine && filterText === null) {
             try { 
                 localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
@@ -1351,12 +1465,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { 
             let displayName, editAction; 
-            let viewButton = ''; // Botón extra para "Ver"
+            let viewButton = ''; 
 
             if (endpoint === 'artistas') { 
                 displayName = `${item.nombreArtistico || item.nombre}`; 
                 editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`;
-                // BOTÓN DE OJITO PARA ARTISTAS
                 viewButton = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')" title="Ver Perfil"><i class="bi bi-eye"></i></button>`;
             } else if (endpoint === 'usuarios') { 
                 displayName = `${item.username} (${item.role})`; 
@@ -1727,7 +1840,7 @@ document.addEventListener('DOMContentLoaded', () => {
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme 
+        toggleTheme, openPlayer, playMedia
     };
 });
 

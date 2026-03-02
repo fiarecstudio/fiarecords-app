@@ -112,26 +112,16 @@ router.get('/agenda', async (req, res) => { try { const filtro = await getFiltro
 
 router.get('/cotizaciones', async (req, res) => { try { const filtro = await getFiltroUsuario(req); filtro.estatus = 'Cotizacion'; const cotizaciones = await Proyecto.find(filtro).populate('artista'); res.json(cotizaciones); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-// ==============================================================
-// SOLUCIÓN AL BUG: HISTORIAL AHORA TRAE COMPLETOS Y CANCELADOS
-// ==============================================================
 router.get('/completos', async (req, res) => { 
     try { 
         const filtro = await getFiltroUsuario(req); 
-        // Filtramos para que traiga los que están en proceso "Completo" O cuyo estatus sea "Cancelado"
-        // PERO que no estén eliminados (isDeleted: false)
-        // NOTA: isDeleted ya viene en getFiltroUsuario, pero $or sobreescribe, así que hay que ser cuidadosos
-        
-        // Reiniciamos la lógica del filtro para combinar el $or con el isDeleted
         const filtroBase = { isDeleted: { $ne: true } };
         
-        // Si es cliente, agregamos su ID
         if (req.user.role === 'cliente') {
             if (req.user.artistaId) filtroBase.artista = new mongoose.Types.ObjectId(req.user.artistaId);
             else filtroBase.artista = new mongoose.Types.ObjectId(); 
         }
 
-        // Combinamos
         const filtroFinal = {
             ...filtroBase,
             $or: [
@@ -186,6 +176,9 @@ router.put('/:id/fecha', async (req, res) => { if (req.user.role === 'cliente') 
 
 router.put('/:id/nombre', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true }); res.json(actualizado); });
 
+// ==============================================================
+// RUTAS: ACTUALIZAR ENLACE Y ARCHIVOS (MODIFICADO)
+// ==============================================================
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
@@ -198,18 +191,25 @@ router.put('/:id/enlace-entrega', async (req, res) => {
             } 
         }
         
+        // Guardamos tanto el enlace de la carpeta como la lista de archivos multimedia
+        let updateData = { enlaceEntrega: req.body.enlace };
+        if (req.body.archivos && Array.isArray(req.body.archivos)) {
+            updateData.archivos = req.body.archivos;
+        }
+
         const actualizado = await Proyecto.findByIdAndUpdate(
             req.params.id, 
-            { enlaceEntrega: req.body.enlace }, 
+            updateData, 
             { new: true }
         ).populate('artista');
         
+        // Enviamos el correo notificando que el material y/o reproductor están listos
         if (req.body.enlace && actualizado.artista && req.user.role !== 'cliente') {
             const email = actualizado.artista.correo;
-            enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", `<div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>¡Tu material está listo! 🎵</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado.</p><br><a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;">DESCARGAR AHORA</a></div>`);
+            enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", `<div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>¡Tu material está listo! 🎵</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado. Si enviaste audios, videos o imágenes, ya pueden ser previsualizados desde tu panel.</p><br><a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;">DESCARGAR CARPETA ORIGINAL</a></div>`);
         }
         res.json(actualizado);
-    } catch (e) { res.status(500).json({ error: "Error al guardar el enlace" }); }
+    } catch (e) { res.status(500).json({ error: "Error al guardar el enlace y archivos" }); }
 });
 
 router.post('/:id/pagos', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); const nuevoPago = { monto: req.body.monto, metodo: req.body.metodo, fecha: new Date(), artista: proyecto.artista ? proyecto.artista.nombre : 'General' }; proyecto.pagos.push(nuevoPago); proyecto.montoPagado = (proyecto.montoPagado || 0) + parseFloat(req.body.monto); if (proyecto.montoPagado >= (proyecto.total - (proyecto.descuento || 0))) { proyecto.estatus = 'Pagado'; } await proyecto.save(); res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });

@@ -41,8 +41,16 @@ const ProyectoSchema = new mongoose.Schema({
 
     metodoPago: { type: String, default: 'Pendiente' },
     
-    // --- ESTE CAMPO ES EL QUE GUARDA EL LINK ---
+    // Enlace a la carpeta general de Drive
     enlaceEntrega: { type: String, default: '' }, 
+
+    // --- NUEVO: GUARDA LOS ARCHIVOS MULTIMEDIA (AUDIO, VIDEO, IMAGEN) ---
+    archivos: [{
+        nombre: String,
+        driveId: String,
+        urlDirecta: String,
+        tipo: String // 'audio', 'video', 'imagen', 'otro'
+    }],
     
     detallesContrato: { type: Object },
     detallesDistribucion: { type: Object },
