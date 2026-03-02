@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gapiInited = false;
     let gisInited = false;
 
-    // Caché Local (Inicialización segura)
+    // Caché Local
     let localCache = {
         artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
         servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==================================================================
-    // 4. FETCH API (FUNCIÓN CENTRAL)
+    // 4. FETCH API
     // ==================================================================
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // Manejo de caché offline para GET
+        // Caché offline para GET
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -282,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Manejo de cola offline para POST/PUT/DELETE
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -303,27 +302,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // Actualización de caché local al recibir datos frescos
             if (!options.method || options.method === 'GET') {
-                if (url === '/api/artistas') { 
-                    localCache.artistas = Array.isArray(data) ? data : []; 
-                    localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
-                }
-                if (url === '/api/servicios') { 
-                    localCache.servicios = data; 
-                    localStorage.setItem('cache_servicios', JSON.stringify(data)); 
-                }
-                if (url === '/api/usuarios') { 
-                    localCache.usuarios = data; 
-                }
-                if (url === '/api/proyectos') { 
-                    localCache.proyectos = data; 
-                    localStorage.setItem('cache_proyectos', JSON.stringify(data)); 
-                }
-                if (url === '/api/pagos/todos') { 
-                    localCache.pagos = data; 
-                    localStorage.setItem('cache_pagos', JSON.stringify(data)); 
-                }
+                if (url === '/api/artistas') { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
+                if (url === '/api/servicios') { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
+                if (url === '/api/usuarios') { localCache.usuarios = data; }
+                if (url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); }
+                if (url === '/api/pagos/todos') { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
             }
             return data;
         } catch (e) { throw e; } finally { hideLoader(); }
@@ -446,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
                 
-                // Arreglo para guardar info de los archivos multimedia para el reproductor
                 const uploadedFiles = [];
 
                 for (let i = 0; i < files.length; i++) {
@@ -463,19 +446,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const fileData = await resUpload.json();
                     
-                    // Identificar tipo de archivo para el reproductor
                     const nombreLow = file.name.toLowerCase();
                     let tipoArchivo = 'otro';
                     if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
                     else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
                     else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
 
-                    // Solo guardamos en la base de datos si es multimedia
                     if(tipoArchivo !== 'otro') {
                         uploadedFiles.push({
                             nombre: file.name,
                             driveId: fileData.id,
-                            // *** CAMBIO: Usamos el enlace nativo de previsualización de Drive ***
+                            // USAMOS PREVIEW PARA EL IFRAME NATIVO
                             urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
                             tipo: tipoArchivo
                         });
@@ -489,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
-                // Enviamos el Link de la carpeta Y los archivos multimedia al servidor
                 await saveDeliveryLink(false, folderLink, uploadedFiles); 
                 
                 showToast(`¡Archivos subidos y visor configurado!`, 'success');
@@ -524,14 +504,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('drive-status').textContent = ''; 
         inputLink.value = 'Buscando enlace...';
 
-        // BÚSQUEDA ROBUSTA DEL ENLACE (Solución al "Enlace borrado")
-        // Primero busca en caché, si no está o está vacío, pregunta a la API en tiempo real
         let proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
         
         fetchAPI(`/api/proyectos/${projectId}`).then(data => {
             if(data && data.enlaceEntrega) {
                 inputLink.value = data.enlaceEntrega;
-                // Actualizar caché silenciosamente
                 if(proyecto) proyecto.enlaceEntrega = data.enlaceEntrega;
             } else {
                 inputLink.value = '';
@@ -560,14 +537,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null, archivosUpload = null) { 
         const projectId = document.getElementById('delivery-project-id').value; 
-        // Si nos pasan un enlaceDirecto (por ej, desde subirADrive), lo usamos, sino tomamos el del input.
         const enlace = enlaceDirecto !== null ? enlaceDirecto : document.getElementById('delivery-link-input').value; 
         
         const payload = { enlace };
         if (archivosUpload !== null) payload.archivos = archivosUpload;
 
         try { 
-            // GUARDADO ROBUSTO: Guardamos y actualizamos la cache con la respuesta del servidor
             const result = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                 method: 'PUT', 
                 body: JSON.stringify(payload) 
@@ -594,11 +569,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
 
-    // --- REPRODUCTOR INTELIGENTE (MODIFICADO: DRIVE NATIVO) ---
+    // --- REPRODUCTOR INTELIGENTE UNIVERSAL ---
     function openPlayer(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
 
-        // Si no está en cache completo, lo traemos de la API
         if (!proj || (!proj.archivos && !proj.enlaceEntrega)) {
             fetchAPI(`/api/proyectos/${projectId}`).then(data => { renderPlayerUI(data); }).catch(e => showToast('Error cargando proyecto', 'error'));
         } else {
@@ -611,85 +585,117 @@ document.addEventListener('DOMContentLoaded', () => {
         const playlist = document.getElementById('playlist-container');
         const container = document.getElementById('media-container');
         
-        // LIMPIAMOS EL CONTENEDOR Y EL NOMBRE
         container.innerHTML = '<div class="text-muted small">Cargando...</div>';
         document.getElementById('current-track-name').textContent = 'Selecciona un archivo';
 
-        // CASO 1: TIENE ARCHIVOS EN EL REPRODUCTOR
+        // Construir la lista de reproducción combinando archivos nuevos y links viejos
+        let htmlList = '';
+        let hasPlayableItems = false;
+
+        // 1. Archivos en base de datos (Nuevos o importados)
         if(proj.archivos && proj.archivos.length > 0) {
-            playlist.innerHTML = proj.archivos.map(file => {
+            htmlList += proj.archivos.map(file => {
                 let icon = 'bi-file-earmark';
                 if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
                 if (file.tipo === 'video') icon = 'bi-film text-danger';
                 if (file.tipo === 'imagen') icon = 'bi-image text-success';
+                
+                // Usamos la URL tal cual, playMedia se encargará de arreglarla si es vieja
+                const urlToUse = file.urlDirecta || file.url; 
 
                 return `
                 <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
                         style="background-color: transparent;" 
-                        onclick="app.playMedia('${file.urlDirecta}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
+                        onclick="app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
                     <i class="bi ${icon} me-3 fs-5"></i> 
                     <span class="text-truncate">${escapeHTML(file.nombre)}</span>
                 </button>`;
             }).join('');
-            
-            // Auto play del primer archivo si es posible
-            setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
-            new bootstrap.Modal(document.getElementById('player-modal')).show();
-        } 
-        // CASO 2: PROYECTO VIEJO (SOLO TIENE ENLACE, PERO NO ARCHIVOS)
-        else if (proj.enlaceEntrega) {
-            container.innerHTML = `
-                <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
-                    <i class="bi bi-folder-symlink text-warning mb-3" style="font-size: 4rem;"></i>
-                    <h5 class="text-white fw-bold">Proyecto de Archivo Clásico</h5>
-                    <p class="text-muted small px-3">Este proyecto fue guardado antes de habilitar el reproductor interno. Puedes acceder a todo el contenido directamente desde la carpeta de Google Drive.</p>
-                    <a href="${proj.enlaceEntrega}" target="_blank" class="btn btn-success mt-3 shadow-sm">
-                        <i class="bi bi-google me-2"></i> Abrir Carpeta de Drive
-                    </a>
-                </div>
-            `;
-            playlist.innerHTML = '<div class="p-3 text-center text-muted small border-top border-secondary">No hay pistas individuales listadas.</div>';
-            new bootstrap.Modal(document.getElementById('player-modal')).show();
-        } 
-        // CASO 3: NADA
-        else {
-            showToast('Aún no hay archivos multimedia ni enlaces subidos para este proyecto.', 'warning');
+            hasPlayableItems = true;
         }
+
+        // 2. Si no hay archivos, pero hay enlace de entrega (Proyecto Viejo)
+        if ((!proj.archivos || proj.archivos.length === 0) && proj.enlaceEntrega) {
+            htmlList += `
+                <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
+                        style="background-color: transparent;" 
+                        onclick="app.playMedia('${proj.enlaceEntrega}', 'Enlace Principal', 'link', this)">
+                    <i class="bi bi-folder-symlink me-3 fs-5 text-warning"></i> 
+                    <span class="text-truncate">Carpeta/Archivo Principal</span>
+                </button>`;
+            hasPlayableItems = true;
+        }
+
+        playlist.innerHTML = htmlList || '<div class="p-3 text-center text-muted small border-top border-secondary">No hay contenido multimedia disponible.</div>';
+        
+        // Auto play del primer elemento
+        if(hasPlayableItems) {
+            setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
+        } else {
+             container.innerHTML = `<div class="d-flex align-items-center justify-content-center h-100 text-muted">Sin archivos</div>`;
+        }
+
+        new bootstrap.Modal(document.getElementById('player-modal')).show();
     }
 
-    // *** MODIFICADO: Reproductor usando Iframe Nativo de Drive ***
     function playMedia(url, name, tipo, btnElement) {
         document.getElementById('current-track-name').textContent = name;
         const container = document.getElementById('media-container');
         
-        // Limpiar contenedor
         container.innerHTML = '';
 
-        // FIX PARA PROYECTOS VIEJOS: Si la URL es de descarga directa (CORS Blocked), la convertimos a Preview nativo
+        // DETECCIÓN Y REPARACIÓN INTELIGENTE DE URLS
         let iframeUrl = url;
-        if (url.includes('uc?export=download&id=')) {
-            const fileId = url.split('id=')[1].split('&')[0];
-            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-        } else if (url.includes('view?usp=drivesdk')) {
-             const parts = url.split('/d/');
-             if(parts[1]) {
-                const fileId = parts[1].split('/')[0];
-                iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-             }
+        let isFolder = false;
+
+        // Intentar extraer ID de Drive de cualquier formato
+        let fileId = null;
+        
+        // Formatos comunes de Drive
+        // 1. export=download&id=XXXX
+        // 2. /file/d/XXXX/view
+        // 3. /open?id=XXXX
+        // 4. /folders/XXXX (Carpeta)
+        
+        if (url.includes('/folders/')) {
+            isFolder = true;
+            fileId = url.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (url.includes('id=')) {
+            fileId = url.split('id=')[1].split('&')[0];
+        } else if (url.includes('/d/')) {
+            fileId = url.split('/d/')[1].split('/')[0];
         }
 
-        // Insertar el reproductor nativo de Google Drive usando iframe
-        // Esto funciona para Audio, Video e Imágenes sin problemas de CORS
-        container.innerHTML = `
-            <iframe 
-                src="${iframeUrl}" 
-                width="100%" 
-                height="100%" 
-                style="border: none; border-radius: 10px; min-height: 400px; background-color: #111;" 
-                allow="autoplay"
-                allowfullscreen>
-            </iframe>
-        `;
+        // Si detectamos un ID, construimos la URL Preview limpia
+        if (fileId && !isFolder) {
+            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+        }
+
+        // RENDERIZADO
+        if (isFolder) {
+            // Google bloquea incrustar carpetas enteras por seguridad, damos botón para abrir
+            container.innerHTML = `
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
+                    <i class="bi bi-folder-fill text-warning mb-3" style="font-size: 4rem;"></i>
+                    <h5 class="text-white">Carpeta de Archivos</h5>
+                    <p class="text-muted small">Por políticas de Google, las carpetas completas deben abrirse en una pestaña nueva.</p>
+                    <a href="${url}" target="_blank" class="btn btn-primary mt-2">
+                        <i class="bi bi-box-arrow-up-right"></i> Abrir en Drive
+                    </a>
+                </div>
+            `;
+        } else {
+            // Es un archivo (viejo o nuevo), usamos el IFRAME nativo
+            container.innerHTML = `
+                <iframe 
+                    src="${iframeUrl}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border: none; border-radius: 10px; min-height: 400px; background-color: #000;" 
+                    allow="autoplay; fullscreen">
+                </iframe>
+            `;
+        }
 
         // Actualizar UI del botón activo
         document.querySelectorAll('.track-btn').forEach(b => {
@@ -702,12 +708,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Detener reproducción al cerrar el modal (Destruyendo el iframe)
+    // Limpiar reproductor al cerrar
     document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('player-modal');
         if(modalEl) {
             modalEl.addEventListener('hidden.bs.modal', () => {
-                // Al vaciar el contenedor, el iframe desaparece y el audio se detiene
                 document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>';
             });
         }
@@ -1051,7 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
             const rowClass = esCancelado ? 'fila-cancelada' : '';
 
-            // CONDICIÓN: Mostrar si hay archivos O si hay enlace (proyecto viejo)
+            // Mostrar el botón si tiene archivos O enlace viejo
             const showPlayer = (p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0);
 
             return `
@@ -1140,7 +1145,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 proyectos.forEach(p => { 
                     let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
                     
-                    // CONDICIÓN: Mostrar si hay archivos O si hay enlace (proyecto viejo)
                     if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
                         accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
                     }
@@ -1210,7 +1214,6 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.loginContainer.style.display = 'none'; 
         DOMElements.appWrapper.style.display = 'flex'; 
         
-        // Ejecuta configuración de logo
         setupCustomization(payload);
 
         const hashSection = location.hash.replace('#', '');
@@ -1708,7 +1711,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('offline', OfflineManager.updateIndicator); 
         OfflineManager.updateIndicator(); 
         
-        // Listeners for dark mode toggles main UI
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             chk.addEventListener('change', (e) => {
                 toggleTheme(e.target.checked);
@@ -1826,7 +1828,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setupFooterYear();
 
-        // Listeners for dark mode toggles (login screen context)
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             chk.addEventListener('change', (e) => {
                 toggleTheme(e.target.checked);
