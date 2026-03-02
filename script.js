@@ -475,7 +475,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         uploadedFiles.push({
                             nombre: file.name,
                             driveId: fileData.id,
-                            urlDirecta: `https://docs.google.com/uc?export=download&id=${fileData.id}`,
+                            // *** CAMBIO: Usamos el enlace nativo de previsualización de Drive ***
+                            urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
                             tipo: tipoArchivo
                         });
                     }
@@ -593,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
 
-    // --- REPRODUCTOR INTELIGENTE (MODIFICADO PARA PROYECTOS VIEJOS) ---
+    // --- REPRODUCTOR INTELIGENTE (MODIFICADO: DRIVE NATIVO) ---
     function openPlayer(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
 
@@ -656,6 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // *** MODIFICADO: Reproductor usando Iframe Nativo de Drive ***
     function playMedia(url, name, tipo, btnElement) {
         document.getElementById('current-track-name').textContent = name;
         const container = document.getElementById('media-container');
@@ -663,30 +665,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // Limpiar contenedor
         container.innerHTML = '';
 
-        if (tipo === 'audio') {
-            container.innerHTML = `
-                <div class="d-flex flex-column align-items-center justify-content-center w-100 p-3 h-100">
-                    <div style="width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #333 30%, #111 70%); border: 3px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.5); margin-bottom: 20px; animation: spin 4s linear infinite;">
-                        <div style="width: 20px; height: 20px; border-radius: 50%; background-color: var(--info-color, #0dcaf0);"></div>
-                    </div>
-                    <audio id="media-player" controls class="w-100" controlsList="nodownload" style="height: 40px; border-radius: 20px; outline: none;" src="${url}"></audio>
-                </div>
-            `;
-            const audio = document.getElementById('media-player');
-            audio.play().catch(e => console.log('Autoplay prevent', e));
-        } 
-        else if (tipo === 'video') {
-            container.innerHTML = `
-                <video id="media-player" controls class="w-100 h-100 object-fit-contain" controlsList="nodownload" src="${url}"></video>
-            `;
-            const video = document.getElementById('media-player');
-            video.play().catch(e => console.log('Autoplay prevent', e));
+        // FIX PARA PROYECTOS VIEJOS: Si la URL es de descarga directa (CORS Blocked), la convertimos a Preview nativo
+        let iframeUrl = url;
+        if (url.includes('uc?export=download&id=')) {
+            const fileId = url.split('id=')[1].split('&')[0];
+            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+        } else if (url.includes('view?usp=drivesdk')) {
+             const parts = url.split('/d/');
+             if(parts[1]) {
+                const fileId = parts[1].split('/')[0];
+                iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+             }
         }
-        else if (tipo === 'imagen') {
-            container.innerHTML = `
-                <img src="${url}" alt="${name}" class="w-100 h-100 object-fit-contain p-2" style="max-height: 400px; border-radius: 10px;">
-            `;
-        }
+
+        // Insertar el reproductor nativo de Google Drive usando iframe
+        // Esto funciona para Audio, Video e Imágenes sin problemas de CORS
+        container.innerHTML = `
+            <iframe 
+                src="${iframeUrl}" 
+                width="100%" 
+                height="100%" 
+                style="border: none; border-radius: 10px; min-height: 400px; background-color: #111;" 
+                allow="autoplay"
+                allowfullscreen>
+            </iframe>
+        `;
 
         // Actualizar UI del botón activo
         document.querySelectorAll('.track-btn').forEach(b => {
@@ -699,15 +702,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Detener audio/video al cerrar el modal
+    // Detener reproducción al cerrar el modal (Destruyendo el iframe)
     document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('player-modal');
         if(modalEl) {
             modalEl.addEventListener('hidden.bs.modal', () => {
-                const player = document.getElementById('media-player');
-                if(player && typeof player.pause === 'function') {
-                    player.pause();
-                }
+                // Al vaciar el contenedor, el iframe desaparece y el audio se detiene
                 document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>';
             });
         }
