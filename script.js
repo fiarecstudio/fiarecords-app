@@ -3,21 +3,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
     
-    const DIAS_SEMANA =['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    let horariosOcupadosDelDia =[]; 
+    const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    let horariosOcupadosDelDia = []; 
 
     let isInitialized = false;
     let proyectoActual = {};
     let logoBase64 = null; 
     let preseleccionArtistaId = null;
 
+    // Estado de Paginación
     const paginationState = {
         artistas: { page: 1, limit: 10, filter: '' },
         servicios: { page: 1, limit: 10, filter: '' },
         usuarios: { page: 1, limit: 10, filter: '' }
     };
 
-    // ESTADO DE PAGINACIÓN PARA PAPELERA
     const trashPagination = {
         proyectos: { page: 1, limit: 10 },
         artistas: { page: 1, limit: 10 },
@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: { page: 1, limit: 10 }
     };
 
-    // ESTADO DE PAGINACIÓN PARA TABLAS
     const tablePagination = {
         historial: { page: 1, limit: 10 },
         cotizaciones: { page: 1, limit: 10 },
@@ -33,10 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
         pagosHistorial: { page: 1, limit: 10 }
     };
 
+    // Configuración Google API
     const GAP_CONFIG = {
         apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
         clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
-        discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
         scope: 'https://www.googleapis.com/auth/drive'
     };
 
@@ -44,27 +44,27 @@ document.addEventListener('DOMContentLoaded', () => {
     let gapiInited = false;
     let gisInited = false;
 
-    // Caché Local
+    // Caché Local (Inicialización segura)
     let localCache = {
-        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') ||[]),
+        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
         servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
         proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
         cotizaciones: [],
-        historial:[],
+        historial: [],
         pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
-        usuarios:[],
-        trash: { proyectos: [], artistas: [], servicios: [], usuarios:[] } 
+        usuarios: [],
+        trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] } 
     };
 
     let currentCalendar = null;
     let configCache = null;
     let chartInstance = null;
     
-    // Arrays para Tablas Paginadas
-    let historialCacheados =[]; 
+    // Arrays temporales para tablas paginadas
+    let historialCacheados = []; 
     let cotizacionesCacheadas = [];
-    let pagosPendientesCacheados =[];
-    let pagosHistorialCacheados =[];
+    let pagosPendientesCacheados = [];
+    let pagosHistorialCacheados = [];
 
     const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (queue.length === 0) return;
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-            let newQueue =[];
+            let newQueue = [];
             for (const req of queue) {
                 try {
                     let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==================================================================
-    // 4. FETCH API
+    // 4. FETCH API (FUNCIÓN CENTRAL)
     // ==================================================================
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
@@ -264,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // Manejo de caché offline para GET
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -277,10 +278,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return localCache.proyectos.filter(p => !p.deleted);
                 }
                 if (url === '/api/pagos/todos') return localCache.pagos;
-                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome:[] };
+                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
             }
         }
 
+        // Manejo de cola offline para POST/PUT/DELETE
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -301,9 +303,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
+            // Actualización de caché local al recibir datos frescos
             if (!options.method || options.method === 'GET') {
                 if (url === '/api/artistas') { 
-                    localCache.artistas = Array.isArray(data) ? data :[]; 
+                    localCache.artistas = Array.isArray(data) ? data : []; 
                     localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); 
                 }
                 if (url === '/api/servicios') { 
@@ -327,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 5. GOOGLE DRIVE (CON DETECCIÓN DE AUDIO, VIDEO E IMAGEN)
+    // 5. GOOGLE DRIVE Y REPRODUCTOR
     // ==================================================================
     window.initializeGapiClient = function() {
         gapi.load('client', async () => {
@@ -435,7 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(statusSpan) statusSpan.textContent = `Creando carpeta: ${projectName}...`;
                 const idProyecto = await buscarOCrearCarpetaProyecto(projectName, idArtista);
                 
-                if(statusSpan) statusSpan.textContent = 'Configurando permisos públicos...';
                 await hacerCarpetaPublica(idProyecto);
 
                 if(statusSpan) statusSpan.textContent = 'Generando enlace...';
@@ -444,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
                 
-                // Arreglo para guardar archivos multimedia
+                // Arreglo para guardar info de los archivos multimedia para el reproductor
                 const uploadedFiles = [];
 
                 for (let i = 0; i < files.length; i++) {
@@ -461,14 +463,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const fileData = await resUpload.json();
                     
-                    // Identificar tipo de archivo
+                    // Identificar tipo de archivo para el reproductor
                     const nombreLow = file.name.toLowerCase();
                     let tipoArchivo = 'otro';
                     if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
                     else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
                     else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
 
-                    // Solo guardamos si es multimedia
+                    // Solo guardamos en la base de datos si es multimedia
                     if(tipoArchivo !== 'otro') {
                         uploadedFiles.push({
                             nombre: file.name,
@@ -486,6 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
 
+                // Enviamos el Link de la carpeta Y los archivos multimedia al servidor
                 await saveDeliveryLink(false, folderLink, uploadedFiles); 
                 
                 showToast(`¡Archivos subidos y visor configurado!`, 'success');
@@ -516,23 +519,31 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-artist-name').value = artistName; 
         modalEl.querySelector('#delivery-project-name').value = projectName; 
         
-        let proyecto = localCache.proyectos.find(p => p._id === projectId);
-        if (!proyecto) {
-            proyecto = historialCacheados.find(p => p._id === projectId);
-        }
-        
-        const linkActual = proyecto ? (proyecto.enlaceEntrega || '') : '';
-        modalEl.querySelector('#delivery-link-input').value = linkActual; 
+        const inputLink = document.getElementById('delivery-link-input');
         document.getElementById('drive-status').textContent = ''; 
+        inputLink.value = 'Buscando enlace...';
+
+        // BÚSQUEDA ROBUSTA DEL ENLACE (Solución al "Enlace borrado")
+        // Primero busca en caché, si no está o está vacío, pregunta a la API en tiempo real
+        let proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
         
-        const token = localStorage.getItem('token');
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const isClient = payload.role.toLowerCase() === 'cliente';
+        fetchAPI(`/api/proyectos/${projectId}`).then(data => {
+            if(data && data.enlaceEntrega) {
+                inputLink.value = data.enlaceEntrega;
+                // Actualizar caché silenciosamente
+                if(proyecto) proyecto.enlaceEntrega = data.enlaceEntrega;
+            } else {
+                inputLink.value = '';
+            }
+        }).catch(() => {
+            inputLink.value = (proyecto && proyecto.enlaceEntrega) ? proyecto.enlaceEntrega : '';
+        });
         
+        const userInfo = getUserRoleAndId();
         const uploadBtn = document.getElementById('btn-drive-upload');
         const fileInput = document.getElementById('drive-file-input');
         
-        if (isClient) {
+        if (userInfo.role === 'cliente') {
             if(uploadBtn) uploadBtn.style.display = 'none';
             if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'none';
         } else {
@@ -548,82 +559,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null, archivosUpload = null) { 
         const projectId = document.getElementById('delivery-project-id').value; 
-        const enlace = enlaceDirecto || document.getElementById('delivery-link-input').value; 
+        // Si nos pasan un enlaceDirecto (por ej, desde subirADrive), lo usamos, sino tomamos el del input.
+        const enlace = enlaceDirecto !== null ? enlaceDirecto : document.getElementById('delivery-link-input').value; 
         
         const payload = { enlace };
-        if (archivosUpload) {
-            payload.archivos = archivosUpload;
-        }
+        if (archivosUpload !== null) payload.archivos = archivosUpload;
 
         try { 
-            await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
+            // GUARDADO ROBUSTO: Guardamos y actualizamos la cache con la respuesta del servidor
+            const result = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                 method: 'PUT', 
                 body: JSON.stringify(payload) 
             }); 
             
             const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
-            if (indexCache !== -1) {
-                localCache.proyectos[indexCache].enlaceEntrega = enlace;
-                if(archivosUpload) localCache.proyectos[indexCache].archivos = archivosUpload;
-            }
+            if (indexCache !== -1) localCache.proyectos[indexCache] = result;
 
             const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
-            if (indexHistorial !== -1) {
-                historialCacheados[indexHistorial].enlaceEntrega = enlace;
-                if(archivosUpload) historialCacheados[indexHistorial].archivos = archivosUpload;
-            }
+            if (indexHistorial !== -1) historialCacheados[indexHistorial] = result;
 
-            showToast('Enlace y archivos guardados.', 'success'); 
+            showToast('Enlace guardado correctamente.', 'success'); 
             
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
                 const nombreEl = document.getElementById('vista-artista-nombre');
                 if (nombreEl) {
-                    const nombreActual = nombreEl.textContent;
-                    const artistaId = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual)?._id;
-                    if(artistaId) mostrarVistaArtista(artistaId, nombreActual, ''); 
+                    const n = nombreEl.textContent;
+                    const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                    if(a) mostrarVistaArtista(a._id, n, ''); 
                 }
             }
-
-            if (cerrarModal) { closeDeliveryModal(); }
+            if (cerrarModal) closeDeliveryModal(); 
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
 
-    // ==========================================
-    // LOGICA DEL REPRODUCTOR / VISOR MULTIMEDIA
-    // ==========================================
+    // --- REPRODUCTOR INTELIGENTE (MODIFICADO PARA PROYECTOS VIEJOS) ---
     function openPlayer(projectId) {
-        let proj = localCache.proyectos.find(p => p._id === projectId);
-        if(!proj) proj = historialCacheados.find(p => p._id === projectId);
+        let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
 
-        if(!proj || !proj.archivos || proj.archivos.length === 0) {
-            return showToast('No hay archivos multimedia para este proyecto.', 'warning');
+        // Si no está en cache completo, lo traemos de la API
+        if (!proj || (!proj.archivos && !proj.enlaceEntrega)) {
+            fetchAPI(`/api/proyectos/${projectId}`).then(data => { renderPlayerUI(data); }).catch(e => showToast('Error cargando proyecto', 'error'));
+        } else {
+            renderPlayerUI(proj);
         }
+    }
 
+    function renderPlayerUI(proj) {
         document.getElementById('player-project-name').textContent = proj.nombreProyecto || 'Proyecto';
         const playlist = document.getElementById('playlist-container');
+        const container = document.getElementById('media-container');
         
-        playlist.innerHTML = proj.archivos.map(file => {
-            // Icono según el tipo
-            let icon = 'bi-file-earmark';
-            if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
-            if (file.tipo === 'video') icon = 'bi-film text-danger';
-            if (file.tipo === 'imagen') icon = 'bi-image text-success';
+        // LIMPIAMOS EL CONTENEDOR Y EL NOMBRE
+        container.innerHTML = '<div class="text-muted small">Cargando...</div>';
+        document.getElementById('current-track-name').textContent = 'Selecciona un archivo';
 
-            return `
-            <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
-                    style="background-color: transparent;" 
-                    onclick="app.playMedia('${file.urlDirecta}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
-                <i class="bi ${icon} me-3 fs-5"></i> 
-                <span class="text-truncate">${escapeHTML(file.nombre)}</span>
-            </button>`;
-        }).join('');
+        // CASO 1: TIENE ARCHIVOS EN EL REPRODUCTOR
+        if(proj.archivos && proj.archivos.length > 0) {
+            playlist.innerHTML = proj.archivos.map(file => {
+                let icon = 'bi-file-earmark';
+                if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
+                if (file.tipo === 'video') icon = 'bi-film text-danger';
+                if (file.tipo === 'imagen') icon = 'bi-image text-success';
 
-        // Reproducir la primera pista automáticamente
-        const firstBtn = playlist.querySelector('.track-btn');
-        if(firstBtn) firstBtn.click();
-
-        new bootstrap.Modal(document.getElementById('player-modal')).show();
+                return `
+                <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
+                        style="background-color: transparent;" 
+                        onclick="app.playMedia('${file.urlDirecta}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
+                    <i class="bi ${icon} me-3 fs-5"></i> 
+                    <span class="text-truncate">${escapeHTML(file.nombre)}</span>
+                </button>`;
+            }).join('');
+            
+            // Auto play del primer archivo si es posible
+            setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
+            new bootstrap.Modal(document.getElementById('player-modal')).show();
+        } 
+        // CASO 2: PROYECTO VIEJO (SOLO TIENE ENLACE, PERO NO ARCHIVOS)
+        else if (proj.enlaceEntrega) {
+            container.innerHTML = `
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
+                    <i class="bi bi-folder-symlink text-warning mb-3" style="font-size: 4rem;"></i>
+                    <h5 class="text-white fw-bold">Proyecto de Archivo Clásico</h5>
+                    <p class="text-muted small px-3">Este proyecto fue guardado antes de habilitar el reproductor interno. Puedes acceder a todo el contenido directamente desde la carpeta de Google Drive.</p>
+                    <a href="${proj.enlaceEntrega}" target="_blank" class="btn btn-success mt-3 shadow-sm">
+                        <i class="bi bi-google me-2"></i> Abrir Carpeta de Drive
+                    </a>
+                </div>
+            `;
+            playlist.innerHTML = '<div class="p-3 text-center text-muted small border-top border-secondary">No hay pistas individuales listadas.</div>';
+            new bootstrap.Modal(document.getElementById('player-modal')).show();
+        } 
+        // CASO 3: NADA
+        else {
+            showToast('Aún no hay archivos multimedia ni enlaces subidos para este proyecto.', 'warning');
+        }
     }
 
     function playMedia(url, name, tipo, btnElement) {
@@ -635,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tipo === 'audio') {
             container.innerHTML = `
-                <div class="d-flex flex-column align-items-center w-100 p-3">
+                <div class="d-flex flex-column align-items-center justify-content-center w-100 p-3 h-100">
                     <div style="width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #333 30%, #111 70%); border: 3px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.5); margin-bottom: 20px; animation: spin 4s linear infinite;">
                         <div style="width: 20px; height: 20px; border-radius: 50%; background-color: var(--info-color, #0dcaf0);"></div>
                     </div>
@@ -654,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (tipo === 'imagen') {
             container.innerHTML = `
-                <img src="${url}" alt="${name}" class="w-100 h-100 object-fit-contain" style="max-height: 400px;">
+                <img src="${url}" alt="${name}" class="w-100 h-100 object-fit-contain p-2" style="max-height: 400px; border-radius: 10px;">
             `;
         }
 
@@ -1021,6 +1051,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
             const rowClass = esCancelado ? 'fila-cancelada' : '';
 
+            // CONDICIÓN: Mostrar si hay archivos O si hay enlace (proyecto viejo)
+            const showPlayer = (p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0);
+
             return `
             <tr class="${rowClass}">
                 <td data-label="Fecha">${safeDate(p.fecha)}</td>
@@ -1030,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td data-label="Pagado">$${safeMoney(p.montoPagado)}</td>
                 <td data-label="Estado">${estadoBadge}</td>
                 <td data-label="Acciones" class="table-actions">
-                    ${p.archivos && p.archivos.length > 0 ? `<button class="btn btn-sm btn-info text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>` : ''}
+                    ${showPlayer ? `<button class="btn btn-sm btn-info text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>` : ''}
                     <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
                     <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
@@ -1107,7 +1140,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 proyectos.forEach(p => { 
                     let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
                     
-                    if (p.archivos && p.archivos.length > 0) {
+                    // CONDICIÓN: Mostrar si hay archivos O si hay enlace (proyecto viejo)
+                    if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
                         accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
                     }
 
@@ -1500,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { const vis = document.getElementById('visibleServicio'); body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] =[]; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
     async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] =[]; renderPaginatedList(endpoint); } catch (e) { showToast(e.message, 'error'); } } }); }
     async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } }
-    async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanentemente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
+    async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
     async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     function abrirModalEditarServicio(id, nombre, precio, visible) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true'); new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
