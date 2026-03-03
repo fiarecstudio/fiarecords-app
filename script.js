@@ -393,6 +393,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { console.error("Error permisos carpeta:", error); }
     }
 
+    // ==================================================================
+    // FUNCIONES DE SUBIDA Y SINCRONIZACIÓN DE DRIVE
+    // ==================================================================
+
     async function subirADrive() {
         if (!gapiInited || !gisInited) {
             if(typeof gapi !== 'undefined') initializeGapiClient();
@@ -430,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
                 
+                // Arreglo para guardar info de los archivos multimedia para el reproductor
                 const uploadedFiles = [];
 
                 for (let i = 0; i < files.length; i++) {
@@ -446,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const fileData = await resUpload.json();
                     
+                    // Identificar tipo de archivo
                     const nombreLow = file.name.toLowerCase();
                     let tipoArchivo = 'otro';
                     if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
@@ -456,7 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         uploadedFiles.push({
                             nombre: file.name,
                             driveId: fileData.id,
-                            // USAMOS PREVIEW PARA EL IFRAME NATIVO
                             urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
                             tipo: tipoArchivo
                         });
@@ -468,19 +473,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     linkInput.style.borderColor = '#10b981'; 
                 }
                 
-                if(statusSpan) { statusSpan.textContent = '¡Listo!'; statusSpan.style.color = 'var(--success-color)'; }
+                if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
 
+                // Enviamos el Link Y LOS ARCHIVOS al servidor
                 await saveDeliveryLink(false, folderLink, uploadedFiles); 
                 
-                showToast(`¡Archivos subidos y visor configurado!`, 'success');
+                showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
 
+                // Recargar vistas
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
                     const nombreEl = document.getElementById('vista-artista-nombre');
                     if (nombreEl) {
-                        const nombreActual = nombreEl.textContent;
-                        const artistaEnCache = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual);
-                        if(artistaEnCache) irAVistaArtista(artistaEnCache._id, nombreActual, '');
+                        const n = nombreEl.textContent;
+                        const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                        if(a) mostrarVistaArtista(a._id, n, ''); 
                     }
                 }
             } catch (err) {
@@ -588,11 +595,10 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div class="text-muted small">Cargando...</div>';
         document.getElementById('current-track-name').textContent = 'Selecciona un archivo';
 
-        // Construir la lista de reproducción combinando archivos nuevos y links viejos
         let htmlList = '';
         let hasPlayableItems = false;
 
-        // 1. Archivos en base de datos (Nuevos o importados)
+        // 1. Archivos ya registrados en BD
         if(proj.archivos && proj.archivos.length > 0) {
             htmlList += proj.archivos.map(file => {
                 let icon = 'bi-file-earmark';
@@ -600,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (file.tipo === 'video') icon = 'bi-film text-danger';
                 if (file.tipo === 'imagen') icon = 'bi-image text-success';
                 
-                // Usamos la URL tal cual, playMedia se encargará de arreglarla si es vieja
                 const urlToUse = file.urlDirecta || file.url; 
 
                 return `
@@ -614,28 +619,123 @@ document.addEventListener('DOMContentLoaded', () => {
             hasPlayableItems = true;
         }
 
-        // 2. Si no hay archivos, pero hay enlace de entrega (Proyecto Viejo)
-        if ((!proj.archivos || proj.archivos.length === 0) && proj.enlaceEntrega) {
-            htmlList += `
-                <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
-                        style="background-color: transparent;" 
-                        onclick="app.playMedia('${proj.enlaceEntrega}', 'Enlace Principal', 'link', this)">
-                    <i class="bi bi-folder-symlink me-3 fs-5 text-warning"></i> 
-                    <span class="text-truncate">Carpeta/Archivo Principal</span>
-                </button>`;
-            hasPlayableItems = true;
+        // 2. Si no hay archivos, pero hay enlace, mostramos opción de SINCRONIZAR
+        if (!hasPlayableItems && proj.enlaceEntrega) {
+            htmlList = `
+            <div class="p-4 text-center">
+                <p class="text-muted small mb-3">No hay archivos listados, pero existe una carpeta de Drive.</p>
+                <button class="btn btn-outline-info btn-sm w-100 mb-3" onclick="app.sincronizarArchivosDrive('${proj._id}')">
+                    <i class="bi bi-arrow-repeat"></i> Sincronizar desde Drive
+                </button>
+                <a href="${proj.enlaceEntrega}" target="_blank" class="btn btn-outline-secondary btn-sm w-100">
+                    <i class="bi bi-folder"></i> Abrir Carpeta Original
+                </a>
+            </div>`;
+        } else if (!hasPlayableItems && !proj.enlaceEntrega) {
+             htmlList = '<div class="p-3 text-center text-muted small border-top border-secondary">No hay contenido multimedia ni enlaces.</div>';
         }
 
-        playlist.innerHTML = htmlList || '<div class="p-3 text-center text-muted small border-top border-secondary">No hay contenido multimedia disponible.</div>';
+        playlist.innerHTML = htmlList;
         
-        // Auto play del primer elemento
+        // Auto play del primer elemento si existe
         if(hasPlayableItems) {
             setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
         } else {
-             container.innerHTML = `<div class="d-flex align-items-center justify-content-center h-100 text-muted">Sin archivos</div>`;
+             container.innerHTML = `<div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted small">
+                <i class="bi bi-music-note-list fs-1 mb-2"></i>
+                Sin archivos para reproducir
+             </div>`;
         }
 
         new bootstrap.Modal(document.getElementById('player-modal')).show();
+    }
+
+    async function sincronizarArchivosDrive(projectId) {
+        // Obtenemos el proyecto actual del cache
+        let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
+        if (!proj || !proj.enlaceEntrega) return showToast('No hay enlace de Drive para sincronizar.', 'error');
+
+        // Extraer ID de la carpeta
+        let folderId = null;
+        if (proj.enlaceEntrega.includes('id=')) {
+            folderId = proj.enlaceEntrega.split('id=')[1].split('&')[0];
+        } else if (proj.enlaceEntrega.includes('/folders/')) {
+            folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (proj.enlaceEntrega.includes('/drive/u/0/folders/')) {
+             folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0];
+        }
+
+        if (!folderId) return showToast('No se pudo identificar el ID de la carpeta.', 'error');
+
+        // Verificar auth de Google
+        if (!gapiInited) {
+            if(typeof gapi !== 'undefined') initializeGapiClient();
+             return showToast('Conectando con Google... Intenta de nuevo.', 'info');
+        }
+
+        showLoader();
+        try {
+            // Listar archivos dentro de esa carpeta
+            const response = await gapi.client.drive.files.list({
+                q: `'${folderId}' in parents and trashed = false`,
+                fields: 'files(id, name, mimeType)'
+            });
+
+            const files = response.result.files;
+            if (!files || files.length === 0) {
+                hideLoader();
+                return showToast('La carpeta de Drive está vacía.', 'warning');
+            }
+
+            const archivosDetectados = [];
+            
+            files.forEach(file => {
+                const nombreLow = file.name.toLowerCase();
+                let tipoArchivo = 'otro';
+                // Detectar tipo
+                if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/) || file.mimeType.includes('audio')) tipoArchivo = 'audio';
+                else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/) || file.mimeType.includes('video')) tipoArchivo = 'video';
+                else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/) || file.mimeType.includes('image')) tipoArchivo = 'imagen';
+
+                if (tipoArchivo !== 'otro') {
+                    archivosDetectados.push({
+                        nombre: file.name,
+                        driveId: file.id,
+                        urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`, // Usamos el preview nativo
+                        tipo: tipoArchivo
+                    });
+                }
+            });
+
+            if (archivosDetectados.length === 0) {
+                hideLoader();
+                return showToast('No se encontraron archivos multimedia compatibles en la carpeta.', 'info');
+            }
+
+            // Actualizar en base de datos sin abrir modal de subida
+            const modalEl = document.getElementById('delivery-modal');
+            modalEl.querySelector('#delivery-project-id').value = projectId;
+            
+            // Guardar en backend
+            await saveDeliveryLink(false, proj.enlaceEntrega, archivosDetectados);
+
+            // Actualizar Cache local
+            proj.archivos = archivosDetectados;
+            
+            // Refrescar UI
+            bootstrap.Modal.getInstance(document.getElementById('player-modal')).hide();
+            setTimeout(() => {
+                openPlayer(projectId);
+                showToast(`¡Sincronizado! ${archivosDetectados.length} archivos encontrados.`, 'success');
+            }, 500);
+
+        } catch (e) {
+            console.error(e);
+            showToast('Error al leer carpeta de Drive. Verifica permisos o login.', 'error');
+            if(tokenClient) tokenClient.requestAccessToken({prompt: ''});
+        } finally {
+            hideLoader();
+        }
     }
 
     function playMedia(url, name, tipo, btnElement) {
@@ -650,12 +750,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Intentar extraer ID de Drive de cualquier formato
         let fileId = null;
-        
-        // Formatos comunes de Drive
-        // 1. export=download&id=XXXX
-        // 2. /file/d/XXXX/view
-        // 3. /open?id=XXXX
-        // 4. /folders/XXXX (Carpeta)
         
         if (url.includes('/folders/')) {
             isFolder = true;
@@ -673,7 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // RENDERIZADO
         if (isFolder) {
-            // Google bloquea incrustar carpetas enteras por seguridad, damos botón para abrir
             container.innerHTML = `
                 <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
                     <i class="bi bi-folder-fill text-warning mb-3" style="font-size: 4rem;"></i>
@@ -685,7 +778,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         } else {
-            // Es un archivo (viejo o nuevo), usamos el IFRAME nativo
             container.innerHTML = `
                 <iframe 
                     src="${iframeUrl}" 
@@ -1875,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme, openPlayer, playMedia
+        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive
     };
 });
 
