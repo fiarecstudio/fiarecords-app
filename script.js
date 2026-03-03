@@ -264,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // Caché offline para GET
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -393,10 +392,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { console.error("Error permisos carpeta:", error); }
     }
 
-    // ==================================================================
-    // FUNCIONES DE SUBIDA Y SINCRONIZACIÓN DE DRIVE
-    // ==================================================================
-
     async function subirADrive() {
         if (!gapiInited || !gisInited) {
             if(typeof gapi !== 'undefined') initializeGapiClient();
@@ -434,7 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const accessToken = gapi.client.getToken().access_token;
                 
-                // Arreglo para guardar info de los archivos multimedia para el reproductor
                 const uploadedFiles = [];
 
                 for (let i = 0; i < files.length; i++) {
@@ -451,7 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const fileData = await resUpload.json();
                     
-                    // Identificar tipo de archivo
                     const nombreLow = file.name.toLowerCase();
                     let tipoArchivo = 'otro';
                     if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
@@ -475,12 +468,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
 
-                // Enviamos el Link Y LOS ARCHIVOS al servidor
                 await saveDeliveryLink(false, folderLink, uploadedFiles); 
                 
                 showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
 
-                // Recargar vistas
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
                     const nombreEl = document.getElementById('vista-artista-nombre');
@@ -576,7 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
     }
 
-    // --- REPRODUCTOR INTELIGENTE UNIVERSAL ---
     function openPlayer(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
 
@@ -598,7 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let htmlList = '';
         let hasPlayableItems = false;
 
-        // 1. Archivos ya registrados en BD
         if(proj.archivos && proj.archivos.length > 0) {
             htmlList += proj.archivos.map(file => {
                 let icon = 'bi-file-earmark';
@@ -619,7 +608,6 @@ document.addEventListener('DOMContentLoaded', () => {
             hasPlayableItems = true;
         }
 
-        // 2. Si no hay archivos, pero hay enlace, mostramos opción de SINCRONIZAR
         if (!hasPlayableItems && proj.enlaceEntrega) {
             htmlList = `
             <div class="p-4 text-center">
@@ -637,7 +625,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         playlist.innerHTML = htmlList;
         
-        // Auto play del primer elemento si existe
         if(hasPlayableItems) {
             setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
         } else {
@@ -651,11 +638,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function sincronizarArchivosDrive(projectId) {
-        // Obtenemos el proyecto actual del cache
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
         if (!proj || !proj.enlaceEntrega) return showToast('No hay enlace de Drive para sincronizar.', 'error');
 
-        // Extraer ID de la carpeta
         let folderId = null;
         if (proj.enlaceEntrega.includes('id=')) {
             folderId = proj.enlaceEntrega.split('id=')[1].split('&')[0];
@@ -667,7 +652,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!folderId) return showToast('No se pudo identificar el ID de la carpeta.', 'error');
 
-        // Verificar auth de Google
         if (!gapiInited) {
             if(typeof gapi !== 'undefined') initializeGapiClient();
              return showToast('Conectando con Google... Intenta de nuevo.', 'info');
@@ -675,7 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showLoader();
         try {
-            // Listar archivos dentro de esa carpeta
             const response = await gapi.client.drive.files.list({
                 q: `'${folderId}' in parents and trashed = false`,
                 fields: 'files(id, name, mimeType)'
@@ -692,7 +675,6 @@ document.addEventListener('DOMContentLoaded', () => {
             files.forEach(file => {
                 const nombreLow = file.name.toLowerCase();
                 let tipoArchivo = 'otro';
-                // Detectar tipo
                 if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/) || file.mimeType.includes('audio')) tipoArchivo = 'audio';
                 else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/) || file.mimeType.includes('video')) tipoArchivo = 'video';
                 else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/) || file.mimeType.includes('image')) tipoArchivo = 'imagen';
@@ -701,7 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     archivosDetectados.push({
                         nombre: file.name,
                         driveId: file.id,
-                        urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`, // Usamos el preview nativo
+                        urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`,
                         tipo: tipoArchivo
                     });
                 }
@@ -712,17 +694,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return showToast('No se encontraron archivos multimedia compatibles en la carpeta.', 'info');
             }
 
-            // Actualizar en base de datos sin abrir modal de subida
             const modalEl = document.getElementById('delivery-modal');
             modalEl.querySelector('#delivery-project-id').value = projectId;
             
-            // Guardar en backend
             await saveDeliveryLink(false, proj.enlaceEntrega, archivosDetectados);
 
-            // Actualizar Cache local
             proj.archivos = archivosDetectados;
             
-            // Refrescar UI
             bootstrap.Modal.getInstance(document.getElementById('player-modal')).hide();
             setTimeout(() => {
                 openPlayer(projectId);
@@ -744,11 +722,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         container.innerHTML = '';
 
-        // DETECCIÓN Y REPARACIÓN INTELIGENTE DE URLS
         let iframeUrl = url;
         let isFolder = false;
-
-        // Intentar extraer ID de Drive de cualquier formato
         let fileId = null;
         
         if (url.includes('/folders/')) {
@@ -760,12 +735,10 @@ document.addEventListener('DOMContentLoaded', () => {
             fileId = url.split('/d/')[1].split('/')[0];
         }
 
-        // Si detectamos un ID, construimos la URL Preview limpia
         if (fileId && !isFolder) {
             iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
         }
 
-        // RENDERIZADO
         if (isFolder) {
             container.innerHTML = `
                 <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
@@ -789,7 +762,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
-        // Actualizar UI del botón activo
         document.querySelectorAll('.track-btn').forEach(b => {
             b.classList.remove('active', 'bg-primary');
             b.style.backgroundColor = 'transparent';
@@ -800,7 +772,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Limpiar reproductor al cerrar
     document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('player-modal');
         if(modalEl) {
@@ -1148,7 +1119,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
             const rowClass = esCancelado ? 'fila-cancelada' : '';
 
-            // Mostrar el botón si tiene archivos O enlace viejo
             const showPlayer = (p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0);
 
             return `
@@ -1173,15 +1143,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function eliminarProyecto(id, desdeCotizaciones = false) { Swal.fire({ title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
     
-    // Función para manejar navegación y botón "VOLVER"
+    // ==================================================================
+    // FUNCION DE NAVEGACION CON GUARDIA DE SEGURIDAD ANTI-FLASH
+    // ==================================================================
     async function mostrarSeccion(id, updateHistory = true) { 
+        const userInfo = getUserRoleAndId();
+        const esCliente = (userInfo.role === 'cliente');
+
+        const seccionesProhibidasParaCliente = [
+            'dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones',
+            'historial-proyectos', 'gestion-artistas', 'gestion-servicios',
+            'gestion-usuarios', 'configuracion', 'papelera-reciclaje'
+        ];
+
+        if (esCliente && seccionesProhibidasParaCliente.includes(id)) {
+            id = 'vista-artista'; 
+        }
+
         document.querySelectorAll('main > section').forEach(sec => sec.classList.remove('active')); 
         document.querySelectorAll('.nav-link-sidebar').forEach(link => link.classList.remove('active')); 
+        
         const seccionActiva = document.getElementById(id); 
         const linkActivo = document.querySelector(`.nav-link-sidebar[data-seccion="${id}"]`); 
         
         const btnBack = document.getElementById('btn-global-back'); 
-        if (btnBack) { if (id === 'dashboard' || (id === 'vista-artista' && document.body.getAttribute('data-role') === 'cliente')) { btnBack.style.display = 'none'; } else { btnBack.style.display = 'inline-flex'; } } 
+        if (btnBack) { if (id === 'dashboard' || (id === 'vista-artista' && esCliente)) { btnBack.style.display = 'none'; } else { btnBack.style.display = 'inline-flex'; } } 
         
         if (seccionActiva) { 
             seccionActiva.classList.add('active'); 
@@ -1276,7 +1262,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
-    // Auth & Init
+    // ==================================================================
+    // AUTH & INIT CON REDIRECCION ESTRICTA
+    // ==================================================================
     function showLogin() {
         document.body.classList.add('auth-visible');
         localStorage.removeItem('token');
@@ -1291,8 +1279,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showApp(payload) {
         document.body.classList.remove('auth-visible');
         const role = payload.role ? payload.role.toLowerCase() : 'cliente';
-        document.body.setAttribute('data-role', role);
+        document.body.setAttribute('data-role', role); 
         renderSidebar(payload); 
+        
         if (!configCache) await loadInitialConfig();
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
@@ -1308,7 +1297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         setupCustomization(payload);
 
-        const hashSection = location.hash.replace('#', '');
         if (role === 'cliente') {
              if(payload.artistaId) {
                  await mostrarVistaArtista(payload.artistaId, payload.username, payload.nombre || payload.username);
@@ -1317,7 +1305,11 @@ document.addEventListener('DOMContentLoaded', () => {
                  document.getElementById('vista-artista-contenido').innerHTML = '<div class="alert alert-warning">No se encontró un perfil de artista vinculado. Contacta a soporte.</div>';
                  mostrarSeccion('vista-artista', false);
              }
-        } else { mostrarSeccion(hashSection || 'dashboard', false); }
+        } else { 
+            const hashSection = location.hash.replace('#', '');
+            mostrarSeccion(hashSection || 'dashboard', false); 
+        }
+        
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
     }
 
@@ -1351,7 +1343,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Funciones sueltas
     function renderTableControls(tableBodyId, listKey, page, totalPages) {
         const tbody = document.getElementById(tableBodyId);
         if (!tbody) return;
@@ -1758,7 +1749,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function registerUser(e) { e.preventDefault(); const username = document.getElementById('reg-username').value; const email = document.getElementById('reg-email').value; const password = document.getElementById('reg-password').value; const nombreArtistico = document.getElementById('reg-artistname').value; try { const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Cuenta creada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function recoverPassword(e) { e.preventDefault(); const email = document.getElementById('rec-email').value; try { const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('Correo enviado.', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     
-    // --- FUNCIONES PARA HORARIOS ---
     function toggleInputsHorario(index) {
         const isChecked = document.getElementById(`dia-activo-${index}`).checked;
         document.getElementById(`dia-inicio-${index}`).disabled = !isChecked;
@@ -1810,9 +1800,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // ==================================================================
-    // ARREGLO LOGO Y FAVICON CLICKEABLE
-    // ==================================================================
     function setupCustomization(payload) { 
         if (payload.role === 'admin') { 
             const appLogo = document.getElementById('app-logo');
@@ -1898,7 +1885,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { e.preventDefault(); mostrarSeccion(e.currentTarget.dataset.seccion); } }); }); 
     }
 
-    // --- INICIALIZACIÓN ---
     (async function init() {
         const cachedLogo = localStorage.getItem('cached_logo_path');
         if(cachedLogo) {

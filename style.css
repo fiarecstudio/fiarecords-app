@@ -24,7 +24,7 @@
   --secondary-button-text: #475569; 
   --secondary-button-hover-bg: #e2e8f0;
   
-  /* Colores de procesos */
+  /* Colores de procesos Kanban */
   --proceso-Solicitud: #64748b;
   --proceso-Agendado: #3b82f6; 
   --proceso-Grabacion: #8b5cf6; 
@@ -87,18 +87,14 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .table td { vertical-align: middle; }
 
 /* --- ESTILOS ESPECIALES PARA FILAS CANCELADAS --- */
-/* Modo Claro: Un gris muy suave, texto atenuado */
 .fila-cancelada, .fila-cancelada td {
     background-color: #f1f5f9 !important; 
     color: #94a3b8 !important;
 }
-
-/* Modo Oscuro: Un tono oscuro sutil, evitando el blanco brillante */
 body.dark-mode .fila-cancelada, body.dark-mode .fila-cancelada td {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* Transparencia sutil */
+    background-color: rgba(255, 255, 255, 0.05) !important;
     color: var(--text-color-light) !important;
 }
-/* Fix para el hover en modo oscuro de tablas */
 body.dark-mode .table-hover tbody tr:hover {
     background-color: rgba(255, 255, 255, 0.08);
 }
@@ -204,6 +200,11 @@ body.dark-mode .login-footer small.text-muted, body.dark-mode .main-footer small
 .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ESTILOS DEL REPRODUCTOR (TRACK BUTTONS) */
+.track-btn { border: none; text-align: left; transition: background 0.2s; }
+.track-btn:hover { background-color: rgba(255,255,255,0.1) !important; }
+.track-btn.active { background-color: var(--primary-color) !important; color: white !important; }
+
 @media (min-width: 1024px) {
     .kanban-board { overflow-x: hidden; justify-content: space-between; gap: 0.4rem; width: 100%; }
     .kanban-column { flex: 1 1 0; min-width: 0; width: auto; padding: 0.5rem; }
@@ -240,10 +241,48 @@ body.dark-mode .login-footer small.text-muted, body.dark-mode .main-footer small
 input:checked + .slider { background-color: var(--primary-color); }
 input:checked + .slider:before { transform: translateX(20px); }
 
-main > section { display: none; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
-main > section.active { display: block; opacity: 1; transform: translateY(0); animation: fadeIn 0.4s ease-out; }
+/* =========================================
+   SISTEMA DE OCULTAMIENTO ANTI-FLASH (CRÍTICO)
+   ========================================= */
+
+/* 1. Ocultar todas las secciones principales por defecto */
+main > section { 
+    display: none !important; /* Importante para sobreescribir cualquier estilo por defecto */
+    opacity: 0; 
+    transform: translateY(10px); 
+    transition: all 0.3s ease; 
+}
+
+/* 2. Solo mostrar cuando tengan la clase active */
+main > section.active { 
+    display: block !important; 
+    opacity: 1; 
+    transform: translateY(0); 
+    animation: fadeIn 0.4s ease-out; 
+}
+
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+/* 3. SEGURIDAD VISUAL EXTRA PARA CLIENTES:
+   Si el body tiene data-role="cliente", forzamos ocultar
+   las secciones de admin aunque el JS falle o intente mostrarlas.
+   Esto previene el "flash" del dashboard. */
+body[data-role="cliente"] #dashboard,
+body[data-role="cliente"] #agenda,
+body[data-role="cliente"] #flujo-trabajo,
+body[data-role="cliente"] #cotizaciones,
+body[data-role="cliente"] #historial-proyectos,
+body[data-role="cliente"] #gestion-artistas,
+body[data-role="cliente"] #gestion-servicios,
+body[data-role="cliente"] #gestion-usuarios,
+body[data-role="cliente"] #configuracion,
+body[data-role="cliente"] #papelera-reciclaje {
+    display: none !important;
+}
+
+/* =========================================
+   PAGINACIÓN Y EXTRAS
+   ========================================= */
 .pagination-controls { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-top: 1rem; border-top: 1px solid var(--border-color); }
 .pagination-btn { background-color: var(--secondary-button-bg); border: 1px solid var(--border-color); color: var(--text-color-dark); padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; }
 .pagination-btn:hover:not(:disabled) { background-color: var(--primary-color); color: white; }
@@ -266,7 +305,7 @@ body.dark-mode .text-muted {
 body.dark-mode .table-pagination-controls span,
 body.dark-mode .pagination-controls-mini span,
 body.dark-mode .pagination-info {
-    color: #cbd5e1 !important; /* Gris claro para que resalte perfecto en fondos oscuros */
+    color: #cbd5e1 !important; 
 }
 
 /* FIX PAPELERA Y LISTAS (list-group-item) EN MODO OSCURO */
