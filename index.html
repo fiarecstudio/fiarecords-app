@@ -537,6 +537,47 @@
                 </div>
             </section>
 
+            <!-- ============================================== -->
+            <!-- NUEVA SECCIÓN: MIS DEUDAS (SOLO ADMIN) -->
+            <!-- ============================================== -->
+            <section id="mis-deudas" class="section-view">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                <div class="card mb-4">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h2 class="mb-0 text-danger"><i class="bi bi-wallet2"></i> Mis Deudas Personales</h2>
+                        <button class="btn btn-primary" onclick="app.abrirModalNuevaDeuda()"><i class="bi bi-plus"></i> Registrar Deuda</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-light rounded border border-danger border-opacity-25">
+                                    <h6 class="text-muted mb-1">Total a Pagar Pendiente</h6>
+                                    <h3 class="text-danger mb-0" id="total-deuda-global">$0.00</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Concepto</th>
+                                        <th>Total Deuda</th>
+                                        <th>Abonado</th>
+                                        <th>Restante</th>
+                                        <th>Estatus</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaDeudasBody">
+                                    <!-- Dinámico -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- FIN NUEVA SECCIÓN MIS DEUDAS -->
+
             <section id="configuracion" class="section-view">
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               
@@ -605,7 +646,7 @@
     </div>
   </div>
 
-  <!-- MODALES SE MANTIENEN IGUAL -->
+  <!-- MODALES -->
   <div class="modal fade" id="edit-artist-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
@@ -797,14 +838,12 @@
             
             <h6 id="current-track-name" class="mb-3 text-truncate fw-bold text-light">Selecciona un archivo para previsualizar</h6>
             
-            <!-- Contenedor Dinámico para Media (Audio, Video o Imagen) -->
             <div id="media-container" class="mb-3 d-flex justify-content-center align-items-center bg-dark rounded" style="min-height: 250px; position: relative; overflow: hidden; border: 1px solid #333;">
                 <div class="text-muted small" id="media-placeholder">Cargando reproductor...</div>
             </div>
             
             <p class="small text-muted mb-3" style="font-size: 0.75rem;">Si el archivo no carga rápido por su tamaño, usa el botón original de Descargar Carpeta.</p>
             
-            <!-- Lista de Reproducción / Archivos -->
             <div class="list-group list-group-flush text-start rounded" id="playlist-container" style="max-height: 250px; overflow-y: auto; background-color: #2a2a2a; border: 1px solid #444;">
                 <!-- Los items se insertan aquí -->
             </div>

@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
         historial: [],
         pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
         usuarios: [],
+        deudas: [], // <--- NUEVA LISTA DE DEUDAS
         trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] } 
     };
 
@@ -1153,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const seccionesProhibidasParaCliente = [
             'dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones',
             'historial-proyectos', 'gestion-artistas', 'gestion-servicios',
-            'gestion-usuarios', 'configuracion', 'papelera-reciclaje'
+            'gestion-usuarios', 'configuracion', 'papelera-reciclaje', 'mis-deudas'
         ];
 
         if (esCliente && seccionesProhibidasParaCliente.includes(id)) {
@@ -1190,7 +1191,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'registrar-proyecto': cargarOpcionesParaProyecto, 
                 'historial-proyectos': cargarHistorial, 
                 'papelera-reciclaje': cargarPapelera, 
-                'configuracion': cargarConfiguracion, 
+                'configuracion': cargarConfiguracion,
+                'mis-deudas': cargarDeudas,
                 'vista-artista': () => { } 
             }; 
             if(loadDataActions[id]) await loadDataActions[id](); 
@@ -1541,7 +1543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==================================================================
-    // LISTAS NORMALES (ARTISTAS, SERVICIOS) - CON BOTÓN DE OJITO Y CACHÉ FIX
+    // LISTAS NORMALES (ARTISTAS, SERVICIOS)
     // ==================================================================
     async function renderPaginatedList(endpoint, filterText = null) { 
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
@@ -1880,9 +1882,197 @@ document.addEventListener('DOMContentLoaded', () => {
         let p = user.permisos ||[]; 
         const role = user.role ? user.role.toLowerCase() : 'cliente'; 
         let html = ''; 
-        if (role === 'cliente') { html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a><a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Mis Pagos</a></div>`; } else { const isSuperAdmin = role === 'admin'; const canAccess = (permKey) => isSuperAdmin || p.includes(permKey); html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Gestión de Pagos</a>' : ''}</div><div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}</div>${isSuperAdmin ? `<div class="nav-group"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div><a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a><a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a></div>` : ''}`; } 
+        if (role === 'cliente') { 
+            html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi bi-music-note-beamed"></i> Mis Proyectos</a><a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Mis Pagos</a></div>`; 
+        } else { 
+            const isSuperAdmin = role === 'admin'; 
+            const canAccess = (permKey) => isSuperAdmin || p.includes(permKey); 
+            
+            html = `<div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
+                        ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>' : ''}
+                        ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi bi-calendar-event"></i> Agenda</a>' : ''}
+                        ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi bi-kanban"></i> Flujo de Trabajo</a>' : ''}
+                        ${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a>' : ''}
+                        ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi bi-clock-history"></i> Historial</a>' : ''}
+                        ${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi bi-cash-stack"></i> Gestión de Pagos</a>' : ''}
+                    </div>
+                    <div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
+                        ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi bi-people"></i> Artistas</a>' : ''}
+                        ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi bi-tags"></i> Servicios</a>' : ''}
+                        ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi bi-person-badge"></i> Usuarios</a>' : ''}
+                    </div>`;
+
+            if (isSuperAdmin) {
+                html += `<div class="nav-group">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                            <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi bi-wallet2"></i> Mis Deudas</a>
+                            <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi bi-gear"></i> Configuración</a>
+                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi bi-trash"></i> Papelera</a>
+                         </div>`;
+            }
+        } 
         navContainer.innerHTML = html; 
         document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { e.preventDefault(); mostrarSeccion(e.currentTarget.dataset.seccion); } }); }); 
+    }
+
+    // ==================================================================
+    // MODULO DE DEUDAS PERSONALES (ADMIN)
+    // ==================================================================
+    async function cargarDeudas() {
+        const tabla = document.getElementById('tablaDeudasBody');
+        if(!tabla) return;
+        tabla.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+        try {
+            const data = await fetchAPI('/api/deudas');
+            localCache.deudas = data;
+            renderDeudas();
+        } catch (error) {
+            tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar o acceso denegado.</td></tr>';
+        }
+    }
+
+    function renderDeudas() {
+        const tabla = document.getElementById('tablaDeudasBody');
+        if(!tabla) return;
+        let totalGlobal = 0;
+
+        if (!localCache.deudas || localCache.deudas.length === 0) {
+            tabla.innerHTML = '<tr><td colspan="6" class="text-center">No hay deudas registradas. ¡Excelente!</td></tr>';
+            document.getElementById('total-deuda-global').textContent = '$0.00';
+            return;
+        }
+
+        tabla.innerHTML = localCache.deudas.map(d => {
+            const restante = d.total - d.montoPagado;
+            totalGlobal += restante;
+
+            const badge = d.estatus === 'Liquidada' 
+                ? '<span class="badge bg-success">Liquidada</span>' 
+                : '<span class="badge bg-danger">Pendiente</span>';
+            
+            let btnPagar = d.estatus !== 'Liquidada' 
+                ? `<button class="btn btn-sm btn-success text-white" title="Abonar" onclick="app.abonarDeuda('${d._id}', ${restante})"><i class="bi bi-cash"></i></button>`
+                : '';
+
+            return `
+            <tr class="${d.estatus === 'Liquidada' ? 'fila-cancelada' : ''}">
+                <td data-label="Concepto"><strong>${escapeHTML(d.concepto)}</strong></td>
+                <td data-label="Total">$${safeMoney(d.total)}</td>
+                <td data-label="Abonado">$${safeMoney(d.montoPagado)}</td>
+                <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
+                <td data-label="Estatus">${badge}</td>
+                <td data-label="Acciones" class="table-actions">
+                    ${btnPagar}
+                    <button class="btn btn-sm btn-outline-info" title="Historial" onclick="app.verHistorialDeuda('${d._id}')"><i class="bi bi-clock-history"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="app.eliminarDeuda('${d._id}')"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('total-deuda-global').textContent = `$${safeMoney(totalGlobal)}`;
+    }
+
+    function abrirModalNuevaDeuda() {
+        Swal.fire({
+            title: 'Registrar Deuda',
+            html: `
+                <input id="deuda-concepto" class="swal2-input" placeholder="¿Qué se debe? (Ej: Micro, Banco)">
+                <input id="deuda-total" type="number" class="swal2-input" placeholder="Monto total ($)" step="0.01" min="0">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const c = document.getElementById('deuda-concepto').value;
+                const t = document.getElementById('deuda-total').value;
+                if (!c || !t) {
+                    Swal.showValidationMessage('Llena todos los campos');
+                    return false;
+                }
+                return { concepto: c, total: t };
+            }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI('/api/deudas', { method: 'POST', body: JSON.stringify(result.value) });
+                    showToast('Deuda registrada', 'success');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
+
+    function abonarDeuda(id, maxRestante) {
+        Swal.fire({
+            title: 'Registrar Abono',
+            html: `
+                <p>Restante: <strong class="text-danger">$${safeMoney(maxRestante)}</strong></p>
+                <input id="abono-monto" type="number" class="swal2-input" placeholder="Monto a abonar" value="${maxRestante}" step="0.01" min="0.01" max="${maxRestante}">
+                <input id="abono-nota" class="swal2-input" placeholder="Nota (Opcional)">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Abonar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const m = document.getElementById('abono-monto').value;
+                const n = document.getElementById('abono-nota').value;
+                if (!m || m <= 0) {
+                    Swal.showValidationMessage('Monto inválido');
+                    return false;
+                }
+                return { monto: m, nota: n };
+            }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI(`/api/deudas/${id}/pagos`, { method: 'POST', body: JSON.stringify(result.value) });
+                    showToast('Abono registrado', 'success');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
+
+    function verHistorialDeuda(id) {
+        const deuda = localCache.deudas.find(d => d._id === id);
+        if(!deuda || !deuda.pagos || deuda.pagos.length === 0) {
+            return Swal.fire('Historial', 'No hay abonos registrados en esta deuda.', 'info');
+        }
+        
+        let htmlLista = deuda.pagos.map(p => `
+            <div class="d-flex justify-content-between border-bottom p-2 small text-start">
+                <span>${safeDate(p.fecha)} ${p.nota ? `(<i class="text-muted">${escapeHTML(p.nota)}</i>)` : ''}</span>
+                <strong class="text-success">+$${safeMoney(p.monto)}</strong>
+            </div>
+        `).join('');
+
+        Swal.fire({
+            title: `Abonos: ${escapeHTML(deuda.concepto)}`,
+            html: `<div style="max-height: 250px; overflow-y:auto;">${htmlLista}</div>`,
+            confirmButtonText: 'Cerrar'
+        });
+    }
+
+    function eliminarDeuda(id) {
+        Swal.fire({
+            title: '¿Borrar deuda?',
+            text: 'Se eliminará de tu lista visible.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, borrar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d33'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI(`/api/deudas/${id}`, { method: 'DELETE' });
+                    showToast('Deuda eliminada', 'info');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
     }
 
     (async function init() {
@@ -1953,7 +2143,8 @@ document.addEventListener('DOMContentLoaded', () => {
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive
+        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
+        cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda
     };
 });
 
