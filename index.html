@@ -9,20 +9,8 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
-  <!-- FAVICON DINÁMICO -->
+  <!-- FAVICON DINÁMICO (Ahora se carga asíncronamente para no trabar la app) -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
-  <script>
-      (function() {
-          const savedFavicon = localStorage.getItem('cached_favicon_path');
-          const savedLogo = localStorage.getItem('cached_logo_path');
-          // Prioridad al favicon guardado, si no, usa el logo, si no, el default
-          if(savedFavicon) {
-              document.getElementById('dynamic-favicon').href = savedFavicon;
-          } else if (savedLogo) {
-              document.getElementById('dynamic-favicon').href = savedLogo;
-          }
-      })();
-  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
@@ -537,9 +525,7 @@
                 </div>
             </section>
 
-            <!-- ============================================== -->
-            <!-- NUEVA SECCIÓN: MIS DEUDAS (SOLO ADMIN) -->
-            <!-- ============================================== -->
+            <!-- SECCIÓN: MIS DEUDAS -->
             <section id="mis-deudas" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card mb-4">
@@ -576,7 +562,6 @@
                     </div>
                 </div>
             </section>
-            <!-- FIN NUEVA SECCIÓN MIS DEUDAS -->
 
             <section id="configuracion" class="section-view">
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
@@ -590,7 +575,6 @@
                     <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
                         <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
                         
-                        <!-- BOTONES DE CARGA CON FAVICON -->
                         <div class="btn-group-vertical">
                             <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-primary mb-1">Subir Logo Principal</button>
                             <button onclick="document.getElementById('favicon-input').click()" class="btn btn-sm btn-outline-info mb-1">Subir Icono (Favicon)</button>
@@ -600,7 +584,7 @@
                         <!-- INPUTS OCULTOS -->
                         <input type="file" id="firma-input" hidden accept="image/*">
                         <input type="file" id="logo-input" hidden accept="image/*">
-                        <input type="file" id="favicon-input" hidden accept="image/*"> <!-- NUEVO INPUT -->
+                        <input type="file" id="favicon-input" hidden accept="image/*">
                     </div>
                     <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
                 </div>
@@ -862,6 +846,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
+  
+  <!-- LIBRERIA PARA BASE DE DATOS LOCAL (IndexedDB) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  
   <script src="script.js"></script>
 </body>
 </html>

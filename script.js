@@ -44,16 +44,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let gapiInited = false;
     let gisInited = false;
 
-    // Caché Local
+    // Caché Local (Ahora se llenará de forma asíncrona desde IndexedDB)
     let localCache = {
-        artistas: (JSON.parse(localStorage.getItem('cache_artistas') || '[]') || []),
-        servicios: JSON.parse(localStorage.getItem('cache_servicios') || '[]'),
-        proyectos: JSON.parse(localStorage.getItem('cache_proyectos') || '[]'),
+        artistas: [],
+        servicios: [],
+        proyectos: [],
         cotizaciones: [],
         historial: [],
-        pagos: JSON.parse(localStorage.getItem('cache_pagos') || '[]'),
+        pagos: [],
         usuarios: [],
-        deudas: [], // <--- NUEVA LISTA DE DEUDAS
+        deudas: [], 
         trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] } 
     };
 
@@ -85,9 +85,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
     // ==================================================================
-    // 2. UTILIDADES
+    // 2. UTILIDADES Y SISTEMA LOCAL (INDEXED-DB MIGRATION)
     // ==================================================================
     
+    // Inicializar LocalForage (Base de datos local robusta)
+    localforage.config({
+        name: 'FiaRecordsApp',
+        storeName: 'fia_cache'
+    });
+
+    async function cargarCacheDesdeIndexedDB() {
+        try {
+            const artistas = await localforage.getItem('cache_artistas');
+            const servicios = await localforage.getItem('cache_servicios');
+            const proyectos = await localforage.getItem('cache_proyectos');
+            const pagos = await localforage.getItem('cache_pagos');
+            const deudas = await localforage.getItem('cache_deudas');
+
+            if(artistas) localCache.artistas = artistas;
+            if(servicios) localCache.servicios = servicios;
+            if(proyectos) localCache.proyectos = proyectos;
+            if(pagos) localCache.pagos = pagos;
+            if(deudas) localCache.deudas = deudas;
+
+            console.log("📦 Caché local cargado desde IndexedDB");
+        } catch (e) {
+            console.error("Error leyendo IndexedDB:", e);
+        }
+    }
+
     function setupFooterYear() {
         const currentYear = new Date().getFullYear();
         document.querySelectorAll('.footer-year-span').forEach(el => {
@@ -97,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleTheme(isDark) {
         document.body.classList.toggle('dark-mode', isDark);
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light'); // El tema sí puede ir en localStorage (pesa 5 bytes)
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             if (chk.checked !== isDark) {
                 chk.checked = isDark;
@@ -142,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(document.getElementById('login-logo')) document.getElementById('login-logo').src = logoSrc;
                     if(document.getElementById('app-logo')) document.getElementById('app-logo').src = logoSrc;
                     logoBase64 = logoSrc;
-                    localStorage.setItem('cached_logo_path', logoSrc);
+                    await localforage.setItem('cached_logo_path', logoSrc);
                 }
                 if (data && data.faviconBase64) {
                     let link = document.querySelector("link[rel~='icon']");
@@ -152,14 +178,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.head.appendChild(link);
                     }
                     link.href = data.faviconBase64;
-                    localStorage.setItem('cached_favicon_path', data.faviconBase64);
+                    await localforage.setItem('cached_favicon_path', data.faviconBase64);
                 }
             }
         } catch (e) { console.warn("Error cargando config pública", e); }
     }
 
     function getUserRoleAndId() {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token'); // Token va en localStorage para persistir sesión fácil
         if (!token) return { role: null, id: null, artistaId: null };
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
@@ -196,19 +222,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 3. OFFLINE MANAGER
+    // 3. OFFLINE MANAGER (AHORA CON INDEXED DB)
     // ==================================================================
     const OfflineManager = {
         QUEUE_KEY: 'fia_offline_queue',
-        getQueue: () => JSON.parse(localStorage.getItem(OfflineManager.QUEUE_KEY) || '[]'),
-        addToQueue: (url, options, tempId = null) => {
-            const queue = OfflineManager.getQueue();
+        
+        getQueue: async () => {
+            const queue = await localforage.getItem(OfflineManager.QUEUE_KEY);
+            return queue || [];
+        },
+
+        addToQueue: async (url, options, tempId = null) => {
+            const queue = await OfflineManager.getQueue();
             queue.push({ url, options, timestamp: Date.now(), tempId });
-            localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(queue));
+            await localforage.setItem(OfflineManager.QUEUE_KEY, queue);
             OfflineManager.updateIndicator();
         },
-        updateIndicator: () => {
-            const queue = OfflineManager.getQueue();
+
+        updateIndicator: async () => {
+            const queue = await OfflineManager.getQueue();
             if (navigator.onLine) {
                 if (queue.length > 0) {
                     DOMElements.connectionStatus.className = 'connection-status status-syncing';
@@ -223,24 +255,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 DOMElements.connectionText.textContent = queue.length > 0 ? `Offline (${queue.length})` : 'Modo Offline';
             }
         },
+
         sync: async () => {
-            const queue = OfflineManager.getQueue();
+            const queue = await OfflineManager.getQueue();
             if (queue.length === 0) return;
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
             let newQueue = [];
+            
             for (const req of queue) {
                 try {
                     let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
                     if (bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id;
                     const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
                     if (!res.ok) throw new Error('Failed');
-                } catch (e) { newQueue.push(req); }
+                } catch (e) { 
+                    newQueue.push(req); // Si falla (ej. internet intermitente), lo devuelve a la cola
+                }
             }
-            localStorage.setItem(OfflineManager.QUEUE_KEY, JSON.stringify(newQueue));
+            
+            await localforage.setItem(OfflineManager.QUEUE_KEY, newQueue);
+            
             if (newQueue.length === 0) {
                 showToast('Sincronización completada', 'success');
-                await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios')]);
+                // Recargamos todos los cachés
+                await Promise.all([
+                    fetchAPI('/api/proyectos'), 
+                    fetchAPI('/api/artistas'), 
+                    fetchAPI('/api/servicios'),
+                    fetchAPI('/api/deudas')
+                ]);
                 const currentHash = location.hash.replace('#', '');
                 if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
             }
@@ -265,11 +309,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
                 if (url === '/api/servicios') return localCache.servicios;
                 if (url === '/api/usuarios') return localCache.usuarios;
+                if (url === '/api/deudas') return localCache.deudas;
                 if (url.includes('/proyectos')) {
                     if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
                     if (url.includes('completos')) return localCache.proyectos.filter(p => (p.proceso === 'Completo' || p.estatus === 'Cancelado') && !p.deleted);
@@ -282,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // --- MODO OFFLINE (ESCRITURA A COLA) ---
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -302,12 +349,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
+            // --- ACTUALIZAR CACHÉ INDEXED-DB SI HAY INTERNET ---
             if (!options.method || options.method === 'GET') {
-                if (url === '/api/artistas') { localCache.artistas = Array.isArray(data) ? data : []; localStorage.setItem('cache_artistas', JSON.stringify(localCache.artistas)); }
-                if (url === '/api/servicios') { localCache.servicios = data; localStorage.setItem('cache_servicios', JSON.stringify(data)); }
+                if (url === '/api/artistas') { localCache.artistas = Array.isArray(data) ? data : []; await localforage.setItem('cache_artistas', localCache.artistas); }
+                if (url === '/api/servicios') { localCache.servicios = data; await localforage.setItem('cache_servicios', data); }
                 if (url === '/api/usuarios') { localCache.usuarios = data; }
-                if (url === '/api/proyectos') { localCache.proyectos = data; localStorage.setItem('cache_proyectos', JSON.stringify(data)); }
-                if (url === '/api/pagos/todos') { localCache.pagos = data; localStorage.setItem('cache_pagos', JSON.stringify(data)); }
+                if (url === '/api/proyectos') { localCache.proyectos = data; await localforage.setItem('cache_proyectos', data); }
+                if (url === '/api/pagos/todos') { localCache.pagos = data; await localforage.setItem('cache_pagos', data); }
+                if (url === '/api/deudas') { localCache.deudas = data; await localforage.setItem('cache_deudas', data); }
             }
             return data;
         } catch (e) { throw e; } finally { hideLoader(); }
@@ -548,7 +597,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }); 
             
             const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
-            if (indexCache !== -1) localCache.proyectos[indexCache] = result;
+            if (indexCache !== -1) {
+                localCache.proyectos[indexCache] = result;
+                await localforage.setItem('cache_proyectos', localCache.proyectos);
+            }
 
             const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
             if (indexHistorial !== -1) historialCacheados[indexHistorial] = result;
@@ -1014,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cancelarCita(id) { Swal.fire({ title: '¿Cancelar esta cita?', text: "La fecha se liberará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, cancelar', cancelButtonText: 'No', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cita cancelada.', 'info'); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); if(document.getElementById('agenda').classList.contains('active')) cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) cargarFlujoDeTrabajo(); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } } }); }
     async function actualizarHorarioProyecto() { const id = document.getElementById('modal-event-id').value; const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0]; const newTimeInput = document.getElementById('edit-event-time').value; if (!newDateInput) return showToast("Selecciona una nueva fecha", "error"); let finalDate = new Date(newDateInput); if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); } try { await cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Horario actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); cargarAgenda(); } catch (e) { showToast("Error al actualizar", "error"); } }
     async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); verificarDisponibilidad(); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
-    async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto[campo] = valor; if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto[campo] = valor; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
 
     async function aprobarCotizacion(id) { 
         Swal.fire({ 
@@ -1082,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }); 
         } 
     }
-    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) proyecto.proceso = proceso; if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
     // CARGAR HISTORIAL (BOTÓN VISOR)
@@ -1556,6 +1608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (navigator.onLine && filterText === null) {
             try { 
                 localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
+                await localforage.setItem(`cache_${endpoint}`, localCache[endpoint]);
             } catch(e) { console.error("Error fetching " + endpoint); }
         } else if (!localCache[endpoint] || localCache[endpoint].length === 0) {
             try { localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); } catch(e) {}
@@ -1829,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             appLogo.src = res.logoBase64; 
                             if (document.getElementById('login-logo')) document.getElementById('login-logo').src = res.logoBase64;
                             logoBase64 = res.logoBase64;
-                            localStorage.setItem('cached_logo_path', res.logoBase64);
+                            await localforage.setItem('cached_logo_path', res.logoBase64);
                         } else {
                             await loadInitialConfig(); 
                             if(configCache && configCache.logoBase64) { 
@@ -1867,7 +1920,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 document.head.appendChild(link);
                             }
                             link.href = faviconUrl;
-                            localStorage.setItem('cached_favicon_path', faviconUrl);
+                            await localforage.setItem('cached_favicon_path', faviconUrl);
                         }
                     } catch (e) {
                         showToast(`Error al subir favicon`, 'error');
@@ -2076,14 +2129,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     (async function init() {
-        const cachedLogo = localStorage.getItem('cached_logo_path');
+        // --- 1. CARGAR DB LOCAL PRIMERO ---
+        await cargarCacheDesdeIndexedDB();
+
+        // --- 2. CARGAR ASSETS LOCALES ---
+        const cachedLogo = await localforage.getItem('cached_logo_path');
         if(cachedLogo) {
             if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
             if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
             logoBase64 = cachedLogo;
         }
 
-        const cachedFavicon = localStorage.getItem('cached_favicon_path');
+        const cachedFavicon = await localforage.getItem('cached_favicon_path');
         if (cachedFavicon) {
             let link = document.querySelector("link[rel~='icon']");
             if (!link) {
@@ -2106,7 +2163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadInitialConfig();
         setTimeout(preloadLogoForPDF, 2000);
         
-        const savedTheme = localStorage.getItem('theme') === 'dark';
+        const savedTheme = localStorage.getItem('theme') === 'dark'; // Este sí se queda en localStorage, es solo texto
         toggleTheme(savedTheme);
         
         setupAuthListeners();
