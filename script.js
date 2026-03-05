@@ -11,14 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let logoBase64 = null; 
     let preseleccionArtistaId = null;
 
-    // Estado de Paginación para Listas
+    // Estado de Paginación
     const paginationState = {
         artistas: { page: 1, limit: 10, filter: '' },
         servicios: { page: 1, limit: 10, filter: '' },
         usuarios: { page: 1, limit: 10, filter: '' }
     };
 
-    // Paginación para Papelera
     const trashPagination = {
         proyectos: { page: 1, limit: 10 },
         artistas: { page: 1, limit: 10 },
@@ -26,12 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
         usuarios: { page: 1, limit: 10 }
     };
 
-    // Paginación para Tablas (AHORA CON FILTRO INTEGRADO)
     const tablePagination = {
-        historial: { page: 1, limit: 10, filter: '' },
-        cotizaciones: { page: 1, limit: 10, filter: '' },
-        pagosPendientes: { page: 1, limit: 10, filter: '' },
-        pagosHistorial: { page: 1, limit: 10, filter: '' }
+        historial: { page: 1, limit: 10 },
+        cotizaciones: { page: 1, limit: 10 },
+        pagosPendientes: { page: 1, limit: 10 },
+        pagosHistorial: { page: 1, limit: 10 }
     };
 
     // Configuración Google API
@@ -46,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gapiInited = false;
     let gisInited = false;
 
-    // Caché Local
+    // Caché Local (Ahora se llenará de forma asíncrona desde IndexedDB)
     let localCache = {
         artistas: [],
         servicios: [],
@@ -63,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let configCache = null;
     let chartInstance = null;
     
-    // Arrays temporales para tablas
+    // Arrays temporales para tablas paginadas
     let historialCacheados = []; 
     let cotizacionesCacheadas = [];
     let pagosPendientesCacheados = [];
@@ -87,9 +85,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
     // ==================================================================
-    // 2. UTILIDADES Y SISTEMA LOCAL (INDEXED-DB)
+    // 2. UTILIDADES Y SISTEMA LOCAL (INDEXED-DB MIGRATION)
     // ==================================================================
-    localforage.config({ name: 'FiaRecordsApp', storeName: 'fia_cache' });
+    
+    // Inicializar LocalForage (Base de datos local robusta)
+    localforage.config({
+        name: 'FiaRecordsApp',
+        storeName: 'fia_cache'
+    });
 
     async function cargarCacheDesdeIndexedDB() {
         try {
@@ -104,19 +107,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if(proyectos) localCache.proyectos = proyectos;
             if(pagos) localCache.pagos = pagos;
             if(deudas) localCache.deudas = deudas;
-        } catch (e) { console.error("Error leyendo IndexedDB:", e); }
+
+            console.log("📦 Caché local cargado desde IndexedDB");
+        } catch (e) {
+            console.error("Error leyendo IndexedDB:", e);
+        }
     }
 
     function setupFooterYear() {
         const currentYear = new Date().getFullYear();
-        document.querySelectorAll('.footer-year-span').forEach(el => { el.textContent = currentYear; });
+        document.querySelectorAll('.footer-year-span').forEach(el => {
+            el.textContent = currentYear;
+        });
     }
 
     function toggleTheme(isDark) {
         document.body.classList.toggle('dark-mode', isDark);
-        localStorage.setItem('theme', isDark ? 'dark' : 'light'); 
+        localStorage.setItem('theme', isDark ? 'dark' : 'light'); // El tema sí puede ir en localStorage (pesa 5 bytes)
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
-            if (chk.checked !== isDark) chk.checked = isDark;
+            if (chk.checked !== isDark) {
+                chk.checked = isDark;
+            }
         });
     }
 
@@ -174,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getUserRoleAndId() {
-        const token = localStorage.getItem('token'); 
+        const token = localStorage.getItem('token'); // Token va en localStorage para persistir sesión fácil
         if (!token) return { role: null, id: null, artistaId: null };
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
@@ -184,7 +195,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 artistaId: payload.artistaId,
                 username: payload.username
             };
-        } catch (e) { return { role: null, id: null, artistaId: null }; }
+        } catch (e) {
+            return { role: null, id: null, artistaId: null };
+        }
     }
 
     function escapeHTML(str) { if (!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
@@ -194,8 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function preloadLogoForPDF() {
         if (logoBase64) return;
         const appLogo = document.getElementById('app-logo');
-        if(appLogo && appLogo.src.startsWith('data:image')) { logoBase64 = appLogo.src; } 
-        else { await fetchPublicLogo(); }
+        if(appLogo && appLogo.src.startsWith('data:image')) {
+            logoBase64 = appLogo.src;
+        } else {
+             await fetchPublicLogo();
+        }
     }
 
     async function loadInitialConfig() {
@@ -206,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 3. OFFLINE MANAGER
+    // 3. OFFLINE MANAGER (AHORA CON INDEXED DB)
     // ==================================================================
     const OfflineManager = {
         QUEUE_KEY: 'fia_offline_queue',
@@ -253,14 +269,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id;
                     const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
                     if (!res.ok) throw new Error('Failed');
-                } catch (e) { newQueue.push(req); }
+                } catch (e) { 
+                    newQueue.push(req); // Si falla (ej. internet intermitente), lo devuelve a la cola
+                }
             }
             
             await localforage.setItem(OfflineManager.QUEUE_KEY, newQueue);
             
             if (newQueue.length === 0) {
                 showToast('Sincronización completada', 'success');
-                await Promise.all([fetchAPI('/api/proyectos'), fetchAPI('/api/artistas'), fetchAPI('/api/servicios'), fetchAPI('/api/deudas')]);
+                // Recargamos todos los cachés
+                await Promise.all([
+                    fetchAPI('/api/proyectos'), 
+                    fetchAPI('/api/artistas'), 
+                    fetchAPI('/api/servicios'),
+                    fetchAPI('/api/deudas')
+                ]);
                 const currentHash = location.hash.replace('#', '');
                 if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
             }
@@ -277,11 +301,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const token = localStorage.getItem('token');
         const isPublic = url.includes('/auth/') || url.includes('/configuracion/public'); 
 
-        if (!token && !isPublic) { showLogin(); throw new Error('No autenticado'); }
+        if (!token && !isPublic) { 
+            showLogin(); 
+            throw new Error('No autenticado'); 
+        }
 
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -300,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // --- MODO OFFLINE (ESCRITURA A COLA) ---
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -320,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
+            // --- ACTUALIZAR CACHÉ INDEXED-DB SI HAY INTERNET ---
             if (!options.method || options.method === 'GET') {
                 if (url === '/api/artistas') { localCache.artistas = Array.isArray(data) ? data : []; await localforage.setItem('cache_artistas', localCache.artistas); }
                 if (url === '/api/servicios') { localCache.servicios = data; await localforage.setItem('cache_servicios', data); }
@@ -335,19 +365,93 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================
     // 5. GOOGLE DRIVE Y REPRODUCTOR
     // ==================================================================
-    window.initializeGapiClient = function() { gapi.load('client', async () => { try { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs }); gapiInited = true; } catch (error) { console.error("Error init GAPI"); } }); }
-    window.initializeGisClient = function() { try { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GAP_CONFIG.clientId, scope: GAP_CONFIG.scope, callback: '', prompt: '' }); gisInited = true; } catch (error) { console.error("Error init GIS"); } }
-    let checkGoogleLibsInterval = setInterval(() => { if (typeof gapi !== 'undefined' && !gapiInited) { initializeGapiClient(); } if (typeof google !== 'undefined' && !gisInited) { initializeGisClient(); } if (gapiInited && gisInited) { clearInterval(checkGoogleLibsInterval); } }, 500);
+    window.initializeGapiClient = function() {
+        gapi.load('client', async () => {
+            try { await gapi.client.init({ apiKey: GAP_CONFIG.apiKey, discoveryDocs: GAP_CONFIG.discoveryDocs }); gapiInited = true; } catch (error) { console.error("Error init GAPI", error); }
+        });
+    }
 
-    async function obtenerCarpetaMaestra() { const nombreMaestra = "FIA_RECORDS_STUDIO"; const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreMaestra}' and trashed=false and 'root' in parents`; try { const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' }); const files = response.result.files; if (files && files.length > 0) { return files[0].id; } else { const fileMetadata = { 'name': nombreMaestra, 'mimeType': 'application/vnd.google-apps.folder' }; const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' }); return createRes.result.id; } } catch (err) { throw new Error('Error de conexión con Drive.'); } }
-    async function buscarOCrearCarpetaArtista(nombreArtista, idMaestra) { const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreArtista}' and trashed=false and '${idMaestra}' in parents`; try { const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' }); const files = response.result.files; if (files && files.length > 0) { return files[0].id; } else { const fileMetadata = { 'name': nombreArtista, 'mimeType': 'application/vnd.google-apps.folder', 'parents':[idMaestra] }; const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' }); return createRes.result.id; } } catch (err) { throw new Error('No se pudo crear la carpeta del artista.'); } }
-    async function buscarOCrearCarpetaProyecto(nombreProyecto, idCarpetaArtista) { const nombreLimpio = nombreProyecto.trim() || "Proyecto Sin Nombre"; const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreLimpio}' and trashed=false and '${idCarpetaArtista}' in parents`; try { const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' }); const files = response.result.files; if (files && files.length > 0) { return files[0].id; } else { const fileMetadata = { 'name': nombreLimpio, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [idCarpetaArtista] }; const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' }); return createRes.result.id; } } catch (err) { throw new Error('No se pudo crear la carpeta del proyecto.'); } }
-    async function hacerCarpetaPublica(fileId) { try { await gapi.client.drive.permissions.create({ fileId: fileId, resource: { role: 'reader', type: 'anyone' } }); } catch (error) { console.error("Error permisos carpeta:", error); } }
+    window.initializeGisClient = function() {
+        try { 
+            tokenClient = google.accounts.oauth2.initTokenClient({ 
+                client_id: GAP_CONFIG.clientId, 
+                scope: GAP_CONFIG.scope, 
+                callback: '',
+                prompt: '' 
+            }); 
+            gisInited = true; 
+        } catch (error) { console.error("Error init GIS", error); }
+    }
+
+    let checkGoogleLibsInterval = setInterval(() => {
+        if (typeof gapi !== 'undefined' && !gapiInited) { initializeGapiClient(); }
+        if (typeof google !== 'undefined' && !gisInited) { initializeGisClient(); }
+        if (gapiInited && gisInited) { clearInterval(checkGoogleLibsInterval); }
+    }, 500);
+
+    async function obtenerCarpetaMaestra() {
+        const nombreMaestra = "FIA_RECORDS_STUDIO";
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreMaestra}' and trashed=false and 'root' in parents`;
+        try {
+            const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+            const files = response.result.files;
+            if (files && files.length > 0) { return files[0].id; } 
+            else {
+                const fileMetadata = { 'name': nombreMaestra, 'mimeType': 'application/vnd.google-apps.folder' };
+                const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+                return createRes.result.id;
+            }
+        } catch (err) { throw new Error('Error de conexión con Drive.'); }
+    }
+
+    async function buscarOCrearCarpetaArtista(nombreArtista, idMaestra) {
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreArtista}' and trashed=false and '${idMaestra}' in parents`;
+        try {
+            const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+            const files = response.result.files;
+            if (files && files.length > 0) { return files[0].id; } 
+            else {
+                const fileMetadata = { 'name': nombreArtista, 'mimeType': 'application/vnd.google-apps.folder', 'parents':[idMaestra] };
+                const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+                return createRes.result.id;
+            }
+        } catch (err) { throw new Error('No se pudo crear la carpeta del artista.'); }
+    }
+
+    async function buscarOCrearCarpetaProyecto(nombreProyecto, idCarpetaArtista) {
+        const nombreLimpio = nombreProyecto.trim() || "Proyecto Sin Nombre";
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${nombreLimpio}' and trashed=false and '${idCarpetaArtista}' in parents`;
+        try {
+            const response = await gapi.client.drive.files.list({ q: q, fields: 'files(id, name)' });
+            const files = response.result.files;
+            if (files && files.length > 0) { return files[0].id; } 
+            else {
+                const fileMetadata = { 'name': nombreLimpio, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [idCarpetaArtista] };
+                const createRes = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+                return createRes.result.id;
+            }
+        } catch (err) { throw new Error('No se pudo crear la carpeta del proyecto.'); }
+    }
+
+    async function hacerCarpetaPublica(fileId) {
+        try {
+            await gapi.client.drive.permissions.create({
+                fileId: fileId,
+                resource: { role: 'reader', type: 'anyone' }
+            });
+        } catch (error) { console.error("Error permisos carpeta:", error); }
+    }
 
     async function subirADrive() {
-        if (!gapiInited || !gisInited) { return showToast('Cargando servicios de Google... Intenta de nuevo.', 'info'); }
+        if (!gapiInited || !gisInited) {
+            if(typeof gapi !== 'undefined') initializeGapiClient();
+            if(typeof google !== 'undefined') initializeGisClient();
+            return showToast('Cargando servicios de Google... Intenta de nuevo en 5 segundos.', 'info');
+        }
+        
         const fileInput = document.getElementById('drive-file-input');
         if (!fileInput || fileInput.files.length === 0) return showToast('Selecciona al menos un archivo.', 'warning');
+        
         const files = fileInput.files; 
         const artistName = document.getElementById('delivery-artist-name').value || 'General';
         const projectName = document.getElementById('delivery-project-name').value || 'Sin Nombre';
@@ -359,17 +463,24 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 if(statusSpan) { statusSpan.textContent = 'Organizando carpetas...'; statusSpan.style.color = 'var(--primary-color)'; }
                 showLoader();
+
                 const idMaestra = await obtenerCarpetaMaestra();
                 const idArtista = await buscarOCrearCarpetaArtista(artistName, idMaestra);
                 await hacerCarpetaPublica(idArtista); 
+
                 if(statusSpan) statusSpan.textContent = `Creando carpeta: ${projectName}...`;
                 const idProyecto = await buscarOCrearCarpetaProyecto(projectName, idArtista);
+                
                 await hacerCarpetaPublica(idProyecto);
+
                 if(statusSpan) statusSpan.textContent = 'Generando enlace...';
                 const getFolderRes = await gapi.client.drive.files.get({ fileId: idProyecto, fields: 'webViewLink' });
                 const folderLink = getFolderRes.result.webViewLink;
+
                 const accessToken = gapi.client.getToken().access_token;
+                
                 const uploadedFiles = [];
+
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
@@ -377,27 +488,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', file);
-                    const resUpload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form });
+                    
+                    const resUpload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+                        method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form
+                    });
+                    
                     const fileData = await resUpload.json();
+                    
                     const nombreLow = file.name.toLowerCase();
                     let tipoArchivo = 'otro';
                     if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
                     else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
                     else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
-                    if(tipoArchivo !== 'otro') { uploadedFiles.push({ nombre: file.name, driveId: fileData.id, urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`, tipo: tipoArchivo }); }
+
+                    if(tipoArchivo !== 'otro') {
+                        uploadedFiles.push({
+                            nombre: file.name,
+                            driveId: fileData.id,
+                            urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
+                            tipo: tipoArchivo
+                        });
+                    }
                 }
-                if(linkInput) { linkInput.value = folderLink; linkInput.style.borderColor = '#10b981'; }
+
+                if(linkInput) {
+                    linkInput.value = folderLink; 
+                    linkInput.style.borderColor = '#10b981'; 
+                }
+                
                 if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
+
                 await saveDeliveryLink(false, folderLink, uploadedFiles); 
+                
                 showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
+
                 if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
                 if (document.getElementById('vista-artista').classList.contains('active')) {
                     const nombreEl = document.getElementById('vista-artista-nombre');
-                    if (nombreEl) { const n = nombreEl.textContent; const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n); if(a) mostrarVistaArtista(a._id, n, ''); }
+                    if (nombreEl) {
+                        const n = nombreEl.textContent;
+                        const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                        if(a) mostrarVistaArtista(a._id, n, ''); 
+                    }
                 }
-            } catch (err) { showToast('Error: ' + err.message, 'error'); } finally { hideLoader(); }
+            } catch (err) {
+                console.error(err);
+                showToast('Error: ' + err.message, 'error');
+                if(statusSpan) { statusSpan.textContent = 'Error en la subida.'; statusSpan.style.color = 'var(--danger-color)'; }
+            } finally { hideLoader(); }
         };
-        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: ''}); } else { tokenClient.requestAccessToken({prompt: ''}); }
+
+        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: ''}); } 
+        else { tokenClient.requestAccessToken({prompt: ''}); }
     }
 
     function openDeliveryModal(projectId, artistName, projectName) { 
@@ -405,16 +547,37 @@ document.addEventListener('DOMContentLoaded', () => {
         modalEl.querySelector('#delivery-project-id').value = projectId; 
         modalEl.querySelector('#delivery-artist-name').value = artistName; 
         modalEl.querySelector('#delivery-project-name').value = projectName; 
+        
         const inputLink = document.getElementById('delivery-link-input');
         document.getElementById('drive-status').textContent = ''; 
         inputLink.value = 'Buscando enlace...';
+
         let proyecto = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
-        fetchAPI(`/api/proyectos/${projectId}`).then(data => { if(data && data.enlaceEntrega) { inputLink.value = data.enlaceEntrega; if(proyecto) proyecto.enlaceEntrega = data.enlaceEntrega; } else { inputLink.value = ''; } }).catch(() => { inputLink.value = (proyecto && proyecto.enlaceEntrega) ? proyecto.enlaceEntrega : ''; });
+        
+        fetchAPI(`/api/proyectos/${projectId}`).then(data => {
+            if(data && data.enlaceEntrega) {
+                inputLink.value = data.enlaceEntrega;
+                if(proyecto) proyecto.enlaceEntrega = data.enlaceEntrega;
+            } else {
+                inputLink.value = '';
+            }
+        }).catch(() => {
+            inputLink.value = (proyecto && proyecto.enlaceEntrega) ? proyecto.enlaceEntrega : '';
+        });
+        
         const userInfo = getUserRoleAndId();
         const uploadBtn = document.getElementById('btn-drive-upload');
         const fileInput = document.getElementById('drive-file-input');
-        if (userInfo.role === 'cliente') { if(uploadBtn) uploadBtn.style.display = 'none'; if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'none'; } 
-        else { if(uploadBtn) uploadBtn.style.display = 'block'; if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'block'; uploadBtn.onclick = subirADrive; }
+        
+        if (userInfo.role === 'cliente') {
+            if(uploadBtn) uploadBtn.style.display = 'none';
+            if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'none';
+        } else {
+             if(uploadBtn) uploadBtn.style.display = 'block';
+             if(fileInput && fileInput.parentElement) fileInput.parentElement.style.display = 'block';
+             uploadBtn.onclick = subirADrive; 
+        }
+
         new bootstrap.Modal(modalEl).show(); 
     }
 
@@ -423,19 +586,35 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null, archivosUpload = null) { 
         const projectId = document.getElementById('delivery-project-id').value; 
         const enlace = enlaceDirecto !== null ? enlaceDirecto : document.getElementById('delivery-link-input').value; 
+        
         const payload = { enlace };
         if (archivosUpload !== null) payload.archivos = archivosUpload;
+
         try { 
-            const result = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { method: 'PUT', body: JSON.stringify(payload) }); 
+            const result = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
+                method: 'PUT', 
+                body: JSON.stringify(payload) 
+            }); 
+            
             const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
-            if (indexCache !== -1) { localCache.proyectos[indexCache] = result; await localforage.setItem('cache_proyectos', localCache.proyectos); }
+            if (indexCache !== -1) {
+                localCache.proyectos[indexCache] = result;
+                await localforage.setItem('cache_proyectos', localCache.proyectos);
+            }
+
             const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
             if (indexHistorial !== -1) historialCacheados[indexHistorial] = result;
+
             showToast('Enlace guardado correctamente.', 'success'); 
+            
             if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
             if (document.getElementById('vista-artista').classList.contains('active')) {
                 const nombreEl = document.getElementById('vista-artista-nombre');
-                if (nombreEl) { const n = nombreEl.textContent; const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n); if(a) mostrarVistaArtista(a._id, n, ''); }
+                if (nombreEl) {
+                    const n = nombreEl.textContent;
+                    const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                    if(a) mostrarVistaArtista(a._id, n, ''); 
+                }
             }
             if (cerrarModal) closeDeliveryModal(); 
         } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
@@ -443,99 +622,216 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openPlayer(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
+
         if (!proj || (!proj.archivos && !proj.enlaceEntrega)) {
             fetchAPI(`/api/proyectos/${projectId}`).then(data => { renderPlayerUI(data); }).catch(e => showToast('Error cargando proyecto', 'error'));
-        } else { renderPlayerUI(proj); }
+        } else {
+            renderPlayerUI(proj);
+        }
     }
 
     function renderPlayerUI(proj) {
         document.getElementById('player-project-name').textContent = proj.nombreProyecto || 'Proyecto';
         const playlist = document.getElementById('playlist-container');
         const container = document.getElementById('media-container');
+        
         container.innerHTML = '<div class="text-muted small">Cargando...</div>';
         document.getElementById('current-track-name').textContent = 'Selecciona un archivo';
+
         let htmlList = '';
         let hasPlayableItems = false;
+
         if(proj.archivos && proj.archivos.length > 0) {
             htmlList += proj.archivos.map(file => {
                 let icon = 'bi-file-earmark';
                 if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
                 if (file.tipo === 'video') icon = 'bi-film text-danger';
                 if (file.tipo === 'imagen') icon = 'bi-image text-success';
+                
                 const urlToUse = file.urlDirecta || file.url; 
-                return `<button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" style="background-color: transparent;" onclick="app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)"><i class="bi ${icon} me-3 fs-5"></i> <span class="text-truncate">${escapeHTML(file.nombre)}</span></button>`;
+
+                return `
+                <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
+                        style="background-color: transparent;" 
+                        onclick="app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
+                    <i class="bi ${icon} me-3 fs-5"></i> 
+                    <span class="text-truncate">${escapeHTML(file.nombre)}</span>
+                </button>`;
             }).join('');
             hasPlayableItems = true;
         }
+
         if (!hasPlayableItems && proj.enlaceEntrega) {
-            htmlList = `<div class="p-4 text-center"><p class="text-muted small mb-3">No hay archivos listados, pero existe una carpeta de Drive.</p><button class="btn btn-outline-info btn-sm w-100 mb-3" onclick="app.sincronizarArchivosDrive('${proj._id}')"><i class="bi bi-arrow-repeat"></i> Sincronizar desde Drive</button><a href="${proj.enlaceEntrega}" target="_blank" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-folder"></i> Abrir Carpeta Original</a></div>`;
+            htmlList = `
+            <div class="p-4 text-center">
+                <p class="text-muted small mb-3">No hay archivos listados, pero existe una carpeta de Drive.</p>
+                <button class="btn btn-outline-info btn-sm w-100 mb-3" onclick="app.sincronizarArchivosDrive('${proj._id}')">
+                    <i class="bi bi-arrow-repeat"></i> Sincronizar desde Drive
+                </button>
+                <a href="${proj.enlaceEntrega}" target="_blank" class="btn btn-outline-secondary btn-sm w-100">
+                    <i class="bi bi-folder"></i> Abrir Carpeta Original
+                </a>
+            </div>`;
         } else if (!hasPlayableItems && !proj.enlaceEntrega) {
              htmlList = '<div class="p-3 text-center text-muted small border-top border-secondary">No hay contenido multimedia ni enlaces.</div>';
         }
+
         playlist.innerHTML = htmlList;
-        if(hasPlayableItems) { setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300); } 
-        else { container.innerHTML = `<div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted small"><i class="bi bi-music-note-list fs-1 mb-2"></i>Sin archivos para reproducir</div>`; }
+        
+        if(hasPlayableItems) {
+            setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
+        } else {
+             container.innerHTML = `<div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted small">
+                <i class="bi bi-music-note-list fs-1 mb-2"></i>
+                Sin archivos para reproducir
+             </div>`;
+        }
+
         new bootstrap.Modal(document.getElementById('player-modal')).show();
     }
 
     async function sincronizarArchivosDrive(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
         if (!proj || !proj.enlaceEntrega) return showToast('No hay enlace de Drive para sincronizar.', 'error');
+
         let folderId = null;
-        if (proj.enlaceEntrega.includes('id=')) { folderId = proj.enlaceEntrega.split('id=')[1].split('&')[0]; } 
-        else if (proj.enlaceEntrega.includes('/folders/')) { folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0].split('/')[0]; } 
-        else if (proj.enlaceEntrega.includes('/drive/u/0/folders/')) { folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0]; }
+        if (proj.enlaceEntrega.includes('id=')) {
+            folderId = proj.enlaceEntrega.split('id=')[1].split('&')[0];
+        } else if (proj.enlaceEntrega.includes('/folders/')) {
+            folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (proj.enlaceEntrega.includes('/drive/u/0/folders/')) {
+             folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0];
+        }
+
         if (!folderId) return showToast('No se pudo identificar el ID de la carpeta.', 'error');
-        if (!gapiInited) { if(typeof gapi !== 'undefined') initializeGapiClient(); return showToast('Conectando con Google... Intenta de nuevo.', 'info'); }
+
+        if (!gapiInited) {
+            if(typeof gapi !== 'undefined') initializeGapiClient();
+             return showToast('Conectando con Google... Intenta de nuevo.', 'info');
+        }
+
         showLoader();
         try {
-            const response = await gapi.client.drive.files.list({ q: `'${folderId}' in parents and trashed = false`, fields: 'files(id, name, mimeType)' });
+            const response = await gapi.client.drive.files.list({
+                q: `'${folderId}' in parents and trashed = false`,
+                fields: 'files(id, name, mimeType)'
+            });
+
             const files = response.result.files;
-            if (!files || files.length === 0) { hideLoader(); return showToast('La carpeta de Drive está vacía.', 'warning'); }
+            if (!files || files.length === 0) {
+                hideLoader();
+                return showToast('La carpeta de Drive está vacía.', 'warning');
+            }
+
             const archivosDetectados = [];
+            
             files.forEach(file => {
                 const nombreLow = file.name.toLowerCase();
                 let tipoArchivo = 'otro';
                 if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/) || file.mimeType.includes('audio')) tipoArchivo = 'audio';
                 else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/) || file.mimeType.includes('video')) tipoArchivo = 'video';
                 else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/) || file.mimeType.includes('image')) tipoArchivo = 'imagen';
-                if (tipoArchivo !== 'otro') { archivosDetectados.push({ nombre: file.name, driveId: file.id, urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`, tipo: tipoArchivo }); }
+
+                if (tipoArchivo !== 'otro') {
+                    archivosDetectados.push({
+                        nombre: file.name,
+                        driveId: file.id,
+                        urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`,
+                        tipo: tipoArchivo
+                    });
+                }
             });
-            if (archivosDetectados.length === 0) { hideLoader(); return showToast('No se encontraron archivos compatibles en la carpeta.', 'info'); }
+
+            if (archivosDetectados.length === 0) {
+                hideLoader();
+                return showToast('No se encontraron archivos multimedia compatibles en la carpeta.', 'info');
+            }
+
             const modalEl = document.getElementById('delivery-modal');
             modalEl.querySelector('#delivery-project-id').value = projectId;
+            
             await saveDeliveryLink(false, proj.enlaceEntrega, archivosDetectados);
+
             proj.archivos = archivosDetectados;
+            
             bootstrap.Modal.getInstance(document.getElementById('player-modal')).hide();
-            setTimeout(() => { openPlayer(projectId); showToast(`¡Sincronizado! ${archivosDetectados.length} archivos encontrados.`, 'success'); }, 500);
-        } catch (e) { showToast('Error al leer carpeta de Drive.', 'error'); if(tokenClient) tokenClient.requestAccessToken({prompt: ''}); } finally { hideLoader(); }
+            setTimeout(() => {
+                openPlayer(projectId);
+                showToast(`¡Sincronizado! ${archivosDetectados.length} archivos encontrados.`, 'success');
+            }, 500);
+
+        } catch (e) {
+            console.error(e);
+            showToast('Error al leer carpeta de Drive. Verifica permisos o login.', 'error');
+            if(tokenClient) tokenClient.requestAccessToken({prompt: ''});
+        } finally {
+            hideLoader();
+        }
     }
 
     function playMedia(url, name, tipo, btnElement) {
         document.getElementById('current-track-name').textContent = name;
         const container = document.getElementById('media-container');
+        
         container.innerHTML = '';
+
         let iframeUrl = url;
         let isFolder = false;
         let fileId = null;
         
-        if (url.includes('/folders/')) { isFolder = true; fileId = url.split('/folders/')[1].split('?')[0].split('/')[0]; } 
-        else if (url.includes('id=')) { fileId = url.split('id=')[1].split('&')[0]; } 
-        else if (url.includes('/d/')) { fileId = url.split('/d/')[1].split('/')[0]; }
-
-        if (fileId && !isFolder) { iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`; }
-        if (isFolder) {
-            container.innerHTML = `<div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center"><i class="bi bi-folder-fill text-warning mb-3" style="font-size: 4rem;"></i><h5 class="text-white">Carpeta de Archivos</h5><p class="text-muted small">Por políticas de Google, las carpetas deben abrirse en una pestaña nueva.</p><a href="${url}" target="_blank" class="btn btn-primary mt-2"><i class="bi bi-box-arrow-up-right"></i> Abrir en Drive</a></div>`;
-        } else {
-            container.innerHTML = `<iframe src="${iframeUrl}" width="100%" height="100%" style="border: none; border-radius: 10px; min-height: 400px; background-color: #000;" allow="autoplay; fullscreen"></iframe>`;
+        if (url.includes('/folders/')) {
+            isFolder = true;
+            fileId = url.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (url.includes('id=')) {
+            fileId = url.split('id=')[1].split('&')[0];
+        } else if (url.includes('/d/')) {
+            fileId = url.split('/d/')[1].split('/')[0];
         }
-        document.querySelectorAll('.track-btn').forEach(b => { b.classList.remove('active', 'bg-primary'); b.style.backgroundColor = 'transparent'; });
-        if(btnElement) { btnElement.classList.add('active', 'bg-primary'); btnElement.style.backgroundColor = 'var(--primary-color)'; }
+
+        if (fileId && !isFolder) {
+            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+        }
+
+        if (isFolder) {
+            container.innerHTML = `
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
+                    <i class="bi bi-folder-fill text-warning mb-3" style="font-size: 4rem;"></i>
+                    <h5 class="text-white">Carpeta de Archivos</h5>
+                    <p class="text-muted small">Por políticas de Google, las carpetas completas deben abrirse en una pestaña nueva.</p>
+                    <a href="${url}" target="_blank" class="btn btn-primary mt-2">
+                        <i class="bi bi-box-arrow-up-right"></i> Abrir en Drive
+                    </a>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <iframe 
+                    src="${iframeUrl}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border: none; border-radius: 10px; min-height: 400px; background-color: #000;" 
+                    allow="autoplay; fullscreen">
+                </iframe>
+            `;
+        }
+
+        document.querySelectorAll('.track-btn').forEach(b => {
+            b.classList.remove('active', 'bg-primary');
+            b.style.backgroundColor = 'transparent';
+        });
+        if(btnElement) {
+            btnElement.classList.add('active', 'bg-primary');
+            btnElement.style.backgroundColor = 'var(--primary-color)';
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('player-modal');
-        if(modalEl) { modalEl.addEventListener('hidden.bs.modal', () => { document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>'; }); }
+        if(modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', () => {
+                document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>';
+            });
+        }
     });
 
     // ==================================================================
@@ -554,12 +850,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 if(cardIngresos) cardIngresos.style.display = 'block';
                 if(chartContainer) chartContainer.style.display = 'block';
+                
                 kpiIngresos.textContent = `$${safeMoney(stats.ingresosMes)}`;
+                
                 const ctx = document.getElementById('incomeChart').getContext('2d'); 
                 if (chartInstance) chartInstance.destroy(); 
                 const labels =['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; 
                 const dataValues = stats.monthlyIncome || Array(12).fill(0); 
-                chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets:[{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+                chartInstance = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { labels: labels, datasets:[{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, 
+                    options: { responsive: true, maintainAspectRatio: false } 
+                });
             }
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
@@ -569,6 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================
     // 7. GESTIÓN DE PROYECTOS Y AGENDA
     // ==================================================================
+    
     async function verificarDisponibilidad() {
         const fechaInput = document.getElementById('fechaProyecto');
         const horaSelect = document.getElementById('horaProyecto');
@@ -582,31 +885,59 @@ document.addEventListener('DOMContentLoaded', () => {
              const day = String(d.getDate()).padStart(2, '0');
              fecha = `${year}-${month}-${day}`;
         }
-        if (!fecha) { horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>'; horaSelect.disabled = true; return; }
-        horaSelect.innerHTML = '<option value="">Buscando horarios...</option>'; horaSelect.disabled = true; alertaDiv.style.display = 'none';
+
+        if (!fecha) {
+            horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>';
+            horaSelect.disabled = true;
+            return;
+        }
+
+        horaSelect.innerHTML = '<option value="">Buscando horarios...</option>';
+        horaSelect.disabled = true;
+        alertaDiv.style.display = 'none';
 
         try {
             const horariosDisponibles = await fetchAPI(`/api/proyectos/disponibilidad?fecha=${fecha}`);
+            
             horaSelect.innerHTML = ''; 
+
             if (horariosDisponibles.length === 0) {
                 horaSelect.innerHTML = '<option value="">No hay horarios / Día Cerrado</option>';
-                alertaDiv.textContent = 'Lo sentimos, no hay cupo disponible o el estudio no abre este día.'; alertaDiv.style.display = 'block';
+                alertaDiv.textContent = 'Lo sentimos, no hay cupo disponible o el estudio no abre este día.';
+                alertaDiv.style.display = 'block';
             } else {
-                const defaultOp = document.createElement('option'); defaultOp.value = ""; defaultOp.textContent = "-- Selecciona Hora --"; horaSelect.appendChild(defaultOp);
-                horariosDisponibles.forEach(hora => { const option = document.createElement('option'); option.value = hora; option.textContent = `${hora} hrs - Disponible`; horaSelect.appendChild(option); });
+                const defaultOp = document.createElement('option');
+                defaultOp.value = ""; defaultOp.textContent = "-- Selecciona Hora --";
+                horaSelect.appendChild(defaultOp);
+
+                horariosDisponibles.forEach(hora => {
+                    const option = document.createElement('option');
+                    option.value = hora;
+                    option.textContent = `${hora} hrs - Disponible`;
+                    horaSelect.appendChild(option);
+                });
                 horaSelect.disabled = false;
             }
-        } catch (e) { horaSelect.innerHTML = '<option value="">Error de conexión</option>'; }
+
+        } catch (e) { 
+            console.error("Error verificando disponibilidad", e); 
+            horaSelect.innerHTML = '<option value="">Error de conexión</option>';
+        }
     }
 
     async function cargarOpcionesParaSelect(url, selectId, valueField, textFieldFn, addPublicoGeneral = false, currentValue = null) { 
         const select = document.getElementById(selectId); 
         try { 
-            const data = await fetchAPI(url); select.innerHTML = ''; 
+            const data = await fetchAPI(url); 
+            select.innerHTML = ''; 
             if (addPublicoGeneral) { const op = document.createElement('option'); op.value = 'publico_general'; op.textContent = 'Público General'; select.appendChild(op); } 
             const user = getUserRoleAndId();
-            data.forEach(item => { if (selectId === 'proyectoServicio' && user.role === 'cliente') { if (item.visible === false) return; } const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); }); 
-            if (selectId === 'proyectoArtista' && preseleccionArtistaId) { select.value = preseleccionArtistaId; preseleccionArtistaId = null; } else if (currentValue) { select.value = currentValue; } 
+            data.forEach(item => { 
+                if (selectId === 'proyectoServicio' && user.role === 'cliente') { if (item.visible === false) return; }
+                const option = document.createElement('option'); option.value = item[valueField]; option.textContent = textFieldFn(item); option.dataset.precio = item.precio || 0; select.appendChild(option); 
+            }); 
+            if (selectId === 'proyectoArtista' && preseleccionArtistaId) { select.value = preseleccionArtistaId; preseleccionArtistaId = null; } 
+            else if (currentValue) { select.value = currentValue; } 
         } catch (error) { select.innerHTML = `<option value="">Error al cargar datos</option>`; } 
     }
 
@@ -626,7 +957,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(btnGenerarCotizacion) { btnGenerarCotizacion.classList.add('d-none'); }
             const select = document.getElementById('proyectoArtista');
             select.innerHTML = `<option value="${userInfo.artistaId}" selected>${userInfo.username}</option>`;
-            if (!document.getElementById('info-artista-cliente')) { const infoArtistaEl = document.createElement('p'); infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${userInfo.username}</strong>`; infoArtistaEl.id = 'info-artista-cliente'; infoArtistaEl.className = 'alert alert-info py-2'; artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer); }
+            if (!document.getElementById('info-artista-cliente')) {
+                 const infoArtistaEl = document.createElement('p'); infoArtistaEl.innerHTML = `Registrando proyecto para: <strong>${userInfo.username}</strong>`; infoArtistaEl.id = 'info-artista-cliente'; infoArtistaEl.className = 'alert alert-info py-2'; artistaSelectContainer.parentElement.insertBefore(infoArtistaEl, artistaSelectContainer);
+            }
         } else {
             artistaSelectContainer.style.display = 'flex';
             if (btnNuevoArtista) btnNuevoArtista.style.display = 'block';
@@ -637,8 +970,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`); 
         
-        flatpickr("#fechaProyecto", { defaultDate: "today", locale: "es", minDate: "today", onChange: function() { verificarDisponibilidad(); } });
-        const horaSelect = document.getElementById('horaProyecto'); horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>'; horaSelect.disabled = true;
+        const fp = flatpickr("#fechaProyecto", { 
+            defaultDate: "today", 
+            locale: "es",
+            minDate: "today",
+            onChange: function(selectedDates, dateStr, instance) {
+                verificarDisponibilidad(); 
+            }
+        });
+        
+        const horaSelect = document.getElementById('horaProyecto');
+        horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>';
+        horaSelect.disabled = true;
+
         proyectoActual = {}; mostrarProyectoActual(); document.getElementById('formProyecto').reset();
     }
 
@@ -647,28 +991,75 @@ document.addEventListener('DOMContentLoaded', () => {
     function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let subtotal = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; const total = subtotal - descuento; document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
 
     async function guardarProyecto(procesoDestino) {
-        const artistaSelect = document.getElementById('proyectoArtista'); const artistaId = artistaSelect.value; 
-        const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; const horaInput = document.getElementById('horaProyecto').value; 
+        const artistaSelect = document.getElementById('proyectoArtista'); 
+        const artistaId = artistaSelect.value; 
+        const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; 
+        const horaInput = document.getElementById('horaProyecto').value; 
+
         let fechaFinal = new Date(); 
+
         if (procesoDestino !== 'Cotizacion') {
             if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
             if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
-            fechaFinal = new Date(fechaInput); const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes);
+            
+            fechaFinal = new Date(fechaInput); 
+            const [hours, minutes] = horaInput.split(':'); 
+            fechaFinal.setHours(hours);
+            fechaFinal.setMinutes(minutes);
         } else {
-            if (fechaInput) { fechaFinal = new Date(fechaInput); if (horaInput) { const [hours, minutes] = horaInput.split(':'); fechaFinal.setHours(hours); fechaFinal.setMinutes(minutes); } }
+            if (fechaInput) {
+                fechaFinal = new Date(fechaInput);
+                if (horaInput) {
+                    const [hours, minutes] = horaInput.split(':');
+                    fechaFinal.setHours(hours);
+                    fechaFinal.setMinutes(minutes);
+                }
+            }
         }
+        
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
+        
         const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
         const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
         const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
         const total = Math.max(0, subtotal - descuento);
+        
         const procesoBD = procesoDestino === 'Cotizacion' ? 'Solicitud' : procesoDestino;
-        const body = { artista: artistaId === 'publico_general' ? null : artistaId, nombreProyecto: document.getElementById('nombreProyecto').value, items: items, total: total, descuento: descuento, estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', metodoPago: 'Pendiente', fecha: fechaFinal.toISOString(), prioridad: 'Normal', proceso: procesoBD, esAlbum: document.getElementById('esAlbum').checked };
-        try { return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); } catch (error) { showToast(`Error al guardar: ${error.message}`, 'error'); return null; }
+
+        const body = { 
+            artista: artistaId === 'publico_general' ? null : artistaId, 
+            nombreProyecto: document.getElementById('nombreProyecto').value, 
+            items: items, 
+            total: total, 
+            descuento: descuento, 
+            estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', 
+            metodoPago: 'Pendiente', 
+            fecha: fechaFinal.toISOString(), 
+            prioridad: 'Normal', 
+            proceso: procesoBD, 
+            esAlbum: document.getElementById('esAlbum').checked 
+        };
+
+        try { 
+            return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); 
+        } catch (error) { 
+            showToast(`Error al guardar: ${error.message}`, 'error'); 
+            return null; 
+        }
     }
 
     async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); cargarOpcionesParaProyecto(); mostrarSeccion('cotizaciones'); } }
-    async function enviarAFlujoDirecto() { const nuevoProyecto = await guardarProyecto('Agendado'); if (nuevoProyecto) { showToast('¡Proyecto agendado con éxito!', 'success'); cargarOpcionesParaProyecto(); const user = getUserRoleAndId(); if (user.role === 'cliente') { mostrarSeccion('vista-artista'); } else { mostrarSeccion('flujo-trabajo'); } } }
+    
+    async function enviarAFlujoDirecto() { 
+        const nuevoProyecto = await guardarProyecto('Agendado'); 
+        if (nuevoProyecto) { 
+            showToast('¡Proyecto agendado con éxito!', 'success'); 
+            cargarOpcionesParaProyecto(); 
+            const user = getUserRoleAndId();
+            if (user.role === 'cliente') { mostrarSeccion('vista-artista'); } else { mostrarSeccion('flujo-trabajo'); }
+        } 
+    }
+
     async function registrarNuevoArtistaDesdeFormulario() { const nombreInput = document.getElementById('nombreNuevoArtista'); const nombre = nombreInput.value.trim(); if (!nombre) { showToast('Introduce un nombre.', 'error'); return; } try { const nuevoArtista = await fetchAPI('/api/artistas', { method: 'POST', body: JSON.stringify({ nombre: nombre, nombreArtistico: nombre }) }); showToast('Artista guardado', 'success'); await cargarOpcionesParaSelect('/api/artistas', 'proyectoArtista', '_id', item => item.nombreArtistico || item.nombre, true); document.getElementById('proyectoArtista').value = nuevoArtista._id; document.getElementById('nuevoArtistaContainer').style.display = 'none'; nombreInput.value = ''; } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
 
     function openEventModal(info) { const props = info.event.extendedProps; document.getElementById('modal-event-id').value = info.event.id; document.getElementById('modal-event-title').textContent = info.event.title; document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); document.getElementById('modal-event-total').textContent = `$${safeMoney(props.total)}`; document.getElementById('modal-event-status').textContent = props.estatus; document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); flatpickr("#edit-event-date", { defaultDate: info.event.start, locale: "es" }); const hours = String(info.event.start.getHours()).padStart(2, '0'); const minutes = String(info.event.start.getMinutes()).padStart(2, '0'); document.getElementById('edit-event-time').value = `${hours}:${minutes}`; new bootstrap.Modal(document.getElementById('event-modal')).show(); }
@@ -678,7 +1069,48 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto[campo] = valor; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
 
     async function aprobarCotizacion(id) { 
-        Swal.fire({ title: 'Aprobar y Agendar', html: `<p class="small text-muted mb-3">Selecciona el día y la hora para agendar este proyecto en el estudio:</p><input type="date" id="swal-fecha" class="form-control mb-2" min="${new Date().toISOString().split('T')[0]}"><input type="time" id="swal-hora" class="form-control">`, icon: 'calendar', showCancelButton: true, confirmButtonText: 'Sí, Agendar', cancelButtonText: 'Cancelar', preConfirm: () => { const fecha = document.getElementById('swal-fecha').value; const hora = document.getElementById('swal-hora').value; if (!fecha || !hora) { Swal.showValidationMessage('Debes seleccionar fecha y hora'); } return { fecha, hora }; } }).then(async (result) => { if(result.isConfirmed) { showLoader(); try { const { fecha, hora } = result.value; let fechaFinal = new Date(fecha); const [h, m] = hora.split(':'); fechaFinal.setHours(h); fechaFinal.setMinutes(m); fechaFinal.setSeconds(0); await fetchAPI(`/api/proyectos/${id}/fecha`, { method: 'PUT', body: JSON.stringify({ fecha: fechaFinal.toISOString() }) }); await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); showToast('¡Cotización aprobada y agendada con éxito!', 'success'); mostrarSeccion('flujo-trabajo'); } catch (error) { showToast(`Error al aprobar: ${error.message}`, 'error'); } finally { hideLoader(); } } }); 
+        Swal.fire({ 
+            title: 'Aprobar y Agendar', 
+            html: `
+                <p class="small text-muted mb-3">Selecciona el día y la hora para agendar este proyecto en el estudio:</p>
+                <input type="date" id="swal-fecha" class="form-control mb-2" min="${new Date().toISOString().split('T')[0]}">
+                <input type="time" id="swal-hora" class="form-control">
+            `, 
+            icon: 'calendar', 
+            showCancelButton: true, 
+            confirmButtonText: 'Sí, Agendar', 
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const fecha = document.getElementById('swal-fecha').value;
+                const hora = document.getElementById('swal-hora').value;
+                if (!fecha || !hora) {
+                    Swal.showValidationMessage('Debes seleccionar fecha y hora');
+                }
+                return { fecha, hora };
+            }
+        }).then(async (result) => { 
+            if(result.isConfirmed) { 
+                showLoader();
+                try { 
+                    const { fecha, hora } = result.value;
+                    let fechaFinal = new Date(fecha);
+                    const [h, m] = hora.split(':');
+                    fechaFinal.setHours(h);
+                    fechaFinal.setMinutes(m);
+                    fechaFinal.setSeconds(0);
+
+                    await fetchAPI(`/api/proyectos/${id}/fecha`, { method: 'PUT', body: JSON.stringify({ fecha: fechaFinal.toISOString() }) });
+                    await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); 
+                    
+                    showToast('¡Cotización aprobada y agendada con éxito!', 'success'); 
+                    mostrarSeccion('flujo-trabajo'); 
+                } catch (error) { 
+                    showToast(`Error al aprobar: ${error.message}`, 'error'); 
+                } finally {
+                    hideLoader();
+                }
+            } 
+        }); 
     }
 
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${safeMoney(proyecto.total)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
@@ -705,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
-    // CARGAR HISTORIAL (AHORA FILTRADO DE FORMA SEGURA)
+    // CARGAR HISTORIAL (BOTÓN VISOR)
     // ==============================================================
     async function cargarHistorial() { 
         const tablaBody = document.getElementById('tablaHistorialBody'); 
@@ -722,25 +1154,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderHistorialTable() {
         const tablaBody = document.getElementById('tablaHistorialBody');
-        let items = historialCacheados || [];
-        
-        // APLICAR FILTRO DEL BUSCADOR
-        const filterText = tablePagination.historial.filter || '';
-        if (filterText) {
-            items = items.filter(p => {
-                const artista = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
-                const proyecto = p.nombreProyecto || 'Sin nombre';
-                return `${artista} ${proyecto}`.toLowerCase().includes(filterText);
-            });
-        }
-
+        const items = historialCacheados ||[];
         const { page, limit } = tablePagination.historial;
         const start = (page - 1) * limit;
         const paginatedItems = items.slice(start, start + limit);
-        const totalPages = Math.ceil(items.length / limit) || 1;
+        const totalPages = Math.ceil(items.length / limit);
 
         if (items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center">No hay proyectos encontrados.</td></tr>`; 
+            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center">No hay proyectos.</td></tr>`; 
             renderTableControls('tablaHistorialBody', 'historial', 1, 0);
             return;
         }
@@ -750,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const esCancelado = p.estatus === 'Cancelado';
             const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
             const rowClass = esCancelado ? 'fila-cancelada' : '';
+
             const showPlayer = (p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0);
 
             return `
@@ -775,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function eliminarProyecto(id, desdeCotizaciones = false) { Swal.fire({ title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
     
     // ==================================================================
-    // FUNCION DE NAVEGACION 
+    // FUNCION DE NAVEGACION CON GUARDIA DE SEGURIDAD ANTI-FLASH
     // ==================================================================
     async function mostrarSeccion(id, updateHistory = true) { 
         const userInfo = getUserRoleAndId();
@@ -808,15 +1230,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = ''; 
             if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = ''; 
             
-            // LIMPIAR FILTROS DE TABLAS
-            tablePagination.historial.filter = '';
-            tablePagination.cotizaciones.filter = '';
-            tablePagination.pagosPendientes.filter = '';
-            tablePagination.pagosHistorial.filter = '';
-
-            if(id === 'gestion-artistas') renderPaginatedList('artistas', null, true); 
-            if(id === 'gestion-servicios') renderPaginatedList('servicios', null, true); 
-            if(id === 'gestion-usuarios') renderPaginatedList('usuarios', null, true); 
+            if(id === 'gestion-artistas') renderPaginatedList('artistas'); 
+            if(id === 'gestion-servicios') renderPaginatedList('servicios'); 
+            if(id === 'gestion-usuarios') renderPaginatedList('usuarios'); 
             
             const loadDataActions = { 
                 'dashboard': cargarDashboard, 
@@ -864,12 +1280,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             html += `</div></div></div><h3>Historial de Proyectos</h3>`;
             if (proyectos.length) { 
-                html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tablaVistaArtistaBody">'; 
-                
-                // NO PAGINADO, ES DEL ARTISTA, SOLO RENDERIZAMOS TODO (Ocultaremos con buscador DOM genérico si buscan)
+                html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
                     let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
-                    if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) { accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`; }
+                    
+                    if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
+                        accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
+                    }
+
                     if (p.enlaceEntrega) accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Carpeta"><i class="bi bi-cloud-download"></i></a>`; 
                     if (!isClientView) { accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button><button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`; } 
                     
@@ -898,19 +1316,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const artistaId = document.getElementById('directoArtistaId').value;
         const nombreProyecto = document.getElementById('directoNombreProyecto').value;
         const enlaceEntrega = document.getElementById('directoEnlace').value;
+
         showLoader();
         try {
             await fetchAPI('/api/proyectos/directo', {
                 method: 'POST',
                 body: JSON.stringify({ artistaId, nombreProyecto, enlaceEntrega })
             });
+
             showToast('Proyecto anterior añadido al catálogo.', 'success');
             bootstrap.Modal.getInstance(document.getElementById('modalProyectoDirecto')).hide();
+            
+            // Recargar la vista del artista para ver el nuevo proyecto en la tabla
             const nombreArtisticoActual = document.getElementById('vista-artista-nombre').textContent;
             mostrarVistaArtista(artistaId, nombreArtisticoActual, '');
-        } catch (error) { showToast('Error al añadir proyecto: ' + error.message, 'error'); } finally { hideLoader(); }
+
+        } catch (error) {
+            showToast('Error al añadir proyecto: ' + error.message, 'error');
+        } finally {
+            hideLoader();
+        }
     }
 
+    // Función de PDF
     function dibujarLogoEnPDF(pdf, logoData) { 
         if (!logoData) return; 
         const imgProps = pdf.getImageProperties(logoData); 
@@ -931,7 +1359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
     // ==================================================================
-    // AUTH & INIT
+    // AUTH & INIT CON REDIRECCION ESTRICTA
     // ==================================================================
     function showLogin() {
         document.body.classList.add('auth-visible');
@@ -977,6 +1405,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hashSection = location.hash.replace('#', '');
             mostrarSeccion(hashSection || 'dashboard', false); 
         }
+        
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
     }
 
@@ -988,7 +1417,11 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const userVal = document.getElementById('username').value;
                 const passVal = document.getElementById('password').value;
-                const res = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: userVal, password: passVal }) });
+                const res = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: userVal, password: passVal })
+                });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
                 localStorage.setItem('token', data.token);
@@ -996,12 +1429,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
         });
         
-        document.getElementById('toggle-password').addEventListener('click', () => { const passwordInput = document.getElementById('password'); passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'); });
-        document.getElementById('toggle-password-reg').addEventListener('click', () => { const passwordInput = document.getElementById('reg-password'); passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password'); });
+        document.getElementById('toggle-password').addEventListener('click', () => {
+             const passwordInput = document.getElementById('password');
+             passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
+        });
+        document.getElementById('toggle-password-reg').addEventListener('click', () => {
+            const passwordInput = document.getElementById('reg-password');
+            passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
+        });
     }
 
     // ==================================================================
-    // FUNCIONES DE PAGINACIÓN DE TABLAS Y BUSCADOR MEJORADO
+    // FUNCIONES DE PAGINACIÓN DE TABLAS Y BUSCADOR INTELIGENTE
     // ==================================================================
     function renderTableControls(tableBodyId, listKey, page, totalPages) {
         const tbody = document.getElementById(tableBodyId);
@@ -1033,7 +1472,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (listKey === 'pagosHistorial') renderPagosHistorialTable();
     }
 
-    // --- BUSCADOR REPARADO QUE FILTRA INTERNAMENTE ---
     function filtrarTablas(query) { 
         query = query.toLowerCase(); 
         const inputPC = document.getElementById('globalSearchPC'); 
@@ -1277,9 +1715,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==================================================================
-    // LISTAS NORMALES (ARTISTAS, SERVICIOS) - SIN RECARGAS EXTRAS
+    // LISTAS NORMALES (ARTISTAS, SERVICIOS)
     // ==================================================================
-    async function renderPaginatedList(endpoint, filterText = null, forceFetch = false) { 
+    async function renderPaginatedList(endpoint, filterText = null) { 
         const listId = `lista${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`; 
         const listEl = document.getElementById(listId); 
         if(!listEl) return; 
@@ -1287,11 +1725,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const userInfo = getUserRoleAndId(); 
         const isClient = (userInfo.role === 'cliente'); 
         
-        if ((navigator.onLine && forceFetch) || !localCache[endpoint] || localCache[endpoint].length === 0) {
+        if (navigator.onLine && filterText === null) {
             try { 
                 localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
                 await localforage.setItem(`cache_${endpoint}`, localCache[endpoint]);
             } catch(e) { console.error("Error fetching " + endpoint); }
+        } else if (!localCache[endpoint] || localCache[endpoint].length === 0) {
+            try { localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); } catch(e) {}
         }
         
         let data = localCache[endpoint] ||[];
@@ -1350,18 +1790,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function renderPaginationControls(container, endpoint, currentPage, totalPages) { let controls = container.parentNode.querySelector('.pagination-controls'); if(controls) controls.remove(); if (totalPages <= 1) return; controls = document.createElement('div'); controls.className = 'pagination-controls'; controls.innerHTML = `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="app.changePage('${endpoint}', -1)">Anterior</button><span class="pagination-info">Página ${currentPage} de ${totalPages}</span><button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage('${endpoint}', 1)">Siguiente</button>`; container.parentNode.appendChild(controls); }
-    function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null, false); }
+    function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null); }
     function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
-    async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { const vis = document.getElementById('visibleServicio'); body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] =[]; renderPaginatedList(type, null, true); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-    async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] =[]; renderPaginatedList(endpoint, null, true); } catch (e) { showToast(e.message, 'error'); } } }); }
+    async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { const vis = document.getElementById('visibleServicio'); body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] =[]; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
+    async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] =[]; renderPaginatedList(endpoint); } catch (e) { showToast(e.message, 'error'); } } }); }
     async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } }
     async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
-    async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas', null, true); } catch (e) { showToast(e.message, 'error'); } }
+    async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     function abrirModalEditarServicio(id, nombre, precio, visible) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true'); new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
-    async function guardarEdicionServicio(e) { e.preventDefault(); const id = document.getElementById('editServicioId').value; const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value), visible: document.getElementById('editServicioVisible').checked }; try { await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Servicio actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide(); localCache.servicios =[]; renderPaginatedList('servicios', null, true); } catch (e) { showToast(e.message, 'error'); } }
+    async function guardarEdicionServicio(e) { e.preventDefault(); const id = document.getElementById('editServicioId').value; const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value), visible: document.getElementById('editServicioVisible').checked }; try { await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Servicio actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide(); localCache.servicios =[]; renderPaginatedList('servicios'); } catch (e) { showToast(e.message, 'error'); } }
     async function abrirModalEditarUsuario(itemStr) { const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"')); document.getElementById('editUsuarioId').value = item._id; document.getElementById('editUsuarioName').value = item.username; document.getElementById('editUsuarioEmail').value = item.email || ''; document.getElementById('editUsuarioRole').value = item.role; document.getElementById('editUsuarioPass').value = ''; const selectArtista = document.getElementById('editUsuarioArtista'); if (selectArtista) { selectArtista.innerHTML = '<option value="">Cargando...</option>'; try { let artistas = localCache.artistas; if (!artistas || artistas.length === 0) { artistas = await fetchAPI('/api/artistas'); localCache.artistas = artistas; } let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>'; artistas.forEach(a => { const selected = (item.artistaId === a._id) ? 'selected' : ''; opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`; }); selectArtista.innerHTML = opts; } catch (e) { selectArtista.innerHTML = '<option value="">Error al cargar</option>'; } } document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false); if (item.permisos && Array.isArray(item.permisos)) { item.permisos.forEach(p => { const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`); if(chk) chk.checked = true; }); } new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show(); }
-    async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios =[]; renderPaginatedList('usuarios', null, true); } catch (e) { showToast(e.message, 'error'); } }
+    async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios =[]; renderPaginatedList('usuarios'); } catch (e) { showToast(e.message, 'error'); } }
     function editarInfoProyecto(id) { let proyecto = localCache.proyectos.find(p => p._id === id); if(!proyecto) proyecto = historialCacheados.find(p => p._id === id); if (!proyecto) return showToast('Proyecto no encontrado', 'error'); Swal.fire({ title: 'Editar Información', html: `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}"><input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`, focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-nombre').value, document.getElementById('swal-total').value ] } }).then(async (result) => { if (result.isConfirmed) { const [nuevoNombre, nuevoTotalStr] = result.value; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } } }); }
     async function registrarPago(proyectoId, desdeHistorial = false) { let proyecto; try { proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); } catch(e) { return showToast('Proyecto no encontrado.', 'error'); } const restante = proyecto.total - (proyecto.montoPagado || 0); Swal.fire({ title: 'Registrar Pago', html: `<p>Saldo Restante: <strong class="text-danger">$${safeMoney(restante)}</strong></p>` + '<input id="swal-monto" type="number" class="swal2-input" placeholder="Monto a pagar" value="' + (restante > 0 ? restante.toFixed(2) : '0.00') + '">' + '<select id="swal-metodo" class="swal2-select"><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option></select>', focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-monto').value, document.getElementById('swal-metodo').value ] } }).then(async (result) => { if (result.value) { const [montoStr, metodo] = result.value; const monto = parseFloat(montoStr); if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error'); try { const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) }); showToast(proyectoActualizado.offline ? 'Pago registrado en cola offline.' : '¡Pago registrado exitosamente!', proyectoActualizado.offline ? 'info' : 'success'); const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1]; await generarReciboPDF(proyectoActualizado, ultimoPago); if (document.getElementById('pagos').classList.contains('active')) { cargarPagos(); } else if (desdeHistorial) { cargarHistorial(); } else { cargarFlujoDeTrabajo(); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
     async function cargarPagos() { document.querySelector('#pagos .btn-group button.active')?.classList.remove('active'); const btnPendientes = document.querySelector('#pagos .btn-group button'); if (btnPendientes) btnPendientes.classList.add('active'); mostrarSeccionPagos('pendientes', btnPendientes); }
@@ -1403,7 +1843,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalPages = Math.ceil(items.length / limit) || 1;
 
         if (items.length === 0) { 
-            tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes que coincidan.</td></tr>'; 
+            tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; 
             renderTableControls('tablaPendientesBody', 'pagosPendientes', 1, 0);
             return; 
         } 
@@ -1476,7 +1916,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalPages = Math.ceil(items.length / limit) || 1;
 
         if (items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos registrados que coincidan.</td></tr>`; 
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`; 
             renderTableControls('tablaPagosBody', 'pagosHistorial', 1, 0);
             return;
         }
@@ -1530,6 +1970,302 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    function initAppEventListeners(payload) { 
+        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
+        ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
+        document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
+        document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
+        document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario); 
+        document.getElementById('firma-input').addEventListener('change', subirFirma); 
+        document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual); 
+        const modalDatosBancarios = document.getElementById('modalDatosBancarios'); 
+        if (modalDatosBancarios) { modalDatosBancarios.addEventListener('show.bs.modal', function () { cargarDatosBancariosEnModal(); }); } 
+        setupMobileMenu(); 
+        if (DOMElements.logoutButton) { DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; } 
+        window.addEventListener('online', OfflineManager.updateIndicator); 
+        window.addEventListener('offline', OfflineManager.updateIndicator); 
+        OfflineManager.updateIndicator(); 
+        
+        document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                toggleTheme(e.target.checked);
+            });
+        });
+    }
+    
+    function setupCustomization(payload) { 
+        if (payload.role === 'admin') { 
+            const appLogo = document.getElementById('app-logo');
+            const logoInput = document.getElementById('logo-input');
+            const faviconInput = document.getElementById('favicon-input');
+            
+            if (appLogo && logoInput) { 
+                appLogo.style.cursor = 'pointer'; 
+                appLogo.title = 'Haz clic para cambiar el logo'; 
+                
+                appLogo.onclick = () => {
+                    logoInput.click();
+                }; 
+                
+                logoInput.onchange = async (event) => { 
+                    const file = event.target.files[0]; 
+                    if (!file) return; 
+                    const formData = new FormData(); 
+                    formData.append('logoFile', file); 
+                    try { 
+                        const res = await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
+                        showToast('Logo actualizado!', 'success'); 
+                        
+                        if(res && res.logoBase64) { 
+                            appLogo.src = res.logoBase64; 
+                            if (document.getElementById('login-logo')) document.getElementById('login-logo').src = res.logoBase64;
+                            logoBase64 = res.logoBase64;
+                            await localforage.setItem('cached_logo_path', res.logoBase64);
+                        } else {
+                            await loadInitialConfig(); 
+                            if(configCache && configCache.logoBase64) { 
+                                appLogo.src = configCache.logoBase64; 
+                                if (document.getElementById('login-logo')) document.getElementById('login-logo').src = configCache.logoBase64;
+                                logoBase64 = configCache.logoBase64;
+                            } 
+                        }
+                    } catch (e) { 
+                        showToast(`Error al subir logo`, 'error'); 
+                    } 
+                }; 
+            } 
+
+            if (faviconInput) {
+                faviconInput.onchange = async (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('faviconFile', file);
+                    try {
+                        const res = await fetchAPI('/api/configuracion/upload-favicon', { method: 'POST', body: formData, isFormData: true });
+                        showToast('Favicon actualizado!', 'success');
+                        
+                        let faviconUrl = res.faviconBase64;
+                        if (!faviconUrl) {
+                            await loadInitialConfig();
+                            faviconUrl = configCache && configCache.faviconBase64 ? configCache.faviconBase64 : '';
+                        }
+                        if (faviconUrl) {
+                            let link = document.querySelector("link[rel~='icon']");
+                            if (!link) {
+                                link = document.createElement('link');
+                                link.rel = 'icon';
+                                document.head.appendChild(link);
+                            }
+                            link.href = faviconUrl;
+                            await localforage.setItem('cached_favicon_path', faviconUrl);
+                        }
+                    } catch (e) {
+                        showToast(`Error al subir favicon`, 'error');
+                    }
+                };
+            }
+        } 
+    }
+    
+    function renderSidebar(user) { 
+        const navContainer = document.getElementById('sidebar-nav-container'); 
+        let p = user.permisos ||[]; 
+        const role = user.role ? user.role.toLowerCase() : 'cliente'; 
+        let html = ''; 
+        if (role === 'cliente') { 
+            html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi music-note-beamed"></i> Mis Proyectos</a><a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Mis Pagos</a></div>`; 
+        } else { 
+            const isSuperAdmin = role === 'admin'; 
+            const canAccess = (permKey) => isSuperAdmin || p.includes(permKey); 
+            
+            html = `<div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
+                        ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
+                        ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>' : ''}
+                        ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi kanban"></i> Flujo de Trabajo</a>' : ''}
+                        ${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi file-earmark-text"></i> Cotizaciones</a>' : ''}
+                        ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi clock-history"></i> Historial</a>' : ''}
+                        ${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>' : ''}
+                    </div>
+                    <div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
+                        ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi people"></i> Artistas</a>' : ''}
+                        ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi tags"></i> Servicios</a>' : ''}
+                        ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>' : ''}
+                    </div>`;
+
+            if (isSuperAdmin) {
+                html += `<div class="nav-group">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                            <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi wallet2"></i> Mis Deudas</a>
+                            <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
+                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
+                         </div>`;
+            }
+        } 
+        navContainer.innerHTML = html; 
+        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { e.preventDefault(); mostrarSeccion(e.currentTarget.dataset.seccion); } }); }); 
+    }
+
+    // ==================================================================
+    // MODULO DE DEUDAS PERSONALES (ADMIN)
+    // ==================================================================
+    async function cargarDeudas() {
+        const tabla = document.getElementById('tablaDeudasBody');
+        if(!tabla) return;
+        tabla.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+        try {
+            const data = await fetchAPI('/api/deudas');
+            localCache.deudas = data;
+            renderDeudas();
+        } catch (error) {
+            tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar o acceso denegado.</td></tr>';
+        }
+    }
+
+    function renderDeudas() {
+        const tabla = document.getElementById('tablaDeudasBody');
+        if(!tabla) return;
+        let totalGlobal = 0;
+
+        if (!localCache.deudas || localCache.deudas.length === 0) {
+            tabla.innerHTML = '<tr><td colspan="6" class="text-center">No hay deudas registradas. ¡Excelente!</td></tr>';
+            document.getElementById('total-deuda-global').textContent = '$0.00';
+            return;
+        }
+
+        tabla.innerHTML = localCache.deudas.map(d => {
+            const restante = d.total - d.montoPagado;
+            totalGlobal += restante;
+
+            const badge = d.estatus === 'Liquidada' 
+                ? '<span class="badge bg-success">Liquidada</span>' 
+                : '<span class="badge bg-danger">Pendiente</span>';
+            
+            let btnPagar = d.estatus !== 'Liquidada' 
+                ? `<button class="btn btn-sm btn-success text-white" title="Abonar" onclick="app.abonarDeuda('${d._id}', ${restante})"><i class="bi bi-cash"></i></button>`
+                : '';
+
+            return `
+            <tr class="${d.estatus === 'Liquidada' ? 'fila-cancelada' : ''}">
+                <td data-label="Concepto"><strong>${escapeHTML(d.concepto)}</strong></td>
+                <td data-label="Total">$${safeMoney(d.total)}</td>
+                <td data-label="Abonado">$${safeMoney(d.montoPagado)}</td>
+                <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
+                <td data-label="Estatus">${badge}</td>
+                <td data-label="Acciones" class="table-actions">
+                    ${btnPagar}
+                    <button class="btn btn-sm btn-outline-info" title="Historial" onclick="app.verHistorialDeuda('${d._id}')"><i class="bi bi-clock-history"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="app.eliminarDeuda('${d._id}')"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('total-deuda-global').textContent = `$${safeMoney(totalGlobal)}`;
+    }
+
+    function abrirModalNuevaDeuda() {
+        Swal.fire({
+            title: 'Registrar Deuda',
+            html: `
+                <input id="deuda-concepto" class="swal2-input" placeholder="¿Qué se debe? (Ej: Micro, Banco)">
+                <input id="deuda-total" type="number" class="swal2-input" placeholder="Monto total ($)" step="0.01" min="0">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const c = document.getElementById('deuda-concepto').value;
+                const t = document.getElementById('deuda-total').value;
+                if (!c || !t) {
+                    Swal.showValidationMessage('Llena todos los campos');
+                    return false;
+                }
+                return { concepto: c, total: t };
+            }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI('/api/deudas', { method: 'POST', body: JSON.stringify(result.value) });
+                    showToast('Deuda registrada', 'success');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
+
+    function abonarDeuda(id, maxRestante) {
+        Swal.fire({
+            title: 'Registrar Abono',
+            html: `
+                <p>Restante: <strong class="text-danger">$${safeMoney(maxRestante)}</strong></p>
+                <input id="abono-monto" type="number" class="swal2-input" placeholder="Monto a abonar" value="${maxRestante}" step="0.01" min="0.01" max="${maxRestante}">
+                <input id="abono-nota" class="swal2-input" placeholder="Nota (Opcional)">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Abonar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const m = document.getElementById('abono-monto').value;
+                const n = document.getElementById('abono-nota').value;
+                if (!m || m <= 0) {
+                    Swal.showValidationMessage('Monto inválido');
+                    return false;
+                }
+                return { monto: m, nota: n };
+            }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI(`/api/deudas/${id}/pagos`, { method: 'POST', body: JSON.stringify(result.value) });
+                    showToast('Abono registrado', 'success');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
+
+    function verHistorialDeuda(id) {
+        const deuda = localCache.deudas.find(d => d._id === id);
+        if(!deuda || !deuda.pagos || deuda.pagos.length === 0) {
+            return Swal.fire('Historial', 'No hay abonos registrados en esta deuda.', 'info');
+        }
+        
+        let htmlLista = deuda.pagos.map(p => `
+            <div class="d-flex justify-content-between border-bottom p-2 small text-start">
+                <span>${safeDate(p.fecha)} ${p.nota ? `(<i class="text-muted">${escapeHTML(p.nota)}</i>)` : ''}</span>
+                <strong class="text-success">+$${safeMoney(p.monto)}</strong>
+            </div>
+        `).join('');
+
+        Swal.fire({
+            title: `Abonos: ${escapeHTML(deuda.concepto)}`,
+            html: `<div style="max-height: 250px; overflow-y:auto;">${htmlLista}</div>`,
+            confirmButtonText: 'Cerrar'
+        });
+    }
+
+    function eliminarDeuda(id) {
+        Swal.fire({
+            title: '¿Borrar deuda?',
+            text: 'Se eliminará de tu lista visible.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, borrar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d33'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await fetchAPI(`/api/deudas/${id}`, { method: 'DELETE' });
+                    showToast('Deuda eliminada', 'info');
+                    cargarDeudas();
+                } catch (e) { showToast(e.message, 'error'); }
+            }
+        });
+    }
+
     // ==================================================================
     // INITIALIZATION & EVENT LISTENERS
     // ==================================================================
