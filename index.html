@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#6366f1">
   
-  <!-- FAVICON DINÁMICO (Ahora se carga asíncronamente para no trabar la app) -->
+  <!-- FAVICON DINÁMICO -->
   <link id="dynamic-favicon" rel="icon" type="image/png" href="https://placehold.co/32x32?text=Fia">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -491,7 +491,8 @@
             <section id="vista-artista" class="section-view">
                 <div class="card">
                     <div class="card-body" id="vista-artista-contenido">
-                        </div>
+                        <!-- Contenido dinámico de vista artista -->
+                    </div>
                 </div>
             </section>
 
@@ -819,7 +820,6 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body text-center p-4">
-            
             <h6 id="current-track-name" class="mb-3 text-truncate fw-bold text-light">Selecciona un archivo para previsualizar</h6>
             
             <div id="media-container" class="mb-3 d-flex justify-content-center align-items-center bg-dark rounded" style="min-height: 250px; position: relative; overflow: hidden; border: 1px solid #333;">
@@ -833,6 +833,33 @@
             </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- NUEVO MODAL: AÑADIR PROYECTO DIRECTO AL HISTORIAL -->
+  <div class="modal fade" id="modalProyectoDirecto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-archive"></i> Añadir Proyecto de Catálogo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Sube un proyecto anterior directamente al historial del artista. Aparecerá como completado y pagado ($0).</p>
+                <form id="formProyectoDirecto" onsubmit="app.guardarProyectoDirecto(event)">
+                    <input type="hidden" id="directoArtistaId">
+                    <div class="mb-3">
+                        <label>Nombre del Proyecto</label>
+                        <input type="text" id="directoNombreProyecto" class="form-control" required placeholder="Ej: Sencillo 2023">
+                    </div>
+                    <div class="mb-3">
+                        <label>Enlace de Carpeta (Opcional)</label>
+                        <input type="url" id="directoEnlace" class="form-control" placeholder="https://drive.google.com/...">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Guardar en Historial</button>
+                </form>
+            </div>
+        </div>
     </div>
   </div>
 

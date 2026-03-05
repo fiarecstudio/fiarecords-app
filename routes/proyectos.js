@@ -166,6 +166,36 @@ router.get('/por-artista/:id', async (req, res) => { try { if (req.user.role ===
 
 router.get('/:id', async (req, res) => { try { const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) { return res.status(403).json({ error: 'No autorizado.' }); } } res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });
 
+// ==============================================================
+// NUEVA RUTA: CREAR PROYECTO DIRECTO (PASADO)
+// ==============================================================
+router.post('/directo', async (req, res) => {
+    try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
+        
+        const { artistaId, nombreProyecto, enlaceEntrega } = req.body;
+
+        const nuevoProyecto = new Proyecto({
+            artista: artistaId,
+            nombreProyecto: nombreProyecto || 'Proyecto Anterior',
+            fecha: new Date(), // Se pone la fecha de hoy como fecha de subida
+            items: [{ nombre: 'Proyecto de Catálogo (Migración)', unidades: 1, precioUnitario: 0 }],
+            total: 0,
+            descuento: 0,
+            montoPagado: 0,
+            estatus: 'Pagado', // Se asume que ya se pagó en el pasado
+            proceso: 'Completo', // Va directo al historial
+            metodoPago: 'N/A',
+            enlaceEntrega: enlaceEntrega || ''
+        });
+
+        const guardado = await nuevoProyecto.save();
+        res.status(201).json(guardado);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.post('/', async (req, res) => { try { if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id; let datos = { ...req.body, isDeleted: false }; if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (filtro.artista) { datos.artista = filtro.artista; } else { return res.status(400).json({ error: 'Error: Sin perfil de artista.' }); } } const nuevo = new Proyecto(datos); const guardado = await nuevo.save(); if (guardado.proceso === 'Agendado' && guardado.artista) { const email = await getArtistaEmail(guardado.artista); const fechaFmt = formatearFechaMexico(guardado.fecha); enviarNotificacion(email, "📅 Cita Confirmada - Fia Records", `<div style="font-family: Arial;"><h2>¡Proyecto Agendado!</h2><p>Tu proyecto <strong>${guardado.nombreProyecto}</strong> ha sido confirmado.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.status(201).json(guardado); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 router.put('/:id/proceso', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const updateData = { proceso: req.body.proceso }; if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago'; const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('artista'); if (req.body.proceso === 'Agendado' && actualizado.artista) { const email = actualizado.artista.correo; const fechaFmt = formatearFechaMexico(actualizado.fecha); enviarNotificacion(email, "✅ Tu cita ha sido confirmada", `<div style="font-family: Arial;"><h2>¡Cotización Aprobada!</h2><p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> ya está en nuestra agenda.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -176,9 +206,6 @@ router.put('/:id/fecha', async (req, res) => { if (req.user.role === 'cliente') 
 
 router.put('/:id/nombre', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true }); res.json(actualizado); });
 
-// ==============================================================
-// RUTAS: ACTUALIZAR ENLACE Y ARCHIVOS (MODIFICADO)
-// ==============================================================
 router.put('/:id/enlace-entrega', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
@@ -191,7 +218,6 @@ router.put('/:id/enlace-entrega', async (req, res) => {
             } 
         }
         
-        // Guardamos tanto el enlace de la carpeta como la lista de archivos multimedia
         let updateData = { enlaceEntrega: req.body.enlace };
         if (req.body.archivos && Array.isArray(req.body.archivos)) {
             updateData.archivos = req.body.archivos;
@@ -203,7 +229,6 @@ router.put('/:id/enlace-entrega', async (req, res) => {
             { new: true }
         ).populate('artista');
         
-        // Enviamos el correo notificando que el material y/o reproductor están listos
         if (req.body.enlace && actualizado.artista && req.user.role !== 'cliente') {
             const email = actualizado.artista.correo;
             enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", `<div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>¡Tu material está listo! 🎵</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado. Si enviaste audios, videos o imágenes, ya pueden ser previsualizados desde tu panel.</p><br><a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;">DESCARGAR CARPETA ORIGINAL</a></div>`);

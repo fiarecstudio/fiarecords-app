@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleTheme(isDark) {
         document.body.classList.toggle('dark-mode', isDark);
-        localStorage.setItem('theme', isDark ? 'dark' : 'light'); // El tema sí puede ir en localStorage (pesa 5 bytes)
+        localStorage.setItem('theme', isDark ? 'dark' : 'light'); 
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             if (chk.checked !== isDark) {
                 chk.checked = isDark;
@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getUserRoleAndId() {
-        const token = localStorage.getItem('token'); // Token va en localStorage para persistir sesión fácil
+        const token = localStorage.getItem('token'); 
         if (!token) return { role: null, id: null, artistaId: null };
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================================================================
-    // 3. OFFLINE MANAGER (AHORA CON INDEXED DB)
+    // 3. OFFLINE MANAGER (INDEXED DB)
     // ==================================================================
     const OfflineManager = {
         QUEUE_KEY: 'fia_offline_queue',
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
                     if (!res.ok) throw new Error('Failed');
                 } catch (e) { 
-                    newQueue.push(req); // Si falla (ej. internet intermitente), lo devuelve a la cola
+                    newQueue.push(req);
                 }
             }
             
@@ -278,7 +278,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (newQueue.length === 0) {
                 showToast('Sincronización completada', 'success');
-                // Recargamos todos los cachés
                 await Promise.all([
                     fetchAPI('/api/proyectos'), 
                     fetchAPI('/api/artistas'), 
@@ -309,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
-        // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
                 if (url === '/api/artistas') return localCache.artistas;
@@ -328,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // --- MODO OFFLINE (ESCRITURA A COLA) ---
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
              if (!navigator.onLine) {
                 const tempId = `temp_${Date.now()}`;
@@ -349,7 +346,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
-            // --- ACTUALIZAR CACHÉ INDEXED-DB SI HAY INTERNET ---
             if (!options.method || options.method === 'GET') {
                 if (url === '/api/artistas') { localCache.artistas = Array.isArray(data) ? data : []; await localforage.setItem('cache_artistas', localCache.artistas); }
                 if (url === '/api/servicios') { localCache.servicios = data; await localforage.setItem('cache_servicios', data); }
@@ -1268,8 +1264,15 @@ document.addEventListener('DOMContentLoaded', () => {
             let html = `<div class="mb-3">${!isClientView ? `<button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>` : ''}<h2 class="mb-0" id="vista-artista-nombre">${escapeHTML(nombreArtistico || nombre)}</h2></div>
                         <div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);"><div class="card-body"><div class="d-flex justify-content-between align-items-start flex-wrap"><div><p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p class="mb-1"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p><p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
             
-            if (!isClientView) { html += `<div class="btn-group mt-2 mt-md-0"><button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button><button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button></div>`; } 
-            else { html += `<div class="btn-group mt-2 mt-md-0"><button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button></div>`; }
+            if (!isClientView) { 
+                html += `<div class="btn-group mt-2 mt-md-0">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
+                            <button class="btn btn-sm btn-info text-white" onclick="app.abrirModalProyectoDirecto('${artistaInfo._id}')"><i class="bi bi-archive"></i> Catálogo Antiguo</button>
+                            <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
+                         </div>`; 
+            } else { 
+                html += `<div class="btn-group mt-2 mt-md-0"><button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button></div>`; 
+            }
             
             html += `</div></div></div><h3>Historial de Proyectos</h3>`;
             if (proyectos.length) { 
@@ -1296,6 +1299,41 @@ document.addEventListener('DOMContentLoaded', () => {
     async function irAVistaArtista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleAndId(); if (!artistaId) { if (userInfo.role === 'cliente' && userInfo.artistaId) { artistaId = userInfo.artistaId; if (!artistaNombre) artistaNombre = userInfo.username; } else { const artistas = await fetchAPI('/api/artistas'); const artista = artistas.find(a => a.nombre === artistaNombre || a.nombreArtistico === artistaNombre); if (artista) artistaId = artista._id; else return; } } mostrarVistaArtista(artistaId, artistaNombre, nombreArtistico); }
     function nuevoProyectoParaArtista(idArtista, nombreArtista) { preseleccionArtistaId = idArtista; mostrarSeccion('registrar-proyecto'); showToast(`Iniciando proyecto para: ${nombreArtista}`, 'info'); }
     
+    // --- LÓGICA PARA AÑADIR PROYECTO DIRECTO AL HISTORIAL ---
+    function abrirModalProyectoDirecto(artistaId) {
+        document.getElementById('directoArtistaId').value = artistaId;
+        document.getElementById('directoNombreProyecto').value = '';
+        document.getElementById('directoEnlace').value = '';
+        new bootstrap.Modal(document.getElementById('modalProyectoDirecto')).show();
+    }
+
+    async function guardarProyectoDirecto(e) {
+        e.preventDefault();
+        const artistaId = document.getElementById('directoArtistaId').value;
+        const nombreProyecto = document.getElementById('directoNombreProyecto').value;
+        const enlaceEntrega = document.getElementById('directoEnlace').value;
+
+        showLoader();
+        try {
+            await fetchAPI('/api/proyectos/directo', {
+                method: 'POST',
+                body: JSON.stringify({ artistaId, nombreProyecto, enlaceEntrega })
+            });
+
+            showToast('Proyecto anterior añadido al catálogo.', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalProyectoDirecto')).hide();
+            
+            // Recargar la vista del artista para ver el nuevo proyecto en la tabla
+            const nombreArtisticoActual = document.getElementById('vista-artista-nombre').textContent;
+            mostrarVistaArtista(artistaId, nombreArtisticoActual, '');
+
+        } catch (error) {
+            showToast('Error al añadir proyecto: ' + error.message, 'error');
+        } finally {
+            hideLoader();
+        }
+    }
+
     // Función de PDF
     function dibujarLogoEnPDF(pdf, logoData) { 
         if (!logoData) return; 
@@ -1970,164 +2008,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { e.preventDefault(); mostrarSeccion(e.currentTarget.dataset.seccion); } }); }); 
     }
 
-    // ==================================================================
-    // MODULO DE DEUDAS PERSONALES (ADMIN)
-    // ==================================================================
-    async function cargarDeudas() {
-        const tabla = document.getElementById('tablaDeudasBody');
-        if(!tabla) return;
-        tabla.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
-        try {
-            const data = await fetchAPI('/api/deudas');
-            localCache.deudas = data;
-            renderDeudas();
-        } catch (error) {
-            tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar o acceso denegado.</td></tr>';
-        }
-    }
-
-    function renderDeudas() {
-        const tabla = document.getElementById('tablaDeudasBody');
-        if(!tabla) return;
-        let totalGlobal = 0;
-
-        if (!localCache.deudas || localCache.deudas.length === 0) {
-            tabla.innerHTML = '<tr><td colspan="6" class="text-center">No hay deudas registradas. ¡Excelente!</td></tr>';
-            document.getElementById('total-deuda-global').textContent = '$0.00';
-            return;
-        }
-
-        tabla.innerHTML = localCache.deudas.map(d => {
-            const restante = d.total - d.montoPagado;
-            totalGlobal += restante;
-
-            const badge = d.estatus === 'Liquidada' 
-                ? '<span class="badge bg-success">Liquidada</span>' 
-                : '<span class="badge bg-danger">Pendiente</span>';
-            
-            let btnPagar = d.estatus !== 'Liquidada' 
-                ? `<button class="btn btn-sm btn-success text-white" title="Abonar" onclick="app.abonarDeuda('${d._id}', ${restante})"><i class="bi bi-cash"></i></button>`
-                : '';
-
-            return `
-            <tr class="${d.estatus === 'Liquidada' ? 'fila-cancelada' : ''}">
-                <td data-label="Concepto"><strong>${escapeHTML(d.concepto)}</strong></td>
-                <td data-label="Total">$${safeMoney(d.total)}</td>
-                <td data-label="Abonado">$${safeMoney(d.montoPagado)}</td>
-                <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
-                <td data-label="Estatus">${badge}</td>
-                <td data-label="Acciones" class="table-actions">
-                    ${btnPagar}
-                    <button class="btn btn-sm btn-outline-info" title="Historial" onclick="app.verHistorialDeuda('${d._id}')"><i class="bi bi-clock-history"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="app.eliminarDeuda('${d._id}')"><i class="bi bi-trash"></i></button>
-                </td>
-            </tr>`;
-        }).join('');
-
-        document.getElementById('total-deuda-global').textContent = `$${safeMoney(totalGlobal)}`;
-    }
-
-    function abrirModalNuevaDeuda() {
-        Swal.fire({
-            title: 'Registrar Deuda',
-            html: `
-                <input id="deuda-concepto" class="swal2-input" placeholder="¿Qué se debe? (Ej: Micro, Banco)">
-                <input id="deuda-total" type="number" class="swal2-input" placeholder="Monto total ($)" step="0.01" min="0">
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Guardar',
-            cancelButtonText: 'Cancelar',
-            preConfirm: () => {
-                const c = document.getElementById('deuda-concepto').value;
-                const t = document.getElementById('deuda-total').value;
-                if (!c || !t) {
-                    Swal.showValidationMessage('Llena todos los campos');
-                    return false;
-                }
-                return { concepto: c, total: t };
-            }
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    await fetchAPI('/api/deudas', { method: 'POST', body: JSON.stringify(result.value) });
-                    showToast('Deuda registrada', 'success');
-                    cargarDeudas();
-                } catch (e) { showToast(e.message, 'error'); }
-            }
-        });
-    }
-
-    function abonarDeuda(id, maxRestante) {
-        Swal.fire({
-            title: 'Registrar Abono',
-            html: `
-                <p>Restante: <strong class="text-danger">$${safeMoney(maxRestante)}</strong></p>
-                <input id="abono-monto" type="number" class="swal2-input" placeholder="Monto a abonar" value="${maxRestante}" step="0.01" min="0.01" max="${maxRestante}">
-                <input id="abono-nota" class="swal2-input" placeholder="Nota (Opcional)">
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Abonar',
-            cancelButtonText: 'Cancelar',
-            preConfirm: () => {
-                const m = document.getElementById('abono-monto').value;
-                const n = document.getElementById('abono-nota').value;
-                if (!m || m <= 0) {
-                    Swal.showValidationMessage('Monto inválido');
-                    return false;
-                }
-                return { monto: m, nota: n };
-            }
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    await fetchAPI(`/api/deudas/${id}/pagos`, { method: 'POST', body: JSON.stringify(result.value) });
-                    showToast('Abono registrado', 'success');
-                    cargarDeudas();
-                } catch (e) { showToast(e.message, 'error'); }
-            }
-        });
-    }
-
-    function verHistorialDeuda(id) {
-        const deuda = localCache.deudas.find(d => d._id === id);
-        if(!deuda || !deuda.pagos || deuda.pagos.length === 0) {
-            return Swal.fire('Historial', 'No hay abonos registrados en esta deuda.', 'info');
-        }
-        
-        let htmlLista = deuda.pagos.map(p => `
-            <div class="d-flex justify-content-between border-bottom p-2 small text-start">
-                <span>${safeDate(p.fecha)} ${p.nota ? `(<i class="text-muted">${escapeHTML(p.nota)}</i>)` : ''}</span>
-                <strong class="text-success">+$${safeMoney(p.monto)}</strong>
-            </div>
-        `).join('');
-
-        Swal.fire({
-            title: `Abonos: ${escapeHTML(deuda.concepto)}`,
-            html: `<div style="max-height: 250px; overflow-y:auto;">${htmlLista}</div>`,
-            confirmButtonText: 'Cerrar'
-        });
-    }
-
-    function eliminarDeuda(id) {
-        Swal.fire({
-            title: '¿Borrar deuda?',
-            text: 'Se eliminará de tu lista visible.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, borrar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#d33'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    await fetchAPI(`/api/deudas/${id}`, { method: 'DELETE' });
-                    showToast('Deuda eliminada', 'info');
-                    cargarDeudas();
-                } catch (e) { showToast(e.message, 'error'); }
-            }
-        });
-    }
-
     (async function init() {
         // --- 1. CARGAR DB LOCAL PRIMERO ---
         await cargarCacheDesdeIndexedDB();
@@ -2163,7 +2043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadInitialConfig();
         setTimeout(preloadLogoForPDF, 2000);
         
-        const savedTheme = localStorage.getItem('theme') === 'dark'; // Este sí se queda en localStorage, es solo texto
+        const savedTheme = localStorage.getItem('theme') === 'dark'; 
         toggleTheme(savedTheme);
         
         setupAuthListeners();
@@ -2201,7 +2081,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
-        cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda
+        cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
+        abrirModalProyectoDirecto, guardarProyectoDirecto // <-- FUNCIONES NUEVAS EXPORTADAS
     };
 });
 
