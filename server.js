@@ -58,3 +58,10 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('❌ Error fatal de conexión a MongoDB:', err.message);
     process.exit(1);
   });
+
+/* Global Error Handler */
+function globalErrorHandlerFIA(err, req, res, next){
+    console.error("GLOBAL ERROR:", err.stack || err);
+    res.status(500).json({error:"Internal server error"});
+}
+app.use(globalErrorHandlerFIA);
