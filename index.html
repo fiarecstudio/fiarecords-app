@@ -634,7 +634,7 @@
                     <span class="badge bg-primary">{{FECHA}}</span>
                     </p>
 
-                    <form id="form-plantillas" onsubmit="event.preventDefault(); app.guardarPlantillasConfig();">
+                    <form id="form-plantillas">
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
                                 <label class="fw-bold">Encabezado Línea 1 (Arriba a la derecha)</label>
@@ -662,7 +662,7 @@
                         </div>
 
                         <div class="text-end">
-                            <button type="submit" class="btn btn-dark"><i class="bi bi-save"></i> Guardar Plantillas</button>
+                            <button type="button" class="btn btn-dark" onclick="app.guardarPlantillasConfig(event)"><i class="bi bi-save"></i> Guardar Plantillas</button>
                         </div>
                     </form>
                 </div>
