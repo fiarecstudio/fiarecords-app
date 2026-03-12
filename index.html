@@ -564,7 +564,59 @@
                 </div>
             </section>
 
-            <section id="configuracion" class="section-view">
+            <section id="configuracion" class="section-view d-none">
+    <button class="btn-back-inline mb-3" onclick="app.irAlDashboard()">
+        <i class="bi bi-arrow-left"></i> Volver al Dashboard
+    </button>
+    
+    <div class="card p-4 shadow-sm mb-4 border-0">
+        <h3 class="mb-1"><i class="bi bi-file-earmark-text text-primary me-2"></i>Plantillas de Documentos</h3>
+        <p class="text-muted small mb-4">Personaliza los textos que aparecen en tus PDFs de Cotización, Recibo y Contrato.</p>
+        <hr class="mb-4">
+
+        <form id="form-plantillas" onsubmit="app.guardarPlantillasConfig(event)">
+            
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <label for="plantilla-enc1" class="form-label fw-bold">Encabezado Línea 1</label>
+                    <input type="text" id="plantilla-enc1" class="form-control" placeholder="Ej: FiaRecords Studio">
+                    <div class="form-text text-muted">Aparece en la parte superior de los PDFs.</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="plantilla-enc2" class="form-label fw-bold">Encabezado Línea 2</label>
+                    <input type="text" id="plantilla-enc2" class="form-control" placeholder="Ej: Juárez, N.L. | Tel: 81 1234 5678">
+                    <div class="form-text text-muted">Subtítulo o información de contacto.</div>
+                </div>
+                
+                <div class="col-12">
+                    <label for="plantilla-term-cotiz" class="form-label fw-bold">Términos y Condiciones (Cotización)</label>
+                    <textarea id="plantilla-term-cotiz" class="form-control" rows="3" placeholder="Ej: Esta cotización tiene una vigencia de 15 días..."></textarea>
+                </div>
+
+                <div class="col-12">
+                    <label for="plantilla-term-recibo" class="form-label fw-bold">Términos y Notas (Recibo / Nota de Venta)</label>
+                    <textarea id="plantilla-term-recibo" class="form-control" rows="3" placeholder="Ej: No hay reembolsos una vez iniciado el proyecto..."></textarea>
+                </div>
+
+                <div class="col-12">
+                    <label for="plantilla-contrato" class="form-label fw-bold">Cuerpo del Contrato (Legal)</label>
+                    <textarea id="plantilla-contrato" class="form-control" rows="6" placeholder="Redacta aquí las cláusulas de tu contrato..."></textarea>
+                    <div class="form-text text-primary mt-2">
+                        <i class="bi bi-info-circle me-1"></i> 
+                        <strong>Variables disponibles (se reemplazan automáticamente):</strong><br>
+                        <code>{{CLIENTE}}</code>, <code>{{PROYECTO}}</code>, <code>{{TOTAL}}</code>, <code>{{FECHA}}</code>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <button type="submit" class="btn btn-success px-4 py-2">
+                    <i class="bi bi-save me-2"></i>Guardar Plantillas
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               
               <div class="card mb-4">
