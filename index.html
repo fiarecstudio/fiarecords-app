@@ -592,7 +592,7 @@
               </div>
 
               <!-- CARD DE HORARIOS -->
-              <div class="card">
+              <div class="card mb-4">
                 <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
                     <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
                 </div>
@@ -618,6 +618,56 @@
                     </form>
                 </div>
               </div>
+
+              <!-- NUEVA CARD: PLANTILLAS DE DOCUMENTOS -->
+              <div class="card mt-4">
+                <div class="card-header pt-3 border-0 bg-dark text-white rounded-top">
+                    <h4 class="mb-0 text-white"><i class="bi bi-file-earmark-text"></i> Plantillas de Documentos (PDF)</h4>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Puedes usar estas "Palabras Mágicas" en los Textos Largos. El sistema las cambiará automáticamente por los datos reales del proyecto al generar el PDF:<br>
+                    <span class="badge bg-primary">{{CLIENTE}}</span> 
+                    <span class="badge bg-primary">{{PROYECTO}}</span> 
+                    <span class="badge bg-primary">{{TOTAL}}</span> 
+                    <span class="badge bg-primary">{{PAGADO}}</span> 
+                    <span class="badge bg-primary">{{RESTANTE}}</span> 
+                    <span class="badge bg-primary">{{FECHA}}</span>
+                    </p>
+
+                    <form id="form-plantillas" onsubmit="app.guardarPlantillasConfig(event)">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="fw-bold">Encabezado Línea 1 (Arriba a la derecha)</label>
+                                <input type="text" id="plantilla-enc1" class="form-control" placeholder="Ej: FiaRecords Studio">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold">Encabezado Línea 2</label>
+                                <input type="text" id="plantilla-enc2" class="form-control" placeholder="Ej: Juárez N.L.">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-primary">Términos y Condiciones (Aparece abajo en las Cotizaciones)</label>
+                            <textarea id="plantilla-term-cotiz" class="form-control" rows="3" placeholder="Ej: Este presupuesto es válido por 15 días..."></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-success">Nota para Recibos de Pago (Aparece abajo en los Recibos)</label>
+                            <textarea id="plantilla-term-recibo" class="form-control" rows="2" placeholder="Ej: ¡Gracias por tu pago!"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-danger">Plantilla Completa del CONTRATO</label>
+                            <textarea id="plantilla-contrato" class="form-control" rows="10" placeholder="Redacta todo tu contrato legal aquí... Usa {{CLIENTE}} y {{TOTAL}}"></textarea>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-dark"><i class="bi bi-save"></i> Guardar Plantillas</button>
+                        </div>
+                    </form>
+                </div>
+              </div>
+
             </section>
         </main>
         

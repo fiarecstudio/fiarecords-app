@@ -541,7 +541,9 @@ l || ''; document.getElementById('editUsuarioRole').value = item.role; document.
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
-        abrirModalProyectoDirecto, guardarProyectoDirecto 
+        abrirModalProyectoDirecto, guardarProyectoDirecto,
+        // --- NUEVAS EXPORTACIONES PARA PLANTILLAS ---
+        guardarPlantillasConfig, generarContratoPDF
     };
 });
 

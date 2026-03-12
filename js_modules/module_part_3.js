@@ -36,7 +36,44 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
         }
     }
 
-    // Función de PDF
+    // =========================================================
+    // NUEVAS FUNCIONES PARA PLANTILLAS DE DOCUMENTOS
+    // =========================================================
+    function procesarVariablesComunes(texto, proyecto) {
+        if(!texto) return '';
+        const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General';
+        const nombreProyecto = proyecto.nombreProyecto || 'Sin Nombre';
+        return texto
+            .replace(/\{\{CLIENTE\}\}/g, nombreCliente)
+            .replace(/\{\{PROYECTO\}\}/g, nombreProyecto)
+            .replace(/\{\{TOTAL\}\}/g, `$${safeMoney(proyecto.total)}`)
+            .replace(/\{\{PAGADO\}\}/g, `$${safeMoney(proyecto.montoPagado || 0)}`)
+            .replace(/\{\{RESTANTE\}\}/g, `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`)
+            .replace(/\{\{FECHA\}\}/g, new Date().toLocaleDateString());
+    }
+
+    async function guardarPlantillasConfig(e) {
+        e.preventDefault();
+        const plantillasDoc = {
+            encabezado1: document.getElementById('plantilla-enc1').value,
+            encabezado2: document.getElementById('plantilla-enc2').value,
+            terminosCotizacion: document.getElementById('plantilla-term-cotiz').value,
+            terminosRecibo: document.getElementById('plantilla-term-recibo').value,
+            plantillaContrato: document.getElementById('plantilla-contrato').value
+        };
+        try {
+            const res = await fetchAPI('/api/configuracion/plantillas', {
+                method: 'PUT',
+                body: JSON.stringify({ plantillasDoc })
+            });
+            configCache.plantillasDoc = res.plantillasDoc;
+            showToast('Plantillas de Documentos guardadas', 'success');
+        } catch(err) {
+            showToast('Error al guardar plantillas', 'error');
+        }
+    }
+
+    // Función de PDF Básica (Logo y Firma)
     function dibujarLogoEnPDF(pdf, logoData) { 
         if (!logoData) return; 
         const imgProps = pdf.getImageProperties(logoData); 
@@ -51,8 +88,141 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
     }
 
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { let firmaSrc = null; if (configCache) { if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64; else if (configCache.firmaPath) firmaSrc = configCache.firmaPath; } try { if (firmaSrc) { let base64data = firmaSrc; if (!firmaSrc.startsWith('data:image')) { const response = await fetch(firmaSrc); if (!response.ok) throw new Error('No se pudo cargar la firma.'); const firmaImg = await response.blob(); const reader = new FileReader(); const promise = new Promise((resolve) => { reader.onloadend = () => { resolve(reader.result); }; reader.readAsDataURL(firmaImg); }); base64data = await promise; } const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20}; pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); } pdf.save(finalFileName); } catch (e) { console.error("Error firma PDF:", e); pdf.save(finalFileName); } }
-    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor:[0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error al generar PDF", 'error'); } }
-    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); if (!pago) return showToast('No hay pagos.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`],['Saldo Restante:', `$${safeMoney(saldoRestante)}`]] }); const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar recibo.', 'error'); } }
+    
+    // =========================================================
+    // GENERADORES DE PDF ACTUALIZADOS
+    // =========================================================
+    async function generarCotizacionPDF(proyectoIdOrObject) { 
+        try { 
+            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+            
+            const pDoc = (configCache && configCache.plantillasDoc) ? configCache.plantillasDoc : {};
+            const enc1 = pDoc.encabezado1 || "FiaRecords Studio";
+            const enc2 = pDoc.encabezado2 || "Juárez N.L.";
+
+            if (logoBase64) dibujarLogoEnPDF(pdf, logoBase64); 
+            
+            pdf.setFontSize(9); 
+            pdf.text(enc1, 196, 20, { align: 'right' }); 
+            pdf.text(enc2, 196, 25, { align: 'right' }); 
+            
+            pdf.setFontSize(11); 
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); 
+            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); 
+            
+            const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
+            if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } 
+            
+            pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor:[0, 0, 0] } }); 
+            
+            let finalY = pdf.lastAutoTable.finalY + 10; 
+            pdf.setFontSize(12); 
+            pdf.setFont(undefined, 'bold'); 
+            pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); 
+
+            // Términos y Condiciones Editables
+            if(pDoc.terminosCotizacion) {
+                finalY += 15;
+                pdf.setFontSize(9);
+                pdf.setFont(undefined, 'normal');
+                const terminosText = procesarVariablesComunes(pDoc.terminosCotizacion, proyecto);
+                const splitText = pdf.splitTextToSize(terminosText, 180);
+                pdf.text(splitText, 14, finalY);
+            }
+
+            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
+        } catch (error) { showToast("Error al generar PDF", 'error'); } 
+    }
+
+    async function generarReciboPDF(proyecto, pagoEspecifico) { 
+        try { 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+            const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
+            if (!pago) return showToast('No hay pagos.', 'error'); 
+            
+            const saldoRestante = proyecto.total - proyecto.montoPagado; 
+            const pDoc = (configCache && configCache.plantillasDoc) ? configCache.plantillasDoc : {};
+            const enc1 = pDoc.encabezado1 || "FiaRecords Studio";
+            const enc2 = pDoc.encabezado2 || "Juárez N.L.";
+
+            if (logoBase64) dibujarLogoEnPDF(pdf, logoBase64); 
+            
+            pdf.setFontSize(9); 
+            pdf.text(enc1, 196, 20, { align: 'right' }); 
+            pdf.text(enc2, 196, 25, { align: 'right' }); 
+
+            pdf.setFontSize(16); 
+            pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); 
+            
+            pdf.setFontSize(11); 
+            pdf.setFont(undefined, 'normal'); 
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); 
+            
+            pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`],['Saldo Restante:', `$${safeMoney(saldoRestante)}`]] }); 
+            
+            let finalY = pdf.lastAutoTable.finalY + 15;
+            if(pDoc.terminosRecibo) {
+                pdf.setFontSize(10);
+                const notaText = procesarVariablesComunes(pDoc.terminosRecibo, proyecto);
+                const splitNota = pdf.splitTextToSize(notaText, 180);
+                pdf.text(splitNota, 14, finalY);
+            }
+
+            const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
+        } catch (error) { showToast('Error al generar recibo.', 'error'); } 
+    }
+
+    async function generarContratoPDF(proyectoId) {
+        try {
+            const proyecto = typeof proyectoId === 'string' ? await fetchAPI(`/api/proyectos/${proyectoId}`) : proyectoId;
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+            
+            if (logoBase64) dibujarLogoEnPDF(pdf, logoBase64);
+            
+            const pDoc = (configCache && configCache.plantillasDoc) ? configCache.plantillasDoc : {};
+            const enc1 = pDoc.encabezado1 || "FiaRecords Studio";
+            const enc2 = pDoc.encabezado2 || "Juárez N.L.";
+
+            pdf.setFontSize(9); 
+            pdf.text(enc1, 196, 20, { align: 'right' }); 
+            pdf.text(enc2, 196, 25, { align: 'right' }); 
+
+            const plantilla = pDoc.plantillaContrato || "CONTRATO DE SERVICIOS\n\nPor favor, configura tu plantilla legal en la sección de Configuración.";
+            const textoFinal = procesarVariablesComunes(plantilla, proyecto);
+            
+            pdf.setFontSize(11);
+            pdf.setFont("helvetica", "normal");
+            
+            // Envuelve el texto largo en líneas que quepan en la hoja (180mm de ancho)
+            const lineas = pdf.splitTextToSize(textoFinal, 180);
+            
+            let y = 45; // Posición de inicio en el eje Y
+            const altoHoja = pdf.internal.pageSize.height;
+            
+            // Dibuja línea por línea. Si se acaba la hoja, crea una nueva.
+            for(let i=0; i<lineas.length; i++) {
+                if (y > altoHoja - 30) {
+                    pdf.addPage();
+                    y = 20; // Reinicia Y al inicio de la nueva página
+                }
+                pdf.text(lineas[i], 14, y);
+                y += 6; // Espacio entre renglones
+            }
+            
+            const fileName = `Contrato_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`;
+            await addFirmaToPdf(pdf, 'contrato', fileName, proyecto);
+            showToast('Contrato Generado', 'success');
+        } catch (error) {
+            showToast("Error al generar Contrato", 'error');
+            console.error(error);
+        }
+    }
 
     function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
@@ -181,12 +351,10 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
         if (!activeSection) return;
         const sectionId = activeSection.id;
 
-        // 1. Listas Paginadas de Mantenimiento
         if (sectionId === 'gestion-artistas') renderPaginatedList('artistas', query); 
         else if (sectionId === 'gestion-servicios') renderPaginatedList('servicios', query); 
         else if (sectionId === 'gestion-usuarios') renderPaginatedList('usuarios', query); 
         
-        // 2. Tablas Paginadas de Proyectos (Modifica el filtro y re-renderiza todo)
         else if (sectionId === 'historial-proyectos') {
             tablePagination.historial.filter = query;
             tablePagination.historial.page = 1;
@@ -208,8 +376,6 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
                 renderPagosHistorialTable();
             }
         }
-        
-        // 3. Vistas Especiales (DOM Genérico)
         else if (sectionId === 'flujo-trabajo') {
             document.querySelectorAll('.project-card').forEach(card => { 
                 const text = card.innerText.toLowerCase(); 
@@ -229,7 +395,6 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
             });
         }
         else {
-            // Fallback genérico (Para Vista Artista, etc)
             activeSection.querySelectorAll('tbody tr').forEach(row => { 
                 const text = row.innerText.toLowerCase(); 
                 row.style.display = text.includes(query) ? '' : 'none'; 
@@ -242,6 +407,8 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
     function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''],['Titular:', db.titular || ''],['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
+    
+    // --- ACTUALIZADO PARA LLENAR PLANTILLAS AL ABRIR ---
     async function cargarConfiguracion() { 
         try { 
             if (!configCache) await loadInitialConfig();
@@ -286,6 +453,14 @@ tista(artistaId, artistaNombre, nombreArtistico) { const userInfo = getUserRoleA
                 `;
                 tbody.appendChild(tr);
             });
+
+            // Cargar Plantillas de Documentos
+            const p = configCache.plantillasDoc || {};
+            document.getElementById('plantilla-enc1').value = p.encabezado1 || 'FiaRecords Studio';
+            document.getElementById('plantilla-enc2').value = p.encabezado2 || 'Juárez N.L.';
+            document.getElementById('plantilla-term-cotiz').value = p.terminosCotizacion || 'Este presupuesto tiene una vigencia de 15 días.';
+            document.getElementById('plantilla-term-recibo').value = p.terminosRecibo || '¡Gracias por tu pago!';
+            document.getElementById('plantilla-contrato').value = p.plantillaContrato || 'CONTRATO DE PRESTACIÓN DE SERVICIOS\n\nEntre FiaRecords y {{CLIENTE}} para el proyecto {{PROYECTO}}...\n\n(Edita esto en configuración)';
 
         } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
     }

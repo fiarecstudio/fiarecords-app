@@ -35,6 +35,15 @@ const ConfiguracionSchema = new mongoose.Schema({
             "5": { activo: true, inicio: "10:00", fin: "20:00" },
             "6": { activo: true, inicio: "10:00", fin: "16:00" }
         }
+    },
+
+    // --- NUEVO: PLANTILLAS DE DOCUMENTOS (CONTRATOS, RECIBOS, COTIZACIONES) ---
+    plantillasDoc: {
+        encabezado1: { type: String, default: "FiaRecords Studio" },
+        encabezado2: { type: String, default: "Juárez N.L." },
+        terminosCotizacion: { type: String, default: "Este presupuesto tiene una vigencia de 15 días." },
+        terminosRecibo: { type: String, default: "¡Gracias por confiar en FiaRecords!" },
+        plantillaContrato: { type: String, default: "CONTRATO DE PRESTACIÓN DE SERVICIOS\n\nEntre FiaRecords y {{CLIENTE}} para el proyecto {{PROYECTO}}...\n\n(Edita esto en configuración)" }
     }
 });
 

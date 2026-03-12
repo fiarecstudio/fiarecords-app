@@ -22,7 +22,7 @@ router.get('/public/logo', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error al obtener assets' }); }
 });
 
-// --- REQUERE LOGIN ---
+// --- REQUIERE LOGIN ---
 router.use(auth);
 
 const isAdmin = (req, res, next) => {
@@ -63,6 +63,21 @@ router.put('/horarios', isAdmin, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Error guardar horarios' }); }
 });
 
+// ==========================================================
+// --- NUEVO: GUARDAR PLANTILLAS DE DOCUMENTOS (CONTRATOS) ---
+// ==========================================================
+router.put('/plantillas', isAdmin, async (req, res) => {
+    try {
+        const config = await Configuracion.findOneAndUpdate(
+            { singletonId: 'main_config' },
+            { $set: { plantillasDoc: req.body.plantillasDoc } },
+            { new: true, upsert: true }
+        );
+        res.json(config);
+    } catch (err) { res.status(500).json({ error: 'Error al guardar plantillas' }); }
+});
+// ==========================================================
+
 router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No archivo' });
     try {
@@ -91,7 +106,7 @@ router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, re
     } catch (err) { res.status(500).json({ error: 'Error subida' }); }
 });
 
-// --- NUEVO: SUBIR FAVICON ---
+// --- SUBIR FAVICON ---
 router.post('/upload-favicon', [isAdmin, upload.single('faviconFile')], async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No archivo' });
     try {
