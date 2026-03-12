@@ -171,6 +171,12 @@ l || ''; document.getElementById('editUsuarioRole').value = item.role; document.
     function initAppEventListeners(payload) { 
         window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
+        
+        // =========================================================================
+        // LÍNEA AÑADIDA: Conectar el formulario de plantillas con su función de guardado
+        // =========================================================================
+        document.getElementById('form-plantillas').addEventListener('submit', guardarPlantillasConfig);
+
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario); 
@@ -542,9 +548,8 @@ l || ''; document.getElementById('editUsuarioRole').value = item.role; document.
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
-       // --- NUEVAS EXPORTACIONES PARA PLANTILLAS ---
-        guardarPlantillasConfig, 
-        generarContratoPDF
+        // --- NUEVAS EXPORTACIONES PARA PLANTILLAS ---
+        guardarPlantillasConfig, generarContratoPDF
     };
 });
 
@@ -555,4 +560,5 @@ if ('serviceWorker' in navigator) {
         }, function (err) { 
             console.log('ServiceWorker Falló: ', err); 
         }); 
-    });
+    }); 
+}
