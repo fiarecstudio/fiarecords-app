@@ -542,8 +542,9 @@ l || ''; document.getElementById('editUsuarioRole').value = item.role; document.
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
-        // --- NUEVAS EXPORTACIONES PARA PLANTILLAS ---
-        guardarPlantillasConfig, generarContratoPDF
+       // --- NUEVAS EXPORTACIONES PARA PLANTILLAS ---
+        guardarPlantillasConfig, 
+        generarContratoPDF
     };
 });
 
@@ -554,5 +555,4 @@ if ('serviceWorker' in navigator) {
         }, function (err) { 
             console.log('ServiceWorker Falló: ', err); 
         }); 
-    }); 
-}
+    });
