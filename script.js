@@ -217,8 +217,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadInitialConfig() {
         try {
             const config = await fetchAPI('/api/configuracion');
-            if (config) { configCache = config; if(config.logoBase64) logoBase64 = config.logoBase64; }
-        } catch (e) { configCache = {}; }
+            if (config) { 
+                configCache = config; 
+                if(config.logoBase64) logoBase64 = config.logoBase64; 
+            }
+        } catch (e) { 
+            // EL CAMBIO ESTÁ AQUÍ: Asignamos null en lugar de {}
+            configCache = null; 
+        }
     }
 
     // ==================================================================
@@ -1678,7 +1684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function guardarDatosBancarios() { const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; try { await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) }); configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
-    async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = configCache.datosBancarios || {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
+    async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = (configCache && configCache.datosBancarios) ? configCache.datosBancarios : {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
     function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''],['Titular:', db.titular || ''],['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
@@ -1688,12 +1694,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try { 
             if (!configCache) await loadInitialConfig();
             
+            // EL CAMBIO: Creamos una variable segura por si sigue siendo null
+            const configSegura = configCache || {};
+            
             const firmaPreview = document.getElementById('firma-preview-img');
             let firmaSrc = 'https://placehold.co/150x60?text=Sin+Firma';
-            if (configCache && configCache.firmaBase64) firmaSrc = configCache.firmaBase64; 
+            if (configSegura.firmaBase64) firmaSrc = configSegura.firmaBase64; 
             firmaPreview.src = firmaSrc; 
             
-            const db = configCache.datosBancarios || {}; 
+            const db = configSegura.datosBancarios || {}; 
             document.getElementById('banco').value = db.banco || ''; 
             document.getElementById('titular').value = db.titular || ''; 
             document.getElementById('tarjeta').value = db.tarjeta || ''; 
@@ -1702,7 +1711,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tbody = document.getElementById('tabla-horarios-body');
             tbody.innerHTML = '';
             
-            const horarios = configCache.horarioLaboral || {};
+            const horarios = configSegura.horarioLaboral || {};
             
             DIAS_SEMANA.forEach((nombreDia, index) => {
                 const h = horarios[index.toString()] || { activo: (index !== 0), inicio: "10:00", fin: "20:00" };
@@ -1729,14 +1738,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.appendChild(tr);
             });
 
-            // NUEVO: Cargar plantillas de documentos
-            const plantillas = configCache.plantillasDoc || {};
+            // NUEVO: Cargar plantillas de documentos usando configSegura
+            const plantillas = configSegura.plantillasDoc || {};
             document.getElementById('plantilla-enc1').value = plantillas.encabezado1 || '';
             document.getElementById('plantilla-enc2').value = plantillas.encabezado2 || '';
             document.getElementById('plantilla-term-cotiz').value = plantillas.terminosCotizacion || '';
             document.getElementById('plantilla-term-recibo').value = plantillas.terminosRecibo || '';
             document.getElementById('plantilla-contrato').value = plantillas.plantillaContrato || '';
-
 
         } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
     }
