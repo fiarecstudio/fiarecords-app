@@ -1352,9 +1352,147 @@ document.addEventListener('DOMContentLoaded', () => {
         pdf.addImage(logoData, 'PNG', 14, 15, finalWidth, finalHeight); 
     }
 
-    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { let firmaSrc = null; if (configCache) { if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64; else if (configCache.firmaPath) firmaSrc = configCache.firmaPath; } try { if (firmaSrc) { let base64data = firmaSrc; if (!firmaSrc.startsWith('data:image')) { const response = await fetch(firmaSrc); if (!response.ok) throw new Error('No se pudo cargar la firma.'); const firmaImg = await response.blob(); const reader = new FileReader(); const promise = new Promise((resolve) => { reader.onloadend = () => { resolve(reader.result); }; reader.readAsDataURL(firmaImg); }); base64data = await promise; } const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20}; pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); } pdf.save(finalFileName); } catch (e) { console.error("Error firma PDF:", e); pdf.save(finalFileName); } }
-    async function generarCotizacionPDF(proyectoIdOrObject) { try { const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(9); pdf.text("FiaRecords Studio", 196, 20, { align: 'right' }); pdf.text("Juárez N.L.", 196, 25, { align: 'right' }); pdf.setFontSize(11); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 50); pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 50, { align: 'right' }); const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } pdf.autoTable({ startY: 70, head: [['Servicio', 'Subtotal']], body: body, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor:[0, 0, 0] } }); let finalY = pdf.lastAutoTable.finalY + 10; pdf.setFontSize(12); pdf.setFont(undefined, 'bold'); pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); } catch (error) { showToast("Error al generar PDF", 'error'); } }
-    async function generarReciboPDF(proyecto, pagoEspecifico) { try { const { jsPDF } = window.jspdf; const pdf = new jsPDF(); const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); if (!pago) return showToast('No hay pagos.', 'error'); const saldoRestante = proyecto.total - proyecto.montoPagado; if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(16); pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); pdf.setFontSize(11); pdf.setFont(undefined, 'normal'); pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60); pdf.autoTable({ startY: 70, theme: 'striped', body: [['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`],['Saldo Restante:', `$${safeMoney(saldoRestante)}`]] }); const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); } catch (error) { showToast('Error al generar recibo.', 'error'); } }
+    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
+        let firmaSrc = null; 
+        let encabezado1 = configCache?.plantillasDoc?.encabezado1 || "FiaRecords Studio";
+        let encabezado2 = configCache?.plantillasDoc?.encabezado2 || "Juárez N.L.";
+        let terminos = "";
+        
+        if (configCache) { 
+            if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64; 
+            if (configCache.plantillasDoc) {
+                if (docType === 'cotizacion') terminos = configCache.plantillasDoc.terminosCotizacion || "Este presupuesto tiene una vigencia de 15 días.";
+                if (docType === 'recibo') terminos = configCache.plantillasDoc.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
+                if (docType === 'contrato') terminos = configCache.plantillasDoc.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS"; // Placeholder, se llenará antes.
+            }
+        } 
+        
+        // Renderizar encabezado
+        pdf.setFontSize(9);
+        pdf.text(encabezado1, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 20, { align: 'right' });
+        pdf.text(encabezado2, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 25, { align: 'right' });
+
+        // Renderizar términos y condiciones
+        if (terminos) {
+            let yPos = PDF_DIMENSIONS.HEIGHT - PDF_DIMENSIONS.MARGIN;
+            if (firmaSrc) yPos -= 30; // Si hay firma, dejar espacio
+            
+            pdf.setFontSize(8);
+            pdf.setFont(undefined, 'normal');
+            
+            // Reemplazar las "palabras mágicas" si es un proyecto
+            if (proyecto) {
+                terminos = terminos.replace(/{{CLIENTE}}/g, proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General');
+                terminos = terminos.replace(/{{PROYECTO}}/g, proyecto.nombreProyecto || 'Proyecto sin nombre');
+                terminos = terminos.replace(/{{TOTAL}}/g, `$${safeMoney(proyecto.total)}`);
+                terminos = terminos.replace(/{{PAGADO}}/g, `$${safeMoney(proyecto.montoPagado || 0)}`);
+                terminos = terminos.replace(/{{RESTANTE}}/g, `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`);
+                terminos = terminos.replace(/{{FECHA}}/g, safeDate(proyecto.fecha));
+            }
+
+            const splitTerms = pdf.splitTextToSize(terminos, PDF_DIMENSIONS.WIDTH - (2 * PDF_DIMENSIONS.MARGIN));
+            pdf.text(splitTerms, PDF_DIMENSIONS.MARGIN, yPos, { align: 'left' });
+        }
+
+
+        try { 
+            if (firmaSrc) { 
+                let base64data = firmaSrc; 
+                // If the signature is not already a data URI, fetch and convert it
+                if (!firmaSrc.startsWith('data:image')) { 
+                    const response = await fetch(firmaSrc); 
+                    if (!response.ok) throw new Error('No se pudo cargar la firma.'); 
+                    const firmaImg = await response.blob(); 
+                    const reader = new FileReader(); 
+                    const promise = new Promise((resolve) => { 
+                        reader.onloadend = () => { resolve(reader.result); }; 
+                        reader.readAsDataURL(firmaImg); 
+                    }); 
+                    base64data = await promise; 
+                } 
+                const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20}; 
+                pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
+                pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
+                pdf.setFontSize(9); // Ajustar tamaño de fuente para el nombre de la firma
+                pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
+                pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
+            } 
+            pdf.save(finalFileName); 
+        } catch (e) { 
+            console.error("Error firma PDF:", e); 
+            pdf.save(finalFileName); 
+        } 
+    }
+
+    async function generarCotizacionPDF(proyectoIdOrObject) { 
+        try { 
+            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+
+            await preloadLogoForPDF(); // Asegura que el logo esté cargado
+            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } 
+            
+            pdf.setFontSize(11); 
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, PDF_DIMENSIONS.MARGIN, 50); 
+            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 50, { align: 'right' }); 
+            
+            const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
+            if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } 
+            
+            pdf.autoTable({ 
+                startY: 70, 
+                head: [['Servicio', 'Subtotal']], 
+                body: body, 
+                theme: 'grid', 
+                styles: { fontSize: 10 }, 
+                headStyles: { fillColor:[0, 0, 0] } 
+            }); 
+            
+            let finalY = pdf.lastAutoTable.finalY + 10; 
+            pdf.setFontSize(12); 
+            pdf.setFont(undefined, 'bold'); 
+            pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, finalY, { align: 'right' }); 
+            
+            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
+        } catch (error) { 
+            showToast("Error al generar PDF", 'error'); 
+        } 
+    }
+    
+    async function generarReciboPDF(proyecto, pagoEspecifico) { 
+        try { 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+            const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
+            if (!pago) return showToast('No hay pagos.', 'error'); 
+            const saldoRestante = proyecto.total - proyecto.montoPagado; 
+
+            await preloadLogoForPDF(); // Asegura que el logo esté cargado
+            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } 
+            
+            pdf.setFontSize(16); 
+            pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' }); 
+            pdf.setFontSize(11); 
+            pdf.setFont(undefined, 'normal'); 
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, PDF_DIMENSIONS.MARGIN, 60); 
+            
+            pdf.autoTable({ 
+                startY: 70, 
+                theme: 'striped', 
+                body: [
+                    ['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],
+                    ['Monto de este Recibo:', `$${safeMoney(pago.monto)} (${pago.metodo})`],
+                    ['Saldo Restante:', `$${safeMoney(saldoRestante)}`]
+                ] 
+            }); 
+            const fileName = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
+        } catch (error) { 
+            showToast('Error al generar recibo.', 'error'); 
+        } 
+    }
 
     function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
     
@@ -1544,12 +1682,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''],['Titular:', db.titular || ''],['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
     async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
+    
+    // MODIFICADO: Ahora también carga las plantillas de documentos
     async function cargarConfiguracion() { 
         try { 
             if (!configCache) await loadInitialConfig();
             
             const firmaPreview = document.getElementById('firma-preview-img');
-            let firmaSrc = 'https://placehold.co/150x60?text=Subir+Firma';
+            let firmaSrc = 'https://placehold.co/150x60?text=Sin+Firma';
             if (configCache && configCache.firmaBase64) firmaSrc = configCache.firmaBase64; 
             firmaPreview.src = firmaSrc; 
             
@@ -1589,9 +1729,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.appendChild(tr);
             });
 
+            // NUEVO: Cargar plantillas de documentos
+            const plantillas = configCache.plantillasDoc || {};
+            document.getElementById('plantilla-enc1').value = plantillas.encabezado1 || '';
+            document.getElementById('plantilla-enc2').value = plantillas.encabezado2 || '';
+            document.getElementById('plantilla-term-cotiz').value = plantillas.terminosCotizacion || '';
+            document.getElementById('plantilla-term-recibo').value = plantillas.terminosRecibo || '';
+            document.getElementById('plantilla-contrato').value = plantillas.plantillaContrato || '';
+
+
         } catch (e) { showToast('Error al cargar configuración.', 'error'); } 
     }
 
+    // NUEVO: Función para guardar las plantillas de documentos
+    async function guardarPlantillasConfig(e) {
+        e.preventDefault();
+        const plantillasDoc = {
+            encabezado1: document.getElementById('plantilla-enc1').value,
+            encabezado2: document.getElementById('plantilla-enc2').value,
+            terminosCotizacion: document.getElementById('plantilla-term-cotiz').value,
+            terminosRecibo: document.getElementById('plantilla-term-recibo').value,
+            plantillaContrato: document.getElementById('plantilla-contrato').value
+        };
+        try {
+            const res = await fetchAPI('/api/configuracion/plantillas', {
+                method: 'PUT',
+                body: JSON.stringify({ plantillasDoc })
+            });
+            // Actualizar la caché local con los nuevos valores
+            configCache.plantillasDoc = res.plantillasDoc; 
+            showToast('Plantillas guardadas correctamente', 'success');
+        } catch (err) {
+            showToast('Error al guardar plantillas', 'error');
+        }
+    }
+    
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
         tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
@@ -1671,7 +1843,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (paginatedItems.length === 0) {
             listEl.innerHTML = `<li class="list-group-item text-muted small">Papelera vacía.</li>`;
-            if(controlsEl) controlsEl.innerHTML = '';
+            if(controlsEl) controls.innerHTML = ''; // Fixed typo: controls -> controlsEl
             return;
         }
 
@@ -1991,6 +2163,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleTheme(e.target.checked);
             });
         });
+
+        // NUEVO: Listener para el formulario de plantillas
+        const formPlantillas = document.getElementById('form-plantillas');
+        if (formPlantillas) {
+            formPlantillas.addEventListener('submit', guardarPlantillasConfig);
+        }
     }
     
     function setupCustomization(payload) { 
@@ -2343,7 +2521,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
-        abrirModalProyectoDirecto, guardarProyectoDirecto 
+        abrirModalProyectoDirecto, guardarProyectoDirecto,
+        guardarPlantillasConfig // ¡NUEVO! Exportar esta función
     };
 });
 
