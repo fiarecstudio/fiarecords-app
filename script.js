@@ -1136,13 +1136,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.style.borderLeftColor = `var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})`; 
                 const serviciosHtml = (p.items && p.items.length > 0) ? p.items.map(i => `<li class="small">${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`; 
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
-                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group"><button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
+                
+                // Botones de Contrato y Firma
+                const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+                
+                const userInfo = getUserRoleAndId();
+                let btnFirma = '';
+                
+                if (p.firmaCliente) {
+                    if (userInfo.role !== 'cliente') {
+                        // Admin puede ver firmado + borrar
+                        btnFirma = `
+                            <div class="d-flex gap-1 align-items-center">
+                                <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
+                                <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${p._id}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        // Cliente solo ve que está firmado
+                        btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
+                    }
+                } else {
+                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
+                }
+                
+                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group">${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
             }); 
         } 
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
+
     // CARGAR HISTORIAL (BOTÓN VISOR)
     // ==============================================================
     async function cargarHistorial() { 
@@ -1288,7 +1315,31 @@ document.addEventListener('DOMContentLoaded', () => {
             if (proyectos.length) { 
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
-                    let accionesHtml = `<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
+                    // Botones de Contrato y Firma
+                    const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+                    const userInfo = getUserRoleAndId();
+                let btnFirma = '';
+                
+                if (p.firmaCliente) {
+                    if (userInfo.role !== 'cliente') {
+                        // Admin puede ver firmado + borrar
+                        btnFirma = `
+                            <div class="d-flex gap-1 align-items-center">
+                                <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
+                                <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${p._id}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        // Cliente solo ve que está firmado
+                        btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
+                    }
+                } else {
+                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
+                }
+                    
+                    let accionesHtml = `${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
                     
                     if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
                         accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
@@ -1359,31 +1410,93 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
-        let firmaSrc = null; 
+        // ==================================================================
+        // LÓGICA AGRESIVA DE RECUPERACIÓN DE FIRMA Y CONFIGURACIÓN
+        // ==================================================================
+        
+        // Paso 1: Asegurar que configCache exista
+        if (!configCache) {
+            console.log('addFirmaToPdf: configCache es null, intentando loadInitialConfig...');
+            try {
+                await loadInitialConfig();
+            } catch (e) {
+                console.error('addFirmaToPdf: Error al cargar config:', e);
+            }
+        }
+        
+        // Paso 2: Si sigue sin existir, intentar recuperar de localforage directamente
+        if (!configCache) {
+            console.log('addFirmaToPdf: Intentando recuperar de localforage...');
+            try {
+                const cachedConfig = await localforage.getItem('cached_config');
+                if (cachedConfig) {
+                    configCache = cachedConfig;
+                    console.log('addFirmaToPdf: config recuperada de localforage');
+                }
+            } catch (e) {
+                console.error('addFirmaToPdf: Error al leer localforage:', e);
+            }
+        }
+        
+        // Paso 3: Si aún no hay config, intentar fetch directo al API
+        if (!configCache) {
+            console.log('addFirmaToPdf: Intentando fetch directo a /api/configuracion...');
+            try {
+                const configFromAPI = await fetchAPI('/api/configuracion');
+                if (configFromAPI) {
+                    configCache = configFromAPI;
+                    // Guardar en localforage para futuras ocasiones
+                    await localforage.setItem('cached_config', configCache);
+                    console.log('addFirmaToPdf: config recuperada del API');
+                }
+            } catch (e) {
+                console.error('addFirmaToPdf: Error al fetch config:', e);
+            }
+        }
+        
+        // Ahora sí, asignar firmaSrc con múltiples fallback
+        let firmaSrc = null;
+        if (configCache && configCache.firmaBase64) {
+            firmaSrc = configCache.firmaBase64;
+            console.log('addFirmaToPdf: firma encontrada en configCache.firmaBase64');
+        } else {
+            console.warn('addFirmaToPdf: No se encontró firmaBase64 en configCache');
+        }
+        
+        // Fallback adicional: buscar en otras propiedades posibles
+        if (!firmaSrc && configCache) {
+            if (configCache.firma && configCache.firma.base64) {
+                firmaSrc = configCache.firma.base64;
+                console.log('addFirmaToPdf: firma encontrada en configCache.firma.base64');
+            } else if (configCache.config && configCache.config.firmaBase64) {
+                firmaSrc = configCache.config.firmaBase64;
+                console.log('addFirmaToPdf: firma encontrada en configCache.config.firmaBase64');
+            }
+        }
+        
         let encabezado1 = configCache?.plantillasDoc?.encabezado1 || "FiaRecords Studio";
         let encabezado2 = configCache?.plantillasDoc?.encabezado2 || "Juárez N.L.";
         let terminos = "";
         
-        if (configCache) { 
-            if (configCache.firmaBase64) firmaSrc = configCache.firmaBase64; 
-            if (configCache.plantillasDoc) {
-                if (docType === 'cotizacion') terminos = configCache.plantillasDoc.terminosCotizacion || "Este presupuesto tiene una vigencia de 15 días.";
-                if (docType === 'recibo') terminos = configCache.plantillasDoc.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
-                if (docType === 'contrato') terminos = configCache.plantillasDoc.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS"; // Placeholder, se llenará antes.
-            }
-        } 
+        if (configCache && configCache.plantillasDoc) {
+            if (docType === 'cotizacion') terminos = configCache.plantillasDoc.terminosCotizacion || "Este presupuesto tiene una vigencia de 15 días.";
+            if (docType === 'recibo') terminos = configCache.plantillasDoc.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
+            if (docType === 'contrato') terminos = configCache.plantillasDoc.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS";
+        }
         
         // Renderizar encabezado
         pdf.setFontSize(9);
         pdf.text(encabezado1, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 20, { align: 'right' });
         pdf.text(encabezado2, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 25, { align: 'right' });
 
-        // Renderizar términos y condiciones
-        if (terminos) {
-            let yPos = PDF_DIMENSIONS.HEIGHT - PDF_DIMENSIONS.MARGIN;
-            if (firmaSrc) yPos -= 30; // Si hay firma, dejar espacio
+        // ==================================================================
+        // TAREA 2: MEJORAS DE FORMATO PROFESIONAL PARA CONTRATOS
+        // ==================================================================
+        if (terminos && docType === 'contrato') {
+            // Título del contrato (ya agregado en generarContratoPDF)
+            let yPos = 80; // Empezar después del título
             
-            pdf.setFontSize(8);
+            pdf.setFontSize(10);
             pdf.setFont(undefined, 'normal');
             
             // Reemplazar las "palabras mágicas" si es un proyecto
@@ -1396,38 +1509,188 @@ document.addEventListener('DOMContentLoaded', () => {
                 terminos = terminos.replace(/{{FECHA}}/g, safeDate(proyecto.fecha));
             }
 
-            const splitTerms = pdf.splitTextToSize(terminos, PDF_DIMENSIONS.WIDTH - (2 * PDF_DIMENSIONS.MARGIN));
-            pdf.text(splitTerms, PDF_DIMENSIONS.MARGIN, yPos, { align: 'left' });
+            // TAREA 2: Dividir por párrafos (\n) para mejor formato
+            const parrafos = terminos.split('\n');
+            
+            for (let i = 0; i < parrafos.length; i++) {
+                const parrafo = parrafos[i].trim();
+                if (!parrafo) continue;
+                
+                // TAREA 2: Negritas dinámicas para líneas que empiezan con "CLAUSULA" o mayúsculas + ":"
+                const lineaUpper = parrafo.toUpperCase();
+                if (lineaUpper.startsWith('CLAUSULA') || /^[A-ZÁÉÍÓÚÑ\s]+:/.test(parrafo)) {
+                    pdf.setFont(undefined, 'bold');
+                } else {
+                    pdf.setFont(undefined, 'normal');
+                }
+                
+                // TAREA 2: Dividir párrafo en líneas con margen derecho de 14
+                const maxWidth = PDF_DIMENSIONS.WIDTH - (PDF_DIMENSIONS.MARGIN + 14);
+                const splitLines = pdf.splitTextToSize(parrafo, maxWidth);
+                
+                // TAREA 2: Interlineado aumentado a 8
+                const lineHeight = 8;
+                
+                // Verificar si necesitamos nueva página
+                for (let j = 0; j < splitLines.length; j++) {
+                    if (yPos > PDF_DIMENSIONS.HEIGHT - 40) {
+                        pdf.addPage();
+                        dibujarLogoEnPDF(pdf, logoBase64);
+                        yPos = 50;
+                    }
+                    
+                    pdf.text(splitLines[j], PDF_DIMENSIONS.MARGIN, yPos);
+                    yPos += lineHeight;
+                }
+                
+                // TAREA 2: Espacio extra entre párrafos
+                if (i < parrafos.length - 1) {
+                    yPos += 4;
+                }
+            }
+            
+            // ==================================================================
+            // TAREA 3: POSICIONAMIENTO DE FIRMAS (BOTTOM-FIXED)
+            // ==================================================================
+            yPos += 20; // Espacio antes de firmas
+            
+            // Calcular si las firmas caben en la página actual
+            const altoFirmas = 35;
+            const margenInferiorMinimo = 20;
+            const espacioDisponible = PDF_DIMENSIONS.HEIGHT - margenInferiorMinimo;
+            
+            if (yPos + altoFirmas > espacioDisponible) {
+                // No caben, agregar nueva página
+                pdf.addPage();
+                dibujarLogoEnPDF(pdf, logoBase64);
+                yPos = PDF_DIMENSIONS.HEIGHT - 80; // Posición fija al final
+            } else {
+                // Sí caben, ajustar posición al final de la página
+                yPos = PDF_DIMENSIONS.HEIGHT - 80;
+            }
+            
+            // Dibujar firma del ESTUDIO (derecha)
+            if (firmaSrc) {
+                try {
+                    let base64data = firmaSrc;
+                    if (!firmaSrc.startsWith('data:image')) {
+                        const response = await fetch(firmaSrc);
+                        if (!response.ok) throw new Error('No se pudo cargar la firma.');
+                        const firmaImg = await response.blob();
+                        const reader = new FileReader();
+                        const promise = new Promise((resolve) => {
+                            reader.onloadend = () => { resolve(reader.result); };
+                            reader.readAsDataURL(firmaImg);
+                        });
+                        base64data = await promise;
+                    }
+                    
+                    // Firma del estudio a la derecha - MISMO TAMAÑO QUE FIRMA CLIENTE (40px ancho)
+                    const imgProps = pdf.getImageProperties(base64data);
+                    const imgWidth = 40; // Igual que la firma del cliente
+                    const imgHeight = (imgProps.height / imgProps.width) * imgWidth;
+                    
+                    const posEstudio = {
+                        x: PDF_DIMENSIONS.WIDTH - 64,
+                        y: yPos,
+                        w: imgWidth,
+                        h: imgHeight
+                    };
+                    pdf.addImage(base64data, 'PNG', posEstudio.x, posEstudio.y, posEstudio.w, posEstudio.h);
+                    pdf.line(posEstudio.x, posEstudio.y + posEstudio.h + 2, posEstudio.x + posEstudio.w, posEstudio.y + posEstudio.h + 2);
+                    pdf.setFontSize(9);
+                    pdf.setFont(undefined, 'normal');
+                    pdf.text("Erick Resendiz", posEstudio.x, posEstudio.y + posEstudio.h + 7, { align: 'left' });
+                    pdf.text("Representante FIA Records", posEstudio.x, posEstudio.y + posEstudio.h + 12, { align: 'left' });
+                } catch (error) {
+                    console.error('Error firma estudio:', error);
+                }
+            }
+            
+            // Dibujar firma del CLIENTE (izquierda) - ALINEADA CON LA FIRMA DEL ESTUDIO
+            if (proyecto && proyecto.firmaCliente) {
+                try {
+                    const imgProps = pdf.getImageProperties(proyecto.firmaCliente);
+                    const imgWidth = 40;
+                    const imgHeight = (imgProps.height / imgProps.width) * imgWidth;
+                    
+                    // Alinear por la base: calcular Y para que la parte inferior quede al mismo nivel
+                    // Ahora ambas firmas tienen el mismo ancho (40), pero altura variable
+                    const yCliente = yPos + (imgHeight - imgHeight); // Se alinea con la firma del estudio
+                    
+                    const posCliente = {
+                        x: PDF_DIMENSIONS.MARGIN,
+                        y: yCliente,
+                        w: imgWidth,
+                        h: imgHeight
+                    };
+                    
+                    pdf.addImage(proyecto.firmaCliente, 'PNG', posCliente.x, posCliente.y, posCliente.w, posCliente.h);
+                    pdf.line(posCliente.x, posCliente.y + posCliente.h + 2, posCliente.x + posCliente.w, posCliente.y + posCliente.h + 2);
+                    pdf.setFontSize(9);
+                    pdf.setFont(undefined, 'normal');
+                    pdf.text('Firma del Cliente', posCliente.x, posCliente.y + posCliente.h + 7, { align: 'left' });
+                } catch (error) {
+                    console.error('Error firma cliente:', error);
+                }
+            }
+        } else {
+            // Para cotización y recibo (lógica original)
+            if (terminos) {
+                let yPos = PDF_DIMENSIONS.HEIGHT - PDF_DIMENSIONS.MARGIN;
+                if (firmaSrc) yPos -= 30;
+                
+                pdf.setFontSize(8);
+                pdf.setFont(undefined, 'normal');
+                
+                if (proyecto) {
+                    terminos = terminos.replace(/{{CLIENTE}}/g, proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General');
+                    terminos = terminos.replace(/{{PROYECTO}}/g, proyecto.nombreProyecto || 'Proyecto sin nombre');
+                    terminos = terminos.replace(/{{TOTAL}}/g, `$${safeMoney(proyecto.total)}`);
+                    terminos = terminos.replace(/{{PAGADO}}/g, `$${safeMoney(proyecto.montoPagado || 0)}`);
+                    terminos = terminos.replace(/{{RESTANTE}}/g, `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`);
+                    terminos = terminos.replace(/{{FECHA}}/g, safeDate(proyecto.fecha));
+                }
+
+                const splitTerms = pdf.splitTextToSize(terminos, PDF_DIMENSIONS.WIDTH - (2 * PDF_DIMENSIONS.MARGIN));
+                pdf.text(splitTerms, PDF_DIMENSIONS.MARGIN, yPos, { align: 'left' });
+            }
+
+            try {
+                if (firmaSrc) {
+                    let base64data = firmaSrc;
+                    if (!firmaSrc.startsWith('data:image')) {
+                        try {
+                            const response = await fetch(firmaSrc);
+                            if (!response.ok) throw new Error('No se pudo cargar la firma.');
+                            const firmaImg = await response.blob();
+                            const reader = new FileReader();
+                            const promise = new Promise((resolve) => {
+                                reader.onloadend = () => { resolve(reader.result); };
+                                reader.readAsDataURL(firmaImg);
+                            });
+                            base64data = await promise;
+                        } catch (imgError) {
+                            console.warn('Error cargando imagen de firma admin:', imgError);
+                            // Continuar sin la firma del admin
+                        }
+                    }
+                    const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
+                    pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h);
+                    pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2);
+                    pdf.setFontSize(9);
+                    pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' });
+                    pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' });
+                }
+                pdf.save(finalFileName);
+            } catch (e) {
+                console.error("Error firma PDF:", e);
+                pdf.save(finalFileName);
+            }
         }
-
-
-        try { 
-            if (firmaSrc) { 
-                let base64data = firmaSrc; 
-                // If the signature is not already a data URI, fetch and convert it
-                if (!firmaSrc.startsWith('data:image')) { 
-                    const response = await fetch(firmaSrc); 
-                    if (!response.ok) throw new Error('No se pudo cargar la firma.'); 
-                    const firmaImg = await response.blob(); 
-                    const reader = new FileReader(); 
-                    const promise = new Promise((resolve) => { 
-                        reader.onloadend = () => { resolve(reader.result); }; 
-                        reader.readAsDataURL(firmaImg); 
-                    }); 
-                    base64data = await promise; 
-                } 
-                const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20}; 
-                pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h); 
-                pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2); 
-                pdf.setFontSize(9); // Ajustar tamaño de fuente para el nombre de la firma
-                pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' }); 
-                pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' }); 
-            } 
-            pdf.save(finalFileName); 
-        } catch (e) { 
-            console.error("Error firma PDF:", e); 
-            pdf.save(finalFileName); 
-        } 
+        
+        // PDF SAVE UNIVERSAL - Se ejecuta SIEMPRE para todos los tipos de documentos
+        pdf.save(finalFileName);
     }
 
     async function generarCotizacionPDF(proyectoIdOrObject) { 
@@ -1808,17 +2071,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         tablaBody.innerHTML = paginatedItems.map(c => { 
-            const esArtistaRegistrado = c.artista && c.artista._id; 
-            const nombreArtista = esArtistaRegistrado ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General'; 
-            return `<tr><td data-label="Artista" class="${esArtistaRegistrado ? 'clickable-artist' : ''}" ${esArtistaRegistrado ? `ondblclick="app.irAVistaArtista('${c.artista._id}', '${escapeHTML(c.artista.nombre)}', '${escapeHTML(c.artista.nombreArtistico || '')}')"` : ''}>${escapeHTML(nombreArtista)}</td><td data-label="Total">$${safeMoney(c.total)}</td><td data-label="Fecha">${safeDate(c.createdAt)}</td><td data-label="Acciones" class="table-actions"><button class="btn btn-sm btn-success" onclick="app.aprobarCotizacion('${c._id}')" title="Aprobar"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-outline-secondary" title="Generar PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button><button class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="app.compartirPorWhatsApp('${c._id}')"><i class="bi bi-whatsapp"></i></button><button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${c._id}', true)" title="Borrar"><i class="bi bi-trash"></i></button></td></tr>`; 
+            const artistaNombre = c.artista ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General';
+            
+            // Botones de Contrato y Firma
+            const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${c._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+            
+            const userInfo = getUserRoleAndId();
+            let btnFirma = '';
+            
+            if (c.firmaCliente) {
+                if (userInfo.role !== 'cliente') {
+                    // Admin puede ver firmado + borrar
+                    btnFirma = `
+                        <div class="d-flex gap-1 align-items-center">
+                            <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
+                            <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${c._id}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // Cliente solo ve que está firmado
+                    btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
+                }
+            } else {
+                btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${c._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
+            }
+            
+            return `
+                <tr>
+                    <td data-label="Fecha">${safeDate(c.fecha)}</td>
+                    <td data-label="Artista">${escapeHTML(artistaNombre)}</td>
+                    <td data-label="Total">$${safeMoney(c.total)}</td>
+                    <td data-label="Acciones" class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" title="Aprobar y Agendar" onclick="app.aprobarCotizacion('${c._id}')"><i class="bi bi-check-circle"></i></button>
+                        <button class="btn btn-sm btn-outline-info" title="Cotización PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
+                        ${btnContrato}${btnFirma}
+                    </td>
+                </tr>
+            `;
         }).join('');
         
         renderTableControls('tablaCotizacionesBody', 'cotizaciones', page, totalPages);
     }
-    
-    // ==================================================================
-    // LÓGICA DE PAPELERA PAGINADA
-    // ==================================================================
+
     async function cargarPapelera() {
         const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
         for (const endpoint of endpoints) {
@@ -1851,7 +2147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (paginatedItems.length === 0) {
             listEl.innerHTML = `<li class="list-group-item text-muted small">Papelera vacía.</li>`;
-            if(controlsEl) controls.innerHTML = ''; // Fixed typo: controls -> controlsEl
+            if(controlsEl) controlsEl.innerHTML = '';
             return;
         }
 
@@ -2512,6 +2808,201 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { showLogin(); }
     })();
 
+    // ==================================================================
+    // GENERACIÓN DE CONTRATOS PDF CON MEJORAS PROFESIONALES
+    // ==================================================================
+    async function generarContratoPDF(proyectoId) {
+        try {
+            // TAREA 1: SIEMPRE hacer fetch para obtener datos frescos (incluyendo firmaCliente)
+            let proyecto;
+            if (typeof proyectoId === 'string') {
+                proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+            } else {
+                proyecto = proyectoId;
+            }
+            
+            if (!proyecto) {
+                showToast('Proyecto no encontrado', 'error');
+                return;
+            }
+
+            // Cargar configuración si no existe
+            if (!configCache) {
+                await loadInitialConfig();
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+
+            await preloadLogoForPDF();
+            if (logoBase64) {
+                dibujarLogoEnPDF(pdf, logoBase64);
+            }
+
+            // Título del contrato
+            pdf.setFontSize(18);
+            pdf.setFont(undefined, 'bold');
+            pdf.text('CONTRATO DE PRESTACIÓN DE SERVICIOS', 105, 60, { align: 'center' });
+
+            const fileName = `Contrato-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`;
+            await addFirmaToPdf(pdf, 'contrato', fileName, proyecto);
+            
+            showToast('Contrato generado exitosamente', 'success');
+        } catch (error) {
+            console.error('Error al generar contrato:', error);
+            showToast('Error al generar contrato', 'error');
+        }
+    }
+
+    // ==================================================================
+    // TAREA 2: FIRMA DIGITAL DEL CLIENTE (Lógica Completa)
+    // ==================================================================
+    let canvasFirma = null;
+    let ctxFirma = null;
+    let isDrawing = false;
+    let proyectoActualFirma = null;
+
+    function inicializarCanvasFirma() {
+        canvasFirma = document.getElementById('canvas-firma');
+        if (!canvasFirma) return;
+        
+        ctxFirma = canvasFirma.getContext('2d');
+        const rect = canvasFirma.getBoundingClientRect();
+        canvasFirma.width = rect.width;
+        canvasFirma.height = 200;
+        
+        ctxFirma.strokeStyle = '#000';
+        ctxFirma.lineWidth = 2;
+        ctxFirma.lineCap = 'round';
+        ctxFirma.lineJoin = 'round';
+        
+        canvasFirma.addEventListener('mousedown', startDrawing);
+        canvasFirma.addEventListener('mousemove', draw);
+        canvasFirma.addEventListener('mouseup', stopDrawing);
+        canvasFirma.addEventListener('mouseout', stopDrawing);
+        
+        canvasFirma.addEventListener('touchstart', handleTouch, {passive: false});
+        canvasFirma.addEventListener('touchmove', handleTouch, {passive: false});
+        canvasFirma.addEventListener('touchend', stopDrawing);
+    }
+
+    function startDrawing(e) {
+        isDrawing = true;
+        const rect = canvasFirma.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const y = (e.clientY || e.touches[0].clientY) - rect.top;
+        ctxFirma.beginPath();
+        ctxFirma.moveTo(x, y);
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        const rect = canvasFirma.getBoundingClientRect();
+        const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+        const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+        ctxFirma.lineTo(x, y);
+        ctxFirma.stroke();
+    }
+
+    function stopDrawing() { isDrawing = false; }
+
+    function handleTouch(e) {
+        e.preventDefault();
+        if (e.type === 'touchstart') startDrawing(e);
+        else if (e.type === 'touchmove') draw(e);
+    }
+
+    function limpiarCanvas() {
+        if (!ctxFirma || !canvasFirma) return;
+        ctxFirma.clearRect(0, 0, canvasFirma.width, canvasFirma.height);
+    }
+
+    function abrirModalFirma(proyectoId) {
+        proyectoActualFirma = proyectoId;
+        const modalEl = document.getElementById('modal-firma-cliente');
+        if (!modalEl) {
+            showToast('Error: No se encontró el modal de firma en el HTML', 'error');
+            return;
+        }
+        
+        modalEl.removeAttribute('aria-hidden'); // Elimina el conflicto de accesibilidad
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        
+        // Inicializar el canvas después de que el modal se muestre
+        setTimeout(inicializarCanvasFirma, 300);
+    }
+
+    async function guardarFirmaCliente() {
+        if (!canvasFirma || !proyectoActualFirma) return;
+        
+        // Verificar si el canvas está vacío
+        const blank = document.createElement('canvas');
+        blank.width = canvasFirma.width;
+        blank.height = canvasFirma.height;
+        if (canvasFirma.toDataURL() === blank.toDataURL()) {
+            showToast('Por favor, firme antes de guardar', 'warning');
+            return;
+        }
+        
+        try {
+            showLoader();
+            const firmaBase64 = canvasFirma.toDataURL('image/png');
+            
+            // Actualizar proyecto con la firma
+            await fetchAPI(`/api/proyectos/${proyectoActualFirma}`, {
+                method: 'PUT',
+                body: JSON.stringify({ firmaCliente: firmaBase64 })
+            });
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modal-firma-cliente'));
+            if (modal) modal.hide();
+            
+            showToast('Firma guardada correctamente', 'success');
+            
+            // Recargar datos para ver el badge de "Firmado"
+            const currentHash = location.hash.replace('#', '') || 'dashboard';
+            mostrarSeccion(currentHash, false);
+            
+        } catch (error) {
+            showToast('Error al guardar firma: ' + error.message, 'error');
+        } finally {
+            hideLoader();
+        }
+    }
+
+    // Función para borrar firma del cliente (solo admin)
+    async function borrarFirmaCliente(proyectoId) {
+        const userInfo = getUserRoleAndId();
+        if (userInfo.role === 'cliente') {
+            showToast('No autorizado para esta acción', 'error');
+            return;
+        }
+
+        if (!confirm('¿Estás seguro de que deseas borrar la firma del cliente? Esta acción no se puede deshacer.')) {
+            return;
+        }
+
+        try {
+            showLoader();
+            await fetchAPI(`/api/proyectos/${proyectoId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ firmaCliente: null })
+            });
+            
+            showToast('Firma del cliente eliminada correctamente', 'success');
+            
+            // Recargar datos para actualizar la vista
+            const currentHash = location.hash.replace('#', '') || 'dashboard';
+            mostrarSeccion(currentHash, false);
+            
+        } catch (error) {
+            showToast('Error al borrar firma: ' + error.message, 'error');
+        } finally {
+            hideLoader();
+        }
+    }
+
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
@@ -2530,10 +3021,14 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
-        guardarPlantillasConfig // ¡NUEVO! Exportar esta función
+        guardarPlantillasConfig,
+        generarContratoPDF,
+        abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente
     };
-});
 
+}); // <-- CIERRE DEL DOMCONTENTLOADED
+
+// --- SERVICE WORKER ---
 if ('serviceWorker' in navigator) { 
     window.addEventListener('load', function () { 
         navigator.serviceWorker.register('sw.js').then(function (registration) { 

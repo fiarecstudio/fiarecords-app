@@ -1,9 +1,13 @@
-const CACHE_NAME = "fia-cache-v3"; // <-- ¡Subimos a v3 para forzar la actualización!
+const CACHE_NAME = "fia-cache-v4"; // <-- v4 para forzar actualización tras ESM
 const urlsToCache = [
   "/",
   "/index.html",
   "/style.css",
-  "/script.js",
+  "/js/app.js",
+  "/js/api.js",
+  "/js/ui.js",
+  "/js/drive.js",
+  "/js/pdf.js",
   "/manifest.json"
 ];
 
@@ -30,6 +34,8 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener("fetch", event => {
+  // Solo cacheamos GET. El navegador prohíbe cache.put() con POST/PUT/DELETE.
+  if (event.request.method !== 'GET') return;
   // Estrategia: Network First (Red primero, si falla, usa Caché)
   event.respondWith(
     fetch(event.request)

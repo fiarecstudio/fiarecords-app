@@ -86,6 +86,15 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .table thead th { background-color: var(--secondary-button-bg); color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid var(--border-color); }
 .table td { vertical-align: middle; }
 
+/* --- RESPONSIVE TABLES --- */
+.table-responsive { 
+    border-radius: 8px; 
+    overflow-x: auto; 
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+
 /* --- ESTILOS ESPECIALES PARA FILAS CANCELADAS --- */
 .fila-cancelada, .fila-cancelada td {
     background-color: #f1f5f9 !important; 
@@ -227,8 +236,43 @@ body.dark-mode .login-footer small.text-muted, body.dark-mode .main-footer small
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
     .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
-    .kanban-board { flex-direction: column; overflow-x: hidden; min-height: auto; align-items: stretch; gap: 1rem; }
-    .kanban-column { width: 100%; min-width: 100%; margin-bottom: 0; }
+    
+    /* KANBOARD MOBILE - Scroll horizontal en lugar de vertical */
+    .kanban-board { 
+        display: flex; 
+        flex-wrap: nowrap; 
+        overflow-x: auto; 
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem; 
+        min-height: 400px; 
+        align-items: flex-start; 
+        gap: 0.8rem;
+        scroll-snap-type: x mandatory;
+    }
+    .kanban-column { 
+        min-width: 280px; 
+        width: 280px; 
+        flex-shrink: 0;
+        background-color: var(--secondary-button-bg); 
+        border-radius: 12px; 
+        padding: 0.8rem; 
+        border: 1px solid var(--border-color); 
+        display: flex; 
+        flex-direction: column; 
+        gap: 0.8rem;
+        scroll-snap-align: start;
+    }
+    
+    /* MODALES RESPONSIVE */
+    .modal-dialog { 
+        max-width: 95%; 
+        margin: 0.5rem auto;
+    }
+    .modal-content {
+        max-width: 100%;
+        margin: 0;
+    }
+    
     #welcome-user { font-size: 0.9rem; }
     .theme-toggle-login { top: 10px; right: 10px; padding: 0.3rem 0.6rem; font-size: 0.85rem; }
 }

@@ -923,12 +923,37 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client"></script>
   
   <!-- LIBRERIA PARA BASE DE DATOS LOCAL (IndexedDB) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
   
   <script src="script.js"></script>
+
+  <!-- MODAL FIRMA CLIENTE -->
+  <div class="modal fade" id="modal-firma-cliente" tabindex="-1" aria-labelledby="modalFirmaClienteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalFirmaClienteLabel">Firma Digital del Cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Firme en el área siguiente:</label>
+            <canvas id="canvas-firma" width="100%" height="200" style="border: 1px dashed #ccc; touch-action: none; background: white; width: 100%; border-radius: 8px;"></canvas>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" onclick="app.limpiarCanvas()">
+              <i class="bi bi-eraser"></i> Limpiar
+            </button>
+            <button type="button" class="btn btn-primary" onclick="app.guardarFirmaCliente()">
+              <i class="bi bi-check-circle"></i> Guardar Firma
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

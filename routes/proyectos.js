@@ -167,6 +167,46 @@ router.get('/por-artista/:id', async (req, res) => { try { if (req.user.role ===
 router.get('/:id', async (req, res) => { try { const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) { return res.status(403).json({ error: 'No autorizado.' }); } } res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 // ==============================================================
+// RUTA PUT GENERAL PARA ACTUALIZAR PROYECTO (Firma del Cliente)
+// ==============================================================
+router.put('/:id', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        
+        // Verificar autorización para clientes
+        if (req.user.role === 'cliente') {
+            const filtro = await getFiltroUsuario(req);
+            if (!proyecto.artista || proyecto.artista.toString() !== filtro.artista.toString()) {
+                return res.status(403).json({ error: 'No autorizado' });
+            }
+            // Cliente solo puede actualizar firmaCliente
+            if (req.body.firmaCliente !== undefined) {
+                proyecto.firmaCliente = req.body.firmaCliente;
+                await proyecto.save();
+                return res.json(proyecto);
+            } else {
+                return res.status(403).json({ error: 'Solo puede actualizar la firma' });
+            }
+        }
+        
+        // Admin/empleado pueden actualizar cualquier campo permitido
+        const camposPermitidos = ['firmaCliente', 'detallesContrato', 'detallesDistribucion'];
+        camposPermitidos.forEach(campo => {
+            if (req.body[campo] !== undefined) {
+                proyecto[campo] = req.body[campo];
+            }
+        });
+        
+        await proyecto.save();
+        res.json(proyecto);
+    } catch (error) {
+        console.error('Error al actualizar proyecto:', error);
+        res.status(500).json({ error: 'Error al actualizar proyecto' });
+    }
+});
+
+// ==============================================================
 // NUEVA RUTA: CREAR PROYECTO DIRECTO (PASADO)
 // ==============================================================
 router.post('/directo', async (req, res) => {

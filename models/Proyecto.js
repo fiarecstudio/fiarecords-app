@@ -54,6 +54,9 @@ const ProyectoSchema = new mongoose.Schema({
     
     detallesContrato: { type: Object },
     detallesDistribucion: { type: Object },
+    
+    // Firma del cliente en base64
+    firmaCliente: { type: String },
 
     pagos: [PagoSchema], 
 
