@@ -1569,7 +1569,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 yPos = PDF_DIMENSIONS.HEIGHT - 80;
             }
             
-            // Dibujar firma del ESTUDIO (derecha)
+            // ==================================================================
+            // BLOQUE DE FIRMAS SIMÉTRICAS - LÍNEA BASE ÚNICA
+            // ==================================================================
+            
+            // Definir línea base única para ambas firmas
+            const baselineY = 255;
+            const firmaWidth = 50;
+            const firmaMaxHeight = 20;
+            
+            // Firma del ESTUDIO (derecha)
             if (firmaSrc) {
                 try {
                     let base64data = firmaSrc;
@@ -1585,51 +1594,43 @@ document.addEventListener('DOMContentLoaded', () => {
                         base64data = await promise;
                     }
                     
-                    // Firma del estudio a la derecha - MISMO TAMAÑO QUE FIRMA CLIENTE (40px ancho)
                     const imgProps = pdf.getImageProperties(base64data);
-                    const imgWidth = 40; // Igual que la firma del cliente
-                    const imgHeight = (imgProps.height / imgProps.width) * imgWidth;
+                    const imgWidth = firmaWidth;
+                    const imgHeight = Math.min((imgProps.height / imgProps.width) * imgWidth, firmaMaxHeight);
                     
-                    const posEstudio = {
-                        x: PDF_DIMENSIONS.WIDTH - 64,
-                        y: yPos,
-                        w: imgWidth,
-                        h: imgHeight
-                    };
-                    pdf.addImage(base64data, 'PNG', posEstudio.x, posEstudio.y, posEstudio.w, posEstudio.h);
-                    pdf.line(posEstudio.x, posEstudio.y + posEstudio.h + 2, posEstudio.x + posEstudio.w, posEstudio.y + posEstudio.h + 2);
+                    // Dibujar línea horizontal para firma del estudio
+                    pdf.line(140, baselineY, 140 + firmaWidth, baselineY);
+                    
+                    // Dibujar imagen con parte inferior tocando la línea base
+                    pdf.addImage(base64data, 'PNG', 140, baselineY - imgHeight, imgWidth, imgHeight);
+                    
+                    // Texto debajo de la línea
                     pdf.setFontSize(9);
                     pdf.setFont(undefined, 'normal');
-                    pdf.text("Erick Resendiz", posEstudio.x, posEstudio.y + posEstudio.h + 7, { align: 'left' });
-                    pdf.text("Representante FIA Records", posEstudio.x, posEstudio.y + posEstudio.h + 12, { align: 'left' });
+                    pdf.text("Erick Resendiz", 140, baselineY + 5);
+                    pdf.text("Representante FIA Records", 140, baselineY + 10);
                 } catch (error) {
                     console.error('Error firma estudio:', error);
                 }
             }
             
-            // Dibujar firma del CLIENTE (izquierda) - ALINEADA CON LA FIRMA DEL ESTUDIO
+            // Firma del CLIENTE (izquierda)
             if (proyecto && proyecto.firmaCliente) {
                 try {
                     const imgProps = pdf.getImageProperties(proyecto.firmaCliente);
-                    const imgWidth = 40;
-                    const imgHeight = (imgProps.height / imgProps.width) * imgWidth;
+                    const imgWidth = firmaWidth;
+                    const imgHeight = Math.min((imgProps.height / imgProps.width) * imgWidth, firmaMaxHeight);
                     
-                    // Alinear por la base: calcular Y para que la parte inferior quede al mismo nivel
-                    // Ahora ambas firmas tienen el mismo ancho (40), pero altura variable
-                    const yCliente = yPos + (imgHeight - imgHeight); // Se alinea con la firma del estudio
+                    // Dibujar línea horizontal para firma del cliente
+                    pdf.line(20, baselineY, 20 + firmaWidth, baselineY);
                     
-                    const posCliente = {
-                        x: PDF_DIMENSIONS.MARGIN,
-                        y: yCliente,
-                        w: imgWidth,
-                        h: imgHeight
-                    };
+                    // Dibujar imagen con parte inferior tocando la línea base
+                    pdf.addImage(proyecto.firmaCliente, 'PNG', 20, baselineY - imgHeight, imgWidth, imgHeight);
                     
-                    pdf.addImage(proyecto.firmaCliente, 'PNG', posCliente.x, posCliente.y, posCliente.w, posCliente.h);
-                    pdf.line(posCliente.x, posCliente.y + posCliente.h + 2, posCliente.x + posCliente.w, posCliente.y + posCliente.h + 2);
+                    // Texto debajo de la línea
                     pdf.setFontSize(9);
                     pdf.setFont(undefined, 'normal');
-                    pdf.text('Firma del Cliente', posCliente.x, posCliente.y + posCliente.h + 7, { align: 'left' });
+                    pdf.text("Firma del Cliente", 20, baselineY + 5);
                 } catch (error) {
                     console.error('Error firma cliente:', error);
                 }
