@@ -16,10 +16,13 @@
     "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.3.1",
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.3",
     "multer": "^2.0.2",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "xss-clean": "^0.1.4"
   }
 }

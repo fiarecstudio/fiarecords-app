@@ -109,7 +109,7 @@ router.post('/register', async (req, res) => {
         const token = jwt.sign({ 
             id: savedUser._id, 
             role: savedUser.role 
-        }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+        }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         res.status(201).json({ token });
     } catch (error) {
@@ -199,7 +199,7 @@ router.post('/login', async (req, res) => {
             permisos: user.permisos || [],
             artistaId: artistaId, // <--- ESTO ES LO QUE USA EL FRONTEND
             nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username
-        }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
+        }, process.env.JWT_SECRET, { expiresIn: '8h' });
 
         res.json({ token, role: user.role });
 
@@ -226,7 +226,7 @@ router.post('/forgot-password', async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
         await user.save();
 
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'; 
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'; 
         const cleanFrontendUrl = frontendUrl.replace(/\/$/, ''); 
         const resetUrl = `${cleanFrontendUrl}/reset-password/${token}`;
 

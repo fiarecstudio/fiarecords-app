@@ -1,55 +1,75 @@
 // ==================================================================
-//      SERVER.JS - SOLUCIÓN DEFINITIVA CON EXPRESIÓN REGULAR
+//      SERVER.JS - SOLUCIÓN DEFINITIVA PARA EXPRESS 5
 // ==================================================================
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const mongoSanitize = require('express-mongo-sanitize');
+
+let limiters = {};
+try {
+  limiters = require('./middleware/rateLimit');
+} catch (error) {
+  console.log('⚠️ Aviso: No se encontró middleware de Rate Limit.');
+}
 
 const app = express();
 
-// --- 1. Middlewares Principales ---
 app.use(cors());
+if (limiters.generalLimiter) app.use(limiters.generalLimiter); 
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// --- Ruta Health Check (Para evitar Cold Starts en Render) ---
-// Esta ruta ligera responde "OK" rápidamente. Úsala en cron-job.org
-// para hacer ping cada 14 minutos y evitar que el servidor se duerma.
+// --- 🛠️ PARCHE PARA EXPRESS 5 ---
+// Le damos permiso al guardia para modificar y limpiar las peticiones
+app.use((req, res, next) => {
+  Object.defineProperty(req, 'query', {
+    value: { ...req.query },
+    writable: true,
+    configurable: true,
+    enumerable: true
+  });
+  next();
+});
+
+// --- 2. Middlewares de Seguridad ---
+// Ahora sí, el guardia puede trabajar sin que Express lo bloquee
+app.use(mongoSanitize()); 
+
+// --- Ruta Health Check ---
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// --- 2. Definición de Rutas de la API ---
-// Todas las peticiones que empiecen con /api serán manejadas aquí.
-app.use('/api/auth', require('./routes/auth')); 
+// --- 3. Rutas de la API ---
+const authMiddleware = limiters.authLimiter ? limiters.authLimiter : (req, res, next) => next();
+const projectMiddleware = limiters.projectCreationLimiter ? limiters.projectCreationLimiter : (req, res, next) => next();
+
+app.use('/api/auth', authMiddleware, require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
-app.use('/api/proyectos', require('./routes/proyectos'));
+app.use('/api/proyectos', projectMiddleware, require('./routes/proyectos')); 
 app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
-
-// --- NUEVA RUTA INTEGRADA PARA EL MÓDULO DE DEUDAS ---
 app.use('/api/deudas', require('./routes/deudas'));
 
-// --- 3. Servir Archivos Estáticos ---
-// Sirve archivos como index.html, style.css, script.js, etc.
-app.use(express.static(path.join(__dirname))); 
+// --- 4. Servir Archivos Estáticos ---
+app.use(express.static(path.join(__dirname)));
 
-// --- 4. Ruta Catch-All con EXPRESIÓN REGULAR ---
-// Esta ruta usa una expresión regular (/.*/) para capturar CUALQUIER
-// petición GET que no haya sido manejada por las rutas de API o de archivos estáticos.
+// --- 5. Ruta Catch-All ---
 app.get(/.*/, (req, res) => {
   res.sendFile(path.resolve(__dirname, 'index.html'));
 });
 
-// --- 5. Conexión a Base de Datos y Arranque del Servidor ---
+// --- 6. Conexión a Base de Datos y Servidor ---
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
-    const PORT = process.env.PORT || 10000;
+    const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
     });
