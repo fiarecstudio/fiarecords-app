@@ -992,22 +992,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
     function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
-    function mostrarProyectoActual() { const lista = document.getElementById('listaProyectoActual'); let subtotal = 0; lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; const total = subtotal - descuento; document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; }
+    function mostrarProyectoActual() { 
+        const lista = document.getElementById('listaProyectoActual'); 
+        let subtotal = 0; 
+        lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); 
+        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; 
+        
+        // --- LÓGICA VISUAL DEL PLAN MENSUAL ---
+        const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
+        let total = subtotal - descuento;
+        
+        if (esPlanMensual) {
+            const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
+            const duracionMeses = parseInt(document.getElementById('duracionMeses')?.value) || 1;
+            
+            // Lógica para mostrar desglose...
+            const subtotalMensual = subtotal * serviciosPorMes;
+            const totalConPlan = subtotalMensual * duracionMeses - descuento;
+            total = Math.max(0, totalConPlan);
+            
+            // Opcional: Mostrar información adicional en la UI
+            const infoPlan = document.createElement('div');
+            infoPlan.className = 'alert alert-info mt-2 small';
+            infoPlan.innerHTML = `
+                <strong>Plan Mensual Activado:</strong><br>
+                • ${serviciosPorMes} servicio(s) por mes<br>
+                • ${duracionMeses} meses de duración<br>
+                • Subtotal mensual: $${subtotalMensual.toFixed(2)}<br>
+                • Total del contrato: $${total.toFixed(2)}
+            `;
+            
+            // Eliminar información anterior si existe
+            const infoAnterior = lista.parentNode.querySelector('.alert-info');
+            if (infoAnterior) infoAnterior.remove();
+            
+            // Agregar nueva información
+            lista.parentNode.insertBefore(infoPlan, lista.nextSibling);
+        } else {
+            // Eliminar información del plan si está desactivado
+            const infoPlan = lista.parentNode.querySelector('.alert-info');
+            if (infoPlan) infoPlan.remove();
+        }
+        
+        document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; 
+    }
 
     async function guardarProyecto(procesoDestino) {
-        const artistaSelect = document.getElementById('proyectoArtista'); 
-        const artistaId = artistaSelect.value; 
-        const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0]; 
-        const horaInput = document.getElementById('horaProyecto').value; 
+        const artistaSelect = document.getElementById('proyectoArtista');
+        const artistaId = artistaSelect.value;
+        const fechaInput = document.getElementById('fechaProyecto')._flatpickr.selectedDates[0];
+        const horaInput = document.getElementById('horaProyecto').value;
 
-        let fechaFinal = new Date(); 
+        let fechaFinal = new Date();
 
         if (procesoDestino !== 'Cotizacion') {
             if (!fechaInput) { showToast('Selecciona una fecha', 'warning'); return null; }
             if (!horaInput || horaInput === "") { showToast('Selecciona una hora disponible', 'warning'); return null; }
-            
-            fechaFinal = new Date(fechaInput); 
-            const [hours, minutes] = horaInput.split(':'); 
+
+            fechaFinal = new Date(fechaInput);
+            const [hours, minutes] = horaInput.split(':');
             fechaFinal.setHours(hours);
             fechaFinal.setMinutes(minutes);
         } else {
@@ -1020,35 +1063,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        
+
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
-        
+
         const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
-        const subtotal = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
-        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
-        const total = Math.max(0, subtotal - descuento);
         
+        // --- LÓGICA DE PLAN MENSUAL ---
+        const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
+        const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
+        const duracionMeses = parseInt(document.getElementById('duracionMeses')?.value) || 1;
+        
+        // CÁLCULO LOGICO: (Subtotal * Servicios al mes * Meses) - Descuento
+        const subtotalBase = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
+        const subtotalConPlan = esPlanMensual ? (subtotalBase * serviciosPorMes * duracionMeses) : subtotalBase;
+        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
+        const totalFinal = Math.max(0, subtotalConPlan - descuento);
+
         const procesoBD = procesoDestino === 'Cotizacion' ? 'Solicitud' : procesoDestino;
 
-        const body = { 
-            artista: artistaId === 'publico_general' ? null : artistaId, 
-            nombreProyecto: document.getElementById('nombreProyecto').value, 
-            items: items, 
-            total: total, 
-            descuento: descuento, 
-            estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago', 
-            metodoPago: 'Pendiente', 
-            fecha: fechaFinal.toISOString(), 
-            prioridad: 'Normal', 
-            proceso: procesoBD, 
-            esAlbum: document.getElementById('esAlbum').checked 
+        const body = {
+            artista: artistaId === 'publico_general' ? null : artistaId,
+            nombreProyecto: document.getElementById('nombreProyecto').value,
+            items: items,
+            total: totalFinal,
+            descuento: descuento,
+            estatus: procesoDestino === 'Cotizacion' ? 'Cotizacion' : 'Pendiente de Pago',
+            metodoPago: 'Pendiente',
+            fecha: fechaFinal.toISOString(),
+            prioridad: 'Normal',
+            proceso: procesoBD,
+            esAlbum: document.getElementById('esAlbum').checked,
+            esPlanMensual: esPlanMensual,
+            serviciosPorMes: serviciosPorMes,
+            duracionMeses: duracionMeses
         };
 
-        try { 
-            return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) }); 
-        } catch (error) { 
-            showToast(`Error al guardar: ${error.message}`, 'error'); 
-            return null; 
+        try {
+            return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
+        } catch (error) {
+            showToast(`Error al guardar: ${error.message}`, 'error');
+            return null;
         }
     }
 
@@ -1407,331 +1461,138 @@ document.addEventListener('DOMContentLoaded', () => {
         pdf.addImage(logoData, 'PNG', 14, 15, finalWidth, finalHeight); 
     }
 
-    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto) { 
-        // ==================================================================
-        // LÓGICA AGRESIVA DE RECUPERACIÓN DE FIRMA Y CONFIGURACIÓN
-        // ==================================================================
+    async function addFirmaToPdf(pdf, docType, finalFileName, proyecto, yStartPos = 80) { 
+        if (!configCache) await loadInitialConfig();
         
-        // Paso 1: Asegurar que configCache exista
-        if (!configCache) {
-            console.log('addFirmaToPdf: configCache es null, intentando loadInitialConfig...');
-            try {
-                await loadInitialConfig();
-            } catch (e) {
-                console.error('addFirmaToPdf: Error al cargar config:', e);
-            }
-        }
-        
-        // Paso 2: Si sigue sin existir, intentar recuperar de localforage directamente
-        if (!configCache) {
-            console.log('addFirmaToPdf: Intentando recuperar de localforage...');
-            try {
-                const cachedConfig = await localforage.getItem('cached_config');
-                if (cachedConfig) {
-                    configCache = cachedConfig;
-                    console.log('addFirmaToPdf: config recuperada de localforage');
-                }
-            } catch (e) {
-                console.error('addFirmaToPdf: Error al leer localforage:', e);
-            }
-        }
-        
-        // Paso 3: Si aún no hay config, intentar fetch directo al API
-        if (!configCache) {
-            console.log('addFirmaToPdf: Intentando fetch directo a /api/configuracion...');
-            try {
-                const configFromAPI = await fetchAPI('/api/configuracion');
-                if (configFromAPI) {
-                    configCache = configFromAPI;
-                    // Guardar en localforage para futuras ocasiones
-                    await localforage.setItem('cached_config', configCache);
-                    console.log('addFirmaToPdf: config recuperada del API');
-                }
-            } catch (e) {
-                console.error('addFirmaToPdf: Error al fetch config:', e);
-            }
-        }
-        
-        // Ahora sí, asignar firmaSrc con múltiples fallback
-        let firmaSrc = null;
-        if (configCache && configCache.firmaBase64) {
-            firmaSrc = configCache.firmaBase64;
-            console.log('addFirmaToPdf: firma encontrada en configCache.firmaBase64');
-        } else {
-            console.warn('addFirmaToPdf: No se encontró firmaBase64 en configCache');
-        }
-        
-        // Fallback adicional: buscar en otras propiedades posibles
-        if (!firmaSrc && configCache) {
-            if (configCache.firma && configCache.firma.base64) {
-                firmaSrc = configCache.firma.base64;
-                console.log('addFirmaToPdf: firma encontrada en configCache.firma.base64');
-            } else if (configCache.config && configCache.config.firmaBase64) {
-                firmaSrc = configCache.config.firmaBase64;
-                console.log('addFirmaToPdf: firma encontrada en configCache.config.firmaBase64');
-            }
-        }
-        
+        let firmaSrc = configCache?.firmaBase64 || configCache?.firma?.base64 || configCache?.config?.firmaBase64 || null;
         let encabezado1 = configCache?.plantillasDoc?.encabezado1 || "FiaRecords Studio";
         let encabezado2 = configCache?.plantillasDoc?.encabezado2 || "Juárez N.L.";
         let terminos = "";
         
-        if (configCache && configCache.plantillasDoc) {
-            if (docType === 'cotizacion') terminos = configCache.plantillasDoc.terminosCotizacion || "Este presupuesto tiene una vigencia de 15 días.";
-            if (docType === 'recibo') terminos = configCache.plantillasDoc.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
-            if (docType === 'contrato') terminos = configCache.plantillasDoc.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS";
-        }
-        
-        // Renderizar encabezado
-        pdf.setFontSize(9);
-        pdf.text(encabezado1, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 20, { align: 'right' });
-        pdf.text(encabezado2, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 25, { align: 'right' });
-
-        // ==================================================================
-        // TAREA 2: MEJORAS DE FORMATO PROFESIONAL PARA CONTRATOS
-        // ==================================================================
-        if (terminos && docType === 'contrato') {
-            // Título del contrato (ya agregado en generarContratoPDF)
-            let yPos = 80; // Empezar después del título
-            
-            pdf.setFontSize(10);
-            pdf.setFont(undefined, 'normal');
-            
-            // Reemplazar las "palabras mágicas" si es un proyecto
-            if (proyecto) {
-                terminos = terminos.replace(/{{CLIENTE}}/g, proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General');
-                terminos = terminos.replace(/{{PROYECTO}}/g, proyecto.nombreProyecto || 'Proyecto sin nombre');
-                terminos = terminos.replace(/{{TOTAL}}/g, `$${safeMoney(proyecto.total)}`);
-                terminos = terminos.replace(/{{PAGADO}}/g, `$${safeMoney(proyecto.montoPagado || 0)}`);
-                terminos = terminos.replace(/{{RESTANTE}}/g, `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`);
-                terminos = terminos.replace(/{{FECHA}}/g, safeDate(proyecto.fecha));
+        // 1. CARGAR PLANTILLA SEGÚN TIPO
+        if (docType === 'cotizacion') {
+            terminos = `Este presupuesto es válido por 15 días. Para agendar, se requiere un anticipo del 50%. La entrega de archivos finales se realizará únicamente cuando el saldo pendiente esté liquidado al 100%.`;
+            if (proyecto?.esPlanMensual) {
+                terminos = `Este presupuesto es válido por 15 días. Para iniciar el plan mensual, se requiere el pago del primer mes. Los pagos subsecuentes se realizarán mensualmente. La entrega de archivos finales está sujeta a que todos los pagos estén al día.`;
             }
-
-            // TAREA 2: Dividir por párrafos (\n) para mejor formato
-            const parrafos = terminos.split('\n');
-            
-            for (let i = 0; i < parrafos.length; i++) {
-                const parrafo = parrafos[i].trim();
-                if (!parrafo) continue;
-                
-                // TAREA 2: Negritas dinámicas para líneas que empiezan con "CLAUSULA" o mayúsculas + ":"
-                const lineaUpper = parrafo.toUpperCase();
-                if (lineaUpper.startsWith('CLAUSULA') || /^[A-ZÁÉÍÓÚÑ\s]+:/.test(parrafo)) {
-                    pdf.setFont(undefined, 'bold');
-                } else {
-                    pdf.setFont(undefined, 'normal');
-                }
-                
-                // TAREA 2: Dividir párrafo en líneas con margen derecho de 14
-                const maxWidth = PDF_DIMENSIONS.WIDTH - (PDF_DIMENSIONS.MARGIN + 14);
-                const splitLines = pdf.splitTextToSize(parrafo, maxWidth);
-                
-                // TAREA 2: Interlineado aumentado a 8
-                const lineHeight = 8;
-                
-                // Verificar si necesitamos nueva página
-                for (let j = 0; j < splitLines.length; j++) {
-                    if (yPos > PDF_DIMENSIONS.HEIGHT - 40) {
-                        pdf.addPage();
-                        dibujarLogoEnPDF(pdf, logoBase64);
-                        yPos = 50;
-                    }
-                    
-                    pdf.text(splitLines[j], PDF_DIMENSIONS.MARGIN, yPos);
-                    yPos += lineHeight;
-                }
-                
-                // TAREA 2: Espacio extra entre párrafos
-                if (i < parrafos.length - 1) {
-                    yPos += 4;
-                }
-            }
-            
-            // ==================================================================
-            // TAREA 3: POSICIONAMIENTO DE FIRMAS (BOTTOM-FIXED)
-            // ==================================================================
-            yPos += 20; // Espacio antes de firmas
-            
-            // Calcular si las firmas caben en la página actual
-            const altoFirmas = 35;
-            const margenInferiorMinimo = 20;
-            const espacioDisponible = PDF_DIMENSIONS.HEIGHT - margenInferiorMinimo;
-            
-            if (yPos + altoFirmas > espacioDisponible) {
-                // No caben, agregar nueva página
-                pdf.addPage();
-                dibujarLogoEnPDF(pdf, logoBase64);
-                yPos = PDF_DIMENSIONS.HEIGHT - 80; // Posición fija al final
-            } else {
-                // Sí caben, ajustar posición al final de la página
-                yPos = PDF_DIMENSIONS.HEIGHT - 80;
-            }
-            
-            // ==================================================================
-            // BLOQUE DE FIRMAS SIMÉTRICAS - LÍNEA BASE ÚNICA
-            // ==================================================================
-            
-            // Definir línea base única para ambas firmas
-            const baselineY = 255;
-            const firmaWidth = 50;
-            const firmaMaxHeight = 20;
-            
-            // Firma del ESTUDIO (derecha)
-            if (firmaSrc) {
-                try {
-                    let base64data = firmaSrc;
-                    if (!firmaSrc.startsWith('data:image')) {
-                        const response = await fetch(firmaSrc);
-                        if (!response.ok) throw new Error('No se pudo cargar la firma.');
-                        const firmaImg = await response.blob();
-                        const reader = new FileReader();
-                        const promise = new Promise((resolve) => {
-                            reader.onloadend = () => { resolve(reader.result); };
-                            reader.readAsDataURL(firmaImg);
-                        });
-                        base64data = await promise;
-                    }
-                    
-                    const imgProps = pdf.getImageProperties(base64data);
-                    const imgWidth = firmaWidth;
-                    const imgHeight = Math.min((imgProps.height / imgProps.width) * imgWidth, firmaMaxHeight);
-                    
-                    // Dibujar línea horizontal para firma del estudio
-                    pdf.line(140, baselineY, 140 + firmaWidth, baselineY);
-                    
-                    // Dibujar imagen con parte inferior tocando la línea base
-                    pdf.addImage(base64data, 'PNG', 140, baselineY - imgHeight, imgWidth, imgHeight);
-                    
-                    // Texto debajo de la línea
-                    pdf.setFontSize(9);
-                    pdf.setFont(undefined, 'normal');
-                    pdf.text("Erick Resendiz", 140, baselineY + 5);
-                    pdf.text("Representante FIA Records", 140, baselineY + 10);
-                } catch (error) {
-                    console.error('Error firma estudio:', error);
-                }
-            }
-            
-            // Firma del CLIENTE (izquierda)
-            if (proyecto && proyecto.firmaCliente) {
-                try {
-                    const imgProps = pdf.getImageProperties(proyecto.firmaCliente);
-                    const imgWidth = firmaWidth;
-                    const imgHeight = Math.min((imgProps.height / imgProps.width) * imgWidth, firmaMaxHeight);
-                    
-                    // Dibujar línea horizontal para firma del cliente
-                    pdf.line(20, baselineY, 20 + firmaWidth, baselineY);
-                    
-                    // Dibujar imagen con parte inferior tocando la línea base
-                    pdf.addImage(proyecto.firmaCliente, 'PNG', 20, baselineY - imgHeight, imgWidth, imgHeight);
-                    
-                    // Texto debajo de la línea
-                    pdf.setFontSize(9);
-                    pdf.setFont(undefined, 'normal');
-                    pdf.text("Firma del Cliente", 20, baselineY + 5);
-                } catch (error) {
-                    console.error('Error firma cliente:', error);
-                }
-            }
+        } else if (docType === 'recibo') {
+            terminos = configCache?.plantillasDoc?.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
         } else {
-            // Para cotización y recibo (lógica original)
-            if (terminos) {
-                let yPos = PDF_DIMENSIONS.HEIGHT - PDF_DIMENSIONS.MARGIN;
-                if (firmaSrc) yPos -= 30;
-                
-                pdf.setFontSize(8);
-                pdf.setFont(undefined, 'normal');
-                
-                if (proyecto) {
-                    terminos = terminos.replace(/{{CLIENTE}}/g, proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General');
-                    terminos = terminos.replace(/{{PROYECTO}}/g, proyecto.nombreProyecto || 'Proyecto sin nombre');
-                    terminos = terminos.replace(/{{TOTAL}}/g, `$${safeMoney(proyecto.total)}`);
-                    terminos = terminos.replace(/{{PAGADO}}/g, `$${safeMoney(proyecto.montoPagado || 0)}`);
-                    terminos = terminos.replace(/{{RESTANTE}}/g, `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`);
-                    terminos = terminos.replace(/{{FECHA}}/g, safeDate(proyecto.fecha));
-                }
+            terminos = configCache?.plantillasDoc?.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS";
+        }
 
-                const splitTerms = pdf.splitTextToSize(terminos, PDF_DIMENSIONS.WIDTH - (2 * PDF_DIMENSIONS.MARGIN));
-                pdf.text(splitTerms, PDF_DIMENSIONS.MARGIN, yPos, { align: 'left' });
-            }
+        // 2. LOGICA DE REEMPLAZO "TODO TERRENO" (Ignora espacios y comillas raras)
+        if (proyecto) {
+            const costoMensual = (proyecto.total + (proyecto.descuento || 0)) / (proyecto.duracionMeses || 1);
+            const descuentoTexto = proyecto.descuento > 0 
+                ? `DESCUENTO APLICADO: Se ha otorgado un descuento único de $${safeMoney(proyecto.descuento)} MXN aplicable al monto total del proyecto.\n` 
+                : '';
+            
+            const dataMap = {
+                'CLIENTE': proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General',
+                'PROYECTO': proyecto.nombreProyecto || 'Proyecto sin nombre',
+                'TOTAL': `$${safeMoney(proyecto.total)}`,
+                'PAGADO': `$${safeMoney(proyecto.montoPagado || 0)}`,
+                'RESTANTE': `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`,
+                'FECHA': safeDate(proyecto.fecha),
+                'MODALIDAD': proyecto.esPlanMensual ? 'PLAN MENSUAL RECURRENTE' : 'SERVICIO ÚNICO',
+                'DURACION_MESES': proyecto.duracionMeses || '1',
+                'CANTIDAD_MENSUAL': proyecto.serviciosPorMes || '1',
+                'COSTO_MENSUAL': `$${costoMensual.toFixed(2)}`,
+                'DESCUENTO_INFO': descuentoTexto
+            };
 
-            try {
-                if (firmaSrc) {
-                    let base64data = firmaSrc;
-                    if (!firmaSrc.startsWith('data:image')) {
-                        try {
-                            const response = await fetch(firmaSrc);
-                            if (!response.ok) throw new Error('No se pudo cargar la firma.');
-                            const firmaImg = await response.blob();
-                            const reader = new FileReader();
-                            const promise = new Promise((resolve) => {
-                                reader.onloadend = () => { resolve(reader.result); };
-                                reader.readAsDataURL(firmaImg);
-                            });
-                            base64data = await promise;
-                        } catch (imgError) {
-                            console.warn('Error cargando imagen de firma admin:', imgError);
-                            // Continuar sin la firma del admin
-                        }
-                    }
-                    const pos = {x: PDF_DIMENSIONS.WIDTH - 64, y: PDF_DIMENSIONS.HEIGHT - 44, w: 50, h: 20};
-                    pdf.addImage(base64data, 'PNG', pos.x, pos.y, pos.w, pos.h);
-                    pdf.line(pos.x, pos.y + pos.h + 2, pos.x + pos.w, pos.y + pos.h + 2);
-                    pdf.setFontSize(9);
-                    pdf.text("Erick Resendiz", pos.x, pos.y + pos.h + 7, { align: 'left' });
-                    pdf.text("Representante FIA Records", pos.x, pos.y + pos.h + 12, { align: 'left' });
-                }
-                pdf.save(finalFileName);
-            } catch (e) {
-                console.error("Error firma PDF:", e);
-                pdf.save(finalFileName);
+            // Reemplazo masivo con regex flexible: busca {{ TAG }}, {{TAG}}, {{ "TAG" }}, etc.
+            Object.keys(dataMap).forEach(key => {
+                const regex = new RegExp(`{{\\s*["'"""]?${key}["'"""]?\\s*}}`, 'g');
+                terminos = terminos.replace(regex, dataMap[key]);
+            });
+
+            // Inyección de resumen para contrato
+            if (docType === 'contrato' && proyecto.esPlanMensual) {
+                const resumen = `RESUMEN DE PLAN RECURRENTE: Duración de ${proyecto.duracionMeses} meses. Incluye ${proyecto.serviciosPorMes} servicio(s) al mes. Costo mensual: $${costoMensual.toFixed(2)} MXN.\n\n`;
+                terminos = resumen + terminos;
             }
         }
+
+        //3. RENDERIZADO DE TEXTO
+        pdf.setFontSize(9);
+        pdf.text(encabezado1, 196, 20, { align: 'right' });
+        pdf.text(encabezado2, 196, 25, { align: 'right' });
+
+        let yPos = yStartPos;
+        pdf.setFontSize(docType === 'contrato' ? 10 : 8);
+        const parrafos = terminos.split('\n');
         
-        // PDF SAVE UNIVERSAL - Se ejecuta SIEMPRE para todos los tipos de documentos
-        pdf.save(finalFileName);
+        for (let i = 0; i < parrafos.length; i++) {
+            const parrafo = parrafos[i].trim();
+            if (!parrafo) continue;
+            
+            // Detectar si es una línea importante (Cabecera o Cláusula)
+            const esImportante = parrafo.toUpperCase().startsWith('CLÁUSULA') || 
+                                 parrafo.startsWith('CONTRATO DE PRESTACIÓN') ||
+                                 parrafo.startsWith('RESUMEN DE PLAN') ||
+                                 parrafo.startsWith('DESCUENTO APLICADO') ||
+                                 parrafo.startsWith('NOTA DE DESCUENTO');
+
+            if (esImportante) {
+                pdf.setFont(undefined, 'bold');
+                pdf.setFontSize(docType === 'contrato' ? 11 : 9); // Un punto más grande
+            } else {
+                pdf.setFont(undefined, 'normal');
+                pdf.setFontSize(docType === 'contrato' ? 10 : 8);
+            }
+            
+            const splitLines = pdf.splitTextToSize(parrafo, 182);
+            for (let j = 0; j < splitLines.length; j++) {
+                if (yPos > 245) {
+                    pdf.addPage();
+                    if (logoBase64) dibujarLogoEnPDF(pdf, logoBase64);
+                    yPos = 40;
+                }
+                pdf.text(splitLines[j], 14, yPos);
+                yPos += (docType === 'contrato' ? 7 : 5);
+            }
+            yPos += 3;
+        }
+
+        // 4. FIRMAS ANCLADAS AL FONDO (Última Página)
+        const baselineY = 265; // Posición fija al final de la hoja
+
+        if (firmaSrc) {
+            try {
+                let base64data = firmaSrc;
+                if (!firmaSrc.startsWith('data:image')) {
+                    const res = await fetch(firmaSrc);
+                    const blob = await res.blob();
+                    base64data = await new Promise(r => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => r(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                }
+                pdf.line(140, baselineY, 190, baselineY);
+                pdf.addImage(base64data, 'PNG', 140, baselineY - 22, 50, 20);
+                pdf.setFontSize(9); pdf.setFont(undefined, 'normal');
+                pdf.text("Erick Resendiz", 140, baselineY + 5);
+                pdf.text("Representante FIA Records", 140, baselineY + 10);
+            } catch (e) {}
+        }
+        
+        if (proyecto && proyecto.firmaCliente) {
+            try {
+                pdf.line(20, baselineY, 70, baselineY);
+                pdf.addImage(proyecto.firmaCliente, 'PNG', 20, baselineY - 22, 50, 20);
+                pdf.setFontSize(9); pdf.setFont(undefined, 'normal');
+                pdf.text("Firma del Cliente", 20, baselineY + 5);
+            } catch (e) {}
+        }
+
+        pdf.save(finalFileName); 
     }
 
-    async function generarCotizacionPDF(proyectoIdOrObject) { 
-        try { 
-            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
-            const { jsPDF } = window.jspdf; 
-            const pdf = new jsPDF(); 
-
-            await preloadLogoForPDF(); // Asegura que el logo esté cargado
-            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } 
-            
-            pdf.setFontSize(11); 
-            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, PDF_DIMENSIONS.MARGIN, 50); 
-            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, 50, { align: 'right' }); 
-            
-            const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
-            if (proyecto.descuento && proyecto.descuento > 0) { body.push(['Descuento', `-$${proyecto.descuento.toFixed(2)}`]); } 
-            
-            pdf.autoTable({ 
-                startY: 70, 
-                head: [['Servicio', 'Subtotal']], 
-                body: body, 
-                theme: 'grid', 
-                styles: { fontSize: 10 }, 
-                headStyles: { fillColor:[0, 0, 0] } 
-            }); 
-            
-            let finalY = pdf.lastAutoTable.finalY + 10; 
-            pdf.setFontSize(12); 
-            pdf.setFont(undefined, 'bold'); 
-            pdf.text(`Total: $${safeMoney(proyecto.total)} MXN`, PDF_DIMENSIONS.WIDTH - PDF_DIMENSIONS.MARGIN, finalY, { align: 'right' }); 
-            
-            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
-            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto); 
-        } catch (error) { 
-            showToast("Error al generar PDF", 'error'); 
-        } 
-    }
-    
-    async function generarReciboPDF(proyecto, pagoEspecifico) { 
-        try { 
-            const { jsPDF } = window.jspdf; 
+    async function generarReciboPDF(pagoEspecifico, proyecto) {
+        try {
             const pdf = new jsPDF(); 
             const pago = pagoEspecifico || (proyecto.pagos && proyecto.pagos.length > 0 ? proyecto.pagos[proyecto.pagos.length - 1] : { monto: proyecto.montoPagado || 0, metodo: 'Varios' }); 
             if (!pago) return showToast('No hay pagos.', 'error'); 
@@ -1759,6 +1620,82 @@ document.addEventListener('DOMContentLoaded', () => {
             await addFirmaToPdf(pdf, 'recibo', fileName, proyecto); 
         } catch (error) { 
             showToast('Error al generar recibo.', 'error'); 
+        } 
+    }
+
+    async function generarCotizacionPDF(proyectoIdOrObject) { 
+        try { 
+            const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF(); 
+
+            await preloadLogoForPDF(); 
+            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } 
+            
+            pdf.setFontSize(11); 
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 40); 
+            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 40, { align: 'right' }); 
+            
+            let startY = 50;
+
+            // --- MEJORA: DETALLE DEL PLAN VISIBLE ---
+            if (proyecto.esPlanMensual) {
+                pdf.setFontSize(12);
+                pdf.setFont(undefined, 'bold');
+                pdf.setTextColor(0, 102, 204); // Color azul para resaltar
+                pdf.text("MODALIDAD: PLAN MENSUAL RECURRENTE", 14, startY);
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFontSize(10);
+                pdf.setFont(undefined, 'normal');
+                startY += 6;
+                pdf.text(`Duración del contrato: ${proyecto.duracionMeses} meses.`, 14, startY);
+                startY += 5;
+                pdf.text(`Incluye: ${proyecto.serviciosPorMes} servicio(s) por mes detallados a continuación.`, 14, startY);
+                startY += 10;
+            }
+
+            const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
+    
+    // Mostramos el subtotal mensual sin descuentos para que no haya duda
+    if (proyecto.esPlanMensual) {
+        const subtotalMensual = proyecto.items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
+        const costoMensualBase = subtotalMensual * (proyecto.serviciosPorMes || 1);
+        body.push([{ content: `COSTO MENSUAL BASE: $${costoMensualBase.toFixed(2)} / mes`, colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } }]);
+    }
+            
+            pdf.autoTable({ 
+                startY: startY, 
+                head: [['Servicio a realizar', 'Costo Unitario']], 
+                body: body, 
+                theme: 'grid', 
+                styles: { fontSize: 10 }, 
+                headStyles: { fillColor:[0, 0, 0] } 
+            }); 
+            
+            let finalY = pdf.lastAutoTable.finalY + 10;
+            
+            // Si hay descuento, lo ponemos como una nota aclaratoria separada
+            if (proyecto.descuento > 0) {
+                pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+                pdf.text(`(-) Descuento único aplicado al total: $${proyecto.descuento.toFixed(2)} MXN`, 196, finalY, { align: 'right' });
+                finalY += 8;
+            } 
+            
+            if (finalY > 230) {
+                pdf.addPage();
+                if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); }
+                finalY = 40; 
+            }
+            
+            pdf.setFontSize(13); 
+            pdf.setFont(undefined, 'bold'); 
+            const textoTotal = proyecto.esPlanMensual ? `TOTAL DEL CONTRATO (${proyecto.duracionMeses} meses):` : 'TOTAL A PAGAR:';
+            pdf.text(`${textoTotal} $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); 
+            
+            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
+            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto, finalY + 15); 
+        } catch (error) { 
+            showToast("Error al generar PDF", 'error'); 
         } 
     }
 
@@ -1876,6 +1813,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (listKey === 'cotizaciones') renderCotizacionesTable();
         if (listKey === 'pagosPendientes') renderPagosPendientesTable();
         if (listKey === 'pagosHistorial') renderPagosHistorialTable();
+    }
+
+    function changeTrashPage(endpoint, delta) {
+        trashPagination[endpoint].page += delta;
+        renderTrashList(endpoint);
     }
 
     function filtrarTablas(query) { 
@@ -2453,6 +2395,28 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('formEditarUsuario').addEventListener('submit', guardarEdicionUsuario); 
         document.getElementById('firma-input').addEventListener('change', subirFirma); 
         document.getElementById('proyectoDescuento').addEventListener('input', mostrarProyectoActual); 
+        
+        // Plan Mensual event listeners
+        const esPlanMensualCheckbox = document.getElementById('esPlanMensual');
+        const camposPlanMensual = document.getElementById('camposPlanMensual');
+        const serviciosPorMesInput = document.getElementById('serviciosPorMes');
+        const duracionMesesInput = document.getElementById('duracionMeses');
+        
+        if (esPlanMensualCheckbox && camposPlanMensual) {
+            esPlanMensualCheckbox.addEventListener('change', (e) => {
+                camposPlanMensual.style.display = e.target.checked ? 'block' : 'none';
+                mostrarProyectoActual(); // Recalculate total
+            });
+        }
+        
+        if (serviciosPorMesInput) {
+            serviciosPorMesInput.addEventListener('input', mostrarProyectoActual);
+        }
+        
+        if (duracionMesesInput) {
+            duracionMesesInput.addEventListener('input', mostrarProyectoActual);
+        }
+        
         const modalDatosBancarios = document.getElementById('modalDatosBancarios'); 
         if (modalDatosBancarios) { modalDatosBancarios.addEventListener('show.bs.modal', function () { cargarDatosBancariosEnModal(); }); } 
         setupMobileMenu(); 
