@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isInitialized = false;
     let proyectoActual = {};
+let proyectoIdEnEdicion = null;
     let logoBase64 = null; 
     let preseleccionArtistaId = null;
 
@@ -989,7 +990,15 @@ document.addEventListener('DOMContentLoaded', () => {
         horaSelect.innerHTML = '<option value="">← Primero elige una fecha</option>';
         horaSelect.disabled = true;
 
-        proyectoActual = {}; mostrarProyectoActual(); document.getElementById('formProyecto').reset();
+        // CAMBIO: Solo resetear si NO hay un ID en edición
+        if (!proyectoIdEnEdicion) {
+            proyectoActual = {}; 
+            mostrarProyectoActual(); 
+            document.getElementById('formProyecto').reset();
+            if (document.getElementById('camposPlanMensual')) {
+                document.getElementById('camposPlanMensual').style.display = 'none';
+            }
+        }
     }
 
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
@@ -1100,11 +1109,15 @@ document.addEventListener('DOMContentLoaded', () => {
             duracionMeses: duracionMeses
         };
 
-        try {
-            return await fetchAPI('/api/proyectos', { method: 'POST', body: JSON.stringify(body) });
-        } catch (error) {
-            showToast(`Error al guardar: ${error.message}`, 'error');
-            return null;
+        try { 
+            const url = proyectoIdEnEdicion ? `/api/proyectos/${proyectoIdEnEdicion}` : '/api/proyectos';
+            const metodo = proyectoIdEnEdicion ? 'PUT' : 'POST';
+            const res = await fetchAPI(url, { method: metodo, body: JSON.stringify(body) }); 
+            proyectoIdEnEdicion = null; // Resetear después de guardar
+            return res;
+        } catch (error) { 
+            showToast(`Error al guardar: ${error.message}`, 'error'); 
+            return null; 
         }
     }
 
@@ -2050,6 +2063,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn btn-sm btn-outline-primary" title="Aprobar y Agendar" onclick="app.aprobarCotizacion('${c._id}')"><i class="bi bi-check-circle"></i></button>
                         <button class="btn btn-sm btn-outline-info" title="Cotización PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
                         ${btnContrato}${btnFirma}
+                        <button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.cargarCotizacionParaEditar('${c._id}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${c._id}', true)"><i class="bi bi-trash"></i></button>
                     </td>
                 </tr>
             `;
@@ -2968,6 +2983,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function cargarCotizacionParaEditar(id) {
+        const proyecto = cotizacionesCacheadas.find(p => p._id === id);
+        if (!proyecto) return;
+
+        proyectoIdEnEdicion = id;
+        
+        // 1. Guardamos el ID del artista en la variable de preselección global
+        const idArtista = proyecto.artista ? (proyecto.artista._id || proyecto.artista) : 'publico_general';
+        preseleccionArtistaId = idArtista;
+
+        // 2. Cambiamos a la sección de registro (esto dispara la carga de los artistas desde el servidor)
+        await mostrarSeccion('registrar-proyecto');
+
+        // 3. Llenamos los campos de texto
+        document.getElementById('nombreProyecto').value = proyecto.nombreProyecto || '';
+        document.getElementById('proyectoDescuento').value = proyecto.descuento || 0;
+        
+        // 4. Pequeño retraso de seguridad para asegurar que el select terminó de llenarse
+        setTimeout(() => {
+            const select = document.getElementById('proyectoArtista');
+            if (select) {
+                select.value = idArtista;
+                // Si aún no se marca, intentamos una vez más
+                if (select.value === "" && idArtista !== 'publico_general') {
+                    select.value = idArtista;
+                }
+            }
+        }, 300);
+
+        // 5. Mapear servicios al carrito
+        proyectoActual = {};
+        proyecto.items.forEach(item => {
+            const tempId = `item-${item.servicio}-${Date.now()}-${Math.random()}`;
+            proyectoActual[tempId] = { 
+                id: tempId, 
+                servicioId: item.servicio, 
+                nombre: item.nombre, 
+                unidades: item.unidades, 
+                precioUnitario: item.precioUnitario 
+            };
+        });
+
+        // 6. Manejar Plan Mensual
+        const checkPlan = document.getElementById('esPlanMensual');
+        if (checkPlan) {
+            checkPlan.checked = proyecto.esPlanMensual || false;
+            document.getElementById('camposPlanMensual').style.display = checkPlan.checked ? 'block' : 'none';
+            document.getElementById('serviciosPorMes').value = proyecto.serviciosPorMes || 1;
+            document.getElementById('duracionMeses').value = proyecto.duracionMeses || 1;
+        }
+
+        mostrarProyectoActual();
+        showToast('Cotización cargada para editar', 'info');
+    }
+
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
@@ -2988,7 +3058,8 @@ document.addEventListener('DOMContentLoaded', () => {
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
         generarContratoPDF,
-        abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente
+        abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
+        cargarCotizacionParaEditar
     };
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
