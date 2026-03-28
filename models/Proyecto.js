@@ -19,6 +19,12 @@ const ProyectoSchema = new mongoose.Schema({
     nombreProyecto: { type: String }, 
     esAlbum: { type: Boolean, default: false },
     
+    // 👇 AQUÍ ESTÁN LOS CAMPOS NUEVOS QUE FALTABAN 👇
+    esPlanMensual: { type: Boolean, default: false },
+    serviciosPorMes: { type: Number, default: 1 },
+    duracionMeses: { type: Number, default: 1 },
+    // 👆 ========================================= 👆
+
     fecha: { type: Date, required: true },
     
     items: [ItemSchema],
@@ -44,7 +50,7 @@ const ProyectoSchema = new mongoose.Schema({
     // Enlace a la carpeta general de Drive
     enlaceEntrega: { type: String, default: '' }, 
 
-    // --- NUEVO: GUARDA LOS ARCHIVOS MULTIMEDIA (AUDIO, VIDEO, IMAGEN) ---
+    // Guarda los archivos multimedia
     archivos: [{
         nombre: String,
         driveId: String,

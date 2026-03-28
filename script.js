@@ -1638,79 +1638,157 @@ let proyectoIdEnEdicion = null;
         } 
     }
 
+    // ==================================================================
+    // GENERACIÓN DE COTIZACIÓN PDF (VERSIÓN PLAN MENSUAL DETALLADA FINAL)
+    // ==================================================================
     async function generarCotizacionPDF(proyectoIdOrObject) { 
         try { 
             const proyecto = typeof proyectoIdOrObject === 'string' ? await fetchAPI(`/api/proyectos/${proyectoIdOrObject}`) : proyectoIdOrObject; 
             const { jsPDF } = window.jspdf; 
             const pdf = new jsPDF(); 
 
+            // 1. FORZAR LA VALIDACIÓN (Por si la DB lo guarda como texto o bool)
+            const isPlan = proyecto.esPlanMensual === true || proyecto.esPlanMensual === 'true';
+            const meses = parseInt(proyecto.duracionMeses) || 1;
+            const serviciosMes = parseInt(proyecto.serviciosPorMes) || 1;
+
+            // 2. LOGO
             await preloadLogoForPDF(); 
             if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } 
-            
-            pdf.setFontSize(11); 
-            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General'}`, 14, 40); 
-            pdf.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 40, { align: 'right' }); 
-            
-            let startY = 50;
 
-            // --- MEJORA: DETALLE DEL PLAN VISIBLE ---
-            if (proyecto.esPlanMensual) {
-                pdf.setFontSize(12);
+            // 3. TÍTULO Y FOLIO
+            pdf.setFontSize(14);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("COTIZACIÓN DE SERVICIOS", 14, 48);
+            
+            pdf.setFontSize(10);
+            pdf.text(`Folio: #${proyecto._id.toString().slice(-6).toUpperCase()}`, 196, 48, { align: 'right' });
+
+            pdf.setDrawColor(99, 102, 241);
+            pdf.setLineWidth(0.5);
+            pdf.line(14, 52, 196, 52); 
+
+            // 4. INFORMACIÓN DEL CLIENTE
+            pdf.setFillColor(248, 250, 252);
+            pdf.rect(14, 58, 182, 22, 'F');
+            
+            pdf.setFontSize(9);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("CLIENTE:", 18, 65);
+            pdf.text("FECHA DE EMISIÓN:", 130, 65);
+            pdf.text("PROYECTO:", 18, 73);
+
+            pdf.setFont(undefined, 'normal');
+            const artistaNombre = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General';
+            pdf.text(escapeHTML(artistaNombre), 40, 65);
+            pdf.text(new Date().toLocaleDateString(), 170, 65);
+            pdf.text(escapeHTML(proyecto.nombreProyecto || 'Servicios Varios'), 42, 73);
+
+            let startY = 88;
+
+            // 5. BANNER AZUL DE PLAN MENSUAL
+            if (isPlan) {
+                pdf.setFillColor(238, 242, 255);
+                pdf.setDrawColor(99, 102, 241);
+                pdf.rect(14, startY, 182, 14, 'FD');
+                
                 pdf.setFont(undefined, 'bold');
-                pdf.setTextColor(0, 102, 204); // Color azul para resaltar
-                pdf.text("MODALIDAD: PLAN MENSUAL RECURRENTE", 14, startY);
-                pdf.setTextColor(0, 0, 0);
-                pdf.setFontSize(10);
+                pdf.setTextColor(67, 56, 202);
+                pdf.text("MODALIDAD: PLAN MENSUAL RECURRENTE", 18, startY + 6);
+                pdf.setFontSize(8);
                 pdf.setFont(undefined, 'normal');
-                startY += 6;
-                pdf.text(`Duración del contrato: ${proyecto.duracionMeses} meses.`, 14, startY);
-                startY += 5;
-                pdf.text(`Incluye: ${proyecto.serviciosPorMes} servicio(s) por mes detallados a continuación.`, 14, startY);
-                startY += 10;
+                pdf.text(`Contrato total de ${meses} meses. Incluye ${serviciosMes} servicio(s) entregables por mes.`, 18, startY + 10);
+                
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFontSize(9);
+                startY += 20; // Empujar la tabla hacia abajo para que no choque
             }
 
-            const body = proyecto.items.map(item =>[`${item.unidades}x ${item.nombre}`, `$${(item.precioUnitario * item.unidades).toFixed(2)}`]); 
-    
-    // Mostramos el subtotal mensual sin descuentos para que no haya duda
-    if (proyecto.esPlanMensual) {
-        const subtotalMensual = proyecto.items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
-        const costoMensualBase = subtotalMensual * (proyecto.serviciosPorMes || 1);
-        body.push([{ content: `COSTO MENSUAL BASE: $${costoMensualBase.toFixed(2)} / mes`, colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } }]);
-    }
-            
+            // 6. GENERACIÓN DE FILAS DETALLADAS EN LA TABLA
+            const tableBody = proyecto.items.map(item => {
+                let cantidadFinal = item.unidades;
+                let descripcionExtra = "";
+
+                if (isPlan) {
+                    // Calculamos el total de servicios (Ej: 2 al mes x 3 meses = 6 totales)
+                    cantidadFinal = item.unidades * serviciosMes * meses;
+                    descripcionExtra = `\n(MODALIDAD DE PLAN: ${serviciosMes} AL MES X ${meses} MESES)`;
+                }
+
+                // Subtotal individual de esa fila ya multiplicado
+                const importeSubtotal = item.precioUnitario * cantidadFinal;
+
+                return [
+                    cantidadFinal.toString(),
+                    item.nombre.toUpperCase() + descripcionExtra,
+                    `$${safeMoney(item.precioUnitario)}`,
+                    `$${safeMoney(importeSubtotal)}`
+                ];
+            });
+
+            // 7. RENDERIZADO DE TABLA
             pdf.autoTable({ 
                 startY: startY, 
-                head: [['Servicio a realizar', 'Costo Unitario']], 
-                body: body, 
-                theme: 'grid', 
-                styles: { fontSize: 10 }, 
-                headStyles: { fillColor:[0, 0, 0] } 
+                head: [['CANT. TOTAL', 'DESCRIPCIÓN DETALLADA', 'PRECIO UNIT.', 'IMPORTE']], 
+                body: tableBody, 
+                theme: 'striped', 
+                headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 }, 
+                columnStyles: {
+                    0: { cellWidth: 25, halign: 'center' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 30, halign: 'right' },
+                    3: { cellWidth: 30, halign: 'right' }
+                },
+                styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' }
             }); 
             
             let finalY = pdf.lastAutoTable.finalY + 10;
             
-            // Si hay descuento, lo ponemos como una nota aclaratoria separada
+            // 8. CÁLCULO DE TOTALES (Para que sume perfecto)
+            const totalAntesDescuento = proyecto.items.reduce((sum, item) => {
+                const multiplicador = isPlan ? (serviciosMes * meses) : 1;
+                return sum + (item.precioUnitario * item.unidades * multiplicador);
+            }, 0);
+
+            const marginRight = 196;
+            pdf.setFontSize(9);
+            
+            // Mostrar Subtotal de todos los servicios sumados
+            pdf.setFont(undefined, 'normal');
+            pdf.text("SUBTOTAL SERVICIOS:", 140, finalY);
+            pdf.text(`$${safeMoney(totalAntesDescuento)}`, marginRight, finalY, { align: 'right' });
+            
+            // Mostrar Descuento
             if (proyecto.descuento > 0) {
-                pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
-                pdf.text(`(-) Descuento único aplicado al total: $${proyecto.descuento.toFixed(2)} MXN`, 196, finalY, { align: 'right' });
-                finalY += 8;
-            } 
-            
-            if (finalY > 230) {
-                pdf.addPage();
-                if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); }
-                finalY = 40; 
+                finalY += 6;
+                pdf.setTextColor(220, 38, 38); // Rojo
+                pdf.text("DESCUENTO APLICADO:", 140, finalY);
+                pdf.text(`- $${safeMoney(proyecto.descuento)}`, marginRight, finalY, { align: 'right' });
+                pdf.setTextColor(0, 0, 0);
             }
+
+            // Línea de separación
+            finalY += 4;
+            pdf.setDrawColor(200, 200, 200);
+            pdf.line(135, finalY, 196, finalY);
             
-            pdf.setFontSize(13); 
-            pdf.setFont(undefined, 'bold'); 
-            const textoTotal = proyecto.esPlanMensual ? `TOTAL DEL CONTRATO (${proyecto.duracionMeses} meses):` : 'TOTAL A PAGAR:';
-            pdf.text(`${textoTotal} $${safeMoney(proyecto.total)} MXN`, 196, finalY, { align: 'right' }); 
+            // Total Neto Final
+            finalY += 8;
+            pdf.setFontSize(11);
+            pdf.setFont(undefined, 'bold');
+            const textoTotal = isPlan ? "TOTAL CONTRATO:" : "TOTAL NETO:";
+            pdf.text(textoTotal, 130, finalY);
             
-            const fileName = `Cotizacion-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`; 
-            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto, finalY + 15); 
+            // IMPORTANTE: Imprimimos el total de la base de datos para que coincida siempre.
+            pdf.text(`$${safeMoney(proyecto.total)} MXN`, marginRight, finalY, { align: 'right' });
+
+            // 9. PIE DE PÁGINA Y FIRMAS
+            const fileName = `Cotizacion-${artistaNombre.replace(/\s/g, '_')}.pdf`; 
+            await addFirmaToPdf(pdf, 'cotizacion', fileName, proyecto, finalY + 12); 
+
         } catch (error) { 
-            showToast("Error al generar PDF", 'error'); 
+            console.error(error);
+            showToast("Error al generar PDF detallado", 'error'); 
         } 
     }
 
