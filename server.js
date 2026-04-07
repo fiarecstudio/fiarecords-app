@@ -69,6 +69,12 @@ app.get(/.*/, (req, res) => {
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
+    
+    // --- ACTIVAR BACKUP AUTOMÁTICO ---
+    const { iniciarCronJob } = require('./utils/backupDatabase');
+    iniciarCronJob();
+    // ---------------------------------
+    
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
