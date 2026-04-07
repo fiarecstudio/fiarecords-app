@@ -293,4 +293,41 @@ router.delete('/papelera/vaciar', async (req, res) => { if (req.user.role !== 'a
 
 router.delete('/:id/pagos/:pagoId', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if(!proyecto) return res.status(404).json({error: 'No encontrado'}); const pago = proyecto.pagos.id(req.params.pagoId); if(!pago) return res.status(404).json({error: 'Pago no encontrado'}); proyecto.montoPagado -= pago.monto; pago.deleteOne(); if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) proyecto.estatus = 'Pendiente de Pago'; await proyecto.save(); res.json(proyecto); } catch(e) { res.status(500).json({error: e.message}); } });
 
+// --- NUEVA RUTA: ENVIAR RECIBO POR CORREO ---
+router.post('/:id/enviar-recibo', async (req, res) => {
+    try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
+        
+        const { email, monto, metodo, saldoRestante } = req.body;
+        const proyecto = await Proyecto.findById(req.params.id).populate('artista');
+        
+        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        if (!email) return res.status(400).json({ error: 'Correo requerido' });
+        
+        const nombreProyecto = proyecto.nombreProyecto || 'General';
+        const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Cliente';
+        
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px; max-width: 600px; margin: auto;">
+                <h2 style="color: #10b981;">¡Comprobante de Pago Recibido! 🎵</h2>
+                <p>Hola <strong>${nombreCliente}</strong>,</p>
+                <p>Hemos registrado exitosamente tu pago para el proyecto <strong>${nombreProyecto}</strong>.</p>
+                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Monto pagado:</strong> $${parseFloat(monto).toFixed(2)} MXN</p>
+                    <p><strong>Método:</strong> ${metodo}</p>
+                    <p><strong>Saldo pendiente:</strong> $${parseFloat(saldoRestante).toFixed(2)} MXN</p>
+                </div>
+                <p style="color: #666; font-size: 14px;">Gracias por tu confianza en Fia Records Studio.</p>
+            </div>
+        `;
+        
+        await enviarNotificacion(email, "Comprobante de Pago - Fia Records", htmlContent);
+        res.json({ message: 'Recibo enviado correctamente' });
+        
+    } catch (e) { 
+        console.error("❌ Error enviando recibo:", e.message);
+        res.status(500).json({ error: 'Error al enviar el recibo' }); 
+    }
+});
+
 module.exports = router;
