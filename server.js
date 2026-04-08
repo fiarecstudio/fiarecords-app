@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const mongoSanitize = require('express-mongo-sanitize');
+const helmet = require('helmet');
 
 let limiters = {};
 try {
@@ -17,7 +18,30 @@ try {
 
 const app = express();
 
-app.use(cors());
+// CORS configurado de forma segura - solo permite el frontend autorizado
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
+
+// Helmet - cabeceras de seguridad HTTP (permissive for CDNs and external resources)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'", "https:", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "placehold.co"],
+      connectSrc: ["'self'", "https:", "ws:", "wss:"],
+      fontSrc: ["'self'", "data:", "https:", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
+      frameSrc: ["'self'", "https:"],
+    },
+  },
+}));
 if (limiters.generalLimiter) app.use(limiters.generalLimiter); 
 
 app.use(express.json({ limit: '10mb' }));

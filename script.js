@@ -3137,7 +3137,7 @@ let proyectoIdEnEdicion = null;
             pdf.setFont(undefined, 'bold');
             pdf.text('CONTRATO DE PRESTACIÓN DE SERVICIOS', 105, 60, { align: 'center' });
 
-            const fileName = `Contrato-${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`;
+            const fileName = `Contrato-${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre || 'General').replace(/\s/g, '_') : 'General'}.pdf`;
             await addFirmaToPdf(pdf, 'contrato', fileName, proyecto);
             
             showToast('Contrato generado exitosamente', 'success');
