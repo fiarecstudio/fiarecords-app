@@ -56,6 +56,7 @@ app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/configuracion', require('./routes/configuracion'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/deudas', require('./routes/deudas'));
+app.use('/api/backups', require('./routes/backups'));
 
 // --- 4. Servir Archivos Estáticos ---
 app.use(express.static(path.join(__dirname)));

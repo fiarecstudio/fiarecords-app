@@ -2070,6 +2070,114 @@ let proyectoIdEnEdicion = null;
         }
     }
     
+    // ==========================================
+    // FUNCIONES PARA GESTIÓN DE BACKUPS
+    // ==========================================
+    
+    async function descargarBackup(nombre) {
+        try {
+            showToast('Descargando...', 'info');
+            
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/backups/descargar/${nombre}`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            
+            if (!response.ok) throw new Error('Error al descargar');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showToast('Descarga completada', 'success');
+        } catch (e) {
+            showToast('Error al descargar backup', 'error');
+            console.error(e);
+        }
+    }
+    
+    async function cargarBackups() {
+        const tablaBody = document.getElementById('tabla-backups-body');
+        tablaBody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div> Cargando...</td></tr>';
+        
+        try {
+            const data = await fetchAPI('/api/backups');
+            
+            if (!data.backups || data.backups.length === 0) {
+                tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay backups disponibles. Crea uno primero.</td></tr>';
+                return;
+            }
+            
+            // Agrupar backups por fecha
+            const backupsPorFecha = {};
+            data.backups.forEach(b => {
+                if (!backupsPorFecha[b.fecha]) backupsPorFecha[b.fecha] = [];
+                backupsPorFecha[b.fecha].push(b);
+            });
+            
+            // Ordenar fechas de más reciente a más antigua
+            const fechas = Object.keys(backupsPorFecha).sort().reverse();
+            
+            tablaBody.innerHTML = fechas.map(fecha => {
+                const backups = backupsPorFecha[fecha];
+                const fechaFormateada = fecha.replace(/_/g, ' ').replace(/-/g, '/');
+                
+                return backups.map(b => `
+                    <tr>
+                        <td><span class="badge bg-info">${b.coleccion}</span></td>
+                        <td><small>${fechaFormateada}</small></td>
+                        <td><small>${b.tamano}</small></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-success" 
+                                    onclick="app.descargarBackup('${b.nombre}')">
+                                <i class="bi bi-download"></i> Descargar
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            }).join('');
+            
+            showToast(`${data.total} backups cargados`, 'success');
+            
+        } catch (e) {
+            tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error al cargar backups</td></tr>';
+            showToast('Error al cargar backups', 'error');
+        }
+    }
+    
+    async function crearBackupManual() {
+        try {
+            const btn = document.querySelector('button[onclick="app.crearBackupManual()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Creando...';
+            btn.disabled = true;
+            
+            await fetchAPI('/api/backups/crear', { method: 'POST' });
+            
+            showToast('Backup creado exitosamente', 'success');
+            await cargarBackups(); // Recargar la lista
+            
+        } catch (e) {
+            showToast('Error al crear backup', 'error');
+        } finally {
+            const btn = document.querySelector('button[onclick="app.crearBackupManual()"]');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-plus-circle"></i> Crear Backup Ahora';
+                btn.disabled = false;
+            }
+        }
+    }
+    
+    // ==========================================
+    // FIN FUNCIONES BACKUPS
+    // ==========================================
+    
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
         tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
@@ -3210,7 +3318,8 @@ let proyectoIdEnEdicion = null;
         guardarPlantillasConfig,
         generarContratoPDF,
         abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
-        cargarCotizacionParaEditar
+        cargarCotizacionParaEditar,
+        cargarBackups, crearBackupManual, descargarBackup
     };
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED

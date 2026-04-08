@@ -383,6 +383,7 @@
                     </form>
                 </div>
               </div>
+
             </section>
 
             <section id="gestion-artistas" class="section-view">
@@ -689,6 +690,37 @@
                             <button type="submit" class="btn btn-dark" id="btn-guardar-plantillas"><i class="bi bi-save"></i> Guardar Plantillas</button>
                         </div>
                     </form>
+                </div>
+              </div>
+
+              <!-- CARD: GESTIÓN DE BACKUPS -->
+              <div class="card mt-4">
+                <div class="card-header pt-3 border-0 bg-success text-white rounded-top">
+                    <h4 class="mb-0 text-white"><i class="bi bi-cloud-download"></i> Respaldo de Base de Datos</h4>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Los backups se generan automáticamente todos los días a las 3:00 AM. Los archivos de más de 7 días se eliminan automáticamente.</p>
+                    
+                    <div class="d-flex gap-2 mb-3">
+                        <button onclick="app.cargarBackups()" class="btn btn-outline-primary"><i class="bi bi-refresh"></i> Actualizar Lista</button>
+                        <button onclick="app.crearBackupManual()" class="btn btn-success"><i class="bi bi-plus-circle"></i> Crear Backup Ahora</button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Colección</th>
+                                    <th>Fecha</th>
+                                    <th>Tamaño</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-backups-body">
+                                <tr><td colspan="4" class="text-center text-muted">Haz clic en "Actualizar Lista" para ver los backups</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
               </div>
 
