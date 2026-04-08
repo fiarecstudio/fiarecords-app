@@ -1,0 +1,255 @@
+[
+  {
+    "_id": "690a7a4311a4583c78546a9f",
+    "username": "admin",
+    "password": "$2b$10$xd/r5IJJINj2S46bMoFxh.X94qJ6IgXRlmGALah4s/ov2K8zAZB9y",
+    "role": "admin",
+    "isDeleted": false,
+    "createdAt": "2025-11-04T22:12:19.880Z",
+    "updatedAt": "2026-02-10T00:12:56.894Z",
+    "__v": 0
+  },
+  {
+    "_id": "690a8827668309813aeecd53",
+    "username": "Dagx",
+    "password": "$2b$10$igTdzXRN2LVAzBjDfTJLjuYjM5uK8e8h.8c3dy03eF7ytoGzotQh6",
+    "role": "admin",
+    "isDeleted": false,
+    "createdAt": "2025-11-04T23:11:35.243Z",
+    "updatedAt": "2026-02-10T00:13:39.147Z",
+    "__v": 0
+  },
+  {
+    "_id": "698a763728e5c9670ef263ec",
+    "username": "charlie flores",
+    "password": "$2b$10$kgUJxrymARGBDUibcum.Ru4FB7wbUV5K95w3YLzJ8OGGDK6WTePri",
+    "role": "ingeniero",
+    "isDeleted": true,
+    "createdAt": "2026-02-10T00:05:11.177Z",
+    "updatedAt": "2026-02-23T14:29:05.418Z",
+    "__v": 12,
+    "permisos": [
+      "agenda"
+    ]
+  },
+  {
+    "_id": "698b70ac0071f5f6ace5606c",
+    "username": "charlie",
+    "password": "$2b$10$HxlJZ45wXaWrhPJjkSafsuAwSMNgO2BQuQnO1zCkkvSd30z6J669m",
+    "role": "diseñador",
+    "permisos": [
+      "dashboard",
+      "agenda",
+      "flujo-trabajo",
+      "cotizaciones",
+      "gestion-artistas"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-10T17:53:48.820Z",
+    "updatedAt": "2026-02-24T22:43:22.685Z",
+    "__v": 14,
+    "artistaId": null,
+    "email": "charliefg92@gmail.com"
+  },
+  {
+    "_id": "698b78fb11163dd559534958",
+    "username": "SERGIO VALENTE",
+    "password": "$2b$10$TWmPkXOGqnCKOd/ZnUIneOEgdqHqssADr2AL65ZLEQr0sTDa1mD3m",
+    "role": "cliente",
+    "permisos": [
+      "dashboard"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-10T18:29:15.774Z",
+    "updatedAt": "2026-02-17T16:55:40.606Z",
+    "__v": 0,
+    "email": "sergiovalenteoficial@gmail.com",
+    "artistaId": "690d746b308166001e51daff"
+  },
+  {
+    "_id": "698cc8d655e6421f114008ce",
+    "username": "ADIEL",
+    "email": "erick_adr@hotmail.com",
+    "password": "$2b$10$xcytQA.8Wo7HL2AFSIkItuMFsaA6IaGmLgLff07IrQrt4KvZVVYYi",
+    "role": "cliente",
+    "permisos": [
+      "dashboard"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-11T18:22:14.813Z",
+    "updatedAt": "2026-02-20T19:13:58.321Z",
+    "__v": 0,
+    "resetPasswordExpires": "2026-02-13T01:03:40.585Z",
+    "resetPasswordToken": "33059ecdcadd0fecc0e97c369585afc69edac0da",
+    "artistaId": null
+  },
+  {
+    "_id": "698d0d671ba252463270da1c",
+    "username": "Rodrigo",
+    "email": "erickrm0993@gmail.com",
+    "password": "$2b$10$NB5RerJkUzn9waB2BDoGsekeTosvH3apXYRRFMMtj9fg5VYbdjjlS",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "historial-proyectos",
+      "pagos",
+      "cotizaciones"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-11T23:14:47.135Z",
+    "updatedAt": "2026-02-12T22:07:50.394Z",
+    "__v": 0
+  },
+  {
+    "_id": "698f4194caa113397429ac34",
+    "username": "gerardo",
+    "email": "",
+    "password": "$2b$10$fsAoq5lT2vHASCsd11EBZODV36yu4rEG8ScI2oR5s5VOIPifE75ie",
+    "role": "cliente",
+    "permisos": [
+      "dashboard"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-13T15:21:56.547Z",
+    "updatedAt": "2026-02-16T18:48:30.583Z",
+    "__v": 0
+  },
+  {
+    "_id": "6990951edd4fdc6d73d3fb8d",
+    "username": "PRUEBA",
+    "email": "1234@hotmail.com",
+    "password": "$2b$10$YsiqEto1eN94k9WpTOgrcu.ouQTWxKTbKUeXbSTKcjkatfvzWfWQG",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "cotizaciones",
+      "pagos"
+    ],
+    "isDeleted": false,
+    "createdAt": "2026-02-14T15:30:38.548Z",
+    "updatedAt": "2026-02-20T19:12:54.786Z",
+    "__v": 0,
+    "artistaId": null
+  },
+  {
+    "_id": "69909fd80d3bdad031fab5ce",
+    "username": "esperanzo",
+    "email": "dffs@gmail.com",
+    "password": "$2b$10$EsidISTTdmNliERtZQ5Az.aX7yj5TcTpI4zjU1UOffcj.brWK7U9i",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "historial-proyectos",
+      "pagos",
+      "cotizaciones"
+    ],
+    "isDeleted": true,
+    "createdAt": "2026-02-14T16:16:24.149Z",
+    "updatedAt": "2026-02-20T19:11:53.686Z",
+    "__v": 0
+  },
+  {
+    "_id": "6997a360ec134f70a2e6ca5a",
+    "username": "Gerardo",
+    "email": "grdsar20@gmail.com",
+    "password": "$2b$10$Xy1t.OJqRg8/.GWWMuy7HuLuRTO/iT6zuxk.F4a46cglIbFrdkVUy",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "historial-proyectos",
+      "pagos",
+      "cotizaciones"
+    ],
+    "artistaId": "6997a360ec134f70a2e6ca5c",
+    "isDeleted": false,
+    "createdAt": "2026-02-19T23:57:20.261Z",
+    "updatedAt": "2026-02-19T23:57:20.972Z",
+    "__v": 0
+  },
+  {
+    "_id": "699dc4f04156fbbd86ef6f45",
+    "username": "Rades Peña",
+    "email": "rades@fiarecords.com",
+    "password": "$2b$10$Q1anhP1ZWdwTThplFXJ/NeQwFY4mt0OC0dN.RyZWCggAojB1q8/vS",
+    "role": "cliente",
+    "permisos": [
+      "cotizaciones",
+      "gestion-artistas",
+      "gestion-servicios"
+    ],
+    "artistaId": null,
+    "isDeleted": false,
+    "createdAt": "2026-02-24T15:34:08.178Z",
+    "updatedAt": "2026-03-14T18:32:22.533Z",
+    "__v": 0
+  },
+  {
+    "_id": "69a043191d3ca45395568b44",
+    "username": "KARLOSCORONA",
+    "email": "rayado_boston@hotmail.com",
+    "password": "$2b$10$YH/ixwsvGvqhEgS8hfAUTeLhEVHE5KxHVZDYrK5bBJou/3GCjZXVG",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "cotizaciones",
+      "pagos"
+    ],
+    "artistaId": "692ddf10bfddf292af683650",
+    "isDeleted": false,
+    "createdAt": "2026-02-26T12:56:57.333Z",
+    "updatedAt": "2026-02-26T15:56:08.609Z",
+    "__v": 0
+  },
+  {
+    "_id": "69a9c888620c5d305ced7820",
+    "username": "Eber jimenez",
+    "email": "bleyker.jimenez@gmail.com",
+    "password": "$2b$10$ScvJuu/22kS.ISfhC7ytquFt1kqVCJOY6sPL3Sxs3q6hcCqCK8B0y",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "historial-proyectos",
+      "pagos",
+      "cotizaciones"
+    ],
+    "artistaId": "69a9c889620c5d305ced7822",
+    "isDeleted": false,
+    "createdAt": "2026-03-05T18:16:40.643Z",
+    "updatedAt": "2026-03-05T18:16:41.264Z",
+    "__v": 0
+  },
+  {
+    "_id": "69b2d361d4706f1a126dae00",
+    "username": "fralego",
+    "email": "pacocumbiareal420@gmail.com",
+    "password": "$2b$10$ZknW19ngnMoffueyWDmTdOMAmHY8U7BBlwR5ssijSMQRlwBdpDnim",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "cotizaciones",
+      "pagos"
+    ],
+    "artistaId": "69b2d5b5d4706f1a126daeaf",
+    "isDeleted": false,
+    "createdAt": "2026-03-12T14:53:21.233Z",
+    "updatedAt": "2026-03-12T15:05:48.118Z",
+    "__v": 0
+  },
+  {
+    "_id": "69b5a98b7493e0212d465719",
+    "username": "rafa coria",
+    "email": "rafacoria753@gmail.com",
+    "password": "$2b$10$16uW9gUt7NTaY.OCbwwifONEZdiZ5SkQLwLqB/DrGtwKWQeehkA7O",
+    "role": "cliente",
+    "permisos": [
+      "dashboard",
+      "cotizaciones",
+      "pagos"
+    ],
+    "artistaId": "69b5a7e27493e0212d465676",
+    "isDeleted": false,
+    "createdAt": "2026-03-14T18:31:39.359Z",
+    "updatedAt": "2026-03-14T18:33:02.790Z",
+    "__v": 0
+  }
+]

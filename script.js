@@ -2160,8 +2160,8 @@ let proyectoIdEnEdicion = null;
             
             await fetchAPI('/api/backups/crear', { method: 'POST' });
             
-            showToast('Backup creado exitosamente', 'success');
-            await cargarBackups(); // Recargar la lista
+            showToast('Backup creado y subido a Drive exitosamente', 'success');
+            await cargarBackups(); // Recargar lista local
             
         } catch (e) {
             showToast('Error al crear backup', 'error');
@@ -2171,6 +2171,60 @@ let proyectoIdEnEdicion = null;
                 btn.innerHTML = '<i class="bi bi-plus-circle"></i> Crear Backup Ahora';
                 btn.disabled = false;
             }
+        }
+    }
+    
+    async function cargarBackupsDrive() {
+        const tablaBody = document.getElementById('tabla-backups-drive-body');
+        tablaBody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div> Cargando desde Drive...</td></tr>';
+        
+        try {
+            const data = await fetchAPI('/api/backups/drive');
+            
+            if (!data.backups || data.backups.length === 0) {
+                tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay backups en Google Drive aún. Crea un backup primero.</td></tr>';
+                return;
+            }
+            
+            // Agrupar backups por fecha
+            const backupsPorFecha = {};
+            data.backups.forEach(b => {
+                const fecha = b.nombre.match(/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}/)?.[0] || 'desconocida';
+                if (!backupsPorFecha[fecha]) backupsPorFecha[fecha] = [];
+                backupsPorFecha[fecha].push(b);
+            });
+            
+            // Ordenar fechas de más reciente a más antigua
+            const fechas = Object.keys(backupsPorFecha).sort().reverse();
+            
+            tablaBody.innerHTML = fechas.map(fecha => {
+                const backups = backupsPorFecha[fecha];
+                const fechaFormateada = fecha.replace(/_/g, ' ').replace(/-/g, '/');
+                
+                return backups.map(b => {
+                    const coleccion = b.nombre.split('_')[0];
+                    return `
+                    <tr>
+                        <td><span class="badge bg-info">${coleccion}</span></td>
+                        <td><small>${fechaFormateada}</small></td>
+                        <td><small>${b.tamano}</small></td>
+                        <td class="text-end">
+                            <a href="${b.viewLink}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                            <a href="${b.downloadLink}" target="_blank" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-download"></i> Descargar
+                            </a>
+                        </td>
+                    </tr>
+                `}).join('');
+            }).join('');
+            
+            showToast(`${data.total} backups en Google Drive`, 'success');
+            
+        } catch (e) {
+            tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error al cargar backups de Drive</td></tr>';
+            showToast('Error al cargar backups de Drive', 'error');
         }
     }
     
@@ -3319,7 +3373,7 @@ let proyectoIdEnEdicion = null;
         generarContratoPDF,
         abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
-        cargarBackups, crearBackupManual, descargarBackup
+        cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive
     };
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED

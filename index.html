@@ -699,27 +699,68 @@
                     <h4 class="mb-0 text-white"><i class="bi bi-cloud-download"></i> Respaldo de Base de Datos</h4>
                 </div>
                 <div class="card-body">
-                    <p class="small text-muted mb-3">Los backups se generan automáticamente todos los días a las 3:00 AM. Los archivos de más de 7 días se eliminan automáticamente.</p>
+                    <p class="small text-muted mb-3">Los backups se generan automáticamente todos los días a las 3:00 AM y se suben a Google Drive. Los archivos locales de más de 7 días se eliminan automáticamente.</p>
                     
                     <div class="d-flex gap-2 mb-3">
-                        <button onclick="app.cargarBackups()" class="btn btn-outline-primary"><i class="bi bi-refresh"></i> Actualizar Lista</button>
                         <button onclick="app.crearBackupManual()" class="btn btn-success"><i class="bi bi-plus-circle"></i> Crear Backup Ahora</button>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Colección</th>
-                                    <th>Fecha</th>
-                                    <th>Tamaño</th>
-                                    <th class="text-end">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabla-backups-body">
-                                <tr><td colspan="4" class="text-center text-muted">Haz clic en "Actualizar Lista" para ver los backups</td></tr>
-                            </tbody>
-                        </table>
+                    <!-- Tabs para Local y Drive -->
+                    <ul class="nav nav-tabs mb-3" id="backupTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="local-tab" data-bs-toggle="tab" data-bs-target="#local-backups" type="button" role="tab" onclick="app.cargarBackups()">
+                                <i class="bi bi-hdd"></i> Este Servidor
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="drive-tab" data-bs-toggle="tab" data-bs-target="#drive-backups" type="button" role="tab" onclick="app.cargarBackupsDrive()">
+                                <i class="bi bi-google"></i> Google Drive
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="backupTabsContent">
+                        <!-- Tab: Backups Locales -->
+                        <div class="tab-pane fade show active" id="local-backups" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Colección</th>
+                                            <th>Fecha</th>
+                                            <th>Tamaño</th>
+                                            <th class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabla-backups-body">
+                                        <tr><td colspan="4" class="text-center text-muted">Haz clic en "Crear Backup" o espera el siguiente backup automático</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tab: Backups en Google Drive -->
+                        <div class="tab-pane fade" id="drive-backups" role="tabpanel">
+                            <div class="alert alert-info d-flex align-items-center">
+                                <i class="bi bi-cloud-check me-2"></i>
+                                <div>Los backups en Drive se mantienen permanentemente en la nube.</div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Colección</th>
+                                            <th>Fecha</th>
+                                            <th>Tamaño</th>
+                                            <th class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabla-backups-drive-body">
+                                        <tr><td colspan="4" class="text-center text-muted">Cargando backups de Google Drive...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
               </div>

@@ -7,6 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 
+// Importar módulo de Google Drive
+const { subirBackupsADrive } = require('./googleDrive');
+
 // Importar todos los modelos de Mongoose
 const Artista = require('../models/Artista');
 const Configuracion = require('../models/Configuracion');
@@ -53,6 +56,7 @@ async function respaldarColecciones() {
     
     const timestamp = getTimestamp();
     const resultados = [];
+    const archivosCreados = [];
     
     for (const { modelo, nombre } of colecciones) {
         try {
@@ -61,12 +65,31 @@ async function respaldarColecciones() {
             const filepath = path.join(BACKUP_DIR, filename);
             
             fs.writeFileSync(filepath, JSON.stringify(datos, null, 2));
+            archivosCreados.push(filepath);
             
             console.log(`✅ ${nombre}: ${datos.length} registros → ${filename}`);
             resultados.push({ coleccion: nombre, registros: datos.length, archivo: filename });
         } catch (error) {
             console.error(`❌ Error respaldando ${nombre}:`, error.message);
             resultados.push({ coleccion: nombre, error: error.message });
+        }
+    }
+    
+    // Subir a Google Drive
+    if (archivosCreados.length > 0) {
+        console.log('\n☁️ Subiendo backups a Google Drive...');
+        try {
+            const driveResults = await subirBackupsADrive(archivosCreados);
+            console.log(`✅ ${driveResults.length} archivos subidos a Google Drive`);
+            
+            // Agregar info de Drive a los resultados
+            resultados.forEach((res, idx) => {
+                if (driveResults[idx]) {
+                    res.driveLink = driveResults[idx].viewLink;
+                }
+            });
+        } catch (error) {
+            console.error('❌ Error subiendo a Drive:', error.message);
         }
     }
     
