@@ -158,7 +158,7 @@
                     <button id="hamburger-menu" class="btn btn-light d-md-none">
                         <i class="bi bi-list fs-4"></i>
                     </button>
-                    <div id="welcome-user" class="fw-bold fs-5 text-truncate" style="max-width: 280px;"></div>
+                    <div id="welcome-user" class="fw-bold fs-5 text-truncate" style="max-width: 150px;"></div>
                 </div>
                   
                 <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
@@ -590,9 +590,111 @@
             <section id="configuracion" class="section-view">
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
               
-              <div class="config-grid">
-              <!-- CARD: GESTIÓN DE BACKUPS -->
               <div class="card mb-4">
+                <div class="card-header pt-3 pb-0 border-0">
+                    <h2>Configuración General</h2>
+                </div>
+                <div class="card-body">
+                    <h5>Logotipo y Firma</h5>
+                    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+                        <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
+                        
+                        <div class="btn-group-vertical">
+                            <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-primary mb-1">Subir Logo Principal</button>
+                            <button onclick="document.getElementById('favicon-input').click()" class="btn btn-sm btn-outline-info mb-1">Subir Icono (Favicon)</button>
+                            <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
+                        </div>
+
+                        <!-- INPUTS OCULTOS -->
+                        <input type="file" id="firma-input" hidden accept="image/*">
+                        <input type="file" id="logo-input" hidden accept="image/*">
+                        <input type="file" id="favicon-input" hidden accept="image/*">
+                    </div>
+                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
+                </div>
+              </div>
+
+              <!-- CARD DE HORARIOS -->
+              <div class="card mb-4">
+                <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
+                    <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">Marca los días que trabajas y define la hora de apertura y cierre.</p>
+                    <form id="form-horarios" onsubmit="app.guardarHorariosConfig(event)">
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Día</th>
+                                        <th>Estado</th>
+                                        <th>Apertura</th>
+                                        <th>Cierre</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-horarios-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Guardar Horarios</button>
+                        </div>
+                    </form>
+                </div>
+              </div>
+
+              <!-- NUEVA CARD: PLANTILLAS DE DOCUMENTOS -->
+              <div class="card mt-4">
+                <div class="card-header pt-3 border-0 bg-dark text-white rounded-top">
+                    <h4 class="mb-0 text-white"><i class="bi bi-file-earmark-text"></i> Plantillas de Documentos (PDF)</h4>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Puedes usar estas "Palabras Mágicas" en los Textos Largos. El sistema las cambiará automáticamente por los datos reales del proyecto al generar el PDF:<br>
+                    <span class="badge bg-primary">{{CLIENTE}}</span> 
+                    <span class="badge bg-primary">{{PROYECTO}}</span> 
+                    <span class="badge bg-primary">{{TOTAL}}</span> 
+                    <span class="badge bg-primary">{{PAGADO}}</span> 
+                    <span class="badge bg-primary">{{RESTANTE}}</span> 
+                    <span class="badge bg-primary">{{FECHA}}</span>
+                    </p>
+
+                    <!-- CAMBIO 1: Quitamos el onsubmit de aquí -->
+                    <form id="form-plantillas" onsubmit="app.guardarPlantillasConfig(event)">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="fw-bold">Encabezado Línea 1 (Arriba a la derecha)</label>
+                                <input type="text" id="plantilla-enc1" class="form-control" placeholder="Ej: FiaRecords Studio">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold">Encabezado Línea 2</label>
+                                <input type="text" id="plantilla-enc2" class="form-control" placeholder="Ej: Juárez N.L.">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-primary">Términos y Condiciones (Aparece abajo en las Cotizaciones)</label>
+                            <textarea id="plantilla-term-cotiz" class="form-control" rows="3" placeholder="Ej: Este presupuesto es válido por 15 días..."></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-success">Nota para Recibos de Pago (Aparece abajo en los Recibos)</label>
+                            <textarea id="plantilla-term-recibo" class="form-control" rows="2" placeholder="Ej: ¡Gracias por tu pago!"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold text-danger">Plantilla Completa del CONTRATO</label>
+                            <textarea id="plantilla-contrato" class="form-control" rows="10" placeholder="Redacta todo tu contrato legal aquí... Usa {{CLIENTE}} y {{TOTAL}}"></textarea>
+                        </div>
+
+                        <div class="text-end">
+                            <!-- CAMBIO 2: Le ponemos un ID al botón y lo hacemos tipo "submit" -->
+                            <button type="submit" class="btn btn-dark" id="btn-guardar-plantillas"><i class="bi bi-save"></i> Guardar Plantillas</button>
+                        </div>
+                    </form>
+                </div>
+              </div>
+
+              <!-- CARD: GESTIÓN DE BACKUPS -->
+              <div class="card mt-4">
                 <div class="card-header pt-3 border-0 bg-success text-white rounded-top">
                     <h4 class="mb-0 text-white"><i class="bi bi-cloud-download"></i> Respaldo de Base de Datos</h4>
                 </div>
@@ -663,108 +765,6 @@
                 </div>
               </div>
 
-              <!-- CARD DE HORARIOS -->
-              <div class="card mb-4">
-                <div class="card-header pt-3 border-0 bg-primary text-white rounded-top">
-                    <h4 class="mb-0 text-white"><i class="bi bi-calendar-range"></i> Días y Horarios Laborales</h4>
-                </div>
-                <div class="card-body">
-                    <p class="small text-muted">Marca los días que trabajas y define la hora de apertura y cierre.</p>
-                    <form id="form-horarios" onsubmit="app.guardarHorariosConfig(event)">
-                        <div class="table-responsive">
-                            <table class="table align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Día</th>
-                                        <th>Estado</th>
-                                        <th>Apertura</th>
-                                        <th>Cierre</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabla-horarios-body"></tbody>
-                            </table>
-                        </div>
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Guardar Horarios</button>
-                        </div>
-                    </form>
-                </div>
-              </div>
-
-              <!-- NUEVA CARD: PLANTILLAS DE DOCUMENTOS -->
-              <div class="card mb-4">
-                <div class="card-header pt-3 border-0 bg-dark text-white rounded-top">
-                    <h4 class="mb-0 text-white"><i class="bi bi-file-earmark-text"></i> Plantillas de Documentos (PDF)</h4>
-                </div>
-                <div class="card-body">
-                    <p class="small text-muted mb-3">Puedes usar estas "Palabras Mágicas" en los Textos Largos. El sistema las cambiará automáticamente por los datos reales del proyecto al generar el PDF:<br>
-                    <span class="badge bg-primary">{{CLIENTE}}</span> 
-                    <span class="badge bg-primary">{{PROYECTO}}</span> 
-                    <span class="badge bg-primary">{{TOTAL}}</span> 
-                    <span class="badge bg-primary">{{PAGADO}}</span> 
-                    <span class="badge bg-primary">{{RESTANTE}}</span> 
-                    <span class="badge bg-primary">{{FECHA}}</span>
-                    </p>
-
-                    <form id="form-plantillas" onsubmit="app.guardarPlantillasConfig(event)">
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="fw-bold">Encabezado Línea 1 (Arriba a la derecha)</label>
-                                <input type="text" id="plantilla-enc1" class="form-control" placeholder="Ej: FiaRecords Studio">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="fw-bold">Encabezado Línea 2</label>
-                                <input type="text" id="plantilla-enc2" class="form-control" placeholder="Ej: Juárez N.L.">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold text-primary">Términos y Condiciones (Aparece abajo en las Cotizaciones)</label>
-                            <textarea id="plantilla-term-cotiz" class="form-control" rows="3" placeholder="Ej: Este presupuesto es válido por 15 días..."></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold text-success">Nota para Recibos de Pago (Aparece abajo en los Recibos)</label>
-                            <textarea id="plantilla-term-recibo" class="form-control" rows="2" placeholder="Ej: ¡Gracias por tu pago!"></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold text-danger">Plantilla Completa del CONTRATO</label>
-                            <textarea id="plantilla-contrato" class="form-control" rows="10" placeholder="Redacta todo tu contrato legal aquí... Usa {{CLIENTE}} y {{TOTAL}}"></textarea>
-                        </div>
-
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-dark" id="btn-guardar-plantillas"><i class="bi bi-save"></i> Guardar Plantillas</button>
-                        </div>
-                    </form>
-                </div>
-              </div>
-
-              <div class="card mb-4">
-                <div class="card-header pt-3 pb-0 border-0">
-                    <h2>Configuración General</h2>
-                </div>
-                <div class="card-body">
-                    <h5>Logotipo y Firma</h5>
-                    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
-                        <img id="firma-preview-img" src="https://placehold.co/150x60?text=Sin+Firma" class="border rounded" style="max-height:60px;">
-                        
-                        <div class="btn-group-vertical">
-                            <button onclick="document.getElementById('logo-input').click()" class="btn btn-sm btn-outline-primary mb-1">Subir Logo Principal</button>
-                            <button onclick="document.getElementById('favicon-input').click()" class="btn btn-sm btn-outline-info mb-1">Subir Icono (Favicon)</button>
-                            <button onclick="document.getElementById('firma-input').click()" class="btn btn-sm btn-outline-secondary">Subir Firma</button>
-                        </div>
-
-                        <!-- INPUTS OCULTOS -->
-                        <input type="file" id="firma-input" hidden accept="image/*">
-                        <input type="file" id="logo-input" hidden accept="image/*">
-                        <input type="file" id="favicon-input" hidden accept="image/*">
-                    </div>
-                    <button onclick="app.openDeliveryModal('prueba_config', 'Sistema', 'Prueba')" class="btn btn-outline-info"><i class="bi bi-cloud-upload"></i> Prueba Drive</button>
-                </div>
-              </div>
-
-            </div>
             </section>
         </main>
         
@@ -1036,7 +1036,7 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Firme en el área siguiente:</label>
-            <canvas id="canvas-firma" height="200" style="border: 1px dashed #ccc; touch-action: none; background: white; width: 100%; border-radius: 8px;"></canvas>
+            <canvas id="canvas-firma" width="100%" height="200" style="border: 1px dashed #ccc; touch-action: none; background: white; width: 100%; border-radius: 8px;"></canvas>
           </div>
           <div class="d-flex gap-2">
             <button type="button" class="btn btn-secondary" onclick="app.limpiarCanvas()">
