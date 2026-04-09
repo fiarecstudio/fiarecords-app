@@ -3460,6 +3460,42 @@ let proyectoIdEnEdicion = null;
         expandirPrimeraColumnaConProyectos();
     }, 500);
 
+    // Detectar cuando la sección de Flujo de Trabajo se vuelve visible
+    const flujoTrabajoSection = document.getElementById('flujo-trabajo');
+    if (flujoTrabajoSection) {
+        const visibilityObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && entry.target.classList.contains('active')) {
+                    setTimeout(() => {
+                        actualizarContadoresKanban();
+                        expandirPrimeraColumnaConProyectos();
+                    }, 100);
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        visibilityObserver.observe(flujoTrabajoSection);
+    }
+    
+    // También detectar cambio de clase 'active' en la sección
+    const sectionObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const target = mutation.target;
+                if (target.id === 'flujo-trabajo' && target.classList.contains('active')) {
+                    setTimeout(() => {
+                        actualizarContadoresKanban();
+                        expandirPrimeraColumnaConProyectos();
+                    }, 150);
+                }
+            }
+        });
+    });
+    
+    if (flujoTrabajoSection) {
+        sectionObserver.observe(flujoTrabajoSection, { attributes: true, attributeFilter: ['class'] });
+    }
+
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 
 // --- SERVICE WORKER ---
