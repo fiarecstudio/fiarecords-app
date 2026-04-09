@@ -196,6 +196,14 @@ body.dark-mode .login-footer small.text-muted, body.dark-mode .main-footer small
 /* COMPONENTES APP */
 .card { background-color: var(--card-background); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-sm); margin-bottom: 1.5rem; padding: 1.5rem; }
 .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+
+/* CONFIG GRID - Layout de 2 columnas para sección de configuración */
+.config-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+@media (min-width: 992px) {
+    .config-grid { grid-template-columns: repeat(2, 1fr); }
+    .config-grid .card { margin-bottom: 0; }
+}
+
 .kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
 .kpi-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); }
 
