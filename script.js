@@ -3523,6 +3523,13 @@ let proyectoIdEnEdicion = null;
             expandirPrimeraColumnaConProyectos();
         }, 500);
     }
+    
+    // Intervalo cada 500ms - actualiza contadores locales rápidamente
+    setInterval(() => {
+        if (location.hash === '#flujo-trabajo') {
+            actualizarContadoresKanban();
+        }
+    }, 500);
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 
