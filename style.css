@@ -214,13 +214,6 @@ body.dark-mode .login-footer small.text-muted, body.dark-mode .main-footer small
 .track-btn:hover { background-color: rgba(255,255,255,0.1) !important; }
 .track-btn.active { background-color: var(--primary-color) !important; color: white !important; }
 
-@media (min-width: 1024px) {
-    .kanban-board { overflow-x: hidden; justify-content: space-between; gap: 0.4rem; width: 100%; }
-    .kanban-column { flex: 1 1 0; min-width: 0; width: auto; padding: 0.5rem; }
-    .kanban-column h3 { font-size: 0.9rem; }
-    .project-card { padding: 0.75rem; font-size: 0.85rem; }
-}
-
 @media (min-width: 769px) and (max-width: 1023px) {
     .sidebar { width: 240px; }
     .kanban-column { min-width: 260px; width: 260px; }
