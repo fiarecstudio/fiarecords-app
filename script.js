@@ -1209,60 +1209,32 @@ let proyectoIdEnEdicion = null;
                 
                 const userInfo = getUserRoleAndId();
                 let btnFirma = '';
-                let borrarFirmaBtn = '';
                 
                 if (p.firmaCliente) {
                     if (userInfo.role !== 'cliente') {
-                        // Admin puede ver firmado + borrar firma en menú
-                        btnFirma = `<span class="badge bg-success badge-firma">✅ Firmado</span>`;
-                        borrarFirmaBtn = `<li><a class="dropdown-item text-warning" href="#" onclick="app.borrarFirmaCliente('${p._id}'); return false;"><i class="bi bi-eraser"></i> Borrar Firma</a></li>`;
+                        // Admin puede ver firmado + borrar
+                        btnFirma = `
+                            <div class="d-flex gap-1 align-items-center">
+                                <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
+                                <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${p._id}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        `;
                     } else {
-                        btnFirma = `<span class="badge bg-success badge-firma">✅ Firmado</span>`;
+                        // Cliente solo ve que está firmado
+                        btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
                     }
                 } else {
-                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i></button>`;
+                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
                 }
                 
-                // Menú desplegable para acciones secundarias
-                const menuAcciones = `
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Más acciones">
-                            <i class="bi bi-three-dots-vertical"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="#" onclick="app.editarInfoProyecto('${p._id}'); return false;"><i class="bi bi-pencil"></i> Editar</a></li>
-                            ${borrarFirmaBtn}
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarProyecto('${p._id}'); return false;"><i class="bi bi-trash"></i> Eliminar</a></li>
-                        </ul>
-                    </div>
-                `;
-                
-                card.innerHTML = `
-                    <div class="project-card-header">
-                        <strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong>
-                        <select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm status-select">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>
-                    </div>
-                    <div class="project-card-body">
-                        <div class="project-meta">${safeDate(p.fecha)}</div>
-                        <ul class="project-services">${serviciosHtml}</ul>
-                    </div>
-                    <div class="project-card-price-row">
-                        <span class="project-price">$${safeMoney(p.total)}</span>
-                        <button class="btn btn-sm btn-primary btn-pagar" title="Registrar Pago" onclick="app.registrarPago('${p._id}')">
-                            <i class="bi bi-currency-dollar"></i> Pagar
-                        </button>
-                    </div>
-                    <div class="project-card-docs-row">
-                        ${btnContrato}
-                        ${btnFirma}
-                        ${menuAcciones}
-                    </div>
-                `;
-                colEl.appendChild(card);
+                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group">${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
             }); 
-        }
-    } // <--- Agregado el cierre de la función
+        } 
+    }
+    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    
     // ==============================================================
 
     // CARGAR HISTORIAL (BOTÓN VISOR)
