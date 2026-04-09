@@ -1262,6 +1262,7 @@ let proyectoIdEnEdicion = null;
                 colEl.appendChild(card);
             }); 
         }
+    } // <--- Agregado el cierre de la función
     // ==============================================================
 
     // CARGAR HISTORIAL (BOTÓN VISOR)
