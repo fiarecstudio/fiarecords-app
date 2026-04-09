@@ -3495,6 +3495,34 @@ let proyectoIdEnEdicion = null;
     if (flujoTrabajoSection) {
         sectionObserver.observe(flujoTrabajoSection, { attributes: true, attributeFilter: ['class'] });
     }
+    
+    // Forzar actualización al hacer clic en el link del sidebar
+    document.querySelectorAll('[data-seccion="flujo-trabajo"]').forEach(link => {
+        link.addEventListener('click', () => {
+            setTimeout(() => {
+                actualizarContadoresKanban();
+                expandirPrimeraColumnaConProyectos();
+            }, 300);
+        });
+    });
+    
+    // Forzar actualización cuando cambia el hash de la URL
+    window.addEventListener('hashchange', () => {
+        if (location.hash === '#flujo-trabajo') {
+            setTimeout(() => {
+                actualizarContadoresKanban();
+                expandirPrimeraColumnaConProyectos();
+            }, 300);
+        }
+    });
+    
+    // También revisar si ya estamos en flujo-trabajo al cargar
+    if (location.hash === '#flujo-trabajo') {
+        setTimeout(() => {
+            actualizarContadoresKanban();
+            expandirPrimeraColumnaConProyectos();
+        }, 500);
+    }
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 
