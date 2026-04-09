@@ -126,6 +126,22 @@ body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode
 /* HEADER */
 .main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); min-height: 70px; }
 .btn-back-inline { background: none; border: none; color: var(--primary-color); font-weight: 600; font-size: 0.95rem; padding: 0; margin-bottom: 1rem; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease; }
+
+/* Ocultar botón volver en desktop - sidebar visible proporciona navegación */
+@media (min-width: 769px) {
+    #gestion-artistas .btn-back-inline,
+    #gestion-servicios .btn-back-inline,
+    #gestion-usuarios .btn-back-inline,
+    #historial-proyectos .btn-back-inline,
+    #configuracion .btn-back-inline,
+    #pagos .btn-back-inline,
+    #cotizaciones .btn-back-inline,
+    #flujo-trabajo .btn-back-inline,
+    #agenda .btn-back-inline,
+    #registrar-proyecto .btn-back-inline,
+    #papelera-reciclaje .btn-back-inline,
+    #mis-deudas .btn-back-inline { display: none; }
+}
 .btn-back-inline:hover { color: var(--primary-hover); transform: translateX(-4px); }
 .btn-back-inline i { font-size: 1.2rem; font-weight: bold; }
 body.dark-mode .btn-back-inline { color: #818cf8; }
