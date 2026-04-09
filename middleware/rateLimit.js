@@ -3,10 +3,10 @@
 // ==========================================
 const rateLimit = require('express-rate-limit');
 
-// Configuración general - MUY PERMISIVA para desarrollo
+// Configuración general para todas las rutas (aumentado para mayor fluidez)
 const generalLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minuto (ventana corta)
-    max: 1000, // 1000 peticiones por minuto (muy permisivo)
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutos
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 300, // límite de 300 peticiones (aumentado de 100)
     message: {
         error: 'Demasiadas peticiones desde esta IP. Por favor, intenta más tarde.',
         retryAfter: 60
@@ -22,10 +22,10 @@ const generalLimiter = rateLimit({
     }
 });
 
-// Rate limiting para autenticación - más permisivo
+// Rate limiting más estricto para autenticación (aumentado para evitar bloqueos accidentales)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 50, // 50 intentos (muy permisivo para evitar bloqueos)
+    max: 10, // máximo 10 intentos de login/registro (aumentado de 5)
     message: {
         error: 'Demasiados intentos de autenticación. Por favor, espera 15 minutos.',
         retryAfter: 900
@@ -43,7 +43,7 @@ const authLimiter = rateLimit({
 // Rate limiting para creación de proyectos - más permisivo
 const projectCreationLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hora
-    max: 100, // 100 proyectos por hora (muy permisivo)
+    max: 20, // máximo 20 proyectos por hora (aumentado de 10)
     message: {
         error: 'Límite de creación de proyectos alcanzado. Por favor, espera 1 hora.',
         retryAfter: 3600
