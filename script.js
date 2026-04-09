@@ -3376,6 +3376,84 @@ let proyectoIdEnEdicion = null;
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive
     };
 
+    // ==================================================================
+    // ACORDEÓN KANBAN - Expandir/Colapsar columnas + Contador de proyectos
+    // ==================================================================
+    
+    // Función para actualizar contadores de proyectos en cada columna
+    function actualizarContadoresKanban() {
+        document.querySelectorAll('.kanban-column').forEach(column => {
+            const contenido = column.querySelector('.kanban-column-content');
+            const header = column.querySelector('h3');
+            if (!contenido || !header) return;
+            
+            // Contar tarjetas de proyecto
+            const count = contenido.querySelectorAll('.project-card').length;
+            
+            // Buscar o crear badge
+            let badge = header.querySelector('.project-count');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'project-count';
+                header.appendChild(badge);
+            }
+            
+            badge.textContent = count;
+            badge.dataset.count = count;
+            
+            // Color según cantidad
+            if (count === 0) {
+                badge.style.background = 'var(--text-color-light)';
+            } else if (count <= 3) {
+                badge.style.background = 'var(--success-color)';
+            } else if (count <= 6) {
+                badge.style.background = 'var(--warning-color)';
+            } else {
+                badge.style.background = 'var(--danger-color)';
+            }
+        });
+    }
+    
+    // Click para expandir/colapsar
+    document.addEventListener('click', function(e) {
+        const header = e.target.closest('.kanban-column h3');
+        if (header) {
+            const column = header.closest('.kanban-column');
+            if (column) {
+                column.classList.toggle('expanded');
+            }
+        }
+    });
+
+    // Función para expandir primera columna con proyectos por defecto
+    function expandirPrimeraColumnaConProyectos() {
+        const columnas = document.querySelectorAll('.kanban-column');
+        for (const columna of columnas) {
+            const count = columna.querySelectorAll('.project-card').length;
+            if (count > 0 && !columna.classList.contains('expanded')) {
+                columna.classList.add('expanded');
+                break; // Solo la primera con proyectos
+            }
+        }
+    }
+    
+    // Llamar cuando se renderiza el kanban
+    const observerKanban = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length > 0) {
+                setTimeout(() => {
+                    actualizarContadoresKanban();
+                    expandirPrimeraColumnaConProyectos();
+                }, 100);
+            }
+        });
+    });
+    
+    const kanbanBoard = document.getElementById('kanban-board');
+    if (kanbanBoard) {
+        observerKanban.observe(kanbanBoard, { childList: true, subtree: true });
+    }
+
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 
 // --- SERVICE WORKER ---
