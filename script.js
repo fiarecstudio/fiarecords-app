@@ -3453,6 +3453,12 @@ let proyectoIdEnEdicion = null;
     if (kanbanBoard) {
         observerKanban.observe(kanbanBoard, { childList: true, subtree: true });
     }
+    
+    // Llamar inmediatamente si ya hay columnas renderizadas
+    setTimeout(() => {
+        actualizarContadoresKanban();
+        expandirPrimeraColumnaConProyectos();
+    }, 500);
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 

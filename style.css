@@ -284,6 +284,32 @@ body.dark-mode {
     display: none;
 }
 
+/* SCROLLBAR OSCURO EN DARK MODE */
+body.dark-mode ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+    background: var(--kanban-column-bg);
+    border-radius: 4px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Firefox scrollbar dark mode */
+body.dark-mode * {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 var(--kanban-column-bg);
+}
+
 .kanban-column h3:hover {
     background: var(--secondary-button-bg);
     transform: translateY(-1px);
