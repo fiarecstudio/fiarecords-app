@@ -3523,6 +3523,19 @@ let proyectoIdEnEdicion = null;
             expandirPrimeraColumnaConProyectos();
         }, 500);
     }
+    
+    // Intervalo de verificación cada 1 segundo - cuando estamos en flujo-trabajo
+    let lastUpdate = 0;
+    setInterval(() => {
+        if (location.hash === '#flujo-trabajo' && document.getElementById('flujo-trabajo')?.classList.contains('active')) {
+            const now = Date.now();
+            // Solo actualizar cada 2 segundos máximo
+            if (now - lastUpdate > 2000) {
+                actualizarContadoresKanban();
+                lastUpdate = now;
+            }
+        }
+    }, 1000);
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 
