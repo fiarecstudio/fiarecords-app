@@ -5,6 +5,7 @@ const Proyecto = require('../models/Proyecto');
 const Artista = require('../models/Artista'); 
 const Configuracion = require('../models/Configuracion'); 
 const auth = require('../middleware/auth');   
+const { applyTenantFilter, buildQueryFilter, hasTenantAccess } = require('../middleware/tenantFilter');
 const { google } = require('googleapis');
 
 // --- CONFIGURACIÓN GMAIL ---
@@ -48,6 +49,7 @@ const formatearFechaMexico = (fechaIso) => {
 };
 
 router.use(auth);
+router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticamente
 
 const getFiltroUsuario = async (req) => {
     let filtro = { isDeleted: { $ne: true } };
@@ -85,7 +87,10 @@ router.get('/disponibilidad', async (req, res) => {
         const start = new Date(fecha); start.setUTCHours(0,0,0,0);
         const end = new Date(fecha); end.setUTCHours(23,59,59,999);
 
+        // FASE 4: Aplicar filtro de empresa para slots de disponibilidad
+        const filtroEmpresa = buildQueryFilter(req, {});
         const proyectosOcupados = await Proyecto.find({
+            ...filtroEmpresa,
             fecha: { $gte: start, $lte: end }, 
             estatus: { $ne: 'Cancelado' },
             proceso: { $ne: 'Cotizacion' }, 
@@ -106,31 +111,101 @@ router.get('/disponibilidad', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.get('/', async (req, res) => { try { const filtro = await getFiltroUsuario(req); const proyectos = await Proyecto.find(filtro).populate('artista').sort({ fecha: 1 }); res.json(proyectos); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/', async (req, res) => { 
+    try { 
+        const filtroUsuario = await getFiltroUsuario(req); 
+        // FASE 3: Combinar filtro de empresa + filtro de usuario
+        const filtro = buildQueryFilter(req, filtroUsuario);
+        
+        // DEBUG FASE 5: Mostrar query exacta enviada a MongoDB
+        console.log("\n=== DEBUG /api/proyectos ===");
+        console.log("Query enviada a MongoDB:", JSON.stringify(filtro, null, 2));
+        console.log("tenantFilter en req:", req.tenantFilter);
+        console.log("Headers X-Empresa-Id:", req.headers['x-empresa-id'] || req.headers['X-Empresa-Id']);
+        console.log("Usuario:", req.user ? { id: req.user._id, empresaId: req.user.empresaId, isSuperAdmin: req.user.isSuperAdmin } : 'N/A');
+        
+        const proyectos = await Proyecto.find(filtro).populate('artista').sort({ fecha: 1 }); 
+        
+        // DEBUG FASE 5: Mostrar resultados
+        console.log("Proyectos encontrados:", proyectos.length);
+        console.log("===========================\n");
+        
+        res.json(proyectos); 
+    } catch (e) { 
+        console.error("Error en GET /api/proyectos:", e);
+        res.status(500).json({ error: e.message }); 
+    } 
+});
 
-router.get('/agenda', async (req, res) => { try { const filtro = await getFiltroUsuario(req); filtro.estatus = { $ne: 'Cancelado' }; filtro.proceso = { $ne: 'Completo' }; const proyectos = await Proyecto.find(filtro).populate('artista'); const eventos = proyectos.map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Sin Nombre'), start: p.fecha, allDay: false, extendedProps: { total: p.total, estatus: p.estatus, proceso: p.proceso, servicios: p.items ? p.items.map(i => i.nombre).join('\n') : '', artistaId: p.artista ? p.artista._id : null } })); res.json(eventos); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/agenda', async (req, res) => { 
+    try { 
+        const filtroUsuario = await getFiltroUsuario(req); 
+        
+        // FASE 4: Parche de rastreo para depuración
+        let matchStage = {};
 
-router.get('/cotizaciones', async (req, res) => { try { const filtro = await getFiltroUsuario(req); filtro.estatus = 'Cotizacion'; const cotizaciones = await Proyecto.find(filtro).populate('artista'); res.json(cotizaciones); } catch (e) { res.status(500).json({ error: e.message }); } });
+        // 1. Leer el header directamente para evitar pérdidas en middlewares intermedios
+        const headerEmpresaId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+        console.log("\n=== DEBUG FLUJO TRABAJO ===");
+        console.log("1. Header recibido:", headerEmpresaId);
+
+        // 2. Determinar ID final (priorizar el header, luego el usuario)
+        let targetEmpresaId = headerEmpresaId;
+        if (!targetEmpresaId && req.user) {
+            targetEmpresaId = req.user.empresaId;
+            console.log("2. Usando fallback de usuario:", targetEmpresaId);
+        }
+
+        // 3. Forzar el filtro si no es 'all'
+        if (targetEmpresaId && targetEmpresaId !== 'all') {
+            try {
+                // .trim() evita errores si el frontend manda espacios ocultos
+                matchStage.empresaId = new mongoose.Types.ObjectId(targetEmpresaId.toString().trim());
+                console.log("3. MatchStage exitoso:", matchStage);
+            } catch (error) {
+                console.error("3. ERROR FATAL de ObjectId:", error.message);
+            }
+        } else {
+            console.log("3. Mostrando GLOBAL (sin filtro)");
+        }
+        console.log("===========================\n");
+        
+        const filtro = {
+            ...matchStage,
+            ...filtroUsuario,
+            estatus: { $ne: 'Cancelado' },
+            proceso: { $ne: 'Completo' }
+        };
+        
+        const proyectos = await Proyecto.find(filtro).populate('artista'); 
+        const eventos = proyectos.map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Sin Nombre'), start: p.fecha, allDay: false, extendedProps: { total: p.total, estatus: p.estatus, proceso: p.proceso, servicios: p.items ? p.items.map(i => i.nombre).join('\n') : '', artistaId: p.artista ? p.artista._id : null } })); 
+        res.json(eventos); 
+    } catch (e) { res.status(500).json({ error: e.message }); } 
+});
+
+router.get('/cotizaciones', async (req, res) => { 
+    try { 
+        const filtroUsuario = await getFiltroUsuario(req); 
+        // FASE 3: Combinar filtro de empresa + filtro de usuario + filtro de cotización
+        const filtro = buildQueryFilter(req, {
+            ...filtroUsuario,
+            estatus: 'Cotizacion'
+        });
+        const cotizaciones = await Proyecto.find(filtro).populate('artista'); 
+        res.json(cotizaciones); 
+    } catch (e) { res.status(500).json({ error: e.message }); } 
+});
 
 router.get('/completos', async (req, res) => { 
     try { 
-        const filtro = await getFiltroUsuario(req); 
-        const filtroBase = { isDeleted: { $ne: true } };
-        
-        if (req.user.role === 'cliente') {
-            if (req.user.artistaId) filtroBase.artista = new mongoose.Types.ObjectId(req.user.artistaId);
-            else filtroBase.artista = new mongoose.Types.ObjectId(); 
-        }
-
-        const filtroFinal = {
-            ...filtroBase,
+        const filtroBase = buildQueryFilter(req, { 
             $or: [
                 { proceso: 'Completo' },
                 { estatus: 'Cancelado' }
             ]
-        };
+        });
 
-        const completos = await Proyecto.find(filtroFinal).populate('artista').sort({ fecha: -1 }); 
+        const completos = await Proyecto.find(filtroBase).populate('artista').sort({ fecha: -1 }); 
         res.json(completos); 
     } catch (e) { 
         res.status(500).json({ error: e.message }); 
@@ -139,8 +214,9 @@ router.get('/completos', async (req, res) => {
 
 router.get('/pagos/todos', async (req, res) => { 
     try { 
-        const filtro = await getFiltroUsuario(req); 
-        filtro["pagos.0"] = { $exists: true }; 
+        const filtro = buildQueryFilter(req, {
+            "pagos.0": { $exists: true }
+        });
         const proyectos = await Proyecto.find(filtro).populate('artista'); 
         let todosPagos = []; 
         proyectos.forEach(p => { 
@@ -162,9 +238,41 @@ router.get('/pagos/todos', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); } 
 });
 
-router.get('/por-artista/:id', async (req, res) => { try { if (req.user.role === 'cliente') { const filtroPropio = await getFiltroUsuario(req); if (filtroPropio.artista && filtroPropio.artista.toString() !== req.params.id) { return res.status(403).json({ error: 'No autorizado.' }); } } const proyectos = await Proyecto.find({ artista: req.params.id, isDeleted: { $ne: true } }).populate('artista').sort({ fecha: -1 }); res.json(proyectos); } catch (e) { res.status(500).json({ error: 'Error al obtener historial.' }); } });
+router.get('/por-artista/:id', async (req, res) => { 
+    try { 
+        if (req.user.role === 'cliente') { 
+            const filtroPropio = await getFiltroUsuario(req); 
+            if (filtroPropio.artista && filtroPropio.artista.toString() !== req.params.id) { 
+                return res.status(403).json({ error: 'No autorizado.' }); 
+            } 
+        }
+        // Construir filtro con empresa
+        const filtro = buildQueryFilter(req, { 
+            artista: req.params.id, 
+            isDeleted: { $ne: true } 
+        });
+        const proyectos = await Proyecto.find(filtro).populate('artista').sort({ fecha: -1 }); 
+        res.json(proyectos); 
+    } catch (e) { res.status(500).json({ error: 'Error al obtener historial.' }); } 
+});
 
-router.get('/:id', async (req, res) => { try { const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) { return res.status(403).json({ error: 'No autorizado.' }); } } res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/:id', async (req, res) => { 
+    try { 
+        const proyecto = await Proyecto.findById(req.params.id).populate('artista'); 
+        if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); 
+        // FASE 3: Verificar acceso por empresa
+        if (!hasTenantAccess(req, proyecto)) {
+            return res.status(403).json({ error: 'No autorizado: El proyecto no pertenece a tu empresa.' });
+        }
+        if (req.user.role === 'cliente') { 
+            const filtro = await getFiltroUsuario(req); 
+            if (!proyecto.artista || proyecto.artista._id.toString() !== filtro.artista.toString()) { 
+                return res.status(403).json({ error: 'No autorizado.' }); 
+            } 
+        } 
+        res.json(proyecto); 
+    } catch (e) { res.status(500).json({ error: e.message }); } 
+});
 
 // ==============================================================
 // RUTA PUT GENERAL PARA ACTUALIZAR PROYECTO (Firma del Cliente)
@@ -173,6 +281,11 @@ router.put('/:id', async (req, res) => {
     try {
         const proyecto = await Proyecto.findById(req.params.id);
         if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        
+        // FASE 3: Verificar acceso por empresa
+        if (!hasTenantAccess(req, proyecto)) {
+            return res.status(403).json({ error: 'No autorizado: El proyecto no pertenece a tu empresa.' });
+        }
         
         // Verificar autorización para clientes
         if (req.user.role === 'cliente') {
@@ -215,16 +328,26 @@ router.post('/directo', async (req, res) => {
         
         const { artistaId, nombreProyecto, enlaceEntrega } = req.body;
 
+        // FASE 4: Determinar empresaId
+        let empresaIdAsignar;
+        if (req.user.isSuperAdmin) {
+            const headerEmpresaId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+            empresaIdAsignar = headerEmpresaId || req.user.empresaId;
+        } else {
+            empresaIdAsignar = req.user.empresaId;
+        }
+        
         const nuevoProyecto = new Proyecto({
             artista: artistaId,
+            empresaId: empresaIdAsignar,
             nombreProyecto: nombreProyecto || 'Proyecto Anterior',
-            fecha: new Date(), // Se pone la fecha de hoy como fecha de subida
+            fecha: new Date(),
             items: [{ nombre: 'Proyecto de Catálogo (Migración)', unidades: 1, precioUnitario: 0 }],
             total: 0,
             descuento: 0,
             montoPagado: 0,
-            estatus: 'Pagado', // Se asume que ya se pagó en el pasado
-            proceso: 'Completo', // Va directo al historial
+            estatus: 'Pagado',
+            proceso: 'Completo',
             metodoPago: 'N/A',
             enlaceEntrega: enlaceEntrega || ''
         });
@@ -236,62 +359,34 @@ router.post('/directo', async (req, res) => {
     }
 });
 
-router.post('/', async (req, res) => { try { if (req.body._id && req.body._id.startsWith('temp')) delete req.body._id; let datos = { ...req.body, isDeleted: false }; if (req.user.role === 'cliente') { const filtro = await getFiltroUsuario(req); if (filtro.artista) { datos.artista = filtro.artista; } else { return res.status(400).json({ error: 'Error: Sin perfil de artista.' }); } } const nuevo = new Proyecto(datos); const guardado = await nuevo.save(); if (guardado.proceso === 'Agendado' && guardado.artista) { const email = await getArtistaEmail(guardado.artista); const fechaFmt = formatearFechaMexico(guardado.fecha); enviarNotificacion(email, "📅 Cita Confirmada - Fia Records", `<div style="font-family: Arial;"><h2>¡Proyecto Agendado!</h2><p>Tu proyecto <strong>${guardado.nombreProyecto}</strong> ha sido confirmado.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.status(201).json(guardado); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.put('/:id/proceso', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const updateData = { proceso: req.body.proceso }; if (req.body.proceso === 'Agendado') updateData.estatus = 'Pendiente de Pago'; const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('artista'); if (req.body.proceso === 'Agendado' && actualizado.artista) { const email = actualizado.artista.correo; const fechaFmt = formatearFechaMexico(actualizado.fecha); enviarNotificacion(email, "✅ Tu cita ha sido confirmada", `<div style="font-family: Arial;"><h2>¡Cotización Aprobada!</h2><p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> ya está en nuestra agenda.</p><p><strong>Fecha:</strong> ${fechaFmt}</p></div>`); } res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.put('/:id/estatus', async (req, res) => { try { const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { estatus: req.body.estatus }, { new: true }).populate('artista'); if (req.body.estatus === 'Cancelado' && actualizado.artista) { const email = actualizado.artista.correo; enviarNotificacion(email, "❌ Cita Cancelada - Fia Records", `<div style="font-family: Arial;"><h2>Cita Cancelada</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido cancelado.</p></div>`); } res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.put('/:id/fecha', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { fecha: req.body.fecha }, { new: true }).populate('artista'); if (actualizado.artista) { const email = actualizado.artista.correo; const fechaFmt = formatearFechaMexico(req.body.fecha); enviarNotificacion(email, "📅 Cambio de Horario", `<p>Tu proyecto <strong>${actualizado.nombreProyecto}</strong> se movió al: <strong>${fechaFmt}</strong> (Hora CDMX).</p>`); } res.json(actualizado); });
-
-router.put('/:id/nombre', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, { nombreProyecto: req.body.nombreProyecto }, { new: true }); res.json(actualizado); });
-
-router.put('/:id/enlace-entrega', async (req, res) => {
-    try {
-        const proyecto = await Proyecto.findById(req.params.id);
-        if(!proyecto) return res.status(404).json({error: "No existe el proyecto"});
-        
-        if(req.user.role === 'cliente') { 
-            const filtro = await getFiltroUsuario(req); 
-            if(!proyecto.artista || proyecto.artista.toString() !== filtro.artista.toString()) { 
-                return res.status(403).json({ error: 'No autorizado' }); 
-            } 
-        }
-        
-        let updateData = { enlaceEntrega: req.body.enlace };
-        if (req.body.archivos && Array.isArray(req.body.archivos)) {
-            updateData.archivos = req.body.archivos;
-        }
-
-        const actualizado = await Proyecto.findByIdAndUpdate(
-            req.params.id, 
-            updateData, 
-            { new: true }
-        ).populate('artista');
-        
-        if (req.body.enlace && actualizado.artista && req.user.role !== 'cliente') {
-            const email = actualizado.artista.correo;
-            enviarNotificacion(email, "🚀 Entrega de Material - Fia Records", `<div style="font-family: sans-serif; text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;"><h2>¡Tu material está listo! 🎵</h2><p>El proyecto <strong>${actualizado.nombreProyecto}</strong> ha sido finalizado. Si enviaste audios, videos o imágenes, ya pueden ser previsualizados desde tu panel.</p><br><a href="${req.body.enlace}" style="background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;">DESCARGAR CARPETA ORIGINAL</a></div>`);
-        }
-        res.json(actualizado);
-    } catch (e) { res.status(500).json({ error: "Error al guardar el enlace y archivos" }); }
+router.delete('/:id', async (req, res) => { 
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); 
+    try { 
+        const proyecto = await Proyecto.findById(req.params.id); 
+        if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); 
+        if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); 
+        await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true }); 
+        res.status(204).send(); 
+    } catch (e) { res.status(500).json({ error: e.message }); } 
 });
 
-router.post('/:id/pagos', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const proyecto = await Proyecto.findById(req.params.id).populate('artista'); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); const nuevoPago = { monto: req.body.monto, metodo: req.body.metodo, fecha: new Date(), artista: proyecto.artista ? proyecto.artista.nombre : 'General' }; proyecto.pagos.push(nuevoPago); proyecto.montoPagado = (proyecto.montoPagado || 0) + parseFloat(req.body.monto); if (proyecto.montoPagado >= (proyecto.total - (proyecto.descuento || 0))) { proyecto.estatus = 'Pagado'; } await proyecto.save(); res.json(proyecto); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/papelera/all', async (req, res) => { 
+    if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); 
+    try { 
+        // FASE 3: Filtrar papelera por empresa
+        const filtro = buildQueryFilter(req, { isDeleted: true });
+        const proyectos = await Proyecto.find(filtro).populate('artista'); 
+        res.json(proyectos); 
+    } catch (e) { res.status(500).json({ error: e.message }); } 
+});
 
-router.put('/:id/documentos', async (req, res) => { try { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); const update = {}; if (req.body.tipo === 'contrato') update.detallesContrato = req.body.data; if (req.body.tipo === 'distribucion') update.detallesDistribucion = req.body.data; const actualizado = await Proyecto.findByIdAndUpdate(req.params.id, update, { new: true }).populate('artista'); res.json(actualizado); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.put('/:id/restaurar', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-router.delete('/:id', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: true }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.get('/papelera/all', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyectos = await Proyecto.find({ isDeleted: true }).populate('artista'); res.json(proyectos); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.put('/:id/restaurar', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-router.delete('/:id/permanente', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { await Proyecto.findByIdAndDelete(req.params.id); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.delete('/:id/permanente', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { const proyecto = await Proyecto.findById(req.params.id); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); await Proyecto.findByIdAndDelete(req.params.id); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 router.delete('/papelera/vaciar', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { await Proyecto.deleteMany({ isDeleted: true }); res.status(204).send(); } catch (err) { res.status(500).json({ error: "Error" }); } });
 
-router.delete('/:id/pagos/:pagoId', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if(!proyecto) return res.status(404).json({error: 'No encontrado'}); const pago = proyecto.pagos.id(req.params.pagoId); if(!pago) return res.status(404).json({error: 'Pago no encontrado'}); proyecto.montoPagado -= pago.monto; pago.deleteOne(); if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) proyecto.estatus = 'Pendiente de Pago'; await proyecto.save(); res.json(proyecto); } catch(e) { res.status(500).json({error: e.message}); } });
+router.delete('/:id/pagos/:pagoId', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if(!proyecto) return res.status(404).json({error: 'No encontrado'}); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); const pago = proyecto.pagos.id(req.params.pagoId); if(!pago) return res.status(404).json({error: 'Pago no encontrado'}); proyecto.montoPagado -= pago.monto; pago.deleteOne(); if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) proyecto.estatus = 'Pendiente de Pago'; await proyecto.save(); res.json(proyecto); } catch(e) { res.status(500).json({error: e.message}); } });
 
 // --- NUEVA RUTA: ENVIAR RECIBO POR CORREO ---
 router.post('/:id/enviar-recibo', async (req, res) => {

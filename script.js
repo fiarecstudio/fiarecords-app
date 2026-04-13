@@ -1,15 +1,214 @@
+// ==================================================================
+// FASE 5: GUARDIA DE IDENTIDAD VISUAL - SISTEMA ANTI-FLICKER
+// Este código se ejecuta INMEDIATAMENTE, antes de que el DOM esté listo,
+// para poner el logo en caché al instante y evitar el parpadeo en blanco.
+// ==================================================================
+(function guardiaDeIdentidadInmediato() {
+    // Intentar poner el logo desde caché INMEDIATAMENTE (antes de que el DOM esté listo)
+    const logoCacheado = localStorage.getItem('fia_logo_cache');
+    if (logoCacheado) {
+        // Crear un estilo inline que se aplique inmediatamente
+        const style = document.createElement('style');
+        style.id = 'guardia-logo-placeholder';
+        style.textContent = `
+            #app-logo, #login-logo { 
+                opacity: 0.7 !important;
+                transition: opacity 0.3s ease !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
+    // ==================================================================
+    // 0. GUARDIA DE IDENTIDAD VISUAL (PRIMERO - ANTI-FLICKER)
+    // ==================================================================
+    
+    const IDENTITY_CACHE_KEY = 'fia_identity_cache';
+    const IDENTITY_TIMESTAMP_KEY = 'fia_identity_timestamp';
+    const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
+    
+    /**
+     * Obtiene el ID de empresa con lógica de prioridad:
+     * 1. localStorage.getItem('empresaActiva')
+     * 2. Token decodificado (empresaId)
+     * 3. localStorage.getItem('selected_empresa_id')
+     * 4. 'all' (login o vista global)
+     * @returns {string} ID de empresa o 'all'
+     */
+    function obtenerIdEmpresaPrioridad() {
+        // PRIORIDAD 1: empresaActiva (siempre primero, se actualiza en login y cambios)
+        let empresaId = localStorage.getItem('empresaActiva');
+        if (empresaId && empresaId !== 'null' && empresaId !== 'undefined' && empresaId !== '') {
+            return empresaId;
+        }
+        
+        // PRIORIDAD 2: Token decodificado
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.empresaId) {
+                    // Sincronizar con empresaActiva para futuras llamadas
+                    localStorage.setItem('empresaActiva', payload.empresaId);
+                    return payload.empresaId;
+                }
+            } catch (e) {
+                console.warn('[obtenerIdEmpresaPrioridad] Error decodificando token:', e);
+            }
+        }
+        
+        // PRIORIDAD 3: selected_empresa_id (selector de Super Admin)
+        empresaId = localStorage.getItem('selected_empresa_id');
+        if (empresaId && empresaId !== '' && empresaId !== 'all') {
+            return empresaId;
+        }
+        
+        // DEFAULT: 'all' (FIA RECORDS como fallback)
+        return 'all';
+    }
+    
+    /**
+     * Verifica si estamos en la página de login
+     * @returns {boolean}
+     */
+    function esPaginaLogin() {
+        const token = localStorage.getItem('token');
+        return !token;
+    }
+    
+    /**
+     * Aplica la identidad visual al DOM de forma inmediata
+     * @param {Object} config - { logoBase64, faviconBase64 }
+     * @param {boolean} forzarCambio - Si es true, ignora el caché y fuerza actualización
+     */
+    function aplicarIdentidadVisualAlDOM(config, forzarCambio = false) {
+        if (!config) return;
+        
+        const { logoBase64: logoData, faviconBase64: faviconData } = config;
+        
+        // 1. Aplicar Logo al Header (inmediato)
+        const appLogo = document.getElementById('app-logo');
+        if (logoData && appLogo) {
+            appLogo.src = logoData;
+            appLogo.style.opacity = '1'; // Quitar transparencia de placeholder
+        }
+        
+        // 2. Aplicar Logo al Login (si estamos en login)
+        const loginLogo = document.getElementById('login-logo');
+        if (logoData && loginLogo && esPaginaLogin()) {
+            loginLogo.src = logoData;
+            loginLogo.style.opacity = '1';
+        }
+        
+        // 3. Aplicar Favicon (dinámico, al head)
+        if (faviconData) {
+            let faviconLink = document.querySelector('link[rel="icon"]');
+            if (!faviconLink) {
+                faviconLink = document.createElement('link');
+                faviconLink.rel = 'icon';
+                faviconLink.type = 'image/x-icon';
+                document.head.appendChild(faviconLink);
+            }
+            faviconLink.href = faviconData;
+        }
+    }
+    
+    /**
+     * EL GUARDIA DE IDENTIDAD - Función centralizada
+     * Aplica identidad visual con sistema anti-flicker (placeholder + validación)
+     * @param {boolean} forzarCambio - Si es true, fuerza recarga desde servidor
+     */
+    async function aplicarIdentidadVisual(forzarCambio = false) {
+        try {
+            const empresaId = obtenerIdEmpresaPrioridad();
+            console.log('[GuardiaIdentidad] Aplicando identidad visual para empresa:', empresaId);
+            
+            // FASE 1: PLACEHOLDER INMEDIATO (Anti-Flicker)
+            // Si tenemos caché válido y NO es forzado, ponemos el logo al instante
+            if (!forzarCambio) {
+                const cacheStr = localStorage.getItem(IDENTITY_CACHE_KEY);
+                const cacheTimestamp = localStorage.getItem(IDENTITY_TIMESTAMP_KEY);
+                const ahora = Date.now();
+                
+                if (cacheStr && cacheTimestamp) {
+                    const cache = JSON.parse(cacheStr);
+                    const edadCache = ahora - parseInt(cacheTimestamp);
+                    
+                    // Si el caché es válido y corresponde a la misma empresa (o es reciente)
+                    if (edadCache < CACHE_DURATION_MS && cache.empresaId === empresaId) {
+                        aplicarIdentidadVisualAlDOM(cache, false);
+                        console.log('[GuardiaIdentidad] Logo aplicado desde caché (placeholder)');
+                        // Continuar para validar en segundo plano
+                    }
+                }
+            }
+            
+            // FASE 2: VALIDACIÓN EN SEGUNDO PLANO (fetch real)
+            const url = `${API_URL}/api/configuracion/public/logo` + 
+                        (empresaId !== 'all' ? `?empresaId=${empresaId}` : '');
+            
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const data = await res.json();
+            
+            // FASE 3: ACTUALIZAR DOM con datos frescos
+            if (data.logoBase64 || data.faviconBase64) {
+                aplicarIdentidadVisualAlDOM(data, true);
+                
+                // Guardar en caché para próximas cargas
+                localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
+                    logoBase64: data.logoBase64,
+                    faviconBase64: data.faviconBase64,
+                    empresaId: empresaId,
+                    timestamp: Date.now()
+                }));
+                localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
+                localStorage.setItem('fia_logo_cache', data.logoBase64); // Legacy para guardia inmediato
+                
+                console.log('[GuardiaIdentidad] Identidad visual actualizada desde servidor');
+            }
+            
+            return data;
+        } catch (err) {
+            console.error('[GuardiaIdentidad] Error:', err);
+            // En caso de error, mantener el placeholder si existe
+        }
+    }
+    
+    // ==================================================================
+    // REACTIVIDAD: Escuchar cambios de contexto de empresa (Super Admin)
+    // ==================================================================
+    window.addEventListener('empresa-context-changed', (e) => {
+        console.log('[GuardiaIdentidad] Evento empresa-context-changed detectado:', e.detail);
+        const nuevaEmpresaId = e.detail?.empresaId;
+        
+        if (nuevaEmpresaId !== undefined) {
+            // Actualizar empresaActiva para que la use obtenerIdEmpresaPrioridad
+            if (nuevaEmpresaId && nuevaEmpresaId !== '') {
+                localStorage.setItem('empresaActiva', nuevaEmpresaId);
+            } else {
+                localStorage.setItem('empresaActiva', 'all');
+            }
+            
+            // Forzar cambio de identidad visual inmediato (sin F5)
+            aplicarIdentidadVisual(true);
+        }
+    });
+    
     // ==================================================================
     // 1. VARIABLES GLOBALES Y CONFIGURACIÓN
     // ==================================================================
     
     const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    let horariosOcupadosDelDia = []; 
+    let horariosOcupadosDelDia = [];
 
     let isInitialized = false;
     let proyectoActual = {};
 let proyectoIdEnEdicion = null;
-    let logoBase64 = null; 
+    let logoBase64 = null; // Se mantiene para compatibilidad con PDFs
     let preseleccionArtistaId = null;
 
     // Estado de Paginación
@@ -159,31 +358,27 @@ let proyectoIdEnEdicion = null;
         Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
-    async function fetchPublicLogo() {
-        try {
-            const res = await fetch(`${API_URL}/api/configuracion/public/logo`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.logoBase64) {
-                    const logoSrc = data.logoBase64;
-                    if(document.getElementById('login-logo')) document.getElementById('login-logo').src = logoSrc;
-                    if(document.getElementById('app-logo')) document.getElementById('app-logo').src = logoSrc;
-                    logoBase64 = logoSrc;
-                    await localforage.setItem('cached_logo_path', logoSrc);
-                }
-                if (data && data.faviconBase64) {
-                    let link = document.querySelector("link[rel~='icon']");
-                    if (!link) {
-                        link = document.createElement('link');
-                        link.rel = 'icon';
-                        document.head.appendChild(link);
-                    }
-                    link.href = data.faviconBase64;
-                    await localforage.setItem('cached_favicon_path', data.faviconBase64);
-                }
-            }
-        } catch (e) { console.warn("Error cargando config pública", e); }
+    // ==================================================================
+    // FASE 5: FUNCIONES LEGACY (Compatibilidad hacia atrás)
+    // Todas redirigen al Guardia de Identidad centralizado
+    // ==================================================================
+    
+    async function cargarLogoEmpresa(id = null) {
+        if (id) localStorage.setItem('empresaActiva', id);
+        return aplicarIdentidadVisual(true);
     }
+    
+    async function fetchPublicLogo() {
+        return aplicarIdentidadVisual(false);
+    }
+    
+    async function cargarIdentidadVisualSecuencial(idForzado = null) {
+        if (idForzado) localStorage.setItem('empresaActiva', idForzado);
+        return aplicarIdentidadVisual(true);
+    }
+    
+    // Exponer funciones clave globalmente para otros módulos
+    window.aplicarIdentidadVisual = aplicarIdentidadVisual;
 
     function getUserRoleAndId() {
         const token = localStorage.getItem('token'); // Token va en localStorage para persistir sesión fácil
@@ -215,15 +410,28 @@ let proyectoIdEnEdicion = null;
         }
     }
 
-    async function loadInitialConfig() {
+    async function loadInitialConfig(empresaId = null) {
         try {
-            const config = await fetchAPI('/api/configuracion');
+            // FASE 4: Carga centralizada con empresaId explícito
+            // Si no se pasa empresaId, se obtiene de localStorage o se usa 'all'
+            const finalEmpresaId = empresaId || 
+                                   localStorage.getItem('empresaActiva') || 
+                                   localStorage.getItem('selected_empresa_id') || 
+                                   'all';
+            
+            console.log('[loadInitialConfig] Solicitando config con empresaId:', finalEmpresaId);
+            
+            const config = await fetchAPI('/api/configuracion', {
+                headers: { 'X-Empresa-Id': finalEmpresaId }
+            });
+            
             if (config) { 
                 configCache = config; 
-                if(config.logoBase64) logoBase64 = config.logoBase64; 
+                if(config.logoBase64) logoBase64 = config.logoBase64;
+                console.log('[loadInitialConfig] Config cargada para empresa:', config.empresaId || 'N/A');
             }
         } catch (e) { 
-            // EL CAMBIO ESTÁ AQUÍ: Asignamos null en lugar de {}
+            console.error('[loadInitialConfig] Error cargando config:', e);
             configCache = null; 
         }
     }
@@ -316,6 +524,19 @@ let proyectoIdEnEdicion = null;
         const headers = { 'Authorization': `Bearer ${token}` };
         if (!options.isFormData) { headers['Content-Type'] = 'application/json'; }
 
+        // FASE 4: Incluir empresa seleccionada en headers
+        // PRIORIDAD 1: Si el llamador pasó X-Empresa-Id en options.headers (ej: loadInitialConfig)
+        if (options.headers && options.headers['X-Empresa-Id']) {
+            headers['X-Empresa-Id'] = options.headers['X-Empresa-Id'];
+        }
+        // PRIORIDAD 2: Si es Super Admin y tiene empresa seleccionada
+        else if (token && window.EmpresaContext && window.EmpresaContext.isSuperAdmin()) {
+            const selectedEmpresa = window.EmpresaContext.getSelected();
+            if (selectedEmpresa) {
+                headers['X-Empresa-Id'] = selectedEmpresa;
+            }
+        }
+
         // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
@@ -346,8 +567,27 @@ let proyectoIdEnEdicion = null;
 
         if(!url.includes('/configuracion')) showLoader();
         
+        // FASE 4: Si Super Admin tiene empresa seleccionada, evitar caché del navegador
+        const fetchOptions = { ...options, headers };
+        
+        // DEBUG FASE 5: Verificar headers antes de enviar
+        if (url === '/api/proyectos') {
+            console.log('[DEBUG fetchAPI] Headers a enviar:', fetchOptions.headers);
+            console.log('[DEBUG fetchAPI] X-Empresa-Id en headers:', fetchOptions.headers['X-Empresa-Id']);
+        }
+        
+        if (token && window.EmpresaContext && window.EmpresaContext.isSuperAdmin() && window.EmpresaContext.getSelected()) {
+            fetchOptions.cache = 'no-store';
+            // También agregar timestamp para bypassar Service Worker
+            if (!url.includes('?')) {
+                url = url + '?_=' + Date.now();
+            } else {
+                url = url + '&_=' + Date.now();
+            }
+        }
+        
         try {
-            const res = await fetch(`${API_URL}${url}`, { ...options, headers });
+            const res = await fetch(`${API_URL}${url}`, fetchOptions);
             
             if (res.status === 401 && !isPublic) { showLogin(); throw new Error('Sesión expirada.'); }
             if (res.status === 401 && url.includes('/configuracion')) { return null; }
@@ -1188,16 +1428,253 @@ let proyectoIdEnEdicion = null;
 
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${safeMoney(proyecto.total)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
     const procesos =['Solicitud', 'Agendado', 'Grabacion', 'Edicion', 'Mezcla', 'Mastering', 'Completo'];
-    async function cargarFlujoDeTrabajo(filtroActivo = 'Todos') { const board = document.getElementById('kanbanBoard'); const filtros = document.getElementById('filtrosFlujo'); if (!filtros.innerHTML) { const botonesFiltro =['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')]; filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); } board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud').map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`).join(''); try { await fetchAPI('/api/proyectos'); filtrarFlujo(filtroActivo); } catch (e) { console.error("Error cargando flujo:", e); } }
-    function filtrarFlujo(filtro) { 
+    // ==================================================================
+    // FASE 5: FLUJO DE TRABAJO REACTIVO (KANBAN)
+    // ==================================================================
+    
+    /**
+     * Recarga el Kanban de forma reactiva cuando cambia la empresa
+     * Usada por cambiarEmpresaContexto para actualizar en tiempo real sin F5
+     * FASE 5: Sincronizada con cambio de identidad visual para transición profesional
+     * @param {string} empresaId - ID de la empresa a cargar (opcional, usa empresaActiva por default)
+     */
+    async function recargarKanbanReactivo(empresaId = null) {
+        console.log('[KanbanReactivo] Recarga reactiva iniciada para empresa:', empresaId || 'actual');
+        
+        // Si se proporcionó empresaId, actualizar contexto
+        if (empresaId) {
+            localStorage.setItem('empresaActiva', empresaId);
+        }
+        
+        // FASE 5: SINCRONIZACIÓN PROFESIONAL - Logo y Kanban cambian juntos
+        // Esperar a que ambos estén listos antes de mostrar nada
+        const empresaFinalId = empresaId || localStorage.getItem('empresaActiva') || 'all';
+        
+        // Mostrar overlay de carga ANTES de cualquier operación
+        mostrarOverlayKanban(empresaFinalId);
+        
+        // Limpiar caché de proyectos para forzar recarga desde servidor
+        localCache.proyectos = [];
+        await localforage.removeItem('cache_proyectos');
+        
+        // Recargar el Kanban con el nuevo contexto (el overlay ya está visible)
+        await cargarFlujoDeTrabajo('Todos', true); // true = forzar recarga
+    }
+    
+    /**
+     * Muestra un overlay de carga sobre el Kanban sin limpiar el contenido anterior
+     * Esto evita el flicker (parpadeo en blanco)
+     * @param {string} empresaId - ID de la empresa para mostrar nombre
+     */
+    function mostrarOverlayKanban(empresaId) {
+        const board = document.getElementById('kanbanBoard');
+        if (!board) return;
+        
+        const nombreEmpresa = empresaId === 'all' ? 'Todas las Empresas' : 'Empresa Seleccionada';
+        
+        // Detectar modo oscuro - la app usa 'dark-mode' como clase en body
+        const isDarkMode = document.body.classList.contains('dark-mode') || 
+                          localStorage.getItem('theme') === 'dark' ||
+                          document.documentElement.getAttribute('data-theme') === 'dark';
+        
+        // Crear overlay que se superpone al contenido actual (no lo reemplaza)
+        let overlay = document.getElementById('kanban-loading-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'kanban-loading-overlay';
+            // Fondo según el tema: oscuro semi-transparente o blanco semi-transparente
+            const bgColor = isDarkMode ? 'rgba(33,37,41,0.90)' : 'rgba(255,255,255,0.85)';
+            const textColor = isDarkMode ? '#fff' : '#212529';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: ${bgColor};
+                backdrop-filter: blur(2px);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 100;
+                border-radius: 8px;
+                transition: opacity 0.3s ease;
+                color: ${textColor};
+            `;
+            board.style.position = 'relative';
+            board.appendChild(overlay);
+        }
+        
+        // Actualizar color de fondo si ya existe (por si cambió el tema)
+        const isDark = document.body.classList.contains('dark-mode') || 
+                      localStorage.getItem('theme') === 'dark' ||
+                      document.documentElement.getAttribute('data-theme') === 'dark';
+        overlay.style.background = isDark ? 'rgba(33,37,41,0.90)' : 'rgba(255,255,255,0.85)';
+        overlay.style.color = isDark ? '#fff' : '#212529';
+        
+        // Clases para textos según tema
+        const textMutedClass = isDark ? 'text-light opacity-75' : 'text-muted';
+        
+        overlay.innerHTML = `
+            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="${textMutedClass} mb-1">Actualizando proyectos...</p>
+            <p class="text-primary fw-bold">${nombreEmpresa}</p>
+        `;
+        overlay.style.opacity = '1';
+        overlay.style.display = 'flex';
+    }
+    
+    /**
+     * Oculta el overlay de carga del Kanban
+     */
+    function ocultarOverlayKanban() {
+        const overlay = document.getElementById('kanban-loading-overlay');
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 300);
+        }
+    }
+    
+    /**
+     * Carga el Flujo de Trabajo (Kanban) con sistema anti-flicker profesional
+     * FASE 5: NO limpia el board inmediatamente - usa overlay y espera los datos
+     * @param {string} filtroActivo - Filtro inicial ('Todos' por defecto)
+     * @param {boolean} forzarRecarga - Si es true, ignora el caché y recarga desde servidor
+     */
+    async function cargarFlujoDeTrabajo(filtroActivo = 'Todos', forzarRecarga = false) { 
+        const board = document.getElementById('kanbanBoard'); 
+        const filtros = document.getElementById('filtrosFlujo');
+        
+        // FASE 5: Determinar empresa con prioridad: empresaActiva > selected_empresa_id > 'all'
+        const empresaId = localStorage.getItem('empresaActiva') || 
+                         localStorage.getItem('selected_empresa_id') || 
+                         'all';
+        
+        // FASE 5: Limpiar localCache si es forzado (cambio de empresa)
+        if (forzarRecarga) {
+            localCache.proyectos = [];
+            console.log('[FlujoTrabajo] Caché limpiado por cambio de empresa');
+        }
+        
+        try { 
+            // FASE 5: Inicializar filtros si es necesario (esto no causa flicker)
+            if (!filtros.innerHTML) { 
+                const botonesFiltro = ['Todos', ...procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')]; 
+                filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); 
+            }
+            
+            console.log('[FlujoTrabajo] Cargando con empresaId:', empresaId, '- Forzar recarga:', forzarRecarga);
+            
+            // FASE 5: Petición al servidor con header X-Empresa-Id
+            const data = await fetchAPI('/api/proyectos', { 
+                headers: { 'X-Empresa-Id': empresaId },
+                cache: forzarRecarga ? 'no-store' : 'default'
+            }); 
+            
+            // DEBUG FASE 5: Ver datos recibidos del servidor
+            console.log('[DEBUG] Datos recibidos del servidor:', data);
+            console.log('[DEBUG] Tipo de datos:', typeof data);
+            console.log('[DEBUG] Es array?', Array.isArray(data));
+            console.log('[DEBUG] Cantidad de proyectos:', data ? data.length : 'N/A');
+            
+            // FASE 5: Verificar que tenemos datos válidos
+            if (!data || !Array.isArray(data)) {
+                console.error('[FlujoTrabajo] Datos inválidos recibidos del servidor:', data);
+                board.innerHTML = `
+                    <div class="alert alert-warning m-4" role="alert">
+                        <i class="bi bi-exclamation-circle me-2"></i>
+                        No se recibieron datos válidos del servidor.
+                    </div>
+                `;
+                return;
+            }
+            
+            // DEBUG FASE 5: Analizar proyectos recibidos
+            console.log('[DEBUG] Primeros 3 proyectos:', data.slice(0, 3).map(p => ({ 
+                id: p._id, 
+                nombre: p.nombreProyecto || 'Sin nombre', 
+                empresaId: p.empresaId,
+                proceso: p.proceso,
+                estatus: p.estatus
+            })));
+            
+            // FASE 5: CRÍTICO - Asegurar que localCache.proyectos tenga los datos ANTES de filtrar
+            // fetchAPI debería haberlo hecho, pero por seguridad lo hacemos síncrono aquí
+            localCache.proyectos = data;
+            console.log('[FlujoTrabajo] localCache.proyectos actualizado con', localCache.proyectos.length, 'proyectos');
+            
+            // FASE 5: AHORA SÍ renderizar - los datos ya están listos, transición suave
+            // Solo reemplazamos el contenido cuando tenemos los nuevos datos confirmados
+            board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')
+                .map(p => `<div class="kanban-column" data-columna="${p}"><h3>${p}</h3><div id="columna-${p}" class="kanban-column-content"></div></div>`)
+                .join('');
+            
+            // Aplicar filtro y renderizar tarjetas
+            filtrarFlujo(filtroActivo); 
+            
+            console.log('[FlujoTrabajo] Kanban cargado exitosamente con', data.length, 'proyectos');
+        } catch (e) { 
+            console.error('[FlujoTrabajo] Error cargando flujo:', e);
+            board.innerHTML = `
+                <div class="alert alert-danger m-4" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Error al cargar proyectos. <button class="btn btn-sm btn-outline-danger ms-2" onclick="app.cargarFlujoDeTrabajo()">Reintentar</button>
+                </div>
+            `;
+        } finally {
+            // FASE 5: Siempre ocultar el overlay al finalizar (éxito o error)
+            ocultarOverlayKanban();
+        }
+    }
+    function filtrarFlujo(filtro) {
+        // DEBUG FASE 5: Verificar proyectos disponibles para dibujar
+        console.log('[DEBUG Frontend] Proyectos recibidos para dibujar:', localCache.proyectos ? localCache.proyectos.length : 0);
+        
+        if (!localCache.proyectos || localCache.proyectos.length === 0) {
+            console.warn('[DEBUG Frontend] No hay proyectos en localCache');
+            return;
+        }
+        
+        // DEBUG FASE 5: Análisis de proyectos por estado
+        const porEstado = {
+            proceso: {},
+            estatus: {},
+            deleted: { "true": 0, "false": 0, "undefined": 0 }
+        };
+        localCache.proyectos.forEach(p => {
+            porEstado.proceso[p.proceso] = (porEstado.proceso[p.proceso] || 0) + 1;
+            porEstado.estatus[p.estatus] = (porEstado.estatus[p.estatus] || 0) + 1;
+            if (p.deleted === true) porEstado.deleted["true"]++;
+            else if (p.deleted === false) porEstado.deleted["false"]++;
+            else porEstado.deleted["undefined"]++;
+        });
+        console.log('[DEBUG Frontend] Distribución por proceso:', porEstado.proceso);
+        console.log('[DEBUG Frontend] Distribución por estatus:', porEstado.estatus);
+        console.log('[DEBUG Frontend] Distribución por deleted:', porEstado.deleted);
+        
         document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active', 'btn-primary')); 
         const activeBtn = Array.from(document.querySelectorAll('#filtrosFlujo button')).find(b => b.textContent === filtro); 
         if (activeBtn) { activeBtn.classList.add('active', 'btn-primary'); } 
         document.querySelectorAll('.kanban-column').forEach(c => c.style.display = (filtro === 'Todos' || c.dataset.columna === filtro) ? 'flex' : 'none'); 
         procesos.forEach(col => { if (document.getElementById(`columna-${col}`)) document.getElementById(`columna-${col}`).innerHTML = '' }); 
         
-        if (localCache.proyectos) { 
-            localCache.proyectos.filter(p => p.proceso !== 'Completo' && p.proceso !== 'Solicitud' && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted).forEach(p => { 
+        // DEBUG FASE 5: Contar proyectos que pasan el filtro
+        const proyectosFiltrados = localCache.proyectos.filter(p => {
+            const pasaFiltro = p.proceso !== 'Completo' && p.proceso !== 'Solicitud' && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
+            return pasaFiltro;
+        });
+        console.log('[DEBUG Frontend] Proyectos que pasan el filtro de renderizado:', proyectosFiltrados.length);
+        
+        if (proyectosFiltrados.length === 0) {
+            console.warn('[DEBUG Frontend] Ningún proyecto pasó el filtro. Verificar estados arriba.');
+        }
+        
+        proyectosFiltrados.forEach(p => { 
                 const colEl = document.getElementById(`columna-${p.proceso}`); if (!colEl) return; 
                 const card = document.createElement('div'); card.className = `project-card`; card.dataset.id = p._id; 
                 card.style.borderLeftColor = `var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})`; 
@@ -1231,7 +1708,6 @@ let proyectoIdEnEdicion = null;
                 
                 card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group">${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
             }); 
-        } 
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
@@ -1801,6 +2277,7 @@ let proyectoIdEnEdicion = null;
     function showLogin() {
         document.body.classList.add('auth-visible');
         localStorage.removeItem('token');
+        localStorage.removeItem('empresaActiva');  // FASE 4: Limpiar empresaActiva al cerrar sesión
         history.pushState("", document.title, window.location.pathname);
         DOMElements.loginContainer.style.display = 'flex'; 
         DOMElements.appWrapper.style.display = 'none';
@@ -1815,7 +2292,25 @@ let proyectoIdEnEdicion = null;
         document.body.setAttribute('data-role', role); 
         renderSidebar(payload); 
         
-        if (!configCache) await loadInitialConfig();
+        // FASE 5: Carga centralizada de configuración con empresaId correcto
+        // Para usuarios normales: usa empresaId de su payload
+        // Para Super Admin: usa empresaActiva del localStorage o su empresaId
+        if (!configCache) {
+            const empresaId = localStorage.getItem('empresaActiva') || 
+                              localStorage.getItem('selected_empresa_id') || 
+                              payload.empresaId || 
+                              'all';
+            console.log('[showApp] Cargando configuración para empresaId:', empresaId);
+            await loadInitialConfig(empresaId);
+        }
+        
+        // FASE 5: Aplicar identidad visual desde la configuración cargada
+        // Esto asegura que logo y favicon se sincronicen después de un refresh
+        if (configCache && (configCache.logoBase64 || configCache.faviconBase64)) {
+            aplicarIdentidadVisual(configCache);
+            console.log('[showApp] Identidad visual aplicada desde configCache');
+        }
+        
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
@@ -1829,6 +2324,11 @@ let proyectoIdEnEdicion = null;
         DOMElements.appWrapper.style.display = 'flex'; 
         
         setupCustomization(payload);
+
+        // FASE 4: Inicializar selector de empresa si es Super Admin
+        if (window.empresasApp && window.empresasApp.inicializarSelectorEmpresa) {
+            await window.empresasApp.inicializarSelectorEmpresa();
+        }
 
         if (role === 'cliente') {
              if(payload.artistaId) {
@@ -1861,8 +2361,24 @@ let proyectoIdEnEdicion = null;
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
+                
+                // FASE 5: Extraer datos del token ANTES de cualquier operación
+                const payload = JSON.parse(atob(data.token.split('.')[1]));
+                console.log('[Login] Token recibido. Payload:', payload);
+                
+                // PASO 1: Guardar token y empresaId
                 localStorage.setItem('token', data.token);
-                await showApp(JSON.parse(atob(data.token.split('.')[1])));
+                if (payload.empresaId) {
+                    localStorage.setItem('empresaActiva', payload.empresaId);
+                    console.log('[Login] empresaActiva guardada:', payload.empresaId);
+                }
+                
+                // PASO 2: REACTIVIDAD - Aplicar identidad visual INMEDIATAMENTE (sin esperar nada)
+                // Esto asegura que el logo cambie al instante sin F5
+                await aplicarIdentidadVisual(true);
+                
+                // PASO 3: Mostrar app
+                await showApp(payload);
             } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
         });
         
@@ -1981,11 +2497,42 @@ let proyectoIdEnEdicion = null;
         }
     }
 
-    async function guardarDatosBancarios() { const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; try { await fetchAPI('/api/configuracion/datos-bancarios', { method: 'PUT', body: JSON.stringify({ datosBancarios: datos }) }); configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
+    async function guardarDatosBancarios() { 
+        const datos = { banco: document.getElementById('banco').value, titular: document.getElementById('titular').value, tarjeta: document.getElementById('tarjeta').value, clabe: document.getElementById('clabe').value }; 
+        try { 
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
+            await fetchAPI('/api/configuracion/datos-bancarios', { 
+                method: 'PUT', 
+                body: JSON.stringify({ datosBancarios: datos }),
+                headers: { 'X-Empresa-Id': empresaId }
+            }); 
+            configCache.datosBancarios = datos; bootstrap.Modal.getInstance(document.getElementById('modalDatosBancarios')).hide(); Swal.fire({ icon: 'success', title: 'Datos bancarios guardados', timer: 1500, showConfirmButton: false }); } catch (e) { showToast('Error al guardar', 'error'); } }
     async function cargarDatosBancariosEnModal() { try { if (!configCache || !configCache.datosBancarios) { await loadInitialConfig(); } const db = (configCache && configCache.datosBancarios) ? configCache.datosBancarios : {}; document.getElementById('banco').value = db.banco || ''; document.getElementById('titular').value = db.titular || ''; document.getElementById('tarjeta').value = db.tarjeta || ''; document.getElementById('clabe').value = db.clabe || ''; } catch (error) { console.error("Error al cargar datos bancarios:", error); } }
     function generarDatosBancariosPDF() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const { jsPDF } = window.jspdf; const pdf = new jsPDF(); if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); } pdf.setFontSize(18).setFont(undefined, 'bold').text("DATOS BANCARIOS", 105, 45, { align: 'center' }); const data = [['Banco:', db.banco || ''],['Titular:', db.titular || ''],['Número de Tarjeta:', db.tarjeta || ''],['CLABE Interbancaria:', db.clabe || '']]; pdf.autoTable({ startY: 60, body: data, theme: 'striped', styles: { fontSize: 14, cellPadding: 3 } }); pdf.save("FiaRecords_DatosBancarios.pdf"); }
     function compartirDatosBancariosWhatsApp() { if (!configCache || !configCache.datosBancarios) return showToast('Guarda los datos primero', 'warning'); const db = configCache.datosBancarios; const msg = `*Datos Bancarios FiaRecords*\n\n*Banco:* ${db.banco}\n*Titular:* ${db.titular}\n*Tarjeta:* ${db.tarjeta}\n*CLABE:* ${db.clabe}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
-    async function subirFirma(event) { const file = event.target.files[0]; if (!file) return; const formData = new FormData(); formData.append('firmaFile', file); try { const data = await fetchAPI('/api/configuracion/upload-firma', { method: 'POST', body: formData, isFormData: true }); showToast('¡Firma subida!', 'success'); const newSrc = data.firmaBase64; document.getElementById('firma-preview-img').src = newSrc; if (configCache) configCache.firmaBase64 = data.firmaBase64; } catch (e) { showToast(`Error al subir la firma`, 'error'); } }
+    async function subirFirma(event) { 
+        const file = event.target.files[0]; 
+        if (!file) return; 
+        const formData = new FormData(); 
+        formData.append('firmaFile', file); 
+        try { 
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
+            const data = await fetchAPI('/api/configuracion/upload-firma', { 
+                method: 'POST', 
+                body: formData, 
+                isFormData: true,
+                headers: { 'X-Empresa-Id': empresaId }
+            }); 
+            showToast('¡Firma subida!', 'success'); 
+            const newSrc = data.firmaBase64; 
+            document.getElementById('firma-preview-img').src = newSrc; 
+            if (configCache) configCache.firmaBase64 = data.firmaBase64; 
+        } catch (e) { 
+            showToast(`Error al subir la firma`, 'error'); 
+        } 
+    }
     
     // MODIFICADO: Ahora también carga las plantillas de documentos
     async function cargarConfiguracion() { 
@@ -1994,6 +2541,13 @@ let proyectoIdEnEdicion = null;
             
             // EL CAMBIO: Creamos una variable segura por si sigue siendo null
             const configSegura = configCache || {};
+            
+            // FASE 4: Actualizar logo del header si cambió
+            if (configSegura.logoBase64) {
+                const appLogo = document.getElementById('app-logo');
+                if (appLogo) appLogo.src = configSegura.logoBase64;
+                logoBase64 = configSegura.logoBase64;
+            }
             
             const firmaPreview = document.getElementById('firma-preview-img');
             let firmaSrc = 'https://placehold.co/150x60?text=Sin+Firma';
@@ -2058,9 +2612,12 @@ let proyectoIdEnEdicion = null;
             plantillaContrato: document.getElementById('plantilla-contrato').value
         };
         try {
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
             const res = await fetchAPI('/api/configuracion/plantillas', {
                 method: 'PUT',
-                body: JSON.stringify({ plantillasDoc })
+                body: JSON.stringify({ plantillasDoc }),
+                headers: { 'X-Empresa-Id': empresaId }
             });
             // Actualizar la caché local con los nuevos valores
             configCache.plantillasDoc = res.plantillasDoc; 
@@ -2464,13 +3021,127 @@ let proyectoIdEnEdicion = null;
         renderPaginationControls(listEl, endpoint, page, totalPages); 
     }
     
-    function renderPaginationControls(container, endpoint, currentPage, totalPages) { let controls = container.parentNode.querySelector('.pagination-controls'); if(controls) controls.remove(); if (totalPages <= 1) return; controls = document.createElement('div'); controls.className = 'pagination-controls'; controls.innerHTML = `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="app.changePage('${endpoint}', -1)">Anterior</button><span class="pagination-info">Página ${currentPage} de ${totalPages}</span><button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage('${endpoint}', 1)">Siguiente</button>`; container.parentNode.appendChild(controls); }
+    function renderPaginationControls(container, endpoint, currentPage, totalPages) { 
+        let controls = container.parentNode.querySelector('.pagination-controls'); 
+        if(controls) controls.remove(); 
+        if (totalPages <= 1) return; 
+        controls = document.createElement('div'); 
+        controls.className = 'pagination-controls'; 
+        controls.innerHTML = `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="app.changePage('${endpoint}', -1)">Anterior</button><span class="pagination-info">Página ${currentPage} de ${totalPages}</span><button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage('${endpoint}', 1)">Siguiente</button>`; 
+        container.parentNode.appendChild(controls); 
+    }
+    
     function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null); }
-    function limpiarForm(formId) { const f = document.getElementById(formId); if(f) f.reset(); }
-    async function saveItem(e, type) { e.preventDefault(); const form = e.target; let body; if (type === 'servicios') { const vis = document.getElementById('visibleServicio'); body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; } else if (type === 'artistas') { body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; } else if (type === 'usuarios') { const userVal = document.getElementById('usernameUsuario').value; const emailVal = document.getElementById('emailUsuario').value; const roleVal = document.getElementById('roleUsuario').value; const passVal = document.getElementById('passwordUsuario').value; const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); const permisos = Array.from(checkboxes).map(c => c.value); body = { username: userVal, email: emailVal, role: roleVal, permisos: permisos, password: passVal }; if (!passVal) { showToast('La contraseña es requerida para crear un usuario', 'error'); return; } } try { await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); showToast('Creado exitosamente', 'success'); limpiarForm(form.id); localCache[type] =[]; renderPaginatedList(type); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } }
-    async function eliminarItem(id, endpoint) { Swal.fire({ title: '¿Mover a papelera?', text: "Podrás restaurarlo después.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); showToast('Movido a papelera', 'info'); localCache[endpoint] =[]; renderPaginatedList(endpoint); } catch (e) { showToast(e.message, 'error'); } } }); }
-    async function restaurarItem(id, endpoint) { try { await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); showToast('Elemento restaurado.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } }
-    async function eliminarPermanente(id, endpoint) { Swal.fire({ title: '¿Eliminar Permanente?', text: "¡Acción irreversible!", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33', }).then(async (result) => { if (result.isConfirmed) { try { await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); showToast('Eliminado permanentemente.', 'success'); cargarPapelera(); } catch (error) { showToast(error.message, 'error'); } } }); }
+    
+    function limpiarForm(formId) { 
+        const form = document.getElementById(formId); 
+        if (form) form.reset(); 
+    }
+    
+    async function saveItem(e, type) { 
+        e.preventDefault(); 
+        const form = e.target; 
+        let body; 
+        if (type === 'servicios') { 
+            const vis = document.getElementById('visibleServicio'); 
+            body = { nombre: form.nombreServicio.value, precio: parseFloat(form.precioServicio.value), visible: vis ? vis.checked : true }; 
+        } else if (type === 'artistas') { 
+            body = { nombre: form.nombreArtista.value, nombreArtistico: form.nombreArtisticoArtista.value, telefono: form.telefonoArtista.value, correo: form.correoArtista.value }; 
+        } else if (type === 'usuarios') { 
+            const userVal = document.getElementById('usernameUsuario').value; 
+            const emailVal = document.getElementById('emailUsuario').value; 
+            const roleVal = document.getElementById('roleUsuario').value; 
+            const passVal = document.getElementById('passwordUsuario').value; 
+            const checkboxes = document.querySelectorAll('#formUsuarios input[name="user_permisos"]:checked'); 
+            const permisos = Array.from(checkboxes).map(c => c.value); 
+            
+            // Obtener empresaId desde localStorage (para todos los usuarios)
+            let empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || null;
+            
+            // Construir body base (email opcional)
+            body = { 
+                username: userVal, 
+                role: roleVal, 
+                permisos: permisos, 
+                password: passVal,
+                empresaId: empresaId
+            };
+            
+            // Solo incluir email si tiene valor (evita duplicados de null)
+            if (emailVal && emailVal.trim() !== '') {
+                body.email = emailVal.trim();
+            } 
+            if (!passVal) { 
+                showToast('La contraseña es requerida para crear un usuario', 'error'); 
+                return; 
+            } 
+        }
+        try { 
+            await fetchAPI(`/api/${type}`, { method: 'POST', body: JSON.stringify(body) }); 
+            showToast('Creado exitosamente', 'success'); 
+            limpiarForm(form.id); 
+            localCache[type] =[]; 
+            renderPaginatedList(type); 
+        } catch (error) { 
+            showToast(`Error: ${error.message}`, 'error'); 
+        }
+    }
+    
+    async function eliminarItem(id, endpoint) { 
+        Swal.fire({ 
+            title: '¿Mover a papelera?', 
+            text: "Podrás restaurarlo después.", 
+            icon: 'warning', 
+            showCancelButton: true, 
+            confirmButtonText: 'Sí, mover', 
+            cancelButtonText: 'Cancelar', 
+            confirmButtonColor: '#d33'
+        }).then(async (result) => { 
+            if (result.isConfirmed) { 
+                try { 
+                    await fetchAPI(`/api/${endpoint}/${id}`, { method: 'DELETE' }); 
+                    showToast('Movido a papelera', 'info'); 
+                    localCache[endpoint] = []; 
+                    renderPaginatedList(endpoint); 
+                } catch (e) { 
+                    showToast(e.message, 'error'); 
+                } 
+            } 
+        }); 
+    }
+    
+    async function restaurarItem(id, endpoint) { 
+        try { 
+            await fetchAPI(`/api/${endpoint}/${id}/restaurar`, { method: 'PUT' }); 
+            showToast('Elemento restaurado.', 'success'); 
+            cargarPapelera(); 
+        } catch (error) { 
+            showToast(error.message, 'error'); 
+        } 
+    }
+    
+    async function eliminarPermanente(id, endpoint) { 
+        Swal.fire({ 
+            title: '¿Eliminar Permanente?', 
+            text: "¡Acción irreversible!", 
+            icon: 'error', 
+            showCancelButton: true, 
+            confirmButtonText: 'Sí, eliminar', 
+            cancelButtonText: 'Cancelar', 
+            confirmButtonColor: '#d33'
+        }).then(async (result) => { 
+            if (result.isConfirmed) { 
+                try { 
+                    await fetchAPI(`/api/${endpoint}/${id}/permanente`, { method: 'DELETE' }); 
+                    showToast('Eliminado permanentemente.', 'success'); 
+                    cargarPapelera(); 
+                } catch (error) { 
+                    showToast(error.message, 'error'); 
+                } 
+            } 
+        }); 
+    }
+    
     function abrirModalEditarArtista(id, nombre, artistico, tel, mail) { document.getElementById('editArtistId').value = id; document.getElementById('editArtistNombre').value = nombre; document.getElementById('editArtistNombreArtístico').value = artistico; document.getElementById('editArtistTelefono').value = tel; document.getElementById('editArtistCorreo').value = mail; new bootstrap.Modal(document.getElementById('edit-artist-modal')).show(); }
     async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     function abrirModalEditarServicio(id, nombre, precio, visible) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true'); new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
@@ -2706,9 +3377,12 @@ let proyectoIdEnEdicion = null;
             };
         }
         try {
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
             const res = await fetchAPI('/api/configuracion/horarios', {
                 method: 'PUT',
-                body: JSON.stringify({ horarioLaboral })
+                body: JSON.stringify({ horarioLaboral }),
+                headers: { 'X-Empresa-Id': empresaId }
             });
             configCache.horarioLaboral = res.horarioLaboral; 
             showToast('Horarios actualizados correctamente', 'success');
@@ -2784,11 +3458,24 @@ let proyectoIdEnEdicion = null;
                 
                 logoInput.onchange = async (event) => { 
                     const file = event.target.files[0]; 
-                    if (!file) return; 
+                    if (!file) return;
+                    
+                    // VALIDACIÓN: Si está en modo 'all', mostrar alerta y no proceder
+                    const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id');
+                    if (!empresaId || empresaId === 'all') {
+                        showToast('Selecciona una empresa específica antes de cambiar el logo', 'error');
+                        return;
+                    }
+                    
                     const formData = new FormData(); 
                     formData.append('logoFile', file); 
                     try { 
-                        const res = await fetchAPI('/api/configuracion/upload-logo', { method: 'POST', body: formData, isFormData: true }); 
+                        const res = await fetchAPI('/api/configuracion/upload-logo', { 
+                            method: 'POST', 
+                            body: formData, 
+                            isFormData: true,
+                            headers: { 'X-Empresa-Id': empresaId }
+                        }); 
                         showToast('Logo actualizado!', 'success'); 
                         
                         if(res && res.logoBase64) { 
@@ -2814,10 +3501,23 @@ let proyectoIdEnEdicion = null;
                 faviconInput.onchange = async (event) => {
                     const file = event.target.files[0];
                     if (!file) return;
+                    
+                    // VALIDACIÓN: Si está en modo 'all', mostrar alerta y no proceder
+                    const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id');
+                    if (!empresaId || empresaId === 'all') {
+                        showToast('Selecciona una empresa específica antes de cambiar el favicon', 'error');
+                        return;
+                    }
+                    
                     const formData = new FormData();
                     formData.append('faviconFile', file);
                     try {
-                        const res = await fetchAPI('/api/configuracion/upload-favicon', { method: 'POST', body: formData, isFormData: true });
+                        const res = await fetchAPI('/api/configuracion/upload-favicon', { 
+                            method: 'POST', 
+                            body: formData, 
+                            isFormData: true,
+                            headers: { 'X-Empresa-Id': empresaId }
+                        });
                         showToast('Favicon actualizado!', 'success');
                         
                         let faviconUrl = res.faviconBase64;
@@ -3075,9 +3775,8 @@ let proyectoIdEnEdicion = null;
             });
         });
 
-        await fetchPublicLogo();
-        await loadInitialConfig();
-        setTimeout(preloadLogoForPDF, 2000);
+        // FASE 4: Limpieza de carga - NO cargar config aquí, esperar a saber si hay sesión
+        // La configuración se carga en showApp (logueado) o showLogin (sin sesión)
         
         const savedTheme = localStorage.getItem('theme') === 'dark'; 
         toggleTheme(savedTheme);
@@ -3096,9 +3795,28 @@ let proyectoIdEnEdicion = null;
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin();
+                
+                // FASE 5: Carga SECUENCIAL al refrescar
+                // PASO 1: Token ya verificado arriba
+                // PASO 2: Extraer y guardar empresaId antes de mostrar app
+                if (payload.empresaId) {
+                    localStorage.setItem('empresaActiva', payload.empresaId);
+                    console.log('[Init] empresaActiva sincronizada desde token:', payload.empresaId);
+                }
+                // PASO 3: Aplicar identidad visual ANTI-FLICKER (placeholder inmediato + validación)
+                // El parámetro false permite usar el caché como placeholder mientras se valida
+                await aplicarIdentidadVisual(false);
+                // PASO 4: Mostrar app
                 await showApp(payload);
-            } catch (e) { showLogin(); }
-        } else { showLogin(); }
+            } catch (e) { 
+                console.error('[Init] Error en inicialización:', e);
+                showLogin(); 
+            }
+        } else { 
+            // Sin sesión: cargar identidad visual de FIA para el login (anti-flicker)
+            await aplicarIdentidadVisual(false);
+            showLogin(); 
+        }
     })();
 
     // ==================================================================
@@ -3373,7 +4091,15 @@ let proyectoIdEnEdicion = null;
         generarContratoPDF,
         abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
-        cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive
+        cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
+        fetchPublicLogo, // Exportar para recarga de logo multi-tenant
+        loadInitialConfig, cargarConfiguracion, // Exportar para recarga desde empresas.js
+        // FASE 5: FLUJO DE TRABAJO REACTIVO
+        cargarFlujoDeTrabajo, // Exportar para recarga manual
+        recargarKanbanReactivo, // Exportar para cambio de empresa en tiempo real
+        // FASE 5: OVERLAY DEL KANBAN (para transiciones suaves sin flicker)
+        mostrarOverlayKanban, // Mostrar spinner sobrepuesto
+        ocultarOverlayKanban // Ocultar spinner con transición suave
     };
 
     // ==================================================================

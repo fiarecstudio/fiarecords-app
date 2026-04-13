@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Deuda = require('../models/Deuda');
 const auth = require('../middleware/auth');
+const { applyTenantFilter, buildQueryFilter, hasTenantAccess } = require('../middleware/tenantFilter');
 
 // ==========================================
 // MIDDLEWARE DE SEGURIDAD ESTRICTO PARA ADMIN
@@ -17,13 +18,15 @@ const isAdmin = (req, res, next) => {
 // Aplicar protección a todas las rutas de este archivo
 router.use(auth);
 router.use(isAdmin);
+router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticamente
 
 // ==========================================
 // OBTENER TODAS LAS DEUDAS ACTIVAS
 // ==========================================
 router.get('/', async (req, res) => {
     try {
-        const deudas = await Deuda.find({ isDeleted: false }).sort({ createdAt: -1 });
+        const filtro = buildQueryFilter(req, { isDeleted: false });
+        const deudas = await Deuda.find(filtro).sort({ createdAt: -1 });
         res.json(deudas);
     } catch (e) { 
         res.status(500).json({ error: 'Error al cargar las deudas' }); 
@@ -43,7 +46,8 @@ router.post('/', async (req, res) => {
 
         const nuevaDeuda = new Deuda({
             concepto: concepto,
-            total: parseFloat(total)
+            total: parseFloat(total),
+            empresaId: req.user.empresaId // FASE 3: Asignar empresa
         });
         
         await nuevaDeuda.save();
@@ -60,6 +64,10 @@ router.post('/:id/pagos', async (req, res) => {
     try {
         const deuda = await Deuda.findById(req.params.id);
         if (!deuda) return res.status(404).json({ error: 'Deuda no encontrada' });
+        // FASE 3: Verificar acceso por empresa
+        if (!hasTenantAccess(req, deuda)) {
+            return res.status(403).json({ error: 'No autorizado: La deuda no pertenece a tu empresa.' });
+        }
 
         const montoAbono = parseFloat(req.body.monto);
         if (isNaN(montoAbono) || montoAbono <= 0) {
@@ -93,6 +101,9 @@ router.post('/:id/pagos', async (req, res) => {
 // ==========================================
 router.delete('/:id', async (req, res) => {
     try {
+        const deuda = await Deuda.findById(req.params.id);
+        if (!deuda) return res.status(404).json({ error: 'Deuda no encontrada' });
+        if (!hasTenantAccess(req, deuda)) return res.status(403).json({ error: 'No autorizado' });
         await Deuda.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
     } catch (e) { 

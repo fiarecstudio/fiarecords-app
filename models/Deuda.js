@@ -17,6 +17,14 @@ const PagoDeudaSchema = new mongoose.Schema({
 
 // Esquema principal de la Deuda
 const DeudaSchema = new mongoose.Schema({
+    // --- FASE 1: MULTI-TENANT - VINCULACIÓN CON EMPRESA ---
+    empresaId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Empresa',
+        required: true
+    },
+    // ----------------------------------------------------
+    
     concepto: { 
         type: String, 
         required: true 

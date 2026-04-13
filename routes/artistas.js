@@ -6,28 +6,23 @@ const router = express.Router();
 const Artista = require('../models/Artista');
 const Usuario = require('../models/Usuario'); 
 const auth = require('../middleware/auth');
+const { applyTenantFilter, buildQueryFilter, hasTenantAccess } = require('../middleware/tenantFilter');
 const bcrypt = require('bcryptjs'); 
 
 router.use(auth);
+router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticamente
 
 // ==========================================
 // OBTENER ARTISTAS (CON SEGURIDAD PARA CLIENTES)
 // ==========================================
 router.get('/', async (req, res) => {
     try {
-        let filtro = { isDeleted: false };
-
-        // --- MODIFICACIÓN CLAVE: BLINDAJE ---
-        // Si el usuario es 'cliente', forzamos el filtro para que SOLO traiga su propio ID.
-        if (req.user.role === 'cliente') {
-            if (req.user.artistaId) {
-                filtro._id = req.user.artistaId;
-            } else {
-                // Si es cliente pero no tiene vínculo, devolvemos lista vacía por seguridad
-                return res.json([]); 
-            }
-        }
-        // -------------------------------------
+        // FASE 3: Construir filtro con empresa + filtros adicionales
+        const filtroBase = req.user.role === 'cliente' 
+            ? (req.user.artistaId ? { _id: req.user.artistaId, isDeleted: false } : { isDeleted: false, _id: null })
+            : { isDeleted: false };
+        
+        const filtro = buildQueryFilter(req, filtroBase);
 
         const artistas = await Artista.find(filtro).sort({ nombreArtistico: 1, nombre: 1 });
         res.json(artistas);
@@ -38,7 +33,26 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { nombre, nombreArtistico, telefono, correo, password } = req.body;
-        const nuevoArtista = new Artista({ nombre, nombreArtistico, telefono, correo, password }); 
+        
+        // FASE 4: Determinar empresaId
+        let empresaIdAsignar;
+        if (req.user.isSuperAdmin) {
+            // Super Admin: usar X-Empresa-Id del header si existe, sino la empresa del token
+            const headerEmpresaId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+            empresaIdAsignar = headerEmpresaId || req.user.empresaId;
+        } else {
+            // Usuario normal: usar empresa del token
+            empresaIdAsignar = req.user.empresaId;
+        }
+        
+        const nuevoArtista = new Artista({ 
+            nombre, 
+            nombreArtistico, 
+            telefono, 
+            correo, 
+            password,
+            empresaId: empresaIdAsignar
+        }); 
         await nuevoArtista.save();
         res.status(201).json(nuevoArtista);
     } catch (err) { res.status(400).json({ error: 'Error al crear el artista' }); }
@@ -55,6 +69,12 @@ router.get('/:id', async (req, res) => {
 
         const artista = await Artista.findById(req.params.id);
         if (!artista) return res.status(404).json({ error: 'Artista no encontrado' });
+        
+        // FASE 3: Verificar acceso por empresa
+        if (!hasTenantAccess(req, artista)) {
+            return res.status(403).json({ error: 'No autorizado: El artista no pertenece a tu empresa.' });
+        }
+        
         res.json(artista);
     } catch (err) { res.status(500).json({ error: 'Error del servidor' }); }
 });
@@ -76,6 +96,11 @@ router.put('/:id', async (req, res) => {
         // 1. Buscamos el artista actual
         const artistaActual = await Artista.findById(artistaId);
         if (!artistaActual) return res.status(404).json({ error: 'Artista no encontrado' });
+        
+        // FASE 3: Verificar que el artista pertenece a la empresa del usuario
+        if (!hasTenantAccess(req, artistaActual)) {
+            return res.status(403).json({ error: 'No autorizado: El artista no pertenece a tu empresa.' });
+        }
 
         // Preparar objeto de actualización
         let datosUpdate = { nombre, nombreArtistico, telefono, correo };
@@ -150,6 +175,9 @@ router.delete('/:id', async (req, res) => {
     // Cliente NO puede borrar artistas
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
+        const existente = await Artista.findById(req.params.id);
+        if (!existente) return res.status(404).json({ error: 'Artista no encontrado' });
+        if (!hasTenantAccess(req, existente)) return res.status(403).json({ error: 'No autorizado' });
         await Artista.findByIdAndUpdate(req.params.id, { isDeleted: true });
         res.status(204).send();
     } catch (err) { res.status(500).json({ error: 'Error al eliminar' }); }
@@ -159,7 +187,9 @@ router.get('/papelera/all', async (req, res) => {
     // Cliente NO ve la papelera
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
-        const artistas = await Artista.find({ isDeleted: true });
+        // FASE 3: Filtrar papelera por empresa
+        const filtro = buildQueryFilter(req, { isDeleted: true });
+        const artistas = await Artista.find(filtro);
         res.json(artistas);
     } catch (err) { res.status(500).json({ error: "Error papelera" }); }
 });
@@ -168,6 +198,9 @@ router.put('/:id/restaurar', async (req, res) => {
     // Cliente NO puede restaurar
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
+        const existente = await Artista.findById(req.params.id);
+        if (!existente) return res.status(404).json({ error: 'Artista no encontrado' });
+        if (!hasTenantAccess(req, existente)) return res.status(403).json({ error: 'No autorizado' });
         await Artista.findByIdAndUpdate(req.params.id, { isDeleted: false });
         res.json({ message: 'Restaurado' });
     } catch (err) { res.status(500).json({ error: 'Error restaurar' }); }
@@ -177,6 +210,9 @@ router.delete('/:id/permanente', async (req, res) => {
     // Cliente NO puede borrar permanente
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
+        const existente = await Artista.findById(req.params.id);
+        if (!existente) return res.status(404).json({ error: 'Artista no encontrado' });
+        if (!hasTenantAccess(req, existente)) return res.status(403).json({ error: 'No autorizado' });
         await Artista.findByIdAndDelete(req.params.id);
         res.status(204).send();
     } catch (err) { res.status(500).json({ error: 'Error eliminar permanente' }); }
@@ -186,7 +222,9 @@ router.delete('/papelera/vaciar', async (req, res) => {
     // Cliente NO puede vaciar papelera
     if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
     try {
-        await Artista.deleteMany({ isDeleted: true });
+        // FASE 3: Solo vaciar de la empresa actual
+        const filtro = buildQueryFilter(req, { isDeleted: true });
+        await Artista.deleteMany(filtro);
         res.status(204).send();
     } catch (err) { res.status(500).json({ error: 'Error vaciar' }); }
 });

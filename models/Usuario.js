@@ -5,16 +5,14 @@ const UsuarioSchema = new mongoose.Schema({
     username: { 
         type: String, 
         required: true, 
-        unique: true, 
         trim: true 
     },
     
     email: {
         type: String,
-        unique: true,
-        sparse: true, // Permite nulos, pero si hay texto debe ser único
         trim: true,
-        lowercase: true
+        lowercase: true,
+        default: null
     },
 
     password: { 
@@ -43,6 +41,21 @@ const UsuarioSchema = new mongoose.Schema({
         default: null 
     },
     // --------------------------------------------------
+
+    // --- FASE 1: MULTI-TENANT - VINCULACIÓN CON EMPRESA ---
+    empresaId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Empresa',
+        required: true
+    },
+    // ----------------------------------------------------
+
+    // --- FASE 1: MULTI-TENANT - ROL SUPER ADMIN ---
+    isSuperAdmin: {
+        type: Boolean,
+        default: false
+    },
+    // ---------------------------------------------
 
     isDeleted: { 
         type: Boolean, 
@@ -77,5 +90,11 @@ UsuarioSchema.pre('save', async function(next) {
 UsuarioSchema.methods.matchPassword = async function(enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// --- ÍNDICES COMPUESTOS MULTI-TENANT ---
+// Username único por empresa
+UsuarioSchema.index({ empresaId: 1, username: 1 }, { unique: true });
+// Email indexado para búsqueda rápida (unicidad se valida en el controlador)
+UsuarioSchema.index({ empresaId: 1, email: 1 });
 
 module.exports = mongoose.model('Usuario', UsuarioSchema);

@@ -167,7 +167,17 @@
                         <input type="text" id="globalSearchPC" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
                     </div>
                 </div>
-                  
+                
+                <div id="empresa-selector-container" class="d-none align-items-center gap-2 me-3">
+                    <span class="small text-muted"><i class="bi bi-building"></i> Empresa:</span>
+                    <select id="empresa-selector" class="form-select form-select-sm" style="width: 180px;" onchange="app.cambiarEmpresaContexto(this.value)">
+                        <option value="">Todas (Global)</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalEmpresas()" title="Gestión de Empresas">
+                        <i class="bi bi-gear"></i>
+                    </button>
+                </div>
+
                 <div class="header-actions d-flex align-items-center gap-2">
                   <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()">
                       <div class="status-indicator-dot"></div>
@@ -984,6 +994,70 @@
     </div>
   </div>
 
+  <!-- ==========================================
+       MODAL GESTIÓN DE EMPRESAS (FASE 4)
+       ========================================== -->
+  <div class="modal fade" id="modalEmpresas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-building"></i> Gestión de Empresas</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <strong><i class="bi bi-plus-circle"></i> Nueva Empresa</strong>
+            </div>
+            <div class="card-body">
+              <form id="form-nueva-empresa" onsubmit="app.guardarEmpresa(event)">
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <input type="text" id="emp-nombre" class="form-control" placeholder="Nombre *" required>
+                  </div>
+                  <div class="col-md-3">
+                    <input type="text" id="emp-rfc" class="form-control" placeholder="RFC">
+                  </div>
+                  <div class="col-md-3">
+                    <input type="email" id="emp-email" class="form-control" placeholder="Email">
+                  </div>
+                  <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                      <i class="bi bi-save"></i> Guardar
+                    </button>
+                  </div>
+                </div>
+                <div class="row g-2 mt-2">
+                  <div class="col-md-6">
+                    <input type="text" id="emp-direccion" class="form-control" placeholder="Dirección">
+                  </div>
+                  <div class="col-md-6">
+                    <input type="text" id="emp-telefono" class="form-control" placeholder="Teléfono">
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>RFC</th>
+                  <th>Email</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-empresas-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- NUEVO MODAL: AÑADIR PROYECTO DIRECTO AL HISTORIAL -->
   <div class="modal fade" id="modalProyectoDirecto" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1004,10 +1078,6 @@
                         <label>Enlace de Carpeta (Opcional)</label>
                         <input type="url" id="directoEnlace" class="form-control" placeholder="https://drive.google.com/...">
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Guardar en Historial</button>
-                </form>
-            </div>
-        </div>
     </div>
   </div>
 
@@ -1025,6 +1095,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
   
   <script src="script.js"></script>
+  <script src="empresas.js"></script>
 
   <!-- MODAL FIRMA CLIENTE -->
   <div class="modal fade" id="modal-firma-cliente" tabindex="-1" aria-labelledby="modalFirmaClienteLabel" aria-hidden="true">

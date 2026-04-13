@@ -13,6 +13,14 @@ const ArtistaSchema = new mongoose.Schema({
         ref: 'Usuario' 
     },
 
+    // --- FASE 1: MULTI-TENANT - VINCULACIÓN CON EMPRESA ---
+    empresaId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Empresa',
+        required: true
+    },
+    // ----------------------------------------------------
+
     isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });
 

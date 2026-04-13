@@ -16,6 +16,15 @@ const PagoSchema = new mongoose.Schema({
 
 const ProyectoSchema = new mongoose.Schema({
     artista: { type: mongoose.Schema.Types.ObjectId, ref: 'Artista' },
+    
+    // --- FASE 1: MULTI-TENANT - VINCULACIÓN CON EMPRESA ---
+    empresaId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Empresa',
+        required: true
+    },
+    // ----------------------------------------------------
+    
     nombreProyecto: { type: String }, 
     esAlbum: { type: Boolean, default: false },
     

@@ -1,8 +1,15 @@
 const mongoose = require('mongoose');
 
 const ConfiguracionSchema = new mongoose.Schema({
-    // ID único para asegurar que solo haya una configuración
-    singletonId: { type: String, default: 'main_config', unique: true },
+    // --- FASE 1: MULTI-TENANT - VINCULACIÓN CON EMPRESA ---
+    // Reemplaza el patrón singleton - ahora cada empresa tiene su config
+    empresaId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Empresa',
+        required: true,
+        unique: true // Una configuración por empresa
+    },
+    // ----------------------------------------------------
     
     // Configuración visual
     logoBase64: { type: String },

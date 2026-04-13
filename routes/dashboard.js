@@ -1,17 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Proyecto = require('../models/Proyecto');
 const auth = require('../middleware/auth');
+const { applyTenantFilter, buildQueryFilter } = require('../middleware/tenantFilter');
 
 router.use(auth);
+router.use(applyTenantFilter);
 
 router.get('/stats', async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin'; 
 
         // 1. DATOS OPERATIVOS (Para todos los usuarios)
+        // FASE 4: Usar buildQueryFilter para respetar filtro de empresa (Super Admin con header o usuario normal)
+        const filtroBase = buildQueryFilter(req, {});
+
         // Proyectos Activos (No cotizaciones, no completados, no cancelados)
         const proyectosActivos = await Proyecto.countDocuments({
+            ...filtroBase,
             isDeleted: false,
             proceso: { $nin: ['Cotizacion', 'Completo'] },
             estatus: { $ne: 'Cancelado' }
@@ -19,6 +26,7 @@ router.get('/stats', async (req, res) => {
 
         // Proyectos Por Cobrar (Cálculo manual para precisión)
         const todosProyectos = await Proyecto.find({ 
+            ...filtroBase,
             isDeleted: false, 
             estatus: { $nin: ['Cotizacion', 'Cancelado'] } 
         });
@@ -48,8 +56,20 @@ router.get('/stats', async (req, res) => {
         const finAnio = new Date(ahora.getFullYear(), 11, 31, 23, 59, 59);
 
         // Ingresos Mes Actual
+        // FASE 4: Construir filtro base y asegurar conversión explícita de empresaId a ObjectId
+        let baseMatch = buildQueryFilter(req, { isDeleted: false, 'pagos.0': { $exists: true } });
+        
+        // Asegurar que empresaId sea ObjectId válido para aggregations
+        if (baseMatch.empresaId && typeof baseMatch.empresaId === 'string') {
+            try {
+                baseMatch.empresaId = new mongoose.Types.ObjectId(baseMatch.empresaId);
+            } catch (e) {
+                console.warn('[Dashboard] Error convirtiendo empresaId:', e.message);
+            }
+        }
+        
         const ingresosMesData = await Proyecto.aggregate([
-            { $match: { isDeleted: false, 'pagos.0': { $exists: true } } },
+            { $match: baseMatch },
             { $unwind: '$pagos' },
             { $match: { 'pagos.fecha': { $gte: inicioMes, $lte: finMes } } },
             { $group: { _id: null, total: { $sum: '$pagos.monto' } } }
@@ -58,7 +78,7 @@ router.get('/stats', async (req, res) => {
 
         // Tendencia Anual (Gráfica)
         const ingresosAnuales = await Proyecto.aggregate([
-            { $match: { isDeleted: false, 'pagos.0': { $exists: true } } },
+            { $match: baseMatch },
             { $unwind: '$pagos' },
             { $match: { 'pagos.fecha': { $gte: inicioAnio, $lte: finAnio } } },
             { 

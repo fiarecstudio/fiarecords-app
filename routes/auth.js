@@ -105,10 +105,14 @@ router.post('/register', async (req, res) => {
             await savedUser.save();
         }
 
-        // Generar Token
+        // Generar Token (FASE 2: Incluyendo contexto multi-tenant)
         const token = jwt.sign({ 
             id: savedUser._id, 
-            role: savedUser.role 
+            role: savedUser.role,
+            // --- FASE 2: MULTI-TENANT - CONTEXTO DE SESIÓN ---
+            empresaId: savedUser.empresaId ? savedUser.empresaId.toString() : null,
+            isSuperAdmin: savedUser.isSuperAdmin || false
+            // -------------------------------------------------
         }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         res.status(201).json({ token });
@@ -191,14 +195,18 @@ router.post('/login', async (req, res) => {
             artistaId = artistaVinculado._id;
         }
 
-        // D. Generar Token (INCLUYENDO EL ARTISTA ID CORRECTO)
+        // D. Generar Token (INCLUYENDO EL ARTISTA ID Y DATOS MULTI-TENANT)
         const token = jwt.sign({ 
             id: user._id, 
             username: user.username, 
             role: user.role,
             permisos: user.permisos || [],
             artistaId: artistaId, // <--- ESTO ES LO QUE USA EL FRONTEND
-            nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username
+            nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username,
+            // --- FASE 2: MULTI-TENANT - CONTEXTO DE SESIÓN ---
+            empresaId: user.empresaId ? user.empresaId.toString() : null,
+            isSuperAdmin: user.isSuperAdmin || false
+            // -------------------------------------------------
         }, process.env.JWT_SECRET, { expiresIn: '8h' });
 
         res.json({ token, role: user.role });
