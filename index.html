@@ -1097,27 +1097,25 @@
   <script src="script.js"></script>
   <script src="empresas.js"></script>
 
-  <!-- MODAL FIRMA CLIENTE -->
-  <div class="modal fade" id="modal-firma-cliente" tabindex="-1" aria-labelledby="modalFirmaClienteLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modalFirmaClienteLabel">Firma Digital del Cliente</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+  <!-- MODAL FIRMA CLIENTE - OVERLAY SIMPLE -->
+  <div id="modalFirma" class="firma-overlay" style="display:none;">
+    <div class="firma-modal">
+      <div class="firma-modal-header">
+        <h5 class="firma-modal-title">Firma Digital del Cliente</h5>
+        <button type="button" class="btn-close" onclick="app.cerrarModalFirma()" aria-label="Cerrar"></button>
+      </div>
+      <div class="firma-modal-body">
+        <div class="mb-3">
+          <label class="form-label">Firme en el área siguiente:</label>
+          <canvas id="canvas-firma" height="200"></canvas>
         </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">Firme en el área siguiente:</label>
-            <canvas id="canvas-firma" height="200" style="border: 1px dashed #ccc; touch-action: none; background: white; width: 100%; border-radius: 8px;"></canvas>
-          </div>
-          <div class="d-flex gap-2">
-            <button type="button" class="btn btn-secondary" onclick="app.limpiarCanvas()">
-              <i class="bi bi-eraser"></i> Limpiar
-            </button>
-            <button type="button" class="btn btn-primary" onclick="app.guardarFirmaCliente()">
-              <i class="bi bi-check-circle"></i> Guardar Firma
-            </button>
-          </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary" onclick="app.limpiarCanvas()">
+            <i class="bi bi-eraser"></i> Limpiar
+          </button>
+          <button type="button" class="btn btn-primary" onclick="app.guardarFirmaCliente()">
+            <i class="bi bi-check-circle"></i> Guardar Firma
+          </button>
         </div>
       </div>
     </div>

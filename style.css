@@ -109,8 +109,106 @@ body.dark-mode .table-hover tbody tr:hover {
 }
 
 /* MODALES Y POPUPS EN DARK MODE */
-body.dark-mode div.swal2-popup { background: var(--card-background) !important; color: var(--text-color-dark) !important; border: 1px solid var(--border-color); }
-body.dark-mode div.swal2-title, body.dark-mode div.swal2-content, body.dark-mode div.swal2-html-container { color: var(--text-color-dark) !important; }
+body.dark-mode .firma-overlay {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+body.dark-mode .firma-modal {
+    background: var(--card-background);
+}
+
+body.dark-mode .firma-modal-header,
+body.dark-mode .firma-modal-body {
+    background: var(--card-background);
+    border-color: var(--border-color);
+}
+
+body.dark-mode .firma-modal-title {
+    color: var(--text-color-dark);
+}
+
+body.dark-mode #canvas-firma {
+    background: white;
+    border-color: #6366f1;
+}
+
+/* MODAL DE FIRMA - OVERLAY SIMPLE */
+.firma-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(2px);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.firma-modal {
+    background: white;
+    border-radius: 16px;
+    max-width: 800px;
+    width: 90vw;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    animation: firmaFadeIn 0.2s ease-out;
+}
+
+@keyframes firmaFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.firma-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--card-background);
+}
+
+.firma-modal-title {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.25rem;
+    color: var(--text-color-dark);
+}
+
+.firma-modal-body {
+    padding: 1.5rem;
+    background: var(--card-background);
+}
+
+.firma-modal-body .mb-3 {
+    width: 100%;
+    min-width: 300px;
+}
+
+#canvas-firma {
+    width: 100%;
+    height: 200px;
+    background: white;
+    border: 3px solid #6366f1;
+    border-radius: 8px;
+    touch-action: none;
+    display: block;
+    cursor: crosshair;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#canvas-firma:hover {
+    border-color: #4f46e5;
+    box-shadow: inset 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+#canvas-firma:active {
+    border-color: #4338ca;
+    background: #fafafa;
+}
 
 /* LAYOUT */
 #app-wrapper { display: flex; height: 100dvh; overflow: hidden; }

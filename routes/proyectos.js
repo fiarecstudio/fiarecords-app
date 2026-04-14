@@ -320,6 +320,84 @@ router.put('/:id', async (req, res) => {
 });
 
 // ==============================================================
+// RUTA PUT /:id/fecha - ACTUALIZAR FECHA DEL PROYECTO
+// ==============================================================
+router.put('/:id/fecha', async (req, res) => {
+    try {
+        const { fecha } = req.body;
+        if (!fecha) {
+            return res.status(400).json({ error: 'Fecha requerida' });
+        }
+
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+
+        // FASE 3: Verificar acceso por empresa (multi-tenant)
+        if (!hasTenantAccess(req, proyecto)) {
+            return res.status(403).json({ error: 'No autorizado: El proyecto no pertenece a tu empresa.' });
+        }
+
+        // Verificar que el usuario no sea cliente (solo admin/empleado pueden cambiar fechas)
+        if (req.user.role === 'cliente') {
+            return res.status(403).json({ error: 'No autorizado para cambiar fechas' });
+        }
+
+        // Actualizar la fecha
+        proyecto.fecha = new Date(fecha);
+        
+        // Si estaba en Cotizacion, cambiar estatus para que aparezca en el flujo de trabajo
+        if (proyecto.estatus === 'Cotizacion') {
+            proyecto.estatus = 'Pendiente de Pago';
+        }
+        
+        await proyecto.save();
+
+        res.json(proyecto);
+    } catch (error) {
+        console.error('[PUT /:id/fecha] Error:', error);
+        res.status(500).json({ error: 'Error al actualizar la fecha' });
+    }
+});
+
+// ==============================================================
+// RUTA PUT /:id/proceso - ACTUALIZAR PROCESO DEL PROYECTO
+// ==============================================================
+router.put('/:id/proceso', async (req, res) => {
+    try {
+        const { proceso } = req.body;
+        if (!proceso) {
+            return res.status(400).json({ error: 'Proceso requerido' });
+        }
+
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+
+        // FASE 3: Verificar acceso por empresa (multi-tenant)
+        if (!hasTenantAccess(req, proyecto)) {
+            return res.status(403).json({ error: 'No autorizado: El proyecto no pertenece a tu empresa.' });
+        }
+
+        // Verificar que el usuario no sea cliente
+        if (req.user.role === 'cliente') {
+            return res.status(403).json({ error: 'No autorizado para cambiar el proceso' });
+        }
+
+        // Actualizar el proceso
+        proyecto.proceso = proceso;
+        await proyecto.save();
+
+        res.json(proyecto);
+    } catch (error) {
+        console.error('[PUT /:id/proceso] Error:', error);
+        res.status(500).json({ error: 'Error al actualizar el proceso' });
+    }
+});
+
+// ==============================================================
 // NUEVA RUTA: CREAR PROYECTO DIRECTO (PASADO)
 // ==============================================================
 router.post('/directo', async (req, res) => {
@@ -383,6 +461,73 @@ router.get('/papelera/all', async (req, res) => {
 router.put('/:id/restaurar', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); await Proyecto.findByIdAndUpdate(req.params.id, { isDeleted: false }); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 router.delete('/:id/permanente', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { const proyecto = await Proyecto.findById(req.params.id); if (!proyecto) return res.status(404).json({ error: 'No encontrado' }); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); await Proyecto.findByIdAndDelete(req.params.id); res.status(204).send(); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// ==============================================================
+// RUTA POST / - CREAR NUEVO PROYECTO/COTIZACIÓN (MULTI-TENANT)
+// ==============================================================
+router.post('/', async (req, res) => {
+    try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
+        
+        const { artista, nombreProyecto, items, total, descuento, estatus, metodoPago, fecha, proceso, esAlbum, esPlanMensual, serviciosPorMes, duracionMeses, empresaId: bodyEmpresaId } = req.body;
+        
+        // FASE 4: Determinar empresaId - prioridad: body > header > usuario
+        let empresaIdAsignar;
+        
+        // 1. Si viene en el body y es válido, usarlo
+        if (bodyEmpresaId && bodyEmpresaId !== 'all' && mongoose.Types.ObjectId.isValid(bodyEmpresaId)) {
+            empresaIdAsignar = bodyEmpresaId;
+        }
+        // 2. Si no, usar el header
+        else {
+            const headerEmpresaId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+            if (headerEmpresaId && headerEmpresaId !== 'all' && mongoose.Types.ObjectId.isValid(headerEmpresaId)) {
+                empresaIdAsignar = headerEmpresaId;
+            }
+            // 3. Si no hay header válido, usar el del usuario
+            else if (req.user.empresaId) {
+                empresaIdAsignar = req.user.empresaId;
+            }
+            // 4. Fallback: no se puede crear sin empresa
+            else {
+                return res.status(400).json({ error: 'No se pudo determinar la empresa. Selecciona una empresa específica.' });
+            }
+        }
+        
+        // Validar que empresaId sea un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(empresaIdAsignar)) {
+            return res.status(400).json({ error: 'ID de empresa inválido' });
+        }
+        
+        const nuevoProyecto = new Proyecto({
+            artista: artista === 'publico_general' ? null : artista,
+            empresaId: new mongoose.Types.ObjectId(empresaIdAsignar),
+            nombreProyecto: nombreProyecto || 'Sin nombre',
+            items: items || [],
+            total: total || 0,
+            descuento: descuento || 0,
+            estatus: estatus || 'Cotizacion',
+            metodoPago: metodoPago || 'Pendiente',
+            fecha: fecha ? new Date(fecha) : new Date(),
+            proceso: proceso || 'Solicitud',
+            esAlbum: esAlbum || false,
+            esPlanMensual: esPlanMensual || false,
+            serviciosPorMes: serviciosPorMes || 1,
+            duracionMeses: duracionMeses || 1,
+            montoPagado: 0
+        });
+        
+        const guardado = await nuevoProyecto.save();
+        
+        // Poblar el artista para la respuesta
+        await guardado.populate('artista');
+        
+        res.status(201).json(guardado);
+    } catch (e) {
+        console.error('[POST /api/proyectos] Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 router.delete('/papelera/vaciar', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { await Proyecto.deleteMany({ isDeleted: true }); res.status(204).send(); } catch (err) { res.status(500).json({ error: "Error" }); } });
 

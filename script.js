@@ -31,41 +31,54 @@ document.addEventListener('DOMContentLoaded', () => {
     
     /**
      * Obtiene el ID de empresa con lógica de prioridad:
-     * 1. localStorage.getItem('empresaActiva')
-     * 2. Token decodificado (empresaId)
-     * 3. localStorage.getItem('selected_empresa_id')
+     * 1. Token decodificado (empresaId) - SOLO si hay sesión activa
+     * 2. localStorage.getItem('empresaActiva') - SOLO si hay sesión activa
+     * 3. localStorage.getItem('selected_empresa_id') - SOLO si hay sesión activa y es Super Admin
      * 4. 'all' (login o vista global)
      * @returns {string} ID de empresa o 'all'
      */
     function obtenerIdEmpresaPrioridad() {
-        // PRIORIDAD 1: empresaActiva (siempre primero, se actualiza en login y cambios)
+        const token = localStorage.getItem('token');
+        
+        // Si NO hay token (página de login), SIEMPRE devolver 'all' (FIA RECORDS)
+        if (!token) {
+            return 'all';
+        }
+        
+        // Hay sesión activa - aplicar lógica normal
+        // PRIORIDAD 1: Token decodificado (la fuente de verdad)
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            
+            // Si es Super Admin, revisar selected_empresa_id primero
+            if (payload.isSuperAdmin) {
+                const selectedEmpresa = localStorage.getItem('selected_empresa_id');
+                if (selectedEmpresa && selectedEmpresa !== '' && selectedEmpresa !== 'all') {
+                    // Sincronizar empresaActiva con la selección del Super Admin
+                    localStorage.setItem('empresaActiva', selectedEmpresa);
+                    return selectedEmpresa;
+                }
+                // Super Admin sin empresa seleccionada = vista global
+                localStorage.setItem('empresaActiva', 'all');
+                return 'all';
+            }
+            
+            // Usuario normal - usar empresaId del token
+            if (payload.empresaId) {
+                localStorage.setItem('empresaActiva', payload.empresaId);
+                return payload.empresaId;
+            }
+        } catch (e) {
+            console.warn('[obtenerIdEmpresaPrioridad] Error decodificando token:', e);
+        }
+        
+        // FALLBACK: empresaActiva del localStorage
         let empresaId = localStorage.getItem('empresaActiva');
         if (empresaId && empresaId !== 'null' && empresaId !== 'undefined' && empresaId !== '') {
             return empresaId;
         }
         
-        // PRIORIDAD 2: Token decodificado
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                if (payload.empresaId) {
-                    // Sincronizar con empresaActiva para futuras llamadas
-                    localStorage.setItem('empresaActiva', payload.empresaId);
-                    return payload.empresaId;
-                }
-            } catch (e) {
-                console.warn('[obtenerIdEmpresaPrioridad] Error decodificando token:', e);
-            }
-        }
-        
-        // PRIORIDAD 3: selected_empresa_id (selector de Super Admin)
-        empresaId = localStorage.getItem('selected_empresa_id');
-        if (empresaId && empresaId !== '' && empresaId !== 'all') {
-            return empresaId;
-        }
-        
-        // DEFAULT: 'all' (FIA RECORDS como fallback)
+        // DEFAULT: 'all' (FIA RECORDS)
         return 'all';
     }
     
@@ -149,7 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = `${API_URL}/api/configuracion/public/logo` + 
                         (empresaId !== 'all' ? `?empresaId=${empresaId}` : '');
             
-            const res = await fetch(url);
+            // FASE 4: Incluir header X-Empresa-Id para que el backend identifique correctamente la empresa
+            const res = await fetch(url, {
+                headers: { 'X-Empresa-Id': empresaId }
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             
             const data = await res.json();
@@ -1332,6 +1348,15 @@ let proyectoIdEnEdicion = null;
 
         const procesoBD = procesoDestino === 'Cotizacion' ? 'Solicitud' : procesoDestino;
 
+        // FASE 4: Obtener empresa activa para Multi-Tenant
+        const empresaActiva = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
+        
+        // Validar que no esté en modo Global para cotizaciones
+        if (procesoDestino === 'Cotizacion' && empresaActiva === 'all') {
+            showToast('⚠️ Por favor, selecciona una empresa específica para generar la cotización.', 'warning');
+            return null;
+        }
+        
         const body = {
             artista: artistaId === 'publico_general' ? null : artistaId,
             nombreProyecto: document.getElementById('nombreProyecto').value,
@@ -1346,13 +1371,20 @@ let proyectoIdEnEdicion = null;
             esAlbum: document.getElementById('esAlbum').checked,
             esPlanMensual: esPlanMensual,
             serviciosPorMes: serviciosPorMes,
-            duracionMeses: duracionMeses
+            duracionMeses: duracionMeses,
+            // FASE 4: CRÍTICO - Incluir empresaId para Multi-Tenant
+            empresaId: empresaActiva
         };
 
         try { 
             const url = proyectoIdEnEdicion ? `/api/proyectos/${proyectoIdEnEdicion}` : '/api/proyectos';
             const metodo = proyectoIdEnEdicion ? 'PUT' : 'POST';
-            const res = await fetchAPI(url, { method: metodo, body: JSON.stringify(body) }); 
+            // FASE 4: Asegurar que se envíe el header X-Empresa-Id
+            const res = await fetchAPI(url, { 
+                method: metodo, 
+                body: JSON.stringify(body),
+                headers: { 'X-Empresa-Id': empresaActiva }
+            }); 
             proyectoIdEnEdicion = null; // Resetear después de guardar
             return res;
         } catch (error) { 
@@ -1364,6 +1396,13 @@ let proyectoIdEnEdicion = null;
     async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); cargarOpcionesParaProyecto(); mostrarSeccion('cotizaciones'); } }
     
     async function enviarAFlujoDirecto() { 
+        // FASE 4: Validar empresa específica
+        const empresaActiva = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
+        if (empresaActiva === 'all') {
+            showToast('⚠️ Por favor, selecciona una empresa específica para agendar el proyecto.', 'warning');
+            return;
+        }
+        
         const nuevoProyecto = await guardarProyecto('Agendado'); 
         if (nuevoProyecto) { 
             showToast('¡Proyecto agendado con éxito!', 'success'); 
@@ -1389,7 +1428,7 @@ let proyectoIdEnEdicion = null;
                 <input type="date" id="swal-fecha" class="form-control mb-2" min="${new Date().toISOString().split('T')[0]}">
                 <input type="time" id="swal-hora" class="form-control">
             `, 
-            icon: 'calendar', 
+            icon: 'info', 
             showCancelButton: true, 
             confirmButtonText: 'Sí, Agendar', 
             cancelButtonText: 'Cancelar',
@@ -1414,6 +1453,15 @@ let proyectoIdEnEdicion = null;
 
                     await fetchAPI(`/api/proyectos/${id}/fecha`, { method: 'PUT', body: JSON.stringify({ fecha: fechaFinal.toISOString() }) });
                     await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify({ proceso: 'Agendado' }) }); 
+                    
+                    // Actualizar localCache inmediatamente para reflejar cambios
+                    const proyectoIndex = localCache.proyectos.findIndex(p => p._id === id);
+                    if (proyectoIndex !== -1) {
+                        localCache.proyectos[proyectoIndex].fecha = fechaFinal.toISOString();
+                        localCache.proyectos[proyectoIndex].proceso = 'Agendado';
+                        localCache.proyectos[proyectoIndex].estatus = 'Pendiente de Pago'; // El backend también cambia estatus
+                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                    }
                     
                     showToast('¡Cotización aprobada y agendada con éxito!', 'success'); 
                     mostrarSeccion('flujo-trabajo'); 
@@ -1938,18 +1986,28 @@ let proyectoIdEnEdicion = null;
         }
     }
 
-    // Función de PDF
+    // Función de PDF - Logo optimizado
     function dibujarLogoEnPDF(pdf, logoData) { 
-        if (!logoData) return; 
-        const imgProps = pdf.getImageProperties(logoData); 
-        const originalWidth = imgProps.width; 
-        const originalHeight = imgProps.height; 
-        const maxBoxWidth = 50; 
-        const maxBoxHeight = 25; 
-        let finalWidth = maxBoxWidth; 
-        let finalHeight = (originalHeight * maxBoxWidth) / originalWidth; 
-        if (finalHeight > maxBoxHeight) { finalHeight = maxBoxHeight; finalWidth = (originalWidth * maxBoxHeight) / originalHeight; } 
-        pdf.addImage(logoData, 'PNG', 14, 15, finalWidth, finalHeight); 
+        if (!logoData) return;
+        try {
+            const imgProps = pdf.getImageProperties(logoData); 
+            const originalWidth = imgProps.width; 
+            const originalHeight = imgProps.height; 
+            const maxBoxWidth = 50; 
+            const maxBoxHeight = 25; 
+            let finalWidth = maxBoxWidth; 
+            let finalHeight = (originalHeight * maxBoxWidth) / originalWidth; 
+            if (finalHeight > maxBoxHeight) { 
+                finalHeight = maxBoxHeight; 
+                finalWidth = (originalWidth * maxBoxHeight) / originalHeight; 
+            }
+            // Usar JPEG en lugar de PNG para menor tamaño de archivo
+            // El formato se detecta automáticamente desde el data URI
+            const format = logoData.includes('image/jpeg') || logoData.includes('image/jpg') ? 'JPEG' : 'PNG';
+            pdf.addImage(logoData, format, 14, 15, finalWidth, finalHeight, undefined, 'FAST'); // 'FAST' = compresión rápida y menor tamaño
+        } catch (e) {
+            console.error('[dibujarLogoEnPDF] Error al dibujar logo:', e);
+        }
     }
 
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto, yStartPos = 80) { 
@@ -2038,7 +2096,7 @@ let proyectoIdEnEdicion = null;
             for (let j = 0; j < splitLines.length; j++) {
                 if (yPos > 245) {
                     pdf.addPage();
-                    if (logoBase64) dibujarLogoEnPDF(pdf, logoBase64);
+                    // NOTA: El logo NO se dibuja en páginas adicionales, solo en la primera
                     yPos = 40;
                 }
                 pdf.text(splitLines[j], 14, yPos);
@@ -2063,7 +2121,9 @@ let proyectoIdEnEdicion = null;
                     });
                 }
                 pdf.line(140, baselineY, 190, baselineY);
-                pdf.addImage(base64data, 'PNG', 140, baselineY - 22, 50, 20);
+                // Optimizar compresión de la firma para menor tamaño de PDF
+                const firmaFormat = base64data.includes('image/jpeg') || base64data.includes('image/jpg') ? 'JPEG' : 'PNG';
+                pdf.addImage(base64data, firmaFormat, 140, baselineY - 22, 50, 20, undefined, 'FAST');
                 pdf.setFontSize(9); pdf.setFont(undefined, 'normal');
                 pdf.text("Erick Resendiz", 140, baselineY + 5);
                 pdf.text("Representante FIA Records", 140, baselineY + 10);
@@ -2073,7 +2133,9 @@ let proyectoIdEnEdicion = null;
         if (docType !== 'recibo' && proyecto && proyecto.firmaCliente) {
             try {
                 pdf.line(20, baselineY, 70, baselineY);
-                pdf.addImage(proyecto.firmaCliente, 'PNG', 20, baselineY - 22, 50, 20);
+                // Optimizar compresión de la firma del cliente
+                const clienteFirmaFormat = proyecto.firmaCliente.includes('image/jpeg') || proyecto.firmaCliente.includes('image/jpg') ? 'JPEG' : 'PNG';
+                pdf.addImage(proyecto.firmaCliente, clienteFirmaFormat, 20, baselineY - 22, 50, 20, undefined, 'FAST');
                 pdf.setFontSize(9); pdf.setFont(undefined, 'normal');
                 pdf.text("Firma del Cliente", 20, baselineY + 5);
             } catch (e) {}
@@ -2276,14 +2338,21 @@ let proyectoIdEnEdicion = null;
     // ==================================================================
     function showLogin() {
         document.body.classList.add('auth-visible');
+        // FASE 5: LIMPIEZA COMPLETA al cerrar sesión
         localStorage.removeItem('token');
-        localStorage.removeItem('empresaActiva');  // FASE 4: Limpiar empresaActiva al cerrar sesión
+        localStorage.removeItem('empresaActiva');
+        localStorage.removeItem('selected_empresa_id');  // Crítico: limpiar selección de Super Admin
+        localStorage.removeItem('fia_identity_cache');   // Limpiar caché de identidad
+        localStorage.removeItem('fia_identity_timestamp');
+        localStorage.removeItem('fia_logo_cache');         // Limpiar caché de logo
+        
         history.pushState("", document.title, window.location.pathname);
         DOMElements.loginContainer.style.display = 'flex'; 
         DOMElements.appWrapper.style.display = 'none';
         toggleAuth('login');
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
-        fetchPublicLogo();
+        // Forzar 'all' para que siempre muestre FIA RECORDS en login
+        aplicarIdentidadVisual(true);
     }
     
     async function showApp(payload) {
@@ -2307,7 +2376,7 @@ let proyectoIdEnEdicion = null;
         // FASE 5: Aplicar identidad visual desde la configuración cargada
         // Esto asegura que logo y favicon se sincronicen después de un refresh
         if (configCache && (configCache.logoBase64 || configCache.faviconBase64)) {
-            aplicarIdentidadVisual(configCache);
+            aplicarIdentidadVisualAlDOM(configCache, true);
             console.log('[showApp] Identidad visual aplicada desde configCache');
         }
         
@@ -3799,9 +3868,22 @@ let proyectoIdEnEdicion = null;
                 // FASE 5: Carga SECUENCIAL al refrescar
                 // PASO 1: Token ya verificado arriba
                 // PASO 2: Extraer y guardar empresaId antes de mostrar app
-                if (payload.empresaId) {
+                // CRÍTICO: Para Super Admin, NO sobreescribir empresaActiva si tiene selected_empresa_id
+                if (payload.isSuperAdmin) {
+                    const selectedEmpresa = localStorage.getItem('selected_empresa_id');
+                    if (selectedEmpresa && selectedEmpresa !== '' && selectedEmpresa !== 'all') {
+                        // Super Admin tiene empresa específica seleccionada - mantenerla
+                        localStorage.setItem('empresaActiva', selectedEmpresa);
+                        console.log('[Init] Super Admin - empresaActiva preservada desde selected_empresa_id:', selectedEmpresa);
+                    } else {
+                        // Super Admin en vista global
+                        localStorage.setItem('empresaActiva', 'all');
+                        console.log('[Init] Super Admin - vista global (all)');
+                    }
+                } else if (payload.empresaId) {
+                    // Usuario normal - sincronizar desde token
                     localStorage.setItem('empresaActiva', payload.empresaId);
-                    console.log('[Init] empresaActiva sincronizada desde token:', payload.empresaId);
+                    console.log('[Init] Usuario normal - empresaActiva sincronizada desde token:', payload.empresaId);
                 }
                 // PASO 3: Aplicar identidad visual ANTI-FLICKER (placeholder inmediato + validación)
                 // El parámetro false permite usar el caché como placeholder mientras se valida
@@ -3874,12 +3956,40 @@ let proyectoIdEnEdicion = null;
     let proyectoActualFirma = null;
 
     function inicializarCanvasFirma() {
+        console.log('[inicializarCanvasFirma] Inicializando canvas...');
         canvasFirma = document.getElementById('canvas-firma');
-        if (!canvasFirma) return;
+        if (!canvasFirma) {
+            console.error('[inicializarCanvasFirma] ERROR: No se encontró el canvas');
+            return;
+        }
         
+        console.log('[inicializarCanvasFirma] Canvas encontrado, configurando...');
         ctxFirma = canvasFirma.getContext('2d');
         const rect = canvasFirma.getBoundingClientRect();
-        canvasFirma.width = rect.width;
+        
+        // Calcular ancho del canvas
+        let canvasWidth = rect.width;
+        
+        // Si el ancho es 0 o muy pequeño (dialog aún renderizándose), usar contenedor padre
+        if (canvasWidth < 100) {
+            const parentDiv = canvasFirma.closest('.firma-modal-body') || canvasFirma.parentElement;
+            if (parentDiv) {
+                const parentWidth = parentDiv.getBoundingClientRect().width;
+                // Restar padding solo si el contenedor tiene ancho válido
+                canvasWidth = parentWidth > 0 ? parentWidth - 48 : 0;
+            }
+            // Fallback: usar ancho típico del dialog
+            if (canvasWidth === 0) {
+                canvasWidth = 750;
+            }
+            console.log('[inicializarCanvasFirma] Ancho calculado desde contenedor:', canvasWidth);
+        }
+        
+        // Límite de seguridad: mínimo 300px para evitar valores negativos o inválidos
+        canvasWidth = Math.max(300, canvasWidth);
+        
+        console.log('[inicializarCanvasFirma] Dimensiones del canvas:', canvasWidth, 'x', 200);
+        canvasFirma.width = canvasWidth;
         canvasFirma.height = 200;
         
         ctxFirma.strokeStyle = '#000';
@@ -3887,6 +3997,16 @@ let proyectoIdEnEdicion = null;
         ctxFirma.lineCap = 'round';
         ctxFirma.lineJoin = 'round';
         
+        // Limpiar listeners anteriores para evitar duplicados
+        canvasFirma.removeEventListener('mousedown', startDrawing);
+        canvasFirma.removeEventListener('mousemove', draw);
+        canvasFirma.removeEventListener('mouseup', stopDrawing);
+        canvasFirma.removeEventListener('mouseout', stopDrawing);
+        canvasFirma.removeEventListener('touchstart', handleTouch);
+        canvasFirma.removeEventListener('touchmove', handleTouch);
+        canvasFirma.removeEventListener('touchend', stopDrawing);
+        
+        // Agregar listeners nuevos
         canvasFirma.addEventListener('mousedown', startDrawing);
         canvasFirma.addEventListener('mousemove', draw);
         canvasFirma.addEventListener('mouseup', stopDrawing);
@@ -3895,6 +4015,10 @@ let proyectoIdEnEdicion = null;
         canvasFirma.addEventListener('touchstart', handleTouch, {passive: false});
         canvasFirma.addEventListener('touchmove', handleTouch, {passive: false});
         canvasFirma.addEventListener('touchend', stopDrawing);
+        
+        // Limpiar canvas
+        ctxFirma.clearRect(0, 0, canvasFirma.width, canvasFirma.height);
+        console.log('[inicializarCanvasFirma] Canvas inicializado correctamente');
     }
 
     function startDrawing(e) {
@@ -3904,6 +4028,7 @@ let proyectoIdEnEdicion = null;
         const y = (e.clientY || e.touches[0].clientY) - rect.top;
         ctxFirma.beginPath();
         ctxFirma.moveTo(x, y);
+        console.log('[startDrawing] Iniciando firma en:', x, y);
     }
 
     function draw(e) {
@@ -3913,6 +4038,8 @@ let proyectoIdEnEdicion = null;
         const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
         ctxFirma.lineTo(x, y);
         ctxFirma.stroke();
+        // Log cada 10 puntos para no saturar
+        if (Math.random() < 0.05) console.log('[draw] Dibujando en:', x, y);
     }
 
     function stopDrawing() { isDrawing = false; }
@@ -3929,19 +4056,51 @@ let proyectoIdEnEdicion = null;
     }
 
     function abrirModalFirma(proyectoId) {
+        console.log('[abrirModalFirma] Iniciando para proyecto:', proyectoId);
         proyectoActualFirma = proyectoId;
-        const modalEl = document.getElementById('modal-firma-cliente');
-        if (!modalEl) {
-            showToast('Error: No se encontró el modal de firma en el HTML', 'error');
-            return;
+        
+        // Crear overlay dinamicamente
+        let overlay = document.getElementById('modalFirma');
+        if (overlay) {
+            overlay.remove(); // Eliminar el anterior si existe
         }
         
-        modalEl.removeAttribute('aria-hidden'); // Elimina el conflicto de accesibilidad
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        overlay = document.createElement('div');
+        overlay.id = 'modalFirma';
+        overlay.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:2147483647;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
         
-        // Inicializar el canvas después de que el modal se muestre
-        setTimeout(inicializarCanvasFirma, 300);
+        overlay.innerHTML = `
+            <div style="background:white;border-radius:16px;max-width:800px;width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.5);overflow:hidden;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid #e2e8f0;">
+                    <h5 style="margin:0;font-family:Poppins,sans-serif;font-size:1.25rem;color:#1e293b;">Firma Digital del Cliente</h5>
+                    <button type="button" onclick="app.cerrarModalFirma()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;">×</button>
+                </div>
+                <div style="padding:1.5rem;">
+                    <div style="margin-bottom:1rem;">
+                        <label style="display:block;margin-bottom:0.5rem;color:#475569;">Firme en el área siguiente:</label>
+                        <canvas id="canvas-firma" width="750" height="200" style="width:100%;height:200px;background:white;border:3px solid #6366f1;border-radius:8px;display:block;cursor:crosshair;"></canvas>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button type="button" onclick="app.limpiarCanvas()" style="padding:0.6rem 1.2rem;background:#f1f5f9;border:none;border-radius:10px;cursor:pointer;">Limpiar</button>
+                        <button type="button" onclick="app.guardarFirmaCliente()" style="padding:0.6rem 1.2rem;background:linear-gradient(135deg,#6366f1,#4338ca);color:white;border:none;border-radius:10px;cursor:pointer;">Guardar Firma</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        console.log('[abrirModalFirma] Overlay creado y agregado al body');
+        
+        // Inicializar canvas
+        inicializarCanvasFirma();
+    }
+    
+    function cerrarModalFirma() {
+        const overlay = document.getElementById('modalFirma');
+        if (overlay) {
+            overlay.remove();
+            console.log('[cerrarModalFirma] Overlay eliminado');
+        }
     }
 
     async function guardarFirmaCliente() {
@@ -3966,8 +4125,8 @@ let proyectoIdEnEdicion = null;
                 body: JSON.stringify({ firmaCliente: firmaBase64 })
             });
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modal-firma-cliente'));
-            if (modal) modal.hide();
+            // Cerrar el dialog nativo
+            cerrarModalFirma();
             
             showToast('Firma guardada correctamente', 'success');
             
@@ -3990,7 +4149,18 @@ let proyectoIdEnEdicion = null;
             return;
         }
 
-        if (!confirm('¿Estás seguro de que deseas borrar la firma del cliente? Esta acción no se puede deshacer.')) {
+        const result = await Swal.fire({
+            title: '¿Eliminar firma?',
+            text: '¿Estás seguro de que deseas borrar la firma del cliente? Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b'
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
 
@@ -4001,14 +4171,24 @@ let proyectoIdEnEdicion = null;
                 body: JSON.stringify({ firmaCliente: null })
             });
             
-            showToast('Firma del cliente eliminada correctamente', 'success');
+            Swal.fire({
+                title: '¡Eliminado!',
+                text: 'La firma del cliente ha sido eliminada.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
             
             // Recargar datos para actualizar la vista
             const currentHash = location.hash.replace('#', '') || 'dashboard';
             mostrarSeccion(currentHash, false);
             
         } catch (error) {
-            showToast('Error al borrar firma: ' + error.message, 'error');
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo eliminar la firma: ' + error.message,
+                icon: 'error'
+            });
         } finally {
             hideLoader();
         }
@@ -4089,7 +4269,7 @@ let proyectoIdEnEdicion = null;
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
         generarContratoPDF,
-        abrirModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
+        abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
         fetchPublicLogo, // Exportar para recarga de logo multi-tenant
