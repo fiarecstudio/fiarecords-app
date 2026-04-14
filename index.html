@@ -482,45 +482,18 @@
             <section id="gestion-usuarios" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
-                    <div class="card-header pt-3 pb-0 border-0">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center">
                         <h2>Usuarios del Sistema</h2>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearUsuario">
+                            <i class="bi bi-person-plus"></i> Crear Usuario
+                        </button>
                     </div>
                     <div class="card-body">
-                        <form id="formUsuarios" class="mb-4">
-                            <input type="hidden" id="idUsuario">
-                            <div class="row g-2 mb-2">
-                                <div class="col-md-6"><input type="text" id="usernameUsuario" class="form-control" placeholder="Usuario" required></div>
-                                <div class="col-md-6"><input type="email" id="emailUsuario" class="form-control" placeholder="Email"></div>
-                                <div class="col-md-6">
-                                    <select id="roleUsuario" class="form-select">
-                                        <option value="admin">Admin</option>
-                                        <option value="ingeniero">Ingeniero</option>
-                                        <option value="diseñador">Diseñador</option>
-                                        <option value="cliente">Cliente</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6"><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña"></div>
-                            </div>
-                            <div class="mb-2 p-2 border rounded bg-light permisos-container">
-                                <label class="fw-bold mb-2">Permisos (Creación):</label>
-                                <div class="permissions-grid d-flex flex-wrap gap-3">
-                                    <label><input type="checkbox" name="user_permisos" value="dashboard"> Dashboard</label>
-                                    <label><input type="checkbox" name="user_permisos" value="agenda"> Agenda</label>
-                                    <label><input type="checkbox" name="user_permisos" value="flujo-trabajo"> Flujo</label>
-                                    <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotizaciones</label>
-                                    <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
-                                    <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Usuarios</label>
-                                    <label><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
-                                    <label><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Crear Usuario</button>
-                        </form>
                         <ul id="listaUsuarios" class="list-group"></ul>
                     </div>
                 </div>
             </section>
-            
+
             <section id="vista-artista" class="section-view">
                 <div class="card">
                     <div class="card-body" id="vista-artista-contenido">
@@ -893,8 +866,50 @@
     </div>
   </div>
 
+  <!-- MODAL CREAR USUARIO -->
+  <div class="modal fade" id="modalCrearUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">➕ Crear Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formUsuarios">
+                    <input type="hidden" id="idUsuario">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3"><label class="form-label">Usuario</label><input type="text" id="usernameUsuario" class="form-control" placeholder="Usuario" required></div>
+                            <div class="mb-3"><label class="form-label">Email</label><input type="email" id="emailUsuario" class="form-control" placeholder="Email"></div>
+                            <div class="mb-3"><label class="form-label">Contraseña</label><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3"><label class="form-label">Rol</label><select id="roleUsuario" class="form-select"><option value="admin">Admin</option><option value="ingeniero">Ingeniero</option><option value="diseñador">Diseñador</option><option value="cliente">Cliente</option></select></div>
+                            <div class="mb-3 p-2 border rounded permisos-container">
+                                <label class="fw-bold mb-2 d-block">Permisos:</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <label><input type="checkbox" name="user_permisos" value="dashboard"> Dash</label>
+                                    <label><input type="checkbox" name="user_permisos" value="agenda"> Agenda</label>
+                                    <label><input type="checkbox" name="user_permisos" value="flujo-trabajo"> Flujo</label>
+                                    <label><input type="checkbox" name="user_permisos" value="cotizaciones"> Cotiz</label>
+                                    <label><input type="checkbox" name="user_permisos" value="pagos"> Pagos</label>
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-usuarios"> Users</label>
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-artistas"> Artistas</label>
+                                    <label><input type="checkbox" name="user_permisos" value="gestion-servicios"> Servicios</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Crear Usuario</button>
+                </form>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR USUARIO -->
   <div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">👤 Editar Usuario</h5>
@@ -903,35 +918,41 @@
             <div class="modal-body">
                 <form id="formEditarUsuario" onsubmit="app.guardarEdicionUsuario(event)">
                     <input type="hidden" id="editUsuarioId">
-                    <div class="mb-3"><label class="form-label">Usuario</label><input type="text" class="form-control" id="editUsuarioName" required></div>
-                    <div class="mb-3"><label class="form-label">Email</label><input type="email" class="form-control" id="editUsuarioEmail"></div>
-                    <div class="mb-3">
-                        <label class="form-label">Rol</label>
-                        <select class="form-select" id="editUsuarioRole">
-                            <option value="cliente">Cliente</option>
-                            <option value="admin">Admin</option>
-                            <option value="ingeniero">Ingeniero</option>
-                            <option value="diseñador">Diseñador</option>
-                        </select>
-                    </div>
-                    <div class="mb-3 p-2 bg-light border rounded">
-                        <label class="form-label text-primary fw-bold">🎵 Vincular con Artista</label>
-                        <select class="form-select" id="editUsuarioArtista"><option value="">-- Cargando Artistas... --</option></select>
-                        <div class="form-text small">Selecciona el artista para que este usuario vea sus proyectos.</div>
-                    </div>
-                    <div class="mb-3"><label class="form-label">Contraseña (Opcional)</label><input type="password" class="form-control" id="editUsuarioPass" placeholder="Dejar vacío para no cambiar"></div>
-                    <div class="mb-3 permisos-container" id="editUsuarioPermisosContainer">
-                         <label class="fw-bold d-block mb-2">Permisos:</label>
-                         <div class="d-flex flex-wrap gap-2">
-                            <label><input type="checkbox" value="dashboard"> Dash</label>
-                            <label><input type="checkbox" value="agenda"> Agenda</label>
-                            <label><input type="checkbox" value="flujo-trabajo"> Flujo</label>
-                            <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
-                            <label><input type="checkbox" value="pagos"> Pagos</label>
-                            <label><input type="checkbox" value="gestion-usuarios"> Users</label>
-                            <label><input type="checkbox" value="gestion-artistas"> Artistas</label>
-                            <label><input type="checkbox" value="gestion-servicios"> Servicios</label>
-                         </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3"><label class="form-label">Usuario</label><input type="text" class="form-control" id="editUsuarioName" required></div>
+                            <div class="mb-3"><label class="form-label">Email</label><input type="email" class="form-control" id="editUsuarioEmail"></div>
+                            <div class="mb-3">
+                                <label class="form-label">Rol</label>
+                                <select class="form-select" id="editUsuarioRole">
+                                    <option value="cliente">Cliente</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="ingeniero">Ingeniero</option>
+                                    <option value="diseñador">Diseñador</option>
+                                </select>
+                            </div>
+                            <div class="mb-3"><label class="form-label">Contraseña (Opcional)</label><input type="password" class="form-control" id="editUsuarioPass" placeholder="Dejar vacío para no cambiar"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3 p-2 bg-light border rounded">
+                                <label class="form-label text-primary fw-bold">🎵 Vincular con Artista</label>
+                                <select class="form-select" id="editUsuarioArtista"><option value="">-- Cargando Artistas...</option></select>
+                                <div class="form-text small">Selecciona el artista para que este usuario vea sus proyectos.</div>
+                            </div>
+                            <div class="mb-3 permisos-container" id="editUsuarioPermisosContainer">
+                                <label class="fw-bold d-block mb-2">Permisos:</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <label><input type="checkbox" value="dashboard"> Dash</label>
+                                    <label><input type="checkbox" value="agenda"> Agenda</label>
+                                    <label><input type="checkbox" value="flujo-trabajo"> Flujo</label>
+                                    <label><input type="checkbox" value="cotizaciones"> Cotiz</label>
+                                    <label><input type="checkbox" value="pagos"> Pagos</label>
+                                    <label><input type="checkbox" value="gestion-usuarios"> Users</label>
+                                    <label><input type="checkbox" value="gestion-artistas"> Artistas</label>
+                                    <label><input type="checkbox" value="gestion-servicios"> Servicios</label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Actualizar</button>
                 </form>

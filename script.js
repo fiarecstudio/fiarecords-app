@@ -1907,9 +1907,34 @@ let proyectoIdEnEdicion = null;
     }
 
     function irAlDashboard() { 
-        const role = document.body.getAttribute('data-role'); 
-        if (role === 'cliente') { mostrarSeccion('vista-artista'); } 
-        else { mostrarSeccion('dashboard'); } 
+        const userInfo = getUserRoleAndId();
+        const role = userInfo.role;
+        const permisos = userInfo.permisos || [];
+        const isSuperAdmin = role === 'admin';
+        
+        // Si es cliente, va a vista-artista
+        if (role === 'cliente') { 
+            mostrarSeccion('vista-artista'); 
+            return;
+        }
+        
+        // Si tiene permiso de dashboard, lo muestra
+        if (isSuperAdmin || permisos.includes('dashboard')) {
+            mostrarSeccion('dashboard');
+            return;
+        }
+        
+        // Si no tiene dashboard, redirige al primer permiso disponible
+        if (permisos.includes('agenda')) { mostrarSeccion('agenda'); return; }
+        if (permisos.includes('flujo-trabajo')) { mostrarSeccion('flujo-trabajo'); return; }
+        if (permisos.includes('cotizaciones')) { mostrarSeccion('cotizaciones'); return; }
+        if (permisos.includes('pagos')) { mostrarSeccion('pagos'); return; }
+        if (permisos.includes('gestion-artistas')) { mostrarSeccion('gestion-artistas'); return; }
+        if (permisos.includes('gestion-servicios')) { mostrarSeccion('gestion-servicios'); return; }
+        if (permisos.includes('gestion-usuarios')) { mostrarSeccion('gestion-usuarios'); return; }
+        
+        // Si no tiene ningún permiso específico, ir a flujo de trabajo por defecto
+        mostrarSeccion('flujo-trabajo');
     }
     
     // --- VISTA ARTISTA ---
@@ -2440,7 +2465,11 @@ let proyectoIdEnEdicion = null;
              }
         } else { 
             const hashSection = location.hash.replace('#', '');
-            mostrarSeccion(hashSection || 'dashboard', false); 
+            if (hashSection) {
+                mostrarSeccion(hashSection, false);
+            } else {
+                irAlDashboard(); // Usa la función inteligente que verifica permisos
+            }
         }
         
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
@@ -3590,6 +3619,78 @@ let proyectoIdEnEdicion = null;
         if (formPlantillas) {
             formPlantillas.addEventListener('submit', guardarPlantillasConfig);
         }
+
+        // NUEVO: Listener para llenar permisos automáticamente según el rol seleccionado (CREAR)
+        const roleUsuarioSelect = document.getElementById('roleUsuario');
+        if (roleUsuarioSelect) {
+            roleUsuarioSelect.addEventListener('change', (e) => {
+                const rol = e.target.value;
+                actualizarPermisosPorRol(rol);
+            });
+        }
+
+        // NUEVO: Listener para llenar permisos automáticamente según el rol seleccionado (EDITAR)
+        const editUsuarioRoleSelect = document.getElementById('editUsuarioRole');
+        if (editUsuarioRoleSelect) {
+            editUsuarioRoleSelect.addEventListener('change', (e) => {
+                const rol = e.target.value;
+                actualizarPermisosPorRolEdicion(rol);
+            });
+        }
+    }
+
+    function actualizarPermisosPorRol(rol) {
+        // Mapeo de permisos por rol
+        const permisosPorRol = {
+            'admin': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'],
+            'ingeniero': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos'],
+            'diseñador': ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos'],
+            'cliente': []
+        };
+
+        const permisos = permisosPorRol[rol] || [];
+        
+        // Desmarcar todos primero
+        document.querySelectorAll('#formUsuarios input[name="user_permisos"]').forEach(chk => {
+            chk.checked = false;
+        });
+
+        // Marcar los correspondientes al rol
+        permisos.forEach(perm => {
+            const checkbox = document.querySelector(`#formUsuarios input[name="user_permisos"][value="${perm}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+
+        console.log(`[Permisos] Rol ${rol} seleccionado. Permisos asignados:`, permisos);
+    }
+
+    function actualizarPermisosPorRolEdicion(rol) {
+        // Mapeo de permisos por rol (mismo que crear usuario)
+        const permisosPorRol = {
+            'admin': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'],
+            'ingeniero': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos'],
+            'diseñador': ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos'],
+            'cliente': []
+        };
+
+        const permisos = permisosPorRol[rol] || [];
+        
+        // Desmarcar todos primero
+        document.querySelectorAll('#editUsuarioPermisosContainer input[type="checkbox"]').forEach(chk => {
+            chk.checked = false;
+        });
+
+        // Marcar los correspondientes al rol
+        permisos.forEach(perm => {
+            const checkbox = document.querySelector(`#editUsuarioPermisosContainer input[value="${perm}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+
+        console.log(`[Permisos Edicion] Rol ${rol} seleccionado. Permisos asignados:`, permisos);
     }
     
     function setupCustomization(payload) { 
