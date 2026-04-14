@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const IDENTITY_CACHE_KEY = 'fia_identity_cache';
     const IDENTITY_TIMESTAMP_KEY = 'fia_identity_timestamp';
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
+    let isApplyingIdentity = false; // LOCK para evitar ejecuciones simultáneas
     
     /**
      * Obtiene el ID de empresa con lógica de prioridad:
@@ -134,7 +135,15 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} forzarCambio - Si es true, fuerza recarga desde servidor
      */
     async function aplicarIdentidadVisual(forzarCambio = false) {
+        // LOCK: Si ya está ejecutándose, no iniciar otra vez
+        if (isApplyingIdentity) {
+            console.log('[GuardiaIdentidad] Ya está ejecutándose, ignorando llamada...');
+            return;
+        }
+        
         try {
+            isApplyingIdentity = true; // Activar LOCK
+            
             const empresaId = obtenerIdEmpresaPrioridad();
             console.log('[GuardiaIdentidad] Aplicando identidad visual para empresa:', empresaId);
             
@@ -173,24 +182,29 @@ document.addEventListener('DOMContentLoaded', () => {
             // FASE 3: ACTUALIZAR DOM con datos frescos
             if (data.logoBase64 || data.faviconBase64) {
                 aplicarIdentidadVisualAlDOM(data, true);
-                
-                // Guardar en caché para próximas cargas
-                localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
-                    logoBase64: data.logoBase64,
-                    faviconBase64: data.faviconBase64,
-                    empresaId: empresaId,
-                    timestamp: Date.now()
-                }));
-                localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
-                localStorage.setItem('fia_logo_cache', data.logoBase64); // Legacy para guardia inmediato
-                
-                console.log('[GuardiaIdentidad] Identidad visual actualizada desde servidor');
             }
+            
+            // Actualizar título de la pestaña
+            await actualizarTituloEmpresa();
+            
+            // Guardar en caché para próximas cargas
+            localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
+                logoBase64: data.logoBase64,
+                faviconBase64: data.faviconBase64,
+                empresaId: empresaId,
+                timestamp: Date.now()
+            }));
+            localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
+            localStorage.setItem('fia_logo_cache', data.logoBase64); // Legacy para guardia inmediato
+            
+            console.log('[GuardiaIdentidad] Identidad visual actualizada desde servidor');
             
             return data;
         } catch (err) {
             console.error('[GuardiaIdentidad] Error:', err);
             // En caso de error, mantener el placeholder si existe
+        } finally {
+            isApplyingIdentity = false; // Liberar LOCK
         }
     }
     
@@ -366,6 +380,17 @@ let proyectoIdEnEdicion = null;
         return document.body.classList.contains('dark-mode') || 
                localStorage.getItem('theme') === 'dark' ||
                document.documentElement.getAttribute('data-theme') === 'dark';
+    }
+
+    async function actualizarTituloEmpresa() {
+        try {
+            const response = await fetchAPI('/api/configuracion/empresa');
+            if (response && response.nombre) {
+                document.title = `${response.nombre} - Panel de Administración`;
+            }
+        } catch (e) {
+            console.log('[Titulo] No se pudo actualizar el título de la empresa');
+        }
     }
 
     function showToast(message, type = 'success') {

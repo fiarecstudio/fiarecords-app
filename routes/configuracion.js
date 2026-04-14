@@ -148,6 +148,34 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /empresa - Obtener nombre de la empresa actual
+router.get('/empresa', async (req, res) => {
+    try {
+        const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+        let finalEmpresaId = (headerId && headerId !== 'all') ? headerId : null;
+        
+        if (!finalEmpresaId && req.user && req.user.empresaId) {
+            finalEmpresaId = req.user.empresaId;
+        }
+        
+        if (!finalEmpresaId) {
+            return res.json({ nombre: 'Fia Records' });
+        }
+        
+        const Empresa = require('../models/Empresa');
+        const empresa = await Empresa.findById(finalEmpresaId);
+        
+        if (empresa) {
+            res.json({ nombre: empresa.nombre });
+        } else {
+            res.json({ nombre: 'Fia Records' });
+        }
+    } catch (err) {
+        console.error('[Config/Empresa] Error:', err);
+        res.json({ nombre: 'Fia Records' });
+    }
+});
+
 router.put('/datos-bancarios', isAdmin, async (req, res) => {
     try {
         const config = await Configuracion.findOneAndUpdate(

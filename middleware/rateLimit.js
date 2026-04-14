@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 // Configuración general para todas las rutas (aumentado para mayor fluidez)
 const generalLimiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutos
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // límite de 500 peticiones (aumentado de 300)
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 2000, // límite de 2000 peticiones (aumentado de 500)
     message: {
         error: 'Demasiadas peticiones desde esta IP. Por favor, intenta más tarde.',
         retryAfter: 60
