@@ -320,6 +320,42 @@ router.put('/:id', async (req, res) => {
 });
 
 // ==============================================================
+// RUTA PUT /:id/nombre - ACTUALIZAR NOMBRE DEL PROYECTO
+// ==============================================================
+router.put('/:id/nombre', async (req, res) => {
+    try {
+        const { nombreProyecto } = req.body;
+        if (!nombreProyecto || nombreProyecto.trim() === '') {
+            return res.status(400).json({ error: 'Nombre del proyecto requerido' });
+        }
+
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+
+        // FASE 3: Verificar acceso por empresa (multi-tenant)
+        if (!hasTenantAccess(req, proyecto)) {
+            return res.status(403).json({ error: 'No autorizado: El proyecto no pertenece a tu empresa.' });
+        }
+
+        // Verificar que el usuario no sea cliente
+        if (req.user.role === 'cliente') {
+            return res.status(403).json({ error: 'No autorizado para cambiar el nombre' });
+        }
+
+        // Actualizar el nombre
+        proyecto.nombreProyecto = nombreProyecto.trim();
+        await proyecto.save();
+
+        res.json(proyecto);
+    } catch (error) {
+        console.error('[PUT /:id/nombre] Error:', error);
+        res.status(500).json({ error: 'Error al actualizar el nombre del proyecto' });
+    }
+});
+
+// ==============================================================
 // RUTA PUT /:id/fecha - ACTUALIZAR FECHA DEL PROYECTO
 // ==============================================================
 router.put('/:id/fecha', async (req, res) => {
@@ -530,6 +566,44 @@ router.post('/', async (req, res) => {
 });
 
 router.delete('/papelera/vaciar', async (req, res) => { if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo Admin' }); try { await Proyecto.deleteMany({ isDeleted: true }); res.status(204).send(); } catch (err) { res.status(500).json({ error: "Error" }); } });
+
+// --- RUTA: AGREGAR PAGO A PROYECTO ---
+router.post('/:id/pagos', async (req, res) => {
+    try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
+        
+        const { monto, metodo, notas } = req.body;
+        if (!monto || monto <= 0) return res.status(400).json({ error: 'Monto inválido' });
+        
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' });
+        
+        const nuevoPago = {
+            monto: Number(monto),
+            metodo: metodo || 'Efectivo',
+            fecha: new Date(),
+            notas: notas || ''
+        };
+        
+        proyecto.pagos.push(nuevoPago);
+        proyecto.montoPagado = (proyecto.montoPagado || 0) + Number(monto);
+        
+        // Actualizar estatus según el pago
+        const totalConDescuento = proyecto.total - (proyecto.descuento || 0);
+        if (proyecto.montoPagado >= totalConDescuento) {
+            proyecto.estatus = 'Pagado';
+        } else if (proyecto.montoPagado > 0) {
+            proyecto.estatus = 'Pendiente de Pago';
+        }
+        
+        await proyecto.save();
+        res.json(proyecto);
+    } catch (e) {
+        console.error('[POST /:id/pagos] Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 router.delete('/:id/pagos/:pagoId', async (req, res) => { if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' }); try { const proyecto = await Proyecto.findById(req.params.id); if(!proyecto) return res.status(404).json({error: 'No encontrado'}); if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' }); const pago = proyecto.pagos.id(req.params.pagoId); if(!pago) return res.status(404).json({error: 'Pago no encontrado'}); proyecto.montoPagado -= pago.monto; pago.deleteOne(); if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) proyecto.estatus = 'Pendiente de Pago'; await proyecto.save(); res.json(proyecto); } catch(e) { res.status(500).json({error: e.message}); } });
 

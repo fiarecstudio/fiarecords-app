@@ -362,6 +362,12 @@ let proyectoIdEnEdicion = null;
         return escapeHTML(str);
     }
 
+    function isDarkMode() {
+        return document.body.classList.contains('dark-mode') || 
+               localStorage.getItem('theme') === 'dark' ||
+               document.documentElement.getAttribute('data-theme') === 'dark';
+    }
+
     function showToast(message, type = 'success') {
         const Toast = Swal.mixin({
             toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
@@ -3218,7 +3224,57 @@ let proyectoIdEnEdicion = null;
     async function abrirModalEditarUsuario(itemStr) { const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"')); document.getElementById('editUsuarioId').value = item._id; document.getElementById('editUsuarioName').value = item.username; document.getElementById('editUsuarioEmail').value = item.email || ''; document.getElementById('editUsuarioRole').value = item.role; document.getElementById('editUsuarioPass').value = ''; const selectArtista = document.getElementById('editUsuarioArtista'); if (selectArtista) { selectArtista.innerHTML = '<option value="">Cargando...</option>'; try { let artistas = localCache.artistas; if (!artistas || artistas.length === 0) { artistas = await fetchAPI('/api/artistas'); localCache.artistas = artistas; } let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>'; artistas.forEach(a => { const selected = (item.artistaId === a._id) ? 'selected' : ''; opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`; }); selectArtista.innerHTML = opts; } catch (e) { selectArtista.innerHTML = '<option value="">Error al cargar</option>'; } } document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false); if (item.permisos && Array.isArray(item.permisos)) { item.permisos.forEach(p => { const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`); if(chk) chk.checked = true; }); } new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show(); }
     async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios =[]; renderPaginatedList('usuarios'); } catch (e) { showToast(e.message, 'error'); } }
     function editarInfoProyecto(id) { let proyecto = localCache.proyectos.find(p => p._id === id); if(!proyecto) proyecto = historialCacheados.find(p => p._id === id); if (!proyecto) return showToast('Proyecto no encontrado', 'error'); Swal.fire({ title: 'Editar Información', html: `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}"><input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`, focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-nombre').value, document.getElementById('swal-total').value ] } }).then(async (result) => { if (result.isConfirmed) { const [nuevoNombre, nuevoTotalStr] = result.value; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } } }); }
-    async function registrarPago(proyectoId, desdeHistorial = false) { let proyecto; try { proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); } catch(e) { return showToast('Proyecto no encontrado.', 'error'); } const restante = proyecto.total - (proyecto.montoPagado || 0); Swal.fire({ title: 'Registrar Pago', html: `<p>Saldo Restante: <strong class="text-danger">$${safeMoney(restante)}</strong></p>` + '<input id="swal-monto" type="number" class="swal2-input" placeholder="Monto a pagar" value="' + (restante > 0 ? restante.toFixed(2) : '0.00') + '">' + '<select id="swal-metodo" class="swal2-select"><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option></select>', focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-monto').value, document.getElementById('swal-metodo').value ] } }).then(async (result) => { if (result.value) { const [montoStr, metodo] = result.value; const monto = parseFloat(montoStr); if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error'); try { const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, { method: 'POST', body: JSON.stringify({ monto, metodo }) }); showToast(proyectoActualizado.offline ? 'Pago registrado en cola offline.' : '¡Pago registrado exitosamente!', proyectoActualizado.offline ? 'info' : 'success'); const ultimoPago = proyectoActualizado.pagos[proyectoActualizado.pagos.length - 1]; await generarReciboPDF(ultimoPago, proyectoActualizado); if (document.getElementById('pagos').classList.contains('active')) { cargarPagos(); } else if (desdeHistorial) { cargarHistorial(); } else { cargarFlujoDeTrabajo(); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
+    async function registrarPago(proyectoId, desdeHistorial = false) {
+        let proyecto;
+        try {
+            proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+        } catch(e) {
+            return showToast('Proyecto no encontrado.', 'error');
+        }
+
+        const restante = proyecto.total - (proyecto.montoPagado || 0);
+
+        Swal.fire({
+            title: 'Registrar Pago',
+            html: `<p>Saldo Restante: <strong class="text-danger">$${safeMoney(restante)}</strong></p>` +
+                  '<input id="swal-monto" type="number" class="swal2-input" placeholder="Monto a pagar" value="' + (restante > 0 ? restante.toFixed(2) : '0.00') + '">' +
+                  '<select id="swal-metodo" class="swal2-select"><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option></select>',
+            focusConfirm: false,
+            preConfirm: () => {
+                return [document.getElementById('swal-monto').value, document.getElementById('swal-metodo').value];
+            }
+        }).then(async (result) => {
+            if (result.value) {
+                const [montoStr, metodo] = result.value;
+                const monto = parseFloat(montoStr);
+                if (isNaN(monto) || monto <= 0) return showToast('Monto inválido.', 'error');
+
+                try {
+                    const proyectoActualizado = await fetchAPI(`/api/proyectos/${proyectoId}/pagos`, {
+                        method: 'POST',
+                        body: JSON.stringify({ monto, metodo })
+                    });
+
+                    showToast(proyectoActualizado.offline ? 'Pago registrado en cola offline.' : '¡Pago registrado exitosamente!', proyectoActualizado.offline ? 'info' : 'success');
+
+                    // FIX: Recargar proyecto completo con artista poblado para el recibo
+                    const proyectoCompleto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+                    const ultimoPago = proyectoCompleto.pagos[proyectoCompleto.pagos.length - 1];
+                    await generarReciboPDF(ultimoPago, proyectoCompleto);
+
+                    if (document.getElementById('pagos').classList.contains('active')) {
+                        cargarPagos();
+                    } else if (desdeHistorial) {
+                        cargarHistorial();
+                    } else {
+                        cargarFlujoDeTrabajo();
+                    }
+                } catch (error) {
+                    showToast(`Error: ${error.message}`, 'error');
+                }
+            }
+        });
+    }
     async function cargarPagos() { document.querySelector('#pagos .btn-group button.active')?.classList.remove('active'); const btnPendientes = document.querySelector('#pagos .btn-group button'); if (btnPendientes) btnPendientes.classList.add('active'); mostrarSeccionPagos('pendientes', btnPendientes); }
     function mostrarSeccionPagos(vista, btn) { document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active')); if (btn) btn.classList.add('active'); if (vista === 'pendientes') { document.getElementById('vista-pagos-pendientes').style.display = 'block'; document.getElementById('vista-pagos-historial').style.display = 'none'; cargarPagosPendientes(); } else { document.getElementById('vista-pagos-pendientes').style.display = 'none'; document.getElementById('vista-pagos-historial').style.display = 'block'; cargarHistorialPagos(); } }
     
@@ -4058,39 +4114,50 @@ let proyectoIdEnEdicion = null;
     function abrirModalFirma(proyectoId) {
         console.log('[abrirModalFirma] Iniciando para proyecto:', proyectoId);
         proyectoActualFirma = proyectoId;
-        
+
+        const esModoOscuro = isDarkMode();
+        const bgColor = esModoOscuro ? '#1e293b' : 'white';
+        const headerBg = esModoOscuro ? '#1e293b' : 'white';
+        const headerBorder = esModoOscuro ? '#334155' : '#e2e8f0';
+        const titleColor = esModoOscuro ? '#f1f5f9' : '#1e293b';
+        const labelColor = esModoOscuro ? '#cbd5e1' : '#475569';
+        const btnLimpiarBg = esModoOscuro ? '#334155' : '#f1f5f9';
+        const btnLimpiarColor = esModoOscuro ? '#f1f5f9' : '#1e293b';
+        const canvasBg = esModoOscuro ? '#0f172a' : 'white';
+        const canvasBorder = esModoOscuro ? '#6366f1' : '#6366f1';
+
         // Crear overlay dinamicamente
         let overlay = document.getElementById('modalFirma');
         if (overlay) {
             overlay.remove(); // Eliminar el anterior si existe
         }
-        
+
         overlay = document.createElement('div');
         overlay.id = 'modalFirma';
         overlay.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:2147483647;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
-        
+
         overlay.innerHTML = `
-            <div style="background:white;border-radius:16px;max-width:800px;width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.5);overflow:hidden;">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid #e2e8f0;">
-                    <h5 style="margin:0;font-family:Poppins,sans-serif;font-size:1.25rem;color:#1e293b;">Firma Digital del Cliente</h5>
-                    <button type="button" onclick="app.cerrarModalFirma()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;">×</button>
+            <div style="background:${bgColor};border-radius:16px;max-width:800px;width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.5);overflow:hidden;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid ${headerBorder};background:${headerBg};">
+                    <h5 style="margin:0;font-family:Poppins,sans-serif;font-size:1.25rem;color:${titleColor};">Firma Digital del Cliente</h5>
+                    <button type="button" onclick="app.cerrarModalFirma()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:${titleColor};">×</button>
                 </div>
-                <div style="padding:1.5rem;">
+                <div style="padding:1.5rem;background:${bgColor};">
                     <div style="margin-bottom:1rem;">
-                        <label style="display:block;margin-bottom:0.5rem;color:#475569;">Firme en el área siguiente:</label>
-                        <canvas id="canvas-firma" width="750" height="200" style="width:100%;height:200px;background:white;border:3px solid #6366f1;border-radius:8px;display:block;cursor:crosshair;"></canvas>
+                        <label style="display:block;margin-bottom:0.5rem;color:${labelColor};">Firme en el área siguiente:</label>
+                        <canvas id="canvas-firma" width="750" height="200" style="width:100%;height:200px;background:${canvasBg};border:3px solid ${canvasBorder};border-radius:8px;display:block;cursor:crosshair;"></canvas>
                     </div>
                     <div style="display:flex;gap:0.5rem;">
-                        <button type="button" onclick="app.limpiarCanvas()" style="padding:0.6rem 1.2rem;background:#f1f5f9;border:none;border-radius:10px;cursor:pointer;">Limpiar</button>
+                        <button type="button" onclick="app.limpiarCanvas()" style="padding:0.6rem 1.2rem;background:${btnLimpiarBg};color:${btnLimpiarColor};border:none;border-radius:10px;cursor:pointer;">Limpiar</button>
                         <button type="button" onclick="app.guardarFirmaCliente()" style="padding:0.6rem 1.2rem;background:linear-gradient(135deg,#6366f1,#4338ca);color:white;border:none;border-radius:10px;cursor:pointer;">Guardar Firma</button>
                     </div>
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(overlay);
         console.log('[abrirModalFirma] Overlay creado y agregado al body');
-        
+
         // Inicializar canvas
         inicializarCanvasFirma();
     }

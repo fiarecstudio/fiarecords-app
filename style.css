@@ -894,3 +894,67 @@ body.dark-mode .list-group-item {
 body.dark-mode .list-group-item.text-muted {
     color: var(--text-color-light) !important;
 }
+
+/* SWEETALERT2 DARK MODE STYLES - CORREGIDO */
+body.dark-mode .swal2-popup {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .swal2-title {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .swal2-html-container {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .swal2-input {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #475569 !important;
+}
+
+body.dark-mode .swal2-input::placeholder {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .swal2-select {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #475569 !important;
+}
+
+body.dark-mode .swal2-select option {
+    background: #1e293b !important;
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .swal2-validation-message {
+    background: #dc2626 !important;
+    color: #fef2f2 !important;
+}
+
+/* Estilos para Toast en modo oscuro */
+body.dark-mode .swal2-toast {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+}
+
+body.dark-mode .swal2-toast .swal2-title {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .swal2-toast .swal2-icon {
+    border-color: #f1f5f9 !important;
+}
+
+/* Estilos globales para SweetAlert */
+.swal2-container {
+    z-index: 99999 !important;
+}
+
+body.dark-mode .swal2-backdrop {
+    background: rgba(0, 0, 0, 0.7) !important;
+}
