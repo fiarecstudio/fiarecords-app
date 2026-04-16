@@ -203,8 +203,21 @@ router.put('/horarios', isAdmin, async (req, res) => {
 // ==========================================================
 router.put('/plantillas', isAdmin, async (req, res) => {
     try {
+        // FASE 5: Prioridad ABSOLUTA: header X-Empresa-Id, fallback a empresa del usuario
+        const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+        const userEmpresaId = req.user && req.user.empresaId ? req.user.empresaId.toString() : null;
+        
+        // Limpiar y validar: header tiene prioridad, luego el usuario
+        let targetId = limpiarEmpresaId(headerId) || userEmpresaId;
+        
+        if (!targetId) {
+            return res.status(400).json({ 
+                error: "No se pudo determinar la empresa. Selecciona una empresa específica o verifica tu sesión." 
+            });
+        }
+        
         const config = await Configuracion.findOneAndUpdate(
-            { empresaId: req.user.empresaId },
+            { empresaId: new mongoose.Types.ObjectId(targetId) },
             { $set: { plantillasDoc: req.body.plantillasDoc } },
             { new: true, upsert: true }
         );
