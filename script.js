@@ -1761,7 +1761,7 @@ let proyectoIdEnEdicion = null;
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
                 
                 // Botones de Contrato y Firma
-                const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+                const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
                 
                 const userInfo = getUserRoleAndId();
                 let btnFirma = '';
@@ -1963,7 +1963,7 @@ let proyectoIdEnEdicion = null;
                 html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
                     // Botones de Contrato y Firma
-                    const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+                    const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
                     const userInfo = getUserRoleAndId();
                 let btnFirma = '';
                 
@@ -2573,6 +2573,166 @@ let proyectoIdEnEdicion = null;
             hideLoader();
             console.error('[previewReciboPDF] Error:', error);
             showToast('Error al generar previsualización del recibo', 'error');
+        }
+    }
+
+    async function previewContratoPDF(proyectoId) {
+        console.log('[previewContratoPDF] Iniciando con proyectoId:', proyectoId);
+        try {
+            showLoader();
+            console.log('[previewContratoPDF] Loader mostrado, fetching proyecto...');
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`, {
+                headers: { 'X-Empresa-Id': localStorage.getItem('empresaActiva') || 'all' }
+            });
+
+            if (!proyecto) {
+                hideLoader();
+                showToast('Proyecto no encontrado', 'error');
+                return;
+            }
+
+            // Cargar configuración si no existe
+            if (!configCache) {
+                await loadInitialConfig();
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+
+            await preloadLogoForPDF();
+            if (logoBase64) {
+                dibujarLogoEnPDF(pdf, logoBase64);
+            }
+
+            // Título del contrato
+            pdf.setFontSize(18);
+            pdf.setFont(undefined, 'bold');
+            pdf.text('CONTRATO DE PRESTACIÓN DE SERVICIOS', 105, 60, { align: 'center' });
+
+            // Contenido del contrato usando la plantilla
+            let terminos = configCache?.plantillasDoc?.plantillaContrato || `CONTRATO DE PRESTACIÓN DE SERVICIOS
+
+ENTRE:
+FiaRecords Studio, a través de su representante Erick Resendiz, en adelante "EL PRESTADOR".
+
+Y
+{{CLIENTE}}, en adelante "EL CLIENTE".
+
+SE ESTIPULA:
+
+PRIMERA.- OBJETO DEL CONTRATO.
+EL PRESTADOR se compromete a prestar los servicios descritos a EL CLIENTE, consistentes en: {{PROYECTO}}.
+
+SEGUNDA.- PAGO Y CONDICIONES.
+El monto total del servicio es de {{TOTAL}} MXN. El pago se realizará según las condiciones acordadas.
+
+TERCERA.- CONFIDENCIALIDAD.
+Ambas partes se comprometen a mantener confidencialidad sobre la información intercambiada.
+
+Fecha de firma: {{FECHA}}`;
+
+            // Reemplazar variables
+            const costoMensual = (proyecto.total + (proyecto.descuento || 0)) / (proyecto.duracionMeses || 1);
+            const dataMap = {
+                'CLIENTE': proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General',
+                'PROYECTO': proyecto.nombreProyecto || 'Proyecto sin nombre',
+                'TOTAL': `$${safeMoney(proyecto.total)}`,
+                'FECHA': safeDate(proyecto.fecha),
+                'MODALIDAD': proyecto.esPlanMensual ? 'PLAN MENSUAL RECURRENTE' : 'SERVICIO ÚNICO'
+            };
+
+            Object.keys(dataMap).forEach(key => {
+                const regex = new RegExp(`{{\\s*["'""]?${key}["'""]?\\s*}}`, 'g');
+                terminos = terminos.replace(regex, dataMap[key]);
+            });
+
+            // Renderizar texto
+            let yPos = 75;
+            pdf.setFontSize(10);
+            const parrafos = terminos.split('\n');
+
+            for (let i = 0; i < parrafos.length; i++) {
+                const parrafo = parrafos[i].trim();
+                if (!parrafo) continue;
+
+                const esImportante = parrafo.toUpperCase().startsWith('CLÁUSULA') ||
+                                     parrafo.startsWith('CONTRATO DE PRESTACIÓN') ||
+                                     parrafo.startsWith('ENTRE:') ||
+                                     parrafo.startsWith('SE ESTIPULA:');
+
+                if (esImportante) {
+                    pdf.setFont(undefined, 'bold');
+                    pdf.setFontSize(11);
+                } else {
+                    pdf.setFont(undefined, 'normal');
+                    pdf.setFontSize(10);
+                }
+
+                const splitLines = pdf.splitTextToSize(parrafo, 182);
+                for (let j = 0; j < splitLines.length; j++) {
+                    if (yPos > 245) {
+                        pdf.addPage();
+                        yPos = 40;
+                    }
+                    pdf.text(splitLines[j], 14, yPos);
+                    yPos += 7;
+                }
+                yPos += 3;
+            }
+
+            // Firmas
+            const baselineY = 265;
+            let firmaSrc = configCache?.firmaBase64 || configCache?.firma?.base64 || configCache?.config?.firmaBase64 || null;
+
+            if (firmaSrc) {
+                try {
+                    let base64data = firmaSrc;
+                    if (!firmaSrc.startsWith('data:image')) {
+                        const res = await fetch(firmaSrc);
+                        const blob = await res.blob();
+                        base64data = await new Promise(r => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => r(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+                    }
+                    pdf.line(140, baselineY, 190, baselineY);
+                    const firmaFormat = base64data.includes('image/jpeg') || base64data.includes('image/jpg') ? 'JPEG' : 'PNG';
+                    pdf.addImage(base64data, firmaFormat, 140, baselineY - 22, 50, 20, undefined, 'FAST');
+                    pdf.setFontSize(9);
+                    pdf.setFont(undefined, 'normal');
+                    pdf.text("Erick Resendiz", 140, baselineY + 5);
+                    pdf.text("Representante FIA Records", 140, baselineY + 10);
+                } catch (e) {
+                    console.error('[previewContratoPDF] Error al agregar firma:', e);
+                }
+            }
+
+            // Firma del cliente si existe
+            if (proyecto.firmaCliente) {
+                try {
+                    pdf.line(20, baselineY, 70, baselineY);
+                    const clienteFirmaFormat = proyecto.firmaCliente.includes('image/jpeg') || proyecto.firmaCliente.includes('image/jpg') ? 'JPEG' : 'PNG';
+                    pdf.addImage(proyecto.firmaCliente, clienteFirmaFormat, 20, baselineY - 22, 50, 20, undefined, 'FAST');
+                    pdf.setFontSize(9);
+                    pdf.setFont(undefined, 'normal');
+                    pdf.text("Firma del Cliente", 20, baselineY + 5);
+                } catch (e) {
+                    console.error('[previewContratoPDF] Error al agregar firma cliente:', e);
+                }
+            }
+
+            // Convertir a base64 y mostrar en preview
+            const pdfBase64 = pdf.output('datauristring');
+            pdfActualBase64 = pdfBase64;
+            pdfActualNombre = `Contrato-${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre).replace(/\s/g, '_') : 'General'}.pdf`;
+
+            await mostrarPDFEnModal(pdfBase64);
+            hideLoader();
+        } catch (error) {
+            hideLoader();
+            console.error('[previewContratoPDF] Error:', error);
+            showToast('Error al generar previsualización del contrato', 'error');
         }
     }
 
@@ -3516,7 +3676,7 @@ let proyectoIdEnEdicion = null;
             const artistaNombre = c.artista ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General';
             
             // Botones de Contrato y Firma
-            const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Generar Contrato" onclick="app.generarContratoPDF('${c._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
+            const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${c._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
             
             const userInfo = getUserRoleAndId();
             let btnFirma = '';
@@ -5032,7 +5192,7 @@ let proyectoIdEnEdicion = null;
         mostrarOverlayKanban, // Mostrar spinner sobrepuesto
         ocultarOverlayKanban, // Ocultar spinner con transición suave
         // PREVISUALIZACIÓN DE PDF
-        previewPDF, previewReciboPDF, cerrarModalPreview, descargarPDFDesdePreview,
+        previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         // ZOOM E IMPRESIÓN DE PDF
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         // VISTA DE IMPRESIÓN INTEGRADA
