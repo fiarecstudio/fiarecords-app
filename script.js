@@ -2387,11 +2387,570 @@ let proyectoIdEnEdicion = null;
         } 
     }
 
-    function setupMobileMenu() { const hamburger = document.getElementById('hamburger-menu'); const sidebar = document.querySelector('.sidebar'); const overlay = document.getElementById('sidebar-overlay'); const toggleMenu = () => { sidebar.classList.toggle('show'); overlay.classList.toggle('show'); }; if (hamburger) hamburger.addEventListener('click', toggleMenu); if (overlay) overlay.addEventListener('click', toggleMenu); document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { link.addEventListener('click', () => { if (window.innerWidth <= 768) { sidebar.classList.remove('show'); overlay.classList.remove('show'); } }); }); }
+    // ==================================================================
+    // PREVISUALIZACIÓN DE PDF CON PDF.JS (COTIZACIONES Y RECIBOS)
+    // ==================================================================
+    let pdfActualBase64 = null;
+    let pdfActualNombre = null;
+    let pdfRenderTask = null; // Para cancelar renderizados previos
+
+    async function previewPDF(proyectoId) {
+        console.log('[previewPDF] Iniciando con proyectoId:', proyectoId);
+        try {
+            showLoader();
+            console.log('[previewPDF] Loader mostrado, fetching proyecto...');
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`, {
+                headers: { 'X-Empresa-Id': localStorage.getItem('empresaActiva') || 'all' }
+            });
+            
+            // Generar PDF en memoria
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+            
+            const isPlan = proyecto.esPlanMensual === true || proyecto.esPlanMensual === 'true';
+            const meses = parseInt(proyecto.duracionMeses) || 1;
+            const serviciosMes = parseInt(proyecto.serviciosPorMes) || 1;
+
+            await preloadLogoForPDF();
+            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); }
+
+            pdf.setFontSize(14);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("COTIZACIÓN DE SERVICIOS", 14, 48);
+            pdf.setFontSize(10);
+            pdf.text(`Folio: #${proyecto._id.toString().slice(-6).toUpperCase()}`, 196, 48, { align: 'right' });
+            pdf.setDrawColor(99, 102, 241);
+            pdf.setLineWidth(0.5);
+            pdf.line(14, 52, 196, 52);
+
+            pdf.setFillColor(248, 250, 252);
+            pdf.rect(14, 58, 182, 22, 'F');
+            pdf.setFontSize(9);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("CLIENTE:", 18, 65);
+            pdf.text("FECHA DE EMISIÓN:", 130, 65);
+            pdf.text("PROYECTO:", 18, 73);
+            pdf.setFont(undefined, 'normal');
+            const artistaNombre = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General';
+            pdf.text(escapeHTML(artistaNombre), 40, 65);
+            pdf.text(new Date().toLocaleDateString(), 170, 65);
+            pdf.text(escapeHTML(proyecto.nombreProyecto || 'Servicios Varios'), 42, 73);
+
+            let startY = 88;
+            if (isPlan) {
+                pdf.setFillColor(238, 242, 255);
+                pdf.setDrawColor(99, 102, 241);
+                pdf.rect(14, startY, 182, 14, 'FD');
+                pdf.setFont(undefined, 'bold');
+                pdf.setTextColor(67, 56, 202);
+                pdf.text("MODALIDAD: PLAN MENSUAL RECURRENTE", 18, startY + 6);
+                pdf.setFontSize(8);
+                pdf.setFont(undefined, 'normal');
+                pdf.text(`Contrato total de ${meses} meses. Incluye ${serviciosMes} servicio(s) entregables por mes.`, 18, startY + 10);
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFontSize(9);
+                startY += 20;
+            }
+
+            const tableBody = proyecto.items.map(item => {
+                let cantidadFinal = item.unidades;
+                let descripcionExtra = "";
+                if (isPlan) {
+                    cantidadFinal = item.unidades * serviciosMes * meses;
+                    descripcionExtra = `\n(MODALIDAD DE PLAN: ${serviciosMes} AL MES X ${meses} MESES)`;
+                }
+                const importeSubtotal = item.precioUnitario * cantidadFinal;
+                return [
+                    cantidadFinal.toString(),
+                    item.nombre.toUpperCase() + descripcionExtra,
+                    `$${safeMoney(item.precioUnitario)}`,
+                    `$${safeMoney(importeSubtotal)}`
+                ];
+            });
+
+            pdf.autoTable({
+                startY: startY,
+                head: [['CANT. TOTAL', 'DESCRIPCIÓN DETALLADA', 'PRECIO UNIT.', 'IMPORTE']],
+                body: tableBody,
+                theme: 'striped',
+                headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+                columnStyles: {
+                    0: { cellWidth: 25, halign: 'center' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 30, halign: 'right' },
+                    3: { cellWidth: 30, halign: 'right' }
+                },
+                styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' }
+            });
+
+            let finalY = pdf.lastAutoTable.finalY + 10;
+            const totalAntesDescuento = proyecto.items.reduce((sum, item) => {
+                const multiplicador = isPlan ? (serviciosMes * meses) : 1;
+                return sum + (item.precioUnitario * item.unidades * multiplicador);
+            }, 0);
+            const marginRight = 196;
+            pdf.setFontSize(9);
+            pdf.setFont(undefined, 'normal');
+            pdf.text("SUBTOTAL SERVICIOS:", 140, finalY);
+            pdf.text(`$${safeMoney(totalAntesDescuento)}`, marginRight, finalY, { align: 'right' });
+            if (proyecto.descuento > 0) {
+                finalY += 6;
+                pdf.setTextColor(220, 38, 38);
+                pdf.text("DESCUENTO APLICADO:", 140, finalY);
+                pdf.text(`- $${safeMoney(proyecto.descuento)}`, marginRight, finalY, { align: 'right' });
+                pdf.setTextColor(0, 0, 0);
+            }
+            finalY += 4;
+            pdf.setDrawColor(200, 200, 200);
+            pdf.line(135, finalY, 196, finalY);
+            finalY += 8;
+            pdf.setFontSize(11);
+            pdf.setFont(undefined, 'bold');
+            const textoTotal = isPlan ? "TOTAL CONTRATO:" : "TOTAL NETO:";
+            pdf.text(textoTotal, 130, finalY);
+            pdf.text(`$${safeMoney(proyecto.total)} MXN`, marginRight, finalY, { align: 'right' });
+
+            // Convertir a base64 y mostrar en preview
+            const pdfBase64 = pdf.output('datauristring');
+            pdfActualBase64 = pdfBase64;
+            pdfActualNombre = `Cotizacion-${artistaNombre.replace(/\s/g, '_')}.pdf`;
+            
+            await mostrarPDFEnModal(pdfBase64);
+            hideLoader();
+        } catch (error) {
+            hideLoader();
+            console.error('[previewPDF] Error:', error);
+            showToast('Error al generar previsualización', 'error');
+        }
+    }
+
+    async function previewReciboPDF(proyectoId, pagoId) {
+        try {
+            showLoader();
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`, {
+                headers: { 'X-Empresa-Id': localStorage.getItem('empresaActiva') || 'all' }
+            });
+            const pago = proyecto.pagos.find(p => p._id === pagoId);
+            if (!pago) {
+                hideLoader();
+                return showToast('Pago no encontrado', 'error');
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+            const saldoRestante = proyecto.total - proyecto.montoPagado;
+
+            await preloadLogoForPDF();
+            if (logoBase64) { dibujarLogoEnPDF(pdf, logoBase64); }
+
+            pdf.setFontSize(16);
+            pdf.setFont(undefined, 'bold').text(`RECIBO DE PAGO`, 105, 45, { align: 'center' });
+            pdf.setFontSize(11);
+            pdf.setFont(undefined, 'normal');
+            pdf.text(`Cliente: ${proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'General'}`, 14, 60);
+            pdf.text(`Fecha: ${new Date(pago.fecha).toLocaleDateString()}`, 14, 67);
+            pdf.text(`Método: ${pago.metodo}`, 14, 74);
+
+            pdf.autoTable({
+                startY: 85,
+                theme: 'striped',
+                head: [['Concepto', 'Monto']],
+                body: [
+                    ['Total del Proyecto:', `$${safeMoney(proyecto.total)}`],
+                    ['Monto de este Recibo:', `$${safeMoney(pago.monto)}`],
+                    ['Saldo Restante:', `$${safeMoney(saldoRestante)}`]
+                ],
+                headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] }
+            });
+
+            const pdfBase64 = pdf.output('datauristring');
+            pdfActualBase64 = pdfBase64;
+            pdfActualNombre = `Recibo_${proyecto.artista ? proyecto.artista.nombre.replace(/\s/g, '_') : 'General'}.pdf`;
+
+            await mostrarPDFEnModal(pdfBase64);
+            hideLoader();
+        } catch (error) {
+            hideLoader();
+            console.error('[previewReciboPDF] Error:', error);
+            showToast('Error al generar previsualización del recibo', 'error');
+        }
+    }
+
+    async function mostrarPDFEnModal(pdfBase64) {
+        console.log('[mostrarPDFEnModal] Iniciando...');
+        const overlay = document.getElementById('modalPreviewDocumento');
+        const loadingDiv = document.getElementById('pdf-loading');
+        const containerDiv = document.getElementById('pdf-container');
+        const errorDiv = document.getElementById('pdf-error');
+        const canvas = document.getElementById('pdf-canvas');
+
+        console.log('[mostrarPDFEnModal] Elementos:', { overlay: !!overlay, loadingDiv: !!loadingDiv, containerDiv: !!containerDiv, errorDiv: !!errorDiv, canvas: !!canvas });
+
+        // Cancelar renderizado previo si existe
+        if (pdfRenderTask) {
+            try {
+                pdfRenderTask.cancel();
+            } catch (e) {
+                // Ignorar errores de cancelación
+            }
+            pdfRenderTask = null;
+        }
+
+        // Resetear estado
+        loadingDiv.style.display = 'block';
+        containerDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+
+        // Limpiar canvas
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Mover modal al final del body (como el modal de firma) para asegurar que esté encima
+        document.body.appendChild(overlay);
+        console.log('[mostrarPDFEnModal] Modal movido al final del body');
+
+        // Mostrar modal con alto z-index
+        overlay.style.display = 'flex';
+        overlay.style.zIndex = '2147483647';
+
+        try {
+            console.log('[mostrarPDFEnModal] Iniciando conversión base64...');
+            // Convertir base64 a Uint8Array
+            const base64Data = pdfBase64.split(',')[1];
+            console.log('[mostrarPDFEnModal] Base64 extraído, longitud:', base64Data.length);
+            const raw = window.atob(base64Data);
+            console.log('[mostrarPDFEnModal] Decodificado, longitud:', raw.length);
+            const uint8Array = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                uint8Array[i] = raw.charCodeAt(i);
+            }
+            console.log('[mostrarPDFEnModal] Uint8Array creado');
+
+            console.log('[mostrarPDFEnModal] Cargando PDF con PDF.js...');
+            // Cargar PDF con PDF.js
+            const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+            console.log('[mostrarPDFEnModal] PDF cargado, páginas:', pdf.numPages);
+            
+            const page = await pdf.getPage(1);
+            console.log('[mostrarPDFEnModal] Página 1 obtenida');
+
+            const viewport = page.getViewport({ scale: 1.5 });
+            console.log('[mostrarPDFEnModal] Viewport:', viewport.width, 'x', viewport.height);
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            console.log('[mostrarPDFEnModal] Canvas dimensionado:', canvas.width, 'x', canvas.height);
+
+            console.log('[mostrarPDFEnModal] Iniciando renderizado...');
+            // Iniciar renderizado y guardar la referencia para poder cancelarla
+            pdfRenderTask = page.render({
+                canvasContext: ctx,
+                viewport: viewport
+            });
+
+            await pdfRenderTask.promise;
+            console.log('[mostrarPDFEnModal] Renderizado completado');
+
+            loadingDiv.style.display = 'none';
+            containerDiv.style.display = 'block';
+            console.log('[mostrarPDFEnModal] Modal mostrado exitosamente');
+        } catch (error) {
+            console.error('[mostrarPDFEnModal] Error:', error);
+            loadingDiv.style.display = 'none';
+            errorDiv.style.display = 'block';
+        } finally {
+            pdfRenderTask = null;
+        }
+    }
+
+    function cerrarModalPreview() {
+        // Cancelar renderizado si está en progreso
+        if (pdfRenderTask) {
+            try {
+                pdfRenderTask.cancel();
+            } catch (e) {
+                // Ignorar errores
+            }
+            pdfRenderTask = null;
+        }
+
+        const overlay = document.getElementById('modalPreviewDocumento');
+        if (overlay) {
+            overlay.style.display = 'none';
+            // Devolver el modal a su posición original (al final del body, antes del cierre)
+            document.body.appendChild(overlay);
+        }
+        
+        // Reiniciar zoom
+        resetZoomPDF();
+        
+        pdfActualBase64 = null;
+        pdfActualNombre = null;
+    }
+
+    function descargarPDFDesdePreview() {
+        if (!pdfActualBase64 || !pdfActualNombre) {
+            showToast('No hay PDF para descargar', 'warning');
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = pdfActualBase64;
+        link.download = pdfActualNombre;
+        link.click();
+    }
+
+    // Variables para zoom del PDF (CSS transform)
+    let pdfZoomScale = 1.0; // Escala de zoom con CSS (1.0 = 100%)
+
+    function zoomPDF(delta) {
+        const canvas = document.getElementById('pdf-canvas');
+        const zoomDisplay = document.getElementById('pdf-zoom-level');
+        
+        if (!canvas) return;
+        
+        // Calcular nuevo nivel de zoom (entre 0.5 y 3.0)
+        pdfZoomScale = Math.max(0.5, Math.min(3.0, pdfZoomScale + delta));
+        
+        // Aplicar transformación CSS
+        canvas.style.transform = `scale(${pdfZoomScale})`;
+        canvas.style.transformOrigin = 'top center';
+        
+        // Actualizar display
+        const percentage = Math.round(pdfZoomScale * 100);
+        if (zoomDisplay) zoomDisplay.textContent = percentage + '%';
+        
+        console.log('[zoomPDF] Zoom aplicado:', pdfZoomScale, '=', percentage + '%');
+    }
+
+    function resetZoomPDF() {
+        pdfZoomScale = 1.0;
+        const canvas = document.getElementById('pdf-canvas');
+        const zoomDisplay = document.getElementById('pdf-zoom-level');
+        
+        if (canvas) {
+            canvas.style.transform = 'scale(1)';
+        }
+        
+        if (zoomDisplay) zoomDisplay.textContent = '100%';
+        console.log('[resetZoomPDF] Zoom reiniciado a 100%');
+    }
+
+    // Variable para guardar la URL del PDF en la vista de impresión
+    let printPreviewUrl = null;
+
+    function imprimirPDF() {
+        if (!pdfActualBase64) {
+            showToast('No hay PDF para imprimir', 'warning');
+            return;
+        }
+        
+        const nombreDoc = pdfActualNombre || 'Documento';
+        
+        // Actualizar nombre del documento en el header
+        document.getElementById('print-doc-name').textContent = nombreDoc;
+        
+        // Copiar el canvas del modal original al canvas de la vista de impresión
+        const sourceCanvas = document.getElementById('pdf-canvas');
+        const printCanvas = document.getElementById('print-preview-canvas');
+        
+        if (sourceCanvas && printCanvas) {
+            // Ajustar tamaño del canvas de impresión
+            printCanvas.width = sourceCanvas.width;
+            printCanvas.height = sourceCanvas.height;
+            
+            // Copiar el contenido del canvas
+            const ctx = printCanvas.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0);
+        }
+        
+        // Mostrar la vista de impresión
+        document.getElementById('printPreviewOverlay').style.display = 'block';
+        document.body.classList.add('printing-mode'); // Agregar clase para CSS de impresión
+        document.body.style.overflow = 'hidden'; // Prevenir scroll del body
+        
+        // NO cerramos el modal de preview original para mantener el PDF en memoria
+        // Solo ocultamos el modal de preview
+        const modalPreview = document.getElementById('modalPreviewDocumento');
+        if (modalPreview) {
+            modalPreview.style.display = 'none';
+        }
+    }
+
+    function cerrarPrintPreview() {
+        const overlay = document.getElementById('printPreviewOverlay');
+        overlay.style.display = 'none';
+        document.body.classList.remove('printing-mode'); // Quitar clase de impresión
+        document.body.style.overflow = ''; // Restaurar scroll
+        
+        // Limpiar el canvas de impresión
+        const printCanvas = document.getElementById('print-preview-canvas');
+        if (printCanvas) {
+            const ctx = printCanvas.getContext('2d');
+            ctx.clearRect(0, 0, printCanvas.width, printCanvas.height);
+        }
+        
+        // NO reiniciamos pdfActualBase64 ni pdfActualNombre aquí
+        // para permitir volver a abrir la vista de impresión si es necesario
+    }
+
+    /**
+     * FUNCIÓN DE IMPRESIÓN DE ALTA CALIDAD
+     * Imprime el PDF real usando iframe con blob URL (evita CSP object-src)
+     */
+    function imprimirDocumentoPDF() {
+        console.log('[Print] Iniciando impresión de alta calidad...');
+
+        if (!pdfActualBase64) {
+            showToast('No hay PDF para imprimir', 'warning');
+            console.log('[Print] ERROR: No hay PDF cargado en pdfActualBase64');
+            return;
+        }
+
+        console.log('[Print] Preparando PDF para impresión...');
+
+        try {
+            // Convertir base64 a blob URL
+            const base64Data = pdfActualBase64.split(',')[1];
+            const raw = window.atob(base64Data);
+            const uint8Array = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                uint8Array[i] = raw.charCodeAt(i);
+            }
+            const blob = new Blob([uint8Array], { type: 'application/pdf' });
+            const blobUrl = URL.createObjectURL(blob);
+            console.log('[Print] Blob URL creado:', blobUrl);
+
+            // Crear iframe con blob URL directamente
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.top = '0';
+            iframe.style.left = '0';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.zIndex = '2147483647';
+            iframe.style.border = 'none';
+            iframe.style.background = 'white';
+            iframe.id = 'print-pdf-iframe';
+            iframe.src = blobUrl;
+
+            document.body.appendChild(iframe);
+            console.log('[Print] Iframe de impresión creado con blob URL');
+
+            // Crear overlay con botones
+            const overlay = document.createElement('div');
+            overlay.id = 'print-controls-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 2147483648;
+                display: flex;
+                gap: 10px;
+            `;
+            overlay.innerHTML = `
+                <button id="btn-cerrar-print" style="
+                    padding: 12px 24px;
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                ">✕ Cerrar</button>
+                <button id="btn-imprimir-print" style="
+                    padding: 12px 24px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                ">🖨️ Imprimir / Guardar PDF</button>
+            `;
+            document.body.appendChild(overlay);
+
+            // Event listeners para los botones
+            document.getElementById('btn-cerrar-print').addEventListener('click', function() {
+                const iframe = document.getElementById('print-pdf-iframe');
+                const overlay = document.getElementById('print-controls-overlay');
+                if (iframe) {
+                    URL.revokeObjectURL(iframe.src);
+                    document.body.removeChild(iframe);
+                }
+                if (overlay) document.body.removeChild(overlay);
+                console.log('[Print] Iframe cerrado');
+            });
+
+            document.getElementById('btn-imprimir-print').addEventListener('click', function() {
+                const iframe = document.getElementById('print-pdf-iframe');
+                if (iframe && iframe.contentWindow) {
+                    try {
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                        console.log('[Print] Comando print() enviado');
+                    } catch (e) {
+                        console.error('[Print] Error al imprimir:', e);
+                        showToast('Error al imprimir. Intenta descargar el PDF.', 'error');
+                    }
+                }
+            });
+
+            console.log('[Print] Controles agregados');
+
+            // Auto-limpiar después de 5 minutos
+            setTimeout(function() {
+                const iframe = document.getElementById('print-pdf-iframe');
+                const overlay = document.getElementById('print-controls-overlay');
+                if (iframe) {
+                    URL.revokeObjectURL(iframe.src);
+                    document.body.removeChild(iframe);
+                }
+                if (overlay) document.body.removeChild(overlay);
+                console.log('[Print] Limpieza automática después de 5 min');
+            }, 300000);
+
+        } catch (e) {
+            console.error('[Print] Error general:', e);
+            showToast('Error al preparar impresión: ' + e.message, 'error');
+        }
+    }
+
+    /**
+     * Cerrar el iframe de impresión
+     */
+    function cerrarIframePrint() {
+        const iframe = document.getElementById('print-pdf-iframe');
+        if (iframe) {
+            document.body.removeChild(iframe);
+            console.log('[Print] Iframe de impresión cerrado');
+        }
+    }
+
+    function ejecutarImpresion() {
+        window.print();
+    }
+
+    function setupMobileMenu() { 
+        const hamburger = document.getElementById('hamburger-menu'); 
+        const sidebar = document.querySelector('.sidebar'); 
+        const overlay = document.getElementById('sidebar-overlay'); 
+        const toggleMenu = () => { 
+            sidebar.classList.toggle('show'); 
+            overlay.classList.toggle('show'); 
+        }; 
+        if (hamburger) hamburger.addEventListener('click', toggleMenu); 
+        if (overlay) overlay.addEventListener('click', toggleMenu); 
+        document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { 
+            link.addEventListener('click', () => { 
+                if (window.innerWidth <= 768) { 
+                    sidebar.classList.remove('show'); 
+                    overlay.classList.remove('show'); 
+                } 
+            }); 
+        }); 
+    }
     
-    // ==================================================================
-    // AUTH & INIT CON REDIRECCION ESTRICTA
-    // ==================================================================
     function showLogin() {
         document.body.classList.add('auth-visible');
         // FASE 5: LIMPIEZA COMPLETA al cerrar sesión
@@ -2987,16 +3546,15 @@ let proyectoIdEnEdicion = null;
                     <td data-label="Artista">${escapeHTML(artistaNombre)}</td>
                     <td data-label="Total">$${safeMoney(c.total)}</td>
                     <td data-label="Acciones" class="table-actions">
-                        <button class="btn btn-sm btn-outline-primary" title="Aprobar y Agendar" onclick="app.aprobarCotizacion('${c._id}')"><i class="bi bi-check-circle"></i></button>
-                        <button class="btn btn-sm btn-outline-info" title="Cotización PDF" onclick="app.generarCotizacionPDF('${c._id}')"><i class="bi bi-file-earmark-pdf"></i></button>
+                        <button class="btn btn-sm btn-outline-primary" title="Aprobar y Agendar" onclick="app.aprobarCotizacion('${escapeHTML(c._id)}')"><i class="bi bi-check-circle"></i></button>
+                        <button class="btn btn-sm btn-outline-info" title="Ver Cotización PDF" onclick="console.log('[Botón] Click en previewPDF, ID:', '${escapeHTML(c._id)}'); app.previewPDF('${escapeHTML(c._id)}')"><i class="bi bi-file-earmark-pdf"></i></button>
                         ${btnContrato}${btnFirma}
-                        <button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.cargarCotizacionParaEditar('${c._id}')"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${c._id}', true)"><i class="bi bi-trash"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.cargarCotizacionParaEditar('${escapeHTML(c._id)}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${escapeHTML(c._id)}', true)"><i class="bi bi-trash"></i></button>
                     </td>
                 </tr>
             `;
         }).join('');
-        
         renderTableControls('tablaCotizacionesBody', 'cotizaciones', page, totalPages);
     }
 
@@ -3447,7 +4005,7 @@ let proyectoIdEnEdicion = null;
         }
 
         tablaBody.innerHTML = paginatedItems.map(p => {
-            let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Reimprimir Recibo" onclick="app.reimprimirRecibo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
+            let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Ver Recibo PDF" onclick="app.previewReciboPDF('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
             buttons += `<button class="btn btn-sm btn-outline-success" title="Enviar por WhatsApp" onclick="app.enviarReciboWhatsApp('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-whatsapp"></i></button>`;
             buttons += `<button class="btn btn-sm btn-outline-primary" title="Enviar por Correo" onclick="app.enviarReciboCorreo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-envelope"></i></button>`;
             if (!isClient) {
@@ -4472,14 +5030,19 @@ let proyectoIdEnEdicion = null;
         recargarKanbanReactivo, // Exportar para cambio de empresa en tiempo real
         // FASE 5: OVERLAY DEL KANBAN (para transiciones suaves sin flicker)
         mostrarOverlayKanban, // Mostrar spinner sobrepuesto
-        ocultarOverlayKanban // Ocultar spinner con transición suave
+        ocultarOverlayKanban, // Ocultar spinner con transición suave
+        // PREVISUALIZACIÓN DE PDF
+        previewPDF, previewReciboPDF, cerrarModalPreview, descargarPDFDesdePreview,
+        // ZOOM E IMPRESIÓN DE PDF
+        zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
+        // VISTA DE IMPRESIÓN INTEGRADA
+        cerrarPrintPreview, ejecutarImpresion
     };
 
     // ==================================================================
     // ACORDEÓN KANBAN - Expandir/Colapsar columnas + Contador de proyectos
     // ==================================================================
-    
-    // Función para actualizar contadores de proyectos en cada columna
+    // ... (rest of the code remains the same)
     function actualizarContadoresKanban() {
         document.querySelectorAll('.kanban-column').forEach(column => {
             const contenido = column.querySelector('.kanban-column-content');
@@ -4629,6 +5192,34 @@ let proyectoIdEnEdicion = null;
             actualizarContadoresKanban();
         }
     }, 500);
+
+    // ==================================================================
+    // INTERCEPTAR Ctrl+P CUANDO EL MODAL DE PDF ESTÁ ABIERTO
+    // ==================================================================
+    document.addEventListener('keydown', function(e) {
+        // Detectar Ctrl+P (o Cmd+P en Mac)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            // Verificar si el modal de previsualización está abierto
+            const modalPreview = document.getElementById('modalPreviewDocumento');
+            const isModalOpen = modalPreview && modalPreview.style.display === 'flex';
+            
+            if (isModalOpen) {
+                console.log('[Print] Ctrl+P detectado con modal de PDF abierto');
+                e.preventDefault(); // Prevenir comportamiento por defecto
+                e.stopPropagation();
+                
+                // Ejecutar impresión de alta calidad (con protección)
+                if (typeof imprimirDocumentoPDF === 'function') {
+                    imprimirDocumentoPDF();
+                } else {
+                    console.error('[Print] ERROR: imprimirDocumentoPDF no está definida');
+                    showToast('Error: función de impresión no disponible', 'error');
+                }
+                
+                return false;
+            }
+        }
+    }, true); // Usar capture para interceptar antes
 
 }); // <-- CIERRE DEL DOMCONTENTLOADED
 

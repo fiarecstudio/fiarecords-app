@@ -1112,6 +1112,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
   
+  <!-- PDF.js para previsualización de documentos -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+  
   <!-- LIBRERIA PARA BASE DE DATOS LOCAL (IndexedDB) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
   
@@ -1139,6 +1145,146 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL PREVISUALIZACION PDF - OVERLAY SIMPLE -->
+  <div id="modalPreviewDocumento" class="firma-overlay" style="display:none;">
+    <div class="firma-modal" style="max-width: 900px; width: 95vw;">
+      <div class="firma-modal-header">
+        <h5 class="firma-modal-title"><i class="bi bi-eye"></i> Previsualización de Documento</h5>
+        <button type="button" class="btn-close" onclick="app.cerrarModalPreview()" aria-label="Cerrar"></button>
+      </div>
+      <div class="firma-modal-body">
+        <div id="pdf-loading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+          </div>
+          <p class="mt-2 text-muted">Generando previsualización...</p>
+        </div>
+        <div id="pdf-container" style="display:none; max-height: 70vh; overflow-y: auto;">
+          <!-- Controles de Zoom -->
+          <div class="d-flex justify-content-center align-items-center gap-2 mb-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.zoomPDF(-0.2)" title="Alejar">
+              <i class="bi bi-zoom-out"></i>
+            </button>
+            <span id="pdf-zoom-level" class="badge bg-secondary">100%</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.zoomPDF(0.2)" title="Acercar">
+              <i class="bi bi-zoom-in"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.resetZoomPDF()" title="Restablecer zoom">
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.imprimirDocumentoPDF()" title="Imprimir PDF">
+              <i class="bi bi-printer"></i>
+            </button>
+          </div>
+          <canvas id="pdf-canvas" style="width: 100%; border: 1px solid #dee2e6; border-radius: 8px;"></canvas>
+        </div>
+        <div id="pdf-error" class="alert alert-danger" style="display:none;" role="alert">
+          <i class="bi bi-exclamation-triangle"></i> Error al cargar el PDF.
+        </div>
+        <div class="d-flex gap-2 mt-3 justify-content-center">
+          <button type="button" class="btn btn-secondary" onclick="app.cerrarModalPreview()">
+            <i class="bi bi-x-circle"></i> Cerrar
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-descargar-pdf" onclick="app.descargarPDFDesdePreview()">
+            <i class="bi bi-download"></i> Descargar PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estilos de impresión -->
+  <style>
+    /* Solo aplicar cuando body tiene clase printing-mode */
+    body.printing-mode #printPreviewOverlay {
+      display: block !important;
+    }
+    
+    @media print {
+      /* Solo aplicar estilos de impresión cuando estamos en modo printing-mode */
+      body.printing-mode > *:not(#printPreviewOverlay) {
+        display: none !important;
+      }
+      /* Mostrar la vista de impresión - forzar sobre el inline style */
+      body.printing-mode #printPreviewOverlay {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: static !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: visible !important;
+        background: white !important;
+        z-index: auto !important;
+      }
+      /* Ocultar header y footer en impresión */
+      body.printing-mode #printPreviewOverlay > div:first-child,
+      body.printing-mode #printPreviewOverlay > div:last-child {
+        display: none !important;
+      }
+      /* Ajustar contenedor del canvas */
+      body.printing-mode #printPreviewOverlay > div:nth-child(2) {
+        padding: 0 !important;
+        display: block !important;
+      }
+      body.printing-mode #printPreviewOverlay > div:nth-child(2) > div {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 10px !important;
+      }
+      /* Mostrar solo el canvas del PDF */
+      body.printing-mode #print-canvas-container {
+        display: block !important;
+        page-break-inside: avoid;
+      }
+      body.printing-mode #print-preview-canvas {
+        max-width: 100% !important;
+        width: 100% !important;
+        height: auto !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: block !important;
+      }
+    }
+  </style>
+  <div id="printPreviewOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#f5f5f5; z-index:2147483647; overflow-y:auto;">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:20px 30px; box-shadow:0 2px 10px rgba(0,0,0,0.1); position:sticky; top:0; z-index:10;">
+      <div style="max-width:1200px; margin:0 auto; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h1 style="margin:0; font-size:1.5rem; font-weight:500;">🖨️ Previsualización de Impresión</h1>
+          <div id="print-doc-name" style="font-size:0.9rem; opacity:0.9;">Documento</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="button" onclick="app.cerrarPrintPreview()" style="background:#e0e0e0; color:#333; border:none; padding:10px 25px; font-size:0.95rem; border-radius:25px; cursor:pointer;">
+            Cerrar
+          </button>
+          <button type="button" onclick="app.ejecutarImpresion()" style="background:white; color:#667eea; border:none; padding:10px 25px; font-size:0.95rem; border-radius:25px; cursor:pointer; font-weight:600;">
+            🖨️ Imprimir
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Contenido PDF Canvas -->
+    <div style="padding:30px; display:flex; justify-content:center; min-height:calc(100vh - 100px);">
+      <div style="background:white; box-shadow:0 4px 20px rgba(0,0,0,0.15); border-radius:8px; overflow:hidden; max-width:100%; width:900px; padding:20px;">
+        <!-- Canvas del PDF que se clona aquí -->
+        <div id="print-canvas-container" style="display:flex; justify-content:center;">
+          <canvas id="print-preview-canvas" style="max-width:100%; border:1px solid #dee2e6; border-radius:8px;"></canvas>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div style="padding:20px; text-align:center; color:#666; font-size:0.85rem;">
+      Presiona Ctrl+P para imprimir | El PDF se descargará automáticamente al imprimir
     </div>
   </div>
 

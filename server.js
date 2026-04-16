@@ -38,7 +38,9 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:", "blob:", "placehold.co"],
       connectSrc: ["'self'", "https:", "ws:", "wss:"],
       fontSrc: ["'self'", "data:", "https:", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
-      frameSrc: ["'self'", "https:"],
+      frameSrc: ["'self'", "blob:", "https:"],
+      childSrc: ["'self'", "blob:", "https:"],
+      workerSrc: ["'self'", "blob:", "https:"],
     },
   },
 }));
