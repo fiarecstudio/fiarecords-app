@@ -158,11 +158,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const cache = JSON.parse(cacheStr);
                     const edadCache = ahora - parseInt(cacheTimestamp);
                     
-                    // Si el caché es válido y corresponde a la misma empresa (o es reciente)
+                    // Si el caché es válido, corresponde a la misma empresa Y no ha expirado
                     if (edadCache < CACHE_DURATION_MS && cache.empresaId === empresaId) {
                         aplicarIdentidadVisualAlDOM(cache, false);
                         console.log('[GuardiaIdentidad] Logo aplicado desde caché (placeholder)');
                         // Continuar para validar en segundo plano
+                    } else if (cache.empresaId !== empresaId) {
+                        // CAMBIO DE EMPRESA: Limpiar caché y forzar recarga
+                        console.log(`[GuardiaIdentidad] Cambio de empresa detectada: ${cache.empresaId} → ${empresaId}. Limpiando caché.`);
+                        localStorage.removeItem(IDENTITY_CACHE_KEY);
+                        localStorage.removeItem(IDENTITY_TIMESTAMP_KEY);
+                        localStorage.removeItem('fia_logo_cache');
+                        forzarCambio = true; // Forzar recarga desde servidor
                     }
                 }
             }

@@ -43,13 +43,14 @@ const authLimiter = rateLimit({
 // Rate limiting para creación de proyectos - más permisivo
 const projectCreationLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hora
-    max: 20, // máximo 20 proyectos por hora (aumentado de 10)
+    max: 50, // máximo 50 proyectos por hora (aumentado de 20)
     message: {
         error: 'Límite de creación de proyectos alcanzado. Por favor, espera 1 hora.',
         retryAfter: 3600
     },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.method !== 'POST', // SOLO aplicar a POST (creación), no a GET/PUT/DELETE
     handler: (req, res) => {
         res.status(429).json({
             error: 'Límite de creación de proyectos alcanzado. Por favor, espera 1 hora.',
