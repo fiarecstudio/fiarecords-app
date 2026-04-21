@@ -43,6 +43,7 @@ app.use(helmet({
       workerSrc: ["'self'", "blob:", "https:"],
     },
   },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
 }));
 if (limiters.generalLimiter) app.use(limiters.generalLimiter); 
 
