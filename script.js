@@ -271,8 +271,8 @@ let proyectoIdEnEdicion = null;
 
     // Configuración Google API
     const GAP_CONFIG = {
-        apiKey: 'AIzaSyDaeTcNohqRxixSsAY58_pSyy62vsyJeXk',
-        clientId: '769041146398-a0iqgdre2lrevbh1ud9i1mrs4v548rdq.apps.googleusercontent.com',
+        apiKey: 'AIzaSyDlUR3S-I0p3VKDt8QCi7YVsejBxoeQfho',
+        clientId: '356661306993-u5ilnt843b71qqjkk56i9q32qi383brk.apps.googleusercontent.com',
         discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
         scope: 'https://www.googleapis.com/auth/drive'
     };
