@@ -274,7 +274,7 @@ let proyectoIdEnEdicion = null;
         apiKey: 'AIzaSyDlUR3S-I0p3VKDt8QCi7YVsejBxoeQfho',
         clientId: '356661306993-u5ilnt843b71qqjkk56i9q32qi383brk.apps.googleusercontent.com',
         discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-        scope: 'https://www.googleapis.com/auth/drive.file'
+        scope: 'https://www.googleapis.com/auth/drive'
     };
 
     let tokenClient;
@@ -756,7 +756,7 @@ let proyectoIdEnEdicion = null;
         };
 
         if (gapi.client.getToken() === null) {
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
+            tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
             handleGoogleDriveCallback({ access_token: gapi.client.getToken().access_token });
         }
@@ -5328,8 +5328,107 @@ function handleGoogleDriveCallback(tokenResponse) {
     }
 }
 
-// Función puente para procesar la subida
+// Función para procesar la subida real a Drive
 async function processDriveUpload() {
     console.log('[DRIVE] Iniciando subida de archivos guardados...');
-    // Aquí Windsurf debe asegurarse de que la lógica de subida real use window.pendingDriveUpload
+    
+    if (!window.pendingDriveUpload) {
+        showToast('No hay archivos pendientes de subida.', 'error');
+        return;
+    }
+    
+    const { files, statusSpan } = window.pendingDriveUpload;
+    const artistName = document.getElementById('delivery-artist-name')?.value || 'General';
+    const projectName = document.getElementById('delivery-project-name')?.value || 'Sin Nombre';
+    const linkInput = document.getElementById('delivery-link-input');
+    
+    try {
+        if(statusSpan) { statusSpan.textContent = 'Organizando carpetas...'; statusSpan.style.color = 'var(--primary-color)'; }
+        if (typeof showToast === 'function') showToast('Subiendo archivos a Drive...', 'info');
+
+        const idMaestra = await obtenerCarpetaMaestra();
+        const idArtista = await buscarOCrearCarpetaArtista(artistName, idMaestra);
+        await hacerCarpetaPublica(idArtista); 
+
+        if(statusSpan) statusSpan.textContent = `Creando carpeta: ${projectName}...`;
+        const idProyecto = await buscarOCrearCarpetaProyecto(projectName, idArtista);
+        
+        await hacerCarpetaPublica(idProyecto);
+
+        if(statusSpan) statusSpan.textContent = 'Generando enlace...';
+        const getFolderRes = await gapi.client.drive.files.get({ fileId: idProyecto, fields: 'webViewLink' });
+        const folderLink = getFolderRes.result.webViewLink;
+
+        const accessToken = gapi.client.getToken().access_token;
+        const uploadedFiles = [];
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
+            const metadata = { 'name': file.name, 'parents': [idProyecto] };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+            
+            const resUpload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+                method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form
+            });
+            
+            const fileData = await resUpload.json();
+            
+            const nombreLow = file.name.toLowerCase();
+            let tipoArchivo = 'otro';
+            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
+            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
+            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
+
+            if(tipoArchivo !== 'otro') {
+                uploadedFiles.push({
+                    nombre: file.name,
+                    driveId: fileData.id,
+                    urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
+                    tipo: tipoArchivo
+                });
+            }
+        }
+
+        if(linkInput) {
+            linkInput.value = folderLink; 
+            linkInput.style.borderColor = '#10b981'; 
+        }
+        
+        if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
+
+        await saveDeliveryLink(false, folderLink, uploadedFiles); 
+        
+        if (typeof showToast === 'function') showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
+
+        if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
+        if (document.getElementById('vista-artista').classList.contains('active')) {
+            const nombreEl = document.getElementById('vista-artista-nombre');
+            if (nombreEl) {
+                const n = nombreEl.textContent;
+                const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                if(a) mostrarVistaArtista(a._id, n, ''); 
+            }
+        }
+        
+        // Limpiar el estado pendiente
+        delete window.pendingDriveUpload;
+        
+    } catch (err) {
+        console.error(err);
+        if (typeof showToast === 'function') showToast('Error: ' + err.message, 'error');
+        if(statusSpan) { statusSpan.textContent = 'Error en la subida.'; statusSpan.style.color = 'var(--danger-color)'; }
+    } finally { 
+        console.log('[DRIVE] Proceso de carga finalizado');
+    }
+}
+
+// Stub functions for loader (if not defined elsewhere)
+function showLoader(mensaje) {
+    console.log('[Loader]', mensaje);
+}
+function hideLoader() {
+    console.log('[Loader] Ocultado');
 }
