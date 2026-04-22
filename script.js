@@ -282,15 +282,14 @@ let proyectoIdEnEdicion = null;
     let gisInited = false;
 
     // Caché Local (Ahora se llenará de forma asíncrona desde IndexedDB)
-    let localCache = {
+    window.localCache = {
         artistas: [],
         servicios: [],
         proyectos: [],
-        cotizaciones: [],
-        historial: [],
         pagos: [],
         usuarios: [],
-        deudas: [], 
+        cotizaciones: [],
+        historial: [],
         trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] } 
     };
 
@@ -804,40 +803,69 @@ let proyectoIdEnEdicion = null;
     function closeDeliveryModal() { const el = document.getElementById('delivery-modal'); const modal = bootstrap.Modal.getInstance(el); if (modal) modal.hide(); }
 
     async function saveDeliveryLink(cerrarModal = true, enlaceDirecto = null, archivosUpload = null) { 
-        const projectId = document.getElementById('delivery-project-id').value; 
-        const enlace = enlaceDirecto !== null ? enlaceDirecto : document.getElementById('delivery-link-input').value; 
+        const projectId = document.getElementById('delivery-project-id')?.value; 
+        const enlace = enlaceDirecto !== null ? enlaceDirecto : document.getElementById('delivery-link-input')?.value; 
+        
+        // Validación del projectId
+        if (!projectId || projectId === '' || projectId === 'null' || projectId === 'undefined') {
+            console.error('[saveDeliveryLink] projectId no válido:', projectId);
+            showToast('Error: No se pudo identificar el proyecto. Por favor cierra el modal y abrelo nuevamente.', 'error');
+            return;
+        }
+        
+        // Validación del enlace
+        if (!enlace || enlace === '') {
+            showToast('Error: No hay enlace para guardar.', 'error');
+            return;
+        }
         
         const payload = { enlace };
         if (archivosUpload !== null) payload.archivos = archivosUpload;
 
         try { 
+            console.log('[saveDeliveryLink] Guardando enlace para proyecto:', projectId);
             const result = await fetchAPI(`/api/proyectos/${projectId}/enlace-entrega`, { 
                 method: 'PUT', 
                 body: JSON.stringify(payload) 
             }); 
             
-            const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
-            if (indexCache !== -1) {
-                localCache.proyectos[indexCache] = result;
-                await localforage.setItem('cache_proyectos', localCache.proyectos);
+            // Actualizar caché local si existe
+            if (window.localCache && localCache.proyectos) {
+                const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
+                if (indexCache !== -1) {
+                    localCache.proyectos[indexCache].enlaceEntrega = enlace;
+                    if (archivosUpload) localCache.proyectos[indexCache].archivos = archivosUpload;
+                    await localforage.setItem('cache_proyectos', localCache.proyectos);
+                }
             }
 
             const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
-            if (indexHistorial !== -1) historialCacheados[indexHistorial] = result;
+            if (indexHistorial !== -1) {
+                historialCacheados[indexHistorial].enlaceEntrega = enlace;
+                if (archivosUpload) historialCacheados[indexHistorial].archivos = archivosUpload;
+            }
 
             showToast('Enlace guardado correctamente.', 'success'); 
             
-            if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
-            if (document.getElementById('vista-artista').classList.contains('active')) {
+            if (document.getElementById('historial-proyectos')?.classList.contains('active')) cargarHistorial();
+            if (document.getElementById('vista-artista')?.classList.contains('active')) {
                 const nombreEl = document.getElementById('vista-artista-nombre');
                 if (nombreEl) {
                     const n = nombreEl.textContent;
-                    const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
-                    if(a) mostrarVistaArtista(a._id, n, ''); 
+                    const a = localCache.artistas?.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                    if(a && typeof mostrarVistaArtista === 'function') mostrarVistaArtista(a._id, n, ''); 
                 }
             }
             if (cerrarModal) closeDeliveryModal(); 
-        } catch (e) { showToast(`Error al guardar: ${e.message}`, 'error'); } 
+        } catch (e) { 
+            console.error('[saveDeliveryLink] Error completo:', e);
+            // Si el error es de parseo JSON, probablemente el endpoint no existe
+            if (e.message.includes('Unexpected token') || e.message.includes('<')) {
+                showToast('Error: El servidor no reconoce esta operación. Contacta al administrador.', 'error');
+            } else {
+                showToast(`Error al guardar: ${e.message}`, 'error'); 
+            }
+        } 
     }
 
     function openPlayer(projectId) {
@@ -5333,6 +5361,8 @@ async function buscarOCrearCarpeta(nombre, padreId = null) {
     let query = `name = '${nombre}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     if (padreId) query += ` and '${padreId}' in parents`;
 
+    console.log(`[DRIVE] Buscando carpeta "${nombre}"${padreId ? ` dentro de padre: ${padreId}` : ' en raíz'}...`);
+
     try {
         const response = await gapi.client.drive.files.list({
             q: query,
@@ -5342,8 +5372,10 @@ async function buscarOCrearCarpeta(nombre, padreId = null) {
 
         const files = response.result.files;
         if (files && files.length > 0) {
+            console.log(`[DRIVE] Carpeta "${nombre}" encontrada con ID: ${files[0].id}`);
             return files[0].id; // La carpeta ya existe
         } else {
+            console.log(`[DRIVE] Carpeta "${nombre}" no existe. Creando nueva...`);
             // Crear la carpeta si no existe
             const fileMetadata = {
                 name: nombre,
@@ -5354,6 +5386,7 @@ async function buscarOCrearCarpeta(nombre, padreId = null) {
                 resource: fileMetadata,
                 fields: 'id'
             });
+            console.log(`[DRIVE] Carpeta "${nombre}" creada con ID: ${folder.result.id}`);
             return folder.result.id;
         }
     } catch (error) {
@@ -5362,17 +5395,50 @@ async function buscarOCrearCarpeta(nombre, padreId = null) {
     }
 }
 
+// Función para obtener el nombre legible de la empresa actual
+async function obtenerNombreEmpresaActual() {
+    try {
+        // Siempre hacer llamada al API para obtener el nombre actual
+        console.log('[DRIVE] Consultando nombre de empresa al API...');
+        const response = await fetchAPI('/api/configuracion/empresa');
+        if (response && response.nombre && response.nombre !== 'Fia Records') {
+            console.log('[DRIVE] Nombre de empresa obtenido:', response.nombre);
+            return response.nombre;
+        }
+        console.log('[DRIVE] API retornó nombre genérico o no disponible:', response);
+    } catch (e) {
+        console.log('[DRIVE] No se pudo obtener nombre de empresa desde API:', e);
+    }
+    
+    // Fallback: usar ID de empresa o nombre genérico
+    const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id');
+    if (empresaId && empresaId !== 'all' && empresaId !== 'null') {
+        return `Empresa_${empresaId.substring(0, 8)}`;
+    }
+    
+    return 'FiaRecords_General';
+}
+
 // Función Maestra para organizar la estructura del estudio
 async function obtenerCarpetaMaestra() {
     try {
+        console.log('[DRIVE] === INICIANDO CREACIÓN DE ESTRUCTURA DE CARPETAS ===');
+        
         // 1. Carpeta Principal de FiaRecords
+        console.log('[DRIVE] Paso 1: Creando/Buscando carpeta raíz FiaRecords_Studio...');
         const fiaId = await buscarOCrearCarpeta('FiaRecords_Studio');
+        console.log(`[DRIVE] FiaRecords_Studio ID: ${fiaId}`);
         
-        // 2. Carpeta de la Empresa Actual (respetando la multiempresa)
-        const empresaNombre = document.getElementById('empresa-actual-nombre')?.textContent || 'Empresa_General';
-        const empresaId = await buscarOCrearCarpeta(empresaNombre, fiaId);
+        // 2. Obtener el nombre legible de la empresa
+        const empresaNombre = await obtenerNombreEmpresaActual();
+        console.log(`[DRIVE] Nombre de empresa detectado: "${empresaNombre}"`);
         
-        return empresaId;
+        console.log(`[DRIVE] Paso 2: Creando/Buscando carpeta de empresa "${empresaNombre}" dentro de FiaRecords_Studio...`);
+        const empresaCarpetaId = await buscarOCrearCarpeta(empresaNombre, fiaId);
+        console.log(`[DRIVE] Carpeta empresa ID: ${empresaCarpetaId}`);
+        
+        console.log('[DRIVE] === ESTRUCTURA BASE CREADA ===');
+        return empresaCarpetaId;
     } catch (error) {
         console.error('[DRIVE] Fallo al crear carpeta maestra:', error);
         throw error;
@@ -5398,12 +5464,23 @@ async function processDriveUpload() {
         if (typeof showToast === 'function') showToast('Subiendo archivos a Drive...', 'info');
 
         const idMaestra = await obtenerCarpetaMaestra();
+        console.log(`[DRIVE] Paso 3: Creando/Buscando carpeta de artista "${artistName}" dentro de empresa...`);
         const idArtista = await buscarOCrearCarpeta(artistName, idMaestra);
+        console.log(`[DRIVE] Carpeta artista ID: ${idArtista}`);
+        
+        console.log(`[DRIVE] Paso 4: Creando/Buscando carpeta de proyecto "${projectName}" dentro de artista...`);
         const idProyecto = await buscarOCrearCarpeta(projectName, idArtista);
+        console.log(`[DRIVE] Carpeta proyecto ID: ${idProyecto}`);
+        
+        console.log('[DRIVE] === RESUMEN DE ESTRUCTURA ===');
+        console.log(`[DRIVE] Empresa ID: ${idMaestra}`);
+        console.log(`[DRIVE] Artista ID: ${idArtista} (hija de ${idMaestra})`);
+        console.log(`[DRIVE] Proyecto ID: ${idProyecto} (hija de ${idArtista})`);
 
         if(statusSpan) statusSpan.textContent = 'Generando enlace...';
         const getFolderRes = await gapi.client.drive.files.get({ fileId: idProyecto, fields: 'webViewLink' });
         const folderLink = getFolderRes.result.webViewLink;
+        console.log(`[DRIVE] Enlace generado: ${folderLink}`);
 
         const accessToken = gapi.client.getToken().access_token;
         const uploadedFiles = [];
@@ -5454,8 +5531,8 @@ async function processDriveUpload() {
             const nombreEl = document.getElementById('vista-artista-nombre');
             if (nombreEl) {
                 const n = nombreEl.textContent;
-                const a = localCache.artistas.find(ar => ar.nombre === n || ar.nombreArtistico === n);
-                if(a) mostrarVistaArtista(a._id, n, ''); 
+                const a = localCache.artistas?.find(ar => ar.nombre === n || ar.nombreArtistico === n);
+                if(a && typeof mostrarVistaArtista === 'function') mostrarVistaArtista(a._id, n, ''); 
             }
         }
         

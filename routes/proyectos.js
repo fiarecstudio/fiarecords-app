@@ -644,4 +644,34 @@ router.post('/:id/enviar-recibo', async (req, res) => {
     }
 });
 
+// --- NUEVA RUTA: GUARDAR ENLACE DE ENTREGA (DRIVE) ---
+router.put('/:id/enlace-entrega', async (req, res) => {
+    try {
+        if (req.user.role === 'cliente') return res.status(403).json({ error: 'No autorizado' });
+        
+        const { enlace, archivos } = req.body;
+        if (!enlace) return res.status(400).json({ error: 'Enlace requerido' });
+        
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        if (!hasTenantAccess(req, proyecto)) return res.status(403).json({ error: 'No autorizado' });
+        
+        // Actualizar enlace y archivos
+        proyecto.enlaceEntrega = enlace;
+        if (archivos && Array.isArray(archivos)) {
+            proyecto.archivos = archivos;
+        }
+        
+        await proyecto.save();
+        
+        // Poblar artista para la respuesta
+        await proyecto.populate('artista');
+        
+        res.json(proyecto);
+    } catch (e) {
+        console.error('[PUT /:id/enlace-entrega] Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;
