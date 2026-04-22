@@ -5328,12 +5328,63 @@ function handleGoogleDriveCallback(tokenResponse) {
     }
 }
 
+// Función para buscar o crear una carpeta en Drive
+async function buscarOCrearCarpeta(nombre, padreId = null) {
+    let query = `name = '${nombre}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    if (padreId) query += ` and '${padreId}' in parents`;
+
+    try {
+        const response = await gapi.client.drive.files.list({
+            q: query,
+            fields: 'files(id, name)',
+            spaces: 'drive'
+        });
+
+        const files = response.result.files;
+        if (files && files.length > 0) {
+            return files[0].id; // La carpeta ya existe
+        } else {
+            // Crear la carpeta si no existe
+            const fileMetadata = {
+                name: nombre,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: padreId ? [padreId] : []
+            };
+            const folder = await gapi.client.drive.files.create({
+                resource: fileMetadata,
+                fields: 'id'
+            });
+            return folder.result.id;
+        }
+    } catch (error) {
+        console.error('[DRIVE] Error al buscar/crear carpeta:', error);
+        throw error;
+    }
+}
+
+// Función Maestra para organizar la estructura del estudio
+async function obtenerCarpetaMaestra() {
+    try {
+        // 1. Carpeta Principal de FiaRecords
+        const fiaId = await buscarOCrearCarpeta('FiaRecords_Studio');
+        
+        // 2. Carpeta de la Empresa Actual (respetando la multiempresa)
+        const empresaNombre = document.getElementById('empresa-actual-nombre')?.textContent || 'Empresa_General';
+        const empresaId = await buscarOCrearCarpeta(empresaNombre, fiaId);
+        
+        return empresaId;
+    } catch (error) {
+        console.error('[DRIVE] Fallo al crear carpeta maestra:', error);
+        throw error;
+    }
+}
+
 // Función para procesar la subida real a Drive
 async function processDriveUpload() {
     console.log('[DRIVE] Iniciando subida de archivos guardados...');
     
     if (!window.pendingDriveUpload) {
-        showToast('No hay archivos pendientes de subida.', 'error');
+        if (typeof showToast === 'function') showToast('No hay archivos pendientes de subida.', 'error');
         return;
     }
     
@@ -5347,13 +5398,8 @@ async function processDriveUpload() {
         if (typeof showToast === 'function') showToast('Subiendo archivos a Drive...', 'info');
 
         const idMaestra = await obtenerCarpetaMaestra();
-        const idArtista = await buscarOCrearCarpetaArtista(artistName, idMaestra);
-        await hacerCarpetaPublica(idArtista); 
-
-        if(statusSpan) statusSpan.textContent = `Creando carpeta: ${projectName}...`;
-        const idProyecto = await buscarOCrearCarpetaProyecto(projectName, idArtista);
-        
-        await hacerCarpetaPublica(idProyecto);
+        const idArtista = await buscarOCrearCarpeta(artistName, idMaestra);
+        const idProyecto = await buscarOCrearCarpeta(projectName, idArtista);
 
         if(statusSpan) statusSpan.textContent = 'Generando enlace...';
         const getFolderRes = await gapi.client.drive.files.get({ fileId: idProyecto, fields: 'webViewLink' });
@@ -5399,12 +5445,12 @@ async function processDriveUpload() {
         
         if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
 
-        await saveDeliveryLink(false, folderLink, uploadedFiles); 
+        if (typeof saveDeliveryLink === 'function') await saveDeliveryLink(false, folderLink, uploadedFiles); 
         
         if (typeof showToast === 'function') showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
 
-        if (document.getElementById('historial-proyectos').classList.contains('active')) cargarHistorial();
-        if (document.getElementById('vista-artista').classList.contains('active')) {
+        if (document.getElementById('historial-proyectos')?.classList.contains('active')) cargarHistorial();
+        if (document.getElementById('vista-artista')?.classList.contains('active')) {
             const nombreEl = document.getElementById('vista-artista-nombre');
             if (nombreEl) {
                 const n = nombreEl.textContent;
