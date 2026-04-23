@@ -85,6 +85,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/deudas', require('./routes/deudas'));
 app.use('/api/backups', require('./routes/backups'));
 app.use('/api/empresas', require('./routes/empresas')); // FASE 4: Gestión de Empresas (Super Admin)
+app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google Drive
 
 // --- 4. Servir Archivos Estáticos ---
 app.use(express.static(path.join(__dirname)));

@@ -896,7 +896,13 @@ let proyectoIdEnEdicion = null;
                 if (file.tipo === 'video') icon = 'bi-film text-danger';
                 if (file.tipo === 'imagen') icon = 'bi-image text-success';
                 
-                const urlToUse = file.urlDirecta || file.url; 
+                // Para videos, SIEMPRE usar el formato /preview para evitar CSP
+                let urlToUse;
+                if (file.tipo === 'video' && file.driveId) {
+                    urlToUse = `https://drive.google.com/file/d/${file.driveId}/preview`;
+                } else {
+                    urlToUse = file.urlDirecta || file.url || (file.driveId ? `https://drive.google.com/file/d/${file.driveId}/preview` : '');
+                } 
 
                 return `
                 <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
@@ -939,16 +945,47 @@ let proyectoIdEnEdicion = null;
     }
 
     async function sincronizarArchivosDrive(projectId) {
-        let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
-        if (!proj || !proj.enlaceEntrega) return showToast('No hay enlace de Drive para sincronizar.', 'error');
+        // 1. OBTENER DATOS FRESCOS DEL SERVIDOR (no depender del caché local)
+        let proyectoActualizado;
+        try {
+            proyectoActualizado = await fetchAPI(`/api/proyectos/${projectId}`);
+        } catch (e) {
+            console.error('[sincronizarArchivosDrive] Error al obtener proyecto del servidor:', e);
+            return showToast('Error al obtener información del proyecto.', 'error');
+        }
+        
+        // Validar que existe el enlace
+        if (!proyectoActualizado || !proyectoActualizado.enlaceEntrega) {
+            return showToast('No hay enlace de Drive para sincronizar.', 'error');
+        }
+        
+        const enlaceDrive = proyectoActualizado.enlaceEntrega;
+        
+        // 2. ACTUALIZAR CACHÉ LOCAL con datos frescos
+        if (window.localCache && localCache.proyectos) {
+            const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
+            if (indexCache !== -1) {
+                localCache.proyectos[indexCache] = { ...localCache.proyectos[indexCache], ...proyectoActualizado };
+            } else {
+                localCache.proyectos.push(proyectoActualizado);
+            }
+            await localforage.setItem('cache_proyectos', localCache.proyectos);
+        }
+        
+        // Actualizar historial cacheado también
+        const indexHistorial = historialCacheados.findIndex(p => p._id === projectId);
+        if (indexHistorial !== -1) {
+            historialCacheados[indexHistorial] = { ...historialCacheados[indexHistorial], ...proyectoActualizado };
+        }
 
+        // 3. EXTRAER FOLDER ID del enlace fresco
         let folderId = null;
-        if (proj.enlaceEntrega.includes('id=')) {
-            folderId = proj.enlaceEntrega.split('id=')[1].split('&')[0];
-        } else if (proj.enlaceEntrega.includes('/folders/')) {
-            folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0].split('/')[0];
-        } else if (proj.enlaceEntrega.includes('/drive/u/0/folders/')) {
-             folderId = proj.enlaceEntrega.split('/folders/')[1].split('?')[0];
+        if (enlaceDrive.includes('id=')) {
+            folderId = enlaceDrive.split('id=')[1].split('&')[0];
+        } else if (enlaceDrive.includes('/folders/')) {
+            folderId = enlaceDrive.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (enlaceDrive.includes('/drive/u/0/folders/')) {
+             folderId = enlaceDrive.split('/folders/')[1].split('?')[0];
         }
 
         if (!folderId) return showToast('No se pudo identificar el ID de la carpeta.', 'error');
@@ -998,9 +1035,12 @@ let proyectoIdEnEdicion = null;
             const modalEl = document.getElementById('delivery-modal');
             modalEl.querySelector('#delivery-project-id').value = projectId;
             
-            await saveDeliveryLink(false, proj.enlaceEntrega, archivosDetectados);
+            await saveDeliveryLink(false, enlaceDrive, archivosDetectados);
 
-            proj.archivos = archivosDetectados;
+            // Actualizar también el objeto en caché si existe
+            let proj = localCache.proyectos.find(p => p._id === projectId) || 
+                       historialCacheados.find(p => p._id === projectId);
+            if (proj) proj.archivos = archivosDetectados;
             
             bootstrap.Modal.getInstance(document.getElementById('player-modal')).hide();
             setTimeout(() => {
@@ -1037,6 +1077,11 @@ let proyectoIdEnEdicion = null;
         }
 
         if (fileId && !isFolder) {
+            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+        }
+
+        // Si es video, asegurar que use el formato /preview
+        if (tipo === 'video' && fileId) {
             iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
         }
 
@@ -5440,14 +5485,14 @@ async function obtenerCarpetaMaestra() {
         console.log('[DRIVE] === ESTRUCTURA BASE CREADA ===');
         return empresaCarpetaId;
     } catch (error) {
-        console.error('[DRIVE] Fallo al crear carpeta maestra:', error);
+        console.error('[DRIVE] Error al crear carpeta maestra:', error);
         throw error;
     }
 }
 
-// Función para procesar la subida real a Drive
+// Función para procesar la subida de archivos al backend (que luego sube a Drive central)
 async function processDriveUpload() {
-    console.log('[DRIVE] Iniciando subida de archivos guardados...');
+    console.log('[DRIVE] Iniciando subida de archivos al servidor...');
     
     if (!window.pendingDriveUpload) {
         if (typeof showToast === 'function') showToast('No hay archivos pendientes de subida.', 'error');
@@ -5457,75 +5502,82 @@ async function processDriveUpload() {
     const { files, statusSpan } = window.pendingDriveUpload;
     const artistName = document.getElementById('delivery-artist-name')?.value || 'General';
     const projectName = document.getElementById('delivery-project-name')?.value || 'Sin Nombre';
+    const projectId = document.getElementById('delivery-project-id')?.value;
     const linkInput = document.getElementById('delivery-link-input');
     
-    try {
-        if(statusSpan) { statusSpan.textContent = 'Organizando carpetas...'; statusSpan.style.color = 'var(--primary-color)'; }
-        if (typeof showToast === 'function') showToast('Subiendo archivos a Drive...', 'info');
-
-        const idMaestra = await obtenerCarpetaMaestra();
-        console.log(`[DRIVE] Paso 3: Creando/Buscando carpeta de artista "${artistName}" dentro de empresa...`);
-        const idArtista = await buscarOCrearCarpeta(artistName, idMaestra);
-        console.log(`[DRIVE] Carpeta artista ID: ${idArtista}`);
-        
-        console.log(`[DRIVE] Paso 4: Creando/Buscando carpeta de proyecto "${projectName}" dentro de artista...`);
-        const idProyecto = await buscarOCrearCarpeta(projectName, idArtista);
-        console.log(`[DRIVE] Carpeta proyecto ID: ${idProyecto}`);
-        
-        console.log('[DRIVE] === RESUMEN DE ESTRUCTURA ===');
-        console.log(`[DRIVE] Empresa ID: ${idMaestra}`);
-        console.log(`[DRIVE] Artista ID: ${idArtista} (hija de ${idMaestra})`);
-        console.log(`[DRIVE] Proyecto ID: ${idProyecto} (hija de ${idArtista})`);
-
-        if(statusSpan) statusSpan.textContent = 'Generando enlace...';
-        const getFolderRes = await gapi.client.drive.files.get({ fileId: idProyecto, fields: 'webViewLink' });
-        const folderLink = getFolderRes.result.webViewLink;
-        console.log(`[DRIVE] Enlace generado: ${folderLink}`);
-
-        const accessToken = gapi.client.getToken().access_token;
-        const uploadedFiles = [];
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            if(statusSpan) statusSpan.textContent = `Subiendo ${i + 1} de ${files.length}: "${file.name}"...`;
-            const metadata = { 'name': file.name, 'parents': [idProyecto] };
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', file);
-            
-            const resUpload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-                method: 'POST', headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }), body: form
-            });
-            
-            const fileData = await resUpload.json();
-            
-            const nombreLow = file.name.toLowerCase();
-            let tipoArchivo = 'otro';
-            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
-            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
-            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
-
-            if(tipoArchivo !== 'otro') {
-                uploadedFiles.push({
-                    nombre: file.name,
-                    driveId: fileData.id,
-                    urlDirecta: `https://drive.google.com/file/d/${fileData.id}/preview`,
-                    tipo: tipoArchivo
-                });
-            }
+    // Obtener empresaId del localStorage o del proyecto actual
+    let empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id');
+    
+    // Si tenemos projectId, intentar obtener la empresa del proyecto en caché
+    if (!empresaId && projectId) {
+        const proyecto = localCache.proyectos?.find(p => p._id === projectId);
+        if (proyecto && proyecto.empresaId) {
+            empresaId = proyecto.empresaId;
         }
+    }
+    
+    if (!empresaId) {
+        if (typeof showToast === 'function') showToast('Error: No se pudo determinar la empresa', 'error');
+        return;
+    }
+    
+    try {
+        if(statusSpan) { statusSpan.textContent = 'Preparando archivos...'; statusSpan.style.color = 'var(--primary-color)'; }
+        if (typeof showToast === 'function') showToast('Subiendo archivos a Fia Records...', 'info');
+
+        // Preparar FormData para enviar al backend
+        const formData = new FormData();
+        
+        // Agregar archivos
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
+        
+        // Agregar metadatos (incluyendo empresaId para que el backend busque el nombre real)
+        formData.append('empresaId', empresaId);
+        formData.append('artistaNombre', artistName);
+        formData.append('proyectoNombre', projectName);
+        formData.append('proyectoId', projectId || '');
+
+        console.log(`[DRIVE] Enviando archivos al backend (empresaId: ${empresaId})...`);
+        if(statusSpan) statusSpan.textContent = `Subiendo ${files.length} archivo(s) al servidor...`;
+
+        // Enviar al backend (usar ruta relativa)
+        const response = await fetch('/api/drive/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error en la subida');
+        }
+
+        const data = await response.json();
+        console.log('[DRIVE] Respuesta del servidor:', data);
+
+        if (!data.success) {
+            throw new Error('La subida no fue exitosa');
+        }
+
+        const folderLink = data.folderLink;
+        const uploadedFiles = data.files || [];
 
         if(linkInput) {
             linkInput.value = folderLink; 
             linkInput.style.borderColor = '#10b981'; 
         }
         
-        if(statusSpan) { statusSpan.textContent = '¡Listo! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
+        if(statusSpan) { statusSpan.textContent = '¡Subida exitosa! Guardando datos...'; statusSpan.style.color = 'var(--success-color)'; }
 
-        if (typeof saveDeliveryLink === 'function') await saveDeliveryLink(false, folderLink, uploadedFiles); 
+        // Guardar enlace en el proyecto
+        if (typeof saveDeliveryLink === 'function' && projectId) {
+            await saveDeliveryLink(false, folderLink, uploadedFiles);
+        }
         
-        if (typeof showToast === 'function') showToast(`¡Archivos subidos y reproductor actualizado!`, 'success');
+        if (typeof showToast === 'function') showToast(`¡Archivos subidos a Drive de Fia Records!`, 'success');
 
+        // Actualizar vistas si están activas
         if (document.getElementById('historial-proyectos')?.classList.contains('active')) cargarHistorial();
         if (document.getElementById('vista-artista')?.classList.contains('active')) {
             const nombreEl = document.getElementById('vista-artista-nombre');
@@ -5540,7 +5592,7 @@ async function processDriveUpload() {
         delete window.pendingDriveUpload;
         
     } catch (err) {
-        console.error(err);
+        console.error('[DRIVE] Error:', err);
         if (typeof showToast === 'function') showToast('Error: ' + err.message, 'error');
         if(statusSpan) { statusSpan.textContent = 'Error en la subida.'; statusSpan.style.color = 'var(--danger-color)'; }
     } finally { 
@@ -5548,10 +5600,7 @@ async function processDriveUpload() {
     }
 }
 
-// Stub functions for loader (if not defined elsewhere)
-function showLoader(mensaje) {
-    console.log('[Loader]', mensaje);
-}
+// ... (rest of the code remains the same)
 function hideLoader() {
     console.log('[Loader] Ocultado');
 }
