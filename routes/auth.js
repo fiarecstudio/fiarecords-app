@@ -10,6 +10,15 @@ const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 const { google } = require('googleapis');
 
+// PASO 4: Importar middleware de validación y esquemas Joi
+const { validate } = require('../middleware/validate');
+const {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema
+} = require('../validations/auth.validation');
+
 // ============================================================
 // CONFIGURACIÓN GMAIL API
 // ============================================================
@@ -73,7 +82,8 @@ const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
 // ============================================================
 // 1. REGISTRO
 // ============================================================
-router.post('/register', async (req, res) => {
+// PASO 4: Validación con Joi antes de procesar
+router.post('/register', validate(registerSchema), async (req, res) => {
     try {
         const { username, email, password, nombre, createArtist } = req.body;
         
@@ -125,7 +135,8 @@ router.post('/register', async (req, res) => {
 // ============================================================
 // 2. LOGIN (CON LÓGICA DE PRIORIDAD MANUAL)
 // ============================================================
-router.post('/login', async (req, res) => {
+// PASO 4: Validación con Joi antes de procesar
+router.post('/login', validate(loginSchema), async (req, res) => {
     try {
         const { username, password } = req.body;
 
@@ -220,7 +231,7 @@ router.post('/login', async (req, res) => {
 // ============================================================
 // 3. RECUPERAR CONTRASEÑA (SOLICITUD)
 // ============================================================
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res) => {
     console.log("📩 Iniciando solicitud de recuperación...");
     
     try {
