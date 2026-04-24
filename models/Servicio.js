@@ -16,4 +16,11 @@ const ServicioSchema = new mongoose.Schema({
   isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
+// ==================================================================
+// ÍNDICES COMPUESTOS PARA OPTIMIZACIÓN MULTI-TENANT
+// ==================================================================
+ServicioSchema.index({ empresaId: 1, isDeleted: 1 });
+ServicioSchema.index({ empresaId: 1, nombre: 1 });
+ServicioSchema.index({ empresaId: 1, visible: 1 });
+
 module.exports = mongoose.model('Servicio', ServicioSchema);

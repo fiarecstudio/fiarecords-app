@@ -90,9 +90,22 @@ class ProyectoService {
         return filtro;
     }
     
-    _buildQueryFilter(tenantFilter, additionalFilters = {}) {
+    _buildQueryFilter(tenantFilter, additionalFilters = {}, options = {}) {
         const baseFilter = tenantFilter || {};
-        return { ...baseFilter, ...additionalFilters };
+        
+        // REGLA DE SEGURIDAD: Por defecto, excluir cancelados y eliminados
+        // A menos que se solicite explícitamente (options.includeCancelled o options.includeDeleted)
+        const defaultFilters = {};
+        
+        if (!options.includeCancelled) {
+            defaultFilters.estatus = { $ne: 'Cancelado' };
+        }
+        
+        if (!options.includeDeleted) {
+            defaultFilters.isDeleted = { $ne: true };
+        }
+        
+        return { ...baseFilter, ...defaultFilters, ...additionalFilters };
     }
     
     _determinarEmpresaId(user, headerEmpresaId, bodyEmpresaId = null) {
@@ -272,7 +285,7 @@ class ProyectoService {
     }
     
     /**
-     * Listar proyectos completos o cancelados
+     * Listar proyectos completos o cancelados (incluye cancelados y eliminados explícitamente)
      */
     async listarCompletos(tenantFilter) {
         const filtroBase = this._buildQueryFilter(tenantFilter, { 
@@ -280,7 +293,7 @@ class ProyectoService {
                 { proceso: 'Completo' },
                 { estatus: 'Cancelado' }
             ]
-        });
+        }, { includeCancelled: true, includeDeleted: true });
         return await Proyecto.find(filtroBase).populate('artista').sort({ fecha: -1 });
     }
     
@@ -623,7 +636,8 @@ class ProyectoService {
             throw new AppError('No autorizado', 403);
         }
         
-        const filtro = this._buildQueryFilter(tenantFilter, { isDeleted: true });
+        // Incluir eliminados explícitamente para ver la papelera
+        const filtro = this._buildQueryFilter(tenantFilter, { isDeleted: true }, { includeDeleted: true, includeCancelled: true });
         return await Proyecto.find(filtro).populate('artista');
     }
     
@@ -649,7 +663,9 @@ class ProyectoService {
     }
     
     /**
-     * Eliminar proyecto permanentemente
+     * Eliminar proyecto permanentemente (SOFT DELETE - cambia estatus a Cancelado)
+     * PROHIBIDO: Usar remove(), deleteOne() o findByIdAndDelete()
+     * CORRECCIÓN: Usar findByIdAndUpdate para cambiar estatus a 'Cancelado'
      */
     async eliminarPermanente(user, tenantFilter, proyectoId) {
         if (user.role !== 'admin') {
@@ -665,20 +681,30 @@ class ProyectoService {
             throw new AppError('No autorizado', 403);
         }
         
-        await Proyecto.findByIdAndDelete(proyectoId);
-        return { eliminado: true };
+        // SOFT DELETE: Cambiar estatus a Cancelado en lugar de eliminar físicamente
+        await Proyecto.findByIdAndUpdate(proyectoId, { 
+            estatus: 'Cancelado',
+            isDeleted: true 
+        });
+        return { eliminado: true, metodo: 'soft-delete', estatus: 'Cancelado' };
     }
     
     /**
-     * Vaciar papelera
+     * Vaciar papelera (SOFT DELETE MASIVO)
+     * PROHIBIDO: Usar deleteMany() físico
+     * CORRECCIÓN: Usar updateMany para cambiar estatus a 'Cancelado'
      */
     async vaciarPapelera(user) {
         if (user.role !== 'admin') {
             throw new AppError('Solo Admin', 403);
         }
         
-        await Proyecto.deleteMany({ isDeleted: true });
-        return { vaciado: true };
+        // SOFT DELETE MASIVO: Actualizar todos los marcados como isDeleted
+        const resultado = await Proyecto.updateMany(
+            { isDeleted: true },
+            { estatus: 'Cancelado' }
+        );
+        return { vaciado: true, modificados: resultado.modifiedCount, metodo: 'soft-delete' };
     }
     
     /**
@@ -749,7 +775,9 @@ class ProyectoService {
         }
         
         proyecto.montoPagado -= pago.monto;
-        pago.deleteOne();
+        // PROHIBIDO: pago.deleteOne() - Elimina físicamente el subdocumento
+        // CORRECCIÓN: Usar $pull para remover el pago del array
+        proyecto.pagos.pull({ _id: pagoId });
         
         if (proyecto.montoPagado < (proyecto.total - (proyecto.descuento || 0))) {
             proyecto.estatus = 'Pendiente de Pago';

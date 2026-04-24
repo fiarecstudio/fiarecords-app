@@ -54,4 +54,10 @@ const ConfiguracionSchema = new mongoose.Schema({
     }
 });
 
+// ==================================================================
+// ÍNDICES COMPUESTOS PARA OPTIMIZACIÓN MULTI-TENANT
+// ==================================================================
+// NOTA: empresaId ya tiene unique: true en el esquema (línea 10)
+// No se necesita índice simple adicional para empresaId
+
 module.exports = mongoose.model('Configuracion', ConfiguracionSchema);

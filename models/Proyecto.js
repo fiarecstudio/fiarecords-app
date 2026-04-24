@@ -78,4 +78,15 @@ const ProyectoSchema = new mongoose.Schema({
     isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });
 
+// ==================================================================
+// ÍNDICES COMPUESTOS PARA OPTIMIZACIÓN MULTI-TENANT
+// ==================================================================
+ProyectoSchema.index({ empresaId: 1, estatus: 1 });
+ProyectoSchema.index({ empresaId: 1, proceso: 1 });
+ProyectoSchema.index({ empresaId: 1, fecha: -1 });
+ProyectoSchema.index({ empresaId: 1, isDeleted: 1 });
+ProyectoSchema.index({ empresaId: 1, artista: 1 });
+// Índice para consultas de disponibilidad
+ProyectoSchema.index({ empresaId: 1, fecha: 1, estatus: 1, proceso: 1 });
+
 module.exports = mongoose.model('Proyecto', ProyectoSchema);

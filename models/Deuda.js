@@ -56,4 +56,11 @@ const DeudaSchema = new mongoose.Schema({
     timestamps: true // Guarda fecha de creación y actualización automáticamente
 });
 
+// ==================================================================
+// ÍNDICES COMPUESTOS PARA OPTIMIZACIÓN MULTI-TENANT
+// ==================================================================
+DeudaSchema.index({ empresaId: 1, estatus: 1 });
+DeudaSchema.index({ empresaId: 1, isDeleted: 1 });
+DeudaSchema.index({ empresaId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Deuda', DeudaSchema);
