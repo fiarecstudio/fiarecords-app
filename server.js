@@ -48,24 +48,57 @@ app.use(helmet({
 }));
 if (limiters.generalLimiter) app.use(limiters.generalLimiter); 
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// --- 🛠️ PARCHE PARA EXPRESS 5 ---
-// Le damos permiso al guardia para modificar y limpiar las peticiones
+// ==================================================================
+// PARCHE DE SEGURIDAD PARA EXPRESS 5 + NoSQL Injection Protection
+// ==================================================================
+// En Express 5, req.query es read-only por defecto. Este parche lo hace
+// writable para que mongoSanitize pueda sanitizar correctamente.
+// El parche DEBE ir ANTES de mongoSanitize para que la sanitización
+// ocurra sobre un objeto modificable.
+// ==================================================================
 app.use((req, res, next) => {
+  // Guardar referencia original por si acaso
+  const originalQuery = req.query;
+  
+  // Crear nuevo objeto limpio y writable
+  const cleanQuery = {};
+  
+  // Copiar solo propiedades simples (no objetos anidados maliciosos)
+  // Esto previene que operadores MongoDB como {$ne: null} pasen directamente
+  for (const key in originalQuery) {
+    if (Object.prototype.hasOwnProperty.call(originalQuery, key)) {
+      const value = originalQuery[key];
+      // Solo copiar strings, números, booleanos - no objetos complejos
+      if (typeof value !== 'object' || value === null) {
+        cleanQuery[key] = value;
+      }
+    }
+  }
+  
+  // Reemplazar req.query con objeto writable
   Object.defineProperty(req, 'query', {
-    value: { ...req.query },
+    value: cleanQuery,
     writable: true,
     configurable: true,
     enumerable: true
   });
+  
   next();
 });
 
-// --- 2. Middlewares de Seguridad ---
-// Ahora sí, el guardia puede trabajar sin que Express lo bloquee
-app.use(mongoSanitize()); 
+// --- Middleware de Sanitización NoSQL ---
+// Ahora req.query es writable y mongoSanitize puede sanitizar operadores
+// maliciosos como $ne, $gt, $where, etc.
+app.use(mongoSanitize({
+  // Opciones adicionales de seguridad
+  onSanitize: ({ req, key }) => {
+    console.warn(`[SECURITY] Parámetro sanitizado: ${key} en ${req.originalUrl}`);
+  }
+}));
+
+// Body parsers (después del parche de seguridad)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- Ruta Health Check (Mejorado para Render) ---
 app.get('/health', async (req, res) => {
