@@ -8,6 +8,7 @@ const cors = require('cors');
 const path = require('path');
 const mongoSanitize = require('express-mongo-sanitize');
 const helmet = require('helmet');
+const errorHandler = require('./middleware/errorHandler');
 
 let limiters = {};
 try {
@@ -66,9 +67,36 @@ app.use((req, res, next) => {
 // Ahora sí, el guardia puede trabajar sin que Express lo bloquee
 app.use(mongoSanitize()); 
 
-// --- Ruta Health Check ---
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+// --- Ruta Health Check (Mejorado para Render) ---
+app.get('/health', async (req, res) => {
+  try {
+    // Verificar conexión a MongoDB con ping real
+    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    
+    if (dbStatus === 'connected') {
+      await mongoose.connection.db.admin().ping();
+    }
+    
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB',
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + ' MB'
+      },
+      database: dbStatus,
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: 'Database connection failed'
+    });
+  }
 });
 
 // --- 3. Rutas de la API ---
@@ -96,7 +124,15 @@ app.get(/.*/, (req, res) => {
 });
 
 // --- 6. Conexión a Base de Datos y Servidor ---
-mongoose.connect(process.env.MONGO_URI)
+const mongooseOptions = {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  maxPoolSize: 10 // Limitar conexiones para Render free tier
+};
+
+let server;
+
+mongoose.connect(process.env.MONGO_URI, mongooseOptions)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
     
@@ -106,7 +142,7 @@ mongoose.connect(process.env.MONGO_URI)
     // ---------------------------------
     
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
     });
   })
@@ -115,9 +151,41 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-/* Global Error Handler */
-function globalErrorHandlerFIA(err, req, res, next){
-    console.error("GLOBAL ERROR:", err.stack || err);
-    res.status(500).json({error:"Internal server error"});
-}
-app.use(globalErrorHandlerFIA);
+// --- 7. Graceful Shutdown para Render ---
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} recibido. Cerrando servidor gracefulmente...`);
+  
+  // Forzar cierre después de 10 segundos si algo se queda colgado
+  const forceExit = setTimeout(() => {
+    console.error('❌ Forzando cierre después de timeout...');
+    process.exit(1);
+  }, 10000);
+  
+  try {
+    // Cerrar servidor HTTP primero (dejar de aceptar nuevas conexiones)
+    if (server) {
+      await new Promise((resolve) => {
+        server.close(() => {
+          console.log('✅ Servidor HTTP cerrado');
+          resolve();
+        });
+      });
+    }
+    
+    // Cerrar conexión MongoDB
+    await mongoose.connection.close();
+    console.log('✅ Conexión MongoDB cerrada');
+    
+    clearTimeout(forceExit);
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error durante graceful shutdown:', error.message);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// --- 8. Error Handler Global (debe ser el último middleware) ---
+app.use(errorHandler);
