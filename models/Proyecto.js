@@ -60,11 +60,21 @@ const ProyectoSchema = new mongoose.Schema({
     enlaceEntrega: { type: String, default: '' }, 
 
     // Guarda los archivos multimedia
+    // TASK 3: Esquema mejorado con campos completos de Google Drive
     archivos: [{
-        nombre: String,
-        driveId: String,
-        urlDirecta: String,
-        tipo: String // 'audio', 'video', 'imagen', 'otro'
+        nombre: String,                          // Nombre original del archivo
+        driveId: String,                       // ID de Google Drive
+        urlDirecta: String,                    // URL para preview/embed
+        urlDescarga: String,                   // URL alternativa de descarga
+        webViewLink: String,                   // Link oficial de visualización Drive
+        webContentLink: String,                // Link oficial de descarga directa Drive
+        tipo: {                                // 'audio', 'video', 'imagen', 'documento', 'comprimido', 'otro'
+            type: String,
+            enum: ['audio', 'video', 'imagen', 'documento', 'comprimido', 'otro']
+        },
+        mimeType: String,                      // MIME type real del archivo
+        size: { type: Number, default: 0 },    // Tamaño en bytes
+        subidoEn: { type: Date, default: Date.now } // Fecha de subida
     }],
     
     detallesContrato: { type: Object },

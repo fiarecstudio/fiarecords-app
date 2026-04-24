@@ -25,24 +25,11 @@ const drive = google.drive({ version: 'v3', auth: oauth2Client });
 const ROOT_FOLDER_ID = process.env.GOOGLE_ROOT_FOLDER_ID;
 
 /**
- * Hace una carpeta pública (cualquiera con el enlace puede ver)
- * @param {string} fileId - ID de la carpeta
+ * TASK 2: ELIMINADA - Función hacerCarpetaPublica
+ * Razón: Seguridad - Las carpetas ya NO se hacen públicas automáticamente.
+ * Los archivos y carpetas solo son accesibles por el dueño de la cuenta de Drive.
+ * Para compartir, el administrador debe hacerlo explícitamente desde Google Drive.
  */
-async function hacerCarpetaPublica(fileId) {
-    try {
-        await drive.permissions.create({
-            fileId: fileId,
-            requestBody: {
-                role: 'reader',
-                type: 'anyone'
-            }
-        });
-        console.log(`[DRIVE] Permisos públicos aplicados a carpeta: ${fileId}`);
-    } catch (error) {
-        console.error(`[DRIVE] Error al aplicar permisos públicos:`, error);
-        // No lanzamos error para no interrumpir el flujo si falla
-    }
-}
 
 /**
  * Busca o crea una carpeta en Drive
@@ -137,8 +124,9 @@ router.post('/upload', upload.array('files'), async (req, res) => {
         // 2.1 Crear/Buscar carpeta de la empresa (con el NOMBRE real, no el ID)
         const empresaFolderId = await buscarOCrearCarpeta(nombreEmpresa, ROOT_FOLDER_ID);
         
-        // 2.1.1 Hacer la carpeta de empresa pública (cualquiera con enlace puede ver)
-        await hacerCarpetaPublica(empresaFolderId);
+        // TASK 2: ELIMINADO - Las carpetas ya NO se hacen públicas automáticamente
+        // Los archivos solo son accesibles por el dueño de la cuenta de Drive
+        console.log(`[DRIVE] Carpeta privada creada/verificada: ${empresaFolderId}`);
         
         // 2.2 Crear/Buscar carpeta del artista dentro de la empresa
         const artistaFolderId = await buscarOCrearCarpeta(artistaNombre || 'Sin Artista', empresaFolderId);
@@ -171,30 +159,62 @@ router.post('/upload', upload.array('files'), async (req, res) => {
                 body: fs.createReadStream(file.path)
             };
 
-            const uploadedFile = await drive.files.create({
-                resource: fileMetadata,
-                media: media,
-                fields: 'id, name, mimeType'
-            });
+            // TASK 1: Detectar si usar Resumable Upload (> 5MB)
+            const fileSize = file.size; // Multer ya tiene el tamaño
+            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+            const usarResumable = fileSize > (5 * 1024 * 1024); // 5MB
+
+            let uploadedFile;
+
+            if (usarResumable) {
+                console.log(`[DRIVE] Usando RESUMABLE UPLOAD: ${file.originalname} (${fileSizeMB} MB)`);
+                uploadedFile = await drive.files.create({
+                    resource: fileMetadata,
+                    media: media,
+                    fields: 'id, name, mimeType, webViewLink, webContentLink, size',
+                    uploadType: 'resumable'
+                }, {
+                    timeout: 600000 // 10 minutos para archivos grandes
+                });
+            } else {
+                console.log(`[DRIVE] Subida normal: ${file.originalname} (${fileSizeMB} MB)`);
+                uploadedFile = await drive.files.create({
+                    resource: fileMetadata,
+                    media: media,
+                    fields: 'id, name, mimeType, webViewLink, webContentLink, size'
+                });
+            }
+
+            // TASK 2: ELIMINADO - No se hacen permisos públicos automáticos
+            // Los archivos solo son accesibles por el dueño de la cuenta de Drive
 
             // Detectar tipo de archivo
             const nombreLow = file.originalname.toLowerCase();
             let tipoArchivo = 'otro';
-            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac)$/)) tipoArchivo = 'audio';
-            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm)$/)) tipoArchivo = 'video';
-            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp)$/)) tipoArchivo = 'imagen';
+            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff)$/)) tipoArchivo = 'audio';
+            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm|flv)$/)) tipoArchivo = 'video';
+            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/)) tipoArchivo = 'imagen';
+            else if (nombreLow.match(/\.(pdf|doc|docx|txt|rtf)$/)) tipoArchivo = 'documento';
+            else if (nombreLow.match(/\.(zip|rar|7z|tar|gz)$/)) tipoArchivo = 'comprimido';
 
-            if (tipoArchivo !== 'otro') {
-                uploadedFiles.push({
-                    nombre: file.originalname,
-                    driveId: uploadedFile.data.id,
-                    urlDirecta: `https://drive.google.com/file/d/${uploadedFile.data.id}/preview`,
-                    urlDescarga: `https://drive.google.com/uc?export=download&id=${uploadedFile.data.id}`,
-                    tipo: tipoArchivo
-                });
-            }
+            // TASK 3: Guardar información completa incluyendo size, mimeType, webViewLink, webContentLink
+            const archivoInfo = {
+                nombre: file.originalname,
+                driveId: uploadedFile.data.id,
+                urlDirecta: uploadedFile.data.webViewLink || `https://drive.google.com/file/d/${uploadedFile.data.id}/preview`,
+                urlDescarga: uploadedFile.data.webContentLink || `https://drive.google.com/uc?export=download&id=${uploadedFile.data.id}`,
+                webViewLink: uploadedFile.data.webViewLink,      // Link de visualización
+                webContentLink: uploadedFile.data.webContentLink, // Link de descarga directa
+                tipo: tipoArchivo,
+                mimeType: uploadedFile.data.mimeType || file.mimetype,
+                size: parseInt(uploadedFile.data.size || fileSize),
+                subidoEn: new Date()
+            };
 
-            console.log(`[DRIVE] Archivo subido: ${file.originalname} (${uploadedFile.data.id})`);
+            uploadedFiles.push(archivoInfo);
+
+            console.log(`[DRIVE] ✅ Archivo subido: ${file.originalname} (${fileSizeMB} MB)`);
+            console.log(`[DRIVE] 🔒 Archivo privado - solo accesible por cuenta de Drive`);
         }
 
         // Limpiar archivos temporales

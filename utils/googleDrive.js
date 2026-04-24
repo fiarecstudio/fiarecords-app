@@ -119,14 +119,24 @@ async function buscarOCrearCarpeta(folderName) {
 
 /**
  * Sube un archivo a Google Drive
+ * TASK 1: Resumable Uploads para archivos > 5MB
+ * TASK 2: Eliminados permisos públicos automáticos (seguridad)
+ * TASK 3: Captura de size y mimeType
+ * 
  * @param {string} filePath - Ruta local del archivo
  * @param {string} folderId - ID de la carpeta en Drive
+ * @param {string} originalMimeType - MIME type real del archivo
  * @returns {Promise<Object>} - Información del archivo subido
  */
-async function subirArchivoADrive(filePath, folderId) {
+async function subirArchivoADrive(filePath, folderId, originalMimeType = 'application/octet-stream') {
     try {
         const drive = await getDriveClient();
         const fileName = path.basename(filePath);
+        
+        // TASK 3: Obtener tamaño del archivo
+        const stats = fs.statSync(filePath);
+        const fileSize = stats.size;
+        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
 
         // Verificar si ya existe un archivo con el mismo nombre
         const existingFiles = await drive.files.list({
@@ -149,34 +159,57 @@ async function subirArchivoADrive(filePath, folderId) {
             parents: [folderId]
         };
 
+        // TASK 1: Detectar si usar Resumable Upload (> 5MB = 5 * 1024 * 1024 bytes)
+        const LIMITE_RESUMABLE = 5 * 1024 * 1024; // 5MB
+        const usarResumable = fileSize > LIMITE_RESUMABLE;
+
         const media = {
-            mimeType: 'application/json',
-            body: fs.createReadStream(filePath)
+            mimeType: originalMimeType,
+            body: fs.createReadStream(filePath) // Mantiene bajo uso de RAM
         };
 
-        const file = await drive.files.create({
-            resource: fileMetadata,
-            media: media,
-            fields: 'id, name, webViewLink, webContentLink'
-        });
+        let uploadedFile;
 
-        // Hacer el archivo compartible (cualquiera con el link puede ver)
-        await drive.permissions.create({
-            fileId: file.data.id,
-            resource: {
-                role: 'reader',
-                type: 'anyone'
-            }
-        });
+        if (usarResumable) {
+            console.log(`📤 Usando RESUMABLE UPLOAD para archivo grande: ${fileName} (${fileSizeMB} MB)`);
+            uploadedFile = await drive.files.create({
+                requestBody: fileMetadata,
+                media: media,
+                fields: 'id, name, webViewLink, webContentLink, size, mimeType',
+                uploadType: 'resumable' // TASK 1: Resumable upload para archivos grandes
+            }, {
+                // Timeout extendido para archivos grandes (10 minutos)
+                timeout: 600000
+            });
+        } else {
+            console.log(`📤 Subida simple para archivo: ${fileName} (${fileSizeMB} MB)`);
+            uploadedFile = await drive.files.create({
+                requestBody: fileMetadata,
+                media: media,
+                fields: 'id, name, webViewLink, webContentLink, size, mimeType'
+            });
+        }
 
-        console.log(`✅ Archivo subido a Drive: ${fileName}`);
-        console.log(`🔗 Link: ${file.data.webViewLink}`);
+        // TASK 2: ELIMINADO - No se hacen permisos públicos automáticos
+        // Los archivos solo son accesibles por el dueño de la cuenta de Drive
+        // Para compartir, se debe hacer explícitamente desde la interfaz de Drive
+        console.log(`🔒 Archivo privado (solo accesible por cuenta de Drive): ${fileName}`);
+
+        console.log(`✅ Archivo subido a Drive: ${fileName} (${fileSizeMB} MB)`);
+        console.log(`🔗 View Link: ${uploadedFile.data.webViewLink}`);
+        console.log(`⬇️  Download Link: ${uploadedFile.data.webContentLink}`);
         
+        // TASK 3: Retornar información completa incluyendo size y mimeType
         return {
-            id: file.data.id,
-            name: file.data.name,
-            viewLink: file.data.webViewLink,
-            downloadLink: file.data.webContentLink
+            id: uploadedFile.data.id,
+            name: uploadedFile.data.name,
+            viewLink: uploadedFile.data.webViewLink,
+            downloadLink: uploadedFile.data.webContentLink,
+            webViewLink: uploadedFile.data.webViewLink,      // Alias explícito
+            webContentLink: uploadedFile.data.webContentLink, // Alias explícito
+            size: parseInt(uploadedFile.data.size || fileSize),
+            mimeType: uploadedFile.data.mimeType || originalMimeType,
+            resumableUsed: usarResumable
         };
 
     } catch (error) {
