@@ -70,7 +70,8 @@ const ProyectoSchema = new mongoose.Schema({
         webContentLink: String,                // Link oficial de descarga directa Drive
         tipo: {                                // 'audio', 'video', 'imagen', 'documento', 'comprimido', 'otro'
             type: String,
-            enum: ['audio', 'video', 'imagen', 'documento', 'comprimido', 'otro']
+            enum: ['audio', 'video', 'imagen', 'documento', 'comprimido', 'otro'],
+            default: 'otro'  // Default seguro para evitar fallos de validación
         },
         mimeType: String,                      // MIME type real del archivo
         size: { type: Number, default: 0 },    // Tamaño en bytes

@@ -306,52 +306,72 @@ router.get('/sync/:proyectoId', async (req, res) => {
         
         // 5. Procesar cada archivo de Drive
         for (const file of archivosDrive) {
-            // Ignorar carpetas
-            if (file.mimeType === 'application/vnd.google-apps.folder') continue;
-            
-            archivosDriveIds.add(file.id);
-            
-            // Detectar tipo de archivo
-            const nombreLow = file.name.toLowerCase();
-            let tipoArchivo = 'otro';
-            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff|wma)$/)) tipoArchivo = 'audio';
-            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv|mpg|mpeg)$/)) tipoArchivo = 'video';
-            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg|ico)$/)) tipoArchivo = 'imagen';
-            else if (nombreLow.match(/\.(zip|rar|7z|tar|gz|bz2|xz|tgz)$/)) tipoArchivo = 'comprimido';
-            else if (nombreLow.match(/\.(pdf)$/)) tipoArchivo = 'pdf';
-            else if (nombreLow.match(/\.(txt|rtf|doc|docx|odt|md|csv)$/)) tipoArchivo = 'documento';
-            
-            // Verificar si el archivo ya existe en la base de datos
-            const archivoExistente = archivosActuales.find(a => a.driveId === file.id);
-            
-            if (archivoExistente) {
-                // Actualizar información del archivo existente
-                archivosActualizados.push({
-                    ...archivoExistente.toObject(),
-                    nombre: file.name,
-                    mimeType: file.mimeType,
-                    size: parseInt(file.size) || 0,
-                    webViewLink: file.webViewLink,
-                    webContentLink: file.webContentLink,
-                    urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
-                    urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
-                    tipo: tipoArchivo,
-                    subidoEn: file.createdTime || new Date()
-                });
-            } else {
-                // Crear nuevo registro de archivo
-                archivosActualizados.push({
-                    nombre: file.name,
-                    driveId: file.id,
-                    mimeType: file.mimeType,
-                    size: parseInt(file.size) || 0,
-                    webViewLink: file.webViewLink,
-                    webContentLink: file.webContentLink,
-                    urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
-                    urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
-                    tipo: tipoArchivo,
-                    subidoEn: file.createdTime || new Date()
-                });
+            try {
+                // Ignorar carpetas
+                if (file.mimeType === 'application/vnd.google-apps.folder') continue;
+
+                archivosDriveIds.add(file.id);
+
+                // Detectar tipo de archivo basado en extensión y mimeType
+                const nombreLow = file.name.toLowerCase();
+                const mimeType = file.mimeType || '';
+                let tipoArchivo = 'otro'; // Default seguro para evitar fallos
+
+                if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff|wma)$/) || mimeType.startsWith('audio/')) {
+                    tipoArchivo = 'audio';
+                } else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv|mpg|mpeg)$/) || mimeType.startsWith('video/')) {
+                    tipoArchivo = 'video';
+                } else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg|ico)$/) || mimeType.startsWith('image/')) {
+                    tipoArchivo = 'imagen';
+                } else if (nombreLow.match(/\.(zip|rar|7z|tar|gz|bz2|xz|tgz)$/) || mimeType.includes('compressed') || mimeType.includes('zip') || mimeType.includes('tar')) {
+                    tipoArchivo = 'comprimido';
+                } else if (nombreLow.match(/\.(pdf)$/) || mimeType === 'application/pdf') {
+                    // FIX: PDFs deben mapear a 'documento', no a 'pdf' (que no está en el enum)
+                    tipoArchivo = 'documento';
+                } else if (nombreLow.match(/\.(txt|rtf|doc|docx|odt|md|csv|xls|xlsx|ppt|pptx)$/)) {
+                    tipoArchivo = 'documento';
+                }
+                // Si no coincide ninguno, permanece 'otro' (siempre seguro para el enum)
+
+                // Verificar si el archivo ya existe en la base de datos
+                const archivoExistente = archivosActuales.find(a => a.driveId === file.id);
+
+                if (archivoExistente) {
+                    // Actualizar información del archivo existente
+                    archivosActualizados.push({
+                        ...archivoExistente.toObject(),
+                        nombre: file.name,
+                        mimeType: file.mimeType,
+                        size: parseInt(file.size) || 0,
+                        webViewLink: file.webViewLink,
+                        webContentLink: file.webContentLink,
+                        urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
+                        urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
+                        tipo: tipoArchivo,
+                        subidoEn: file.createdTime || new Date()
+                    });
+                } else {
+                    // Crear nuevo registro de archivo
+                    archivosActualizados.push({
+                        nombre: file.name,
+                        driveId: file.id,
+                        mimeType: file.mimeType,
+                        size: parseInt(file.size) || 0,
+                        webViewLink: file.webViewLink,
+                        webContentLink: file.webContentLink,
+                        urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
+                        urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
+                        tipo: tipoArchivo,
+                        subidoEn: file.createdTime || new Date()
+                    });
+                }
+            } catch (fileError) {
+                // TASK 3: Log detallado de qué archivo causó el error
+                console.error(`[DRIVE SYNC] Error procesando archivo: "${file.name}" (ID: ${file.id})`);
+                console.error(`[DRIVE SYNC]   mimeType: ${file.mimeType}`);
+                console.error(`[DRIVE SYNC]   Error: ${fileError.message}`);
+                // Continuar con el siguiente archivo - no detener la sincronización
+                continue;
             }
         }
         

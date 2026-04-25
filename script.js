@@ -980,15 +980,61 @@ let proyectoIdEnEdicion = null;
                     <i class="bi bi-folder-fill me-2 text-warning"></i>Archivos del Proyecto
                     <span class="badge bg-secondary ms-2" style="font-size: 0.7rem;">${proj.archivos ? proj.archivos.length : 0}</span>
                 </span>
-                <button class="btn btn-sm btn-outline-info" 
+                <button class="btn btn-sm btn-outline-info"
                         onclick="app.sincronizarCarpeta('${proj._id}')"
                         title="Sincronizar con Google Drive">
                     <i class="bi bi-arrow-clockwise"></i> Refrescar
                 </button>
             </div>
         `;
-        
-        playlist.innerHTML = headerHtml + htmlList;
+
+        // NUEVO: Sección de notificaciones al artista (Email/WhatsApp)
+        const artista = proj.artista;
+        const tieneCorreo = artista && artista.correo;
+        const tieneTelefono = artista && artista.telefono;
+        const nombreArtista = artista ? (artista.nombreArtistico || artista.nombre || 'Artista') : 'Sin artista';
+
+        let notificacionesHtml = '';
+        if (tieneCorreo || tieneTelefono) {
+            notificacionesHtml = `
+            <div class="p-2 border-bottom border-secondary" style="background-color: rgba(16, 185, 129, 0.1);">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-white small fw-bold">
+                        <i class="bi bi-bell-fill me-2 text-success"></i>Notificar a: ${escapeHTML(nombreArtista)}
+                    </span>
+                </div>
+                <div class="d-flex gap-2">
+                    ${tieneCorreo ? `
+                    <button class="btn btn-sm btn-outline-primary flex-fill"
+                            onclick="app.notificarArtista('${proj._id}', 'email')"
+                            title="Enviar correo a: ${escapeHTML(artista.correo)}">
+                        <i class="bi bi-envelope"></i> Correo
+                    </button>
+                    ` : ''}
+                    ${tieneTelefono ? `
+                    <button class="btn btn-sm btn-outline-success flex-fill"
+                            onclick="app.notificarArtista('${proj._id}', 'whatsapp')"
+                            title="Enviar WhatsApp a: ${escapeHTML(artista.telefono)}">
+                        <i class="bi bi-whatsapp"></i> WhatsApp
+                    </button>
+                    ` : ''}
+                </div>
+                ${!tieneCorreo ? '<div class="text-warning small mt-1"><i class="bi bi-exclamation-triangle"></i> Artista sin correo</div>' : ''}
+                ${!tieneTelefono ? '<div class="text-warning small mt-1"><i class="bi bi-exclamation-triangle"></i> Artista sin teléfono</div>' : ''}
+            </div>
+            `;
+        } else if (artista) {
+            notificacionesHtml = `
+            <div class="p-2 border-bottom border-secondary" style="background-color: rgba(239, 68, 68, 0.1);">
+                <div class="text-warning small text-center">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    ${escapeHTML(nombreArtista)} no tiene correo ni teléfono registrados
+                </div>
+            </div>
+            `;
+        }
+
+        playlist.innerHTML = headerHtml + notificacionesHtml + htmlList;
         
         if(hasPlayableItems) {
             setTimeout(() => { const firstCard = playlist.querySelector('.file-card'); if(firstCard) firstCard.click(); }, 300);
@@ -5262,6 +5308,132 @@ Fecha de firma: {{FECHA}}`;
         showToast('Cotización cargada para editar', 'info');
     }
 
+    // ==================================================================
+    // NOTIFICACIONES MANUALES AL ARTISTA (EMAIL/WHATSAPP)
+    // Multi-empresa: Usa configuración dinámica del backend
+    // ==================================================================
+    async function notificarArtista(proyectoId, medio) {
+        const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+        if (!proyecto) return showToast('Error al cargar proyecto', 'error');
+
+        const artista = proyecto.artista;
+        if (!artista) return showToast('Proyecto sin artista asignado', 'error');
+
+        const saldoPendiente = proyecto.total - (proyecto.montoPagado || 0);
+        const tieneSaldo = saldoPendiente > 0;
+
+        // Opciones según contexto
+        const inputOptions = {
+            'entrega': '📦 Link de Entrega'
+        };
+
+        if (proyecto.items && proyecto.items.length > 0) {
+            inputOptions['resumen'] = '📄 Resumen de Proyecto';
+        }
+
+        if (tieneSaldo) {
+            inputOptions['recordatorio'] = `💰 Recordatorio de Saldo ($${safeMoney(saldoPendiente)})`;
+        }
+
+        const { value: tipo } = await Swal.fire({
+            title: `Enviar por ${medio === 'email' ? 'Correo' : 'WhatsApp'}`,
+            text: `Para: ${artista.nombreArtistico || artista.nombre}`,
+            input: 'select',
+            inputOptions: inputOptions,
+            inputPlaceholder: 'Selecciona el tipo de mensaje',
+            showCancelButton: true,
+            confirmButtonText: 'Continuar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: medio === 'email' ? '#3b82f6' : '#10b981',
+            inputValidator: (value) => {
+                if (!value) return 'Debes seleccionar una opción';
+            }
+        });
+
+        if (!tipo) return;
+
+        // Validaciones específicas
+        if (tipo === 'entrega' && !proyecto.enlaceEntrega) {
+            return Swal.fire({
+                icon: 'warning',
+                title: 'Sin enlace de entrega',
+                text: 'Este proyecto no tiene un link de Drive configurado. Agrega el enlace primero.'
+            });
+        }
+
+        if (tipo === 'recordatorio' && !tieneSaldo) {
+            return Swal.fire({
+                icon: 'info',
+                title: 'Sin saldo pendiente',
+                text: 'Este proyecto ya está pagado completamente.'
+            });
+        }
+
+        // Paso 2: Mensaje personalizado opcional
+        const { value: mensajePersonalizado } = await Swal.fire({
+            title: 'Mensaje adicional (opcional)',
+            input: 'textarea',
+            inputPlaceholder: 'Escribe un mensaje personalizado que se agregará al final...',
+            showCancelButton: true,
+            confirmButtonText: medio === 'email' ? '📧 Enviar Correo' : '💬 Abrir WhatsApp',
+            cancelButtonText: 'Atrás',
+            confirmButtonColor: medio === 'email' ? '#3b82f6' : '#10b981',
+            inputAttributes: {
+                maxlength: 200
+            }
+        });
+
+        if (mensajePersonalizado === undefined) return; // Canceló en segundo paso
+
+        // Confirmación final
+        const confirmResult = await Swal.fire({
+            title: medio === 'email' ? '¿Enviar correo?' : '¿Abrir WhatsApp?',
+            html: `
+                <div class="text-start">
+                    <p><strong>Destinatario:</strong> ${medio === 'email' ? artista.correo : artista.telefono}</p>
+                    <p><strong>Tipo:</strong> ${inputOptions[tipo]}</p>
+                    ${mensajePersonalizado ? `<p><strong>Mensaje extra:</strong> ${escapeHTML(mensajePersonalizado)}</p>` : ''}
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: medio === 'email' ? 'Sí, enviar' : 'Sí, abrir WhatsApp',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: medio === 'email' ? '#3b82f6' : '#10b981'
+        });
+
+        if (!confirmResult.isConfirmed) return;
+
+        // Llamar al backend
+        showToast(`${medio === 'email' ? 'Enviando correo' : 'Generando link'}...`, 'info');
+
+        try {
+            const response = await fetchAPI(`/api/proyectos/${proyectoId}/notificar`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    tipo,
+                    medio,
+                    mensajePersonalizado: mensajePersonalizado || undefined
+                })
+            });
+
+            if (response.success) {
+                if (medio === 'whatsapp' && response.waLink) {
+                    // Abrir WhatsApp en nueva pestaña
+                    window.open(response.waLink, '_blank');
+                    showToast('WhatsApp abierto con el mensaje pre-cargado', 'success');
+                } else {
+                    showToast('Correo enviado correctamente', 'success');
+                }
+            } else {
+                showToast(response.message || 'Error al enviar', 'error');
+            }
+        } catch (error) {
+            console.error('[notificarArtista] Error:', error);
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
@@ -5277,7 +5449,7 @@ Fecha de firma: {{FECHA}}`;
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive, sincronizarCarpeta,
+        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive, sincronizarCarpeta, notificarArtista,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
