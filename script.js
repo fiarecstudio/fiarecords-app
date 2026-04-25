@@ -3087,7 +3087,11 @@ Fecha de firma: {{FECHA}}`;
                 
                 // PASO 3: Mostrar app
                 await showApp(payload);
-            } catch (error) { document.getElementById('login-error').textContent = error.message; } finally { hideLoader(); }
+            } catch (error) { 
+                document.getElementById('login-error').textContent = error.message; 
+            } finally { 
+                hideLoader(); 
+            }
         });
         
         document.getElementById('toggle-password').addEventListener('click', () => {
@@ -3095,47 +3099,11 @@ Fecha de firma: {{FECHA}}`;
              passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
         });
         document.getElementById('toggle-password-reg').addEventListener('click', () => {
-            const passwordInput = document.getElementById('reg-password');
-            passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
+             const passwordInput = document.getElementById('password-reg');
+             if (passwordInput) {
+                 passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
+             }
         });
-    }
-
-    // ==================================================================
-    // FUNCIONES DE PAGINACIÓN DE TABLAS Y BUSCADOR INTELIGENTE
-    // ==================================================================
-    function renderTableControls(tableBodyId, listKey, page, totalPages) {
-        const tbody = document.getElementById(tableBodyId);
-        if (!tbody) return;
-        const tableEl = tbody.closest('table');
-        const wrapper = tableEl.parentNode;
-        let controls = wrapper.querySelector('.table-pagination-controls');
-        if (!controls) {
-            controls = document.createElement('div');
-            controls.className = 'table-pagination-controls d-flex justify-content-between align-items-center mt-3';
-            wrapper.appendChild(controls);
-        }
-        if (totalPages > 1) {
-            controls.innerHTML = `
-                <button class="btn btn-sm btn-outline-secondary" ${page === 1 ? 'disabled' : ''} onclick="app.changeTablePage('${listKey}', -1)">Anterior</button>
-                <span class="small text-muted fw-bold">Pág ${page} de ${totalPages}</span>
-                <button class="btn btn-sm btn-outline-secondary" ${page === totalPages ? 'disabled' : ''} onclick="app.changeTablePage('${listKey}', 1)">Siguiente</button>
-            `;
-        } else {
-            controls.innerHTML = '';
-        }
-    }
-
-    function changeTablePage(listKey, delta) {
-        tablePagination[listKey].page += delta;
-        if (listKey === 'historial') renderHistorialTable();
-        if (listKey === 'cotizaciones') renderCotizacionesTable();
-        if (listKey === 'pagosPendientes') renderPagosPendientesTable();
-        if (listKey === 'pagosHistorial') renderPagosHistorialTable();
-    }
-
-    function changeTrashPage(endpoint, delta) {
-        trashPagination[endpoint].page += delta;
-        renderTrashList(endpoint);
     }
 
     function filtrarTablas(query) { 
@@ -3738,7 +3706,29 @@ Fecha de firma: {{FECHA}}`;
         container.parentNode.appendChild(controls); 
     }
     
-    function changePage(endpoint, delta) { paginationState[endpoint].page += delta; renderPaginatedList(endpoint, null); }
+    function changePage(endpoint, delta) { 
+        // Wrapper: delega a UIManager si está disponible para tablas, o usa implementación legacy para listas
+        if (typeof window.UIManager?.changePage === 'function' && ['historial', 'cotizaciones', 'pagos'].includes(endpoint)) {
+            return window.UIManager.changePage(endpoint, delta);
+        }
+        paginationState[endpoint].page += delta; 
+        renderPaginatedList(endpoint, null); 
+    }
+
+    // FASE 8 PASO 8: Wrapper para paginación de tablas que delega a UIManager
+    function changeTablePage(listKey, delta) {
+        if (typeof window.UIManager?.changePage === 'function') {
+            return window.UIManager.changePage(listKey, delta);
+        }
+        // Fallback legacy
+        if (tablePagination[listKey]) {
+            tablePagination[listKey].page += delta;
+            if (listKey === 'historial') renderHistorialTable();
+            if (listKey === 'cotizaciones') renderCotizacionesTable();
+            if (listKey === 'pagosPendientes') renderPagosPendientesTable();
+            if (listKey === 'pagosHistorial') renderPagosHistorialTable();
+        }
+    }
     
     function limpiarForm(formId) { 
         const form = document.getElementById(formId); 
