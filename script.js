@@ -400,32 +400,13 @@ let proyectoIdEnEdicion = null;
             toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
             timerProgressBar: true,
             didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer)
-                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
             }
         });
         Toast.fire({ icon: type === 'info' ? 'info' : type, title: message });
     }
 
-    // ==================================================================
-    // FASE 5: FUNCIONES LEGACY (Compatibilidad hacia atrás)
-    // Todas redirigen al Guardia de Identidad centralizado
-    // ==================================================================
-    
-    async function cargarLogoEmpresa(id = null) {
-        if (id) localStorage.setItem('empresaActiva', id);
-        return aplicarIdentidadVisual(true);
-    }
-    
-    async function fetchPublicLogo() {
-        return aplicarIdentidadVisual(false);
-    }
-    
-    async function cargarIdentidadVisualSecuencial(idForzado = null) {
-        if (idForzado) localStorage.setItem('empresaActiva', idForzado);
-        return aplicarIdentidadVisual(true);
-    }
-    
     // Exponer funciones clave globalmente para otros módulos
     window.aplicarIdentidadVisual = aplicarIdentidadVisual;
 
@@ -455,13 +436,13 @@ let proyectoIdEnEdicion = null;
         if(appLogo && appLogo.src.startsWith('data:image')) {
             logoBase64 = appLogo.src;
         } else {
-             await fetchPublicLogo();
+             await aplicarIdentidadVisual(false);
         }
     }
 
     async function loadInitialConfig(empresaId = null) {
         try {
-            // FASE 4: Carga centralizada con empresaId explícito
+            // Carga centralizada con empresaId explícito
             // Si no se pasa empresaId, se obtiene de localStorage o se usa 'all'
             const finalEmpresaId = empresaId || 
                                    localStorage.getItem('empresaActiva') || 
@@ -556,18 +537,10 @@ let proyectoIdEnEdicion = null;
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
 
-    // ==================================================================
+    // =================================================================
     // 5. GOOGLE DRIVE Y REPRODUCTOR
-    // FASE 8 PASO 8: Todas las funciones de Google Drive se encuentran
-    // en public/js/drive.js (cargado antes que script.js).
-    // Las siguientes funciones están disponibles globalmente:
-    // - window.DriveManager (objeto principal)
-    // - window.subirADrive, window.openDeliveryModal, window.saveDeliveryLink
-    // - window.formatBytes, window.getIconByMimeType
-    // ==================================================================
-    
-    // Las funciones de Drive ahora se inicializan automáticamente desde drive.js
-    // No requiere código adicional aquí。
+    // Las funciones de Drive se encuentran en public/js/drive.js
+    // =================================================================
 
     function openPlayer(projectId) {
         let proj = localCache.proyectos.find(p => p._id === projectId) || historialCacheados.find(p => p._id === projectId);
@@ -1649,53 +1622,11 @@ let proyectoIdEnEdicion = null;
         try { 
             historialCacheados = await fetchAPI('/api/proyectos/completos'); 
             tablePagination.historial.page = 1;
-            renderHistorialTable();
+            window.UIManager.renderHistorialTable(historialCacheados, tablePagination.historial);
         } catch (error) { 
             console.error(error);
             tablaBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error al cargar historial.</td></tr>`; 
         } 
-    }
-
-    function renderHistorialTable() {
-        const tablaBody = document.getElementById('tablaHistorialBody');
-        const items = historialCacheados ||[];
-        const { page, limit } = tablePagination.historial;
-        const start = (page - 1) * limit;
-        const paginatedItems = items.slice(start, start + limit);
-        const totalPages = Math.ceil(items.length / limit);
-
-        if (items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center">No hay proyectos.</td></tr>`; 
-            renderTableControls('tablaHistorialBody', 'historial', 1, 0);
-            return;
-        }
-
-        tablaBody.innerHTML = paginatedItems.map(p => { 
-            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
-            const esCancelado = p.estatus === 'Cancelado';
-            const estadoBadge = esCancelado ? `<span class="badge bg-secondary">Cancelado</span>` : `<span class="badge bg-success">Completado</span>`;
-            const rowClass = esCancelado ? 'fila-cancelada' : '';
-
-            const showPlayer = (p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0);
-
-            return `
-            <tr class="${rowClass}">
-                <td data-label="Fecha">${safeDate(p.fecha)}</td>
-                <td data-label="Artista" class="${p.artista ? 'clickable-artist' : ''}" ondblclick="app.irAVistaArtista('${p.artista ? p.artista._id : ''}', '${escapeHTML(artistaNombre)}', '')">${escapeHTML(artistaNombre)}</td>
-                <td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td>
-                <td data-label="Total">$${safeMoney(p.total)}</td>
-                <td data-label="Pagado">$${safeMoney(p.montoPagado)}</td>
-                <td data-label="Estado">${estadoBadge}</td>
-                <td data-label="Acciones" class="table-actions">
-                    ${showPlayer ? `<button class="btn btn-sm btn-info text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>` : ''}
-                    <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button>
-                    <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos"><i class="bi bi-cash-stack"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera"><i class="bi bi-trash"></i></button>
-                </td>
-            </tr>`; 
-        }).join(''); 
-        
-        renderTableControls('tablaHistorialBody', 'historial', page, totalPages);
     }
 
     async function eliminarProyecto(id, desdeCotizaciones = false) { Swal.fire({ title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
@@ -3126,22 +3057,22 @@ Fecha de firma: {{FECHA}}`;
         else if (sectionId === 'historial-proyectos') {
             tablePagination.historial.filter = query;
             tablePagination.historial.page = 1;
-            renderHistorialTable();
+            window.UIManager.renderHistorialTable(historialCacheados, tablePagination.historial);
         }
         else if (sectionId === 'cotizaciones') {
             tablePagination.cotizaciones.filter = query;
             tablePagination.cotizaciones.page = 1;
-            renderCotizacionesTable();
+            window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
         }
         else if (sectionId === 'pagos') {
             if (document.getElementById('vista-pagos-pendientes').style.display !== 'none') {
                 tablePagination.pagosPendientes.filter = query;
                 tablePagination.pagosPendientes.page = 1;
-                renderPagosPendientesTable();
+                window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
             } else {
                 tablePagination.pagosHistorial.filter = query;
                 tablePagination.pagosHistorial.page = 1;
-                renderPagosHistorialTable();
+                window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
             }
         }
         
@@ -3471,81 +3402,12 @@ Fecha de firma: {{FECHA}}`;
         try { 
             cotizacionesCacheadas = await fetchAPI('/api/proyectos/cotizaciones'); 
             tablePagination.cotizaciones.page = 1;
-            renderCotizacionesTable();
+            window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
         } catch (e) { 
             tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; 
         } 
     }
     
-    function renderCotizacionesTable() {
-        const tablaBody = document.getElementById('tablaCotizacionesBody');
-        let items = cotizacionesCacheadas ||[];
-
-        const filterText = tablePagination.cotizaciones.filter || '';
-        if (filterText) {
-            items = items.filter(c => {
-                const artista = c.artista ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General';
-                return artista.toLowerCase().includes(filterText);
-            });
-        }
-
-        const { page, limit } = tablePagination.cotizaciones;
-        const start = (page - 1) * limit;
-        const paginatedItems = items.slice(start, start + limit);
-        const totalPages = Math.ceil(items.length / limit) || 1;
-        
-        if (items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center">No hay cotizaciones pendientes.</td></tr>`;
-            renderTableControls('tablaCotizacionesBody', 'cotizaciones', 1, 0);
-            return;
-        }
-        
-        tablaBody.innerHTML = paginatedItems.map(c => { 
-            const artistaNombre = c.artista ? (c.artista.nombreArtistico || c.artista.nombre) : 'Público General';
-            
-            // Botones de Contrato y Firma
-            const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${c._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
-            
-            const userInfo = getUserRoleAndId();
-            let btnFirma = '';
-            
-            if (c.firmaCliente) {
-                if (userInfo.role !== 'cliente') {
-                    // Admin puede ver firmado + borrar
-                    btnFirma = `
-                        <div class="d-flex gap-1 align-items-center">
-                            <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
-                            <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${c._id}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    `;
-                } else {
-                    // Cliente solo ve que está firmado
-                    btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
-                }
-            } else {
-                btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${c._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
-            }
-            
-            return `
-                <tr>
-                    <td data-label="Fecha">${safeDate(c.fecha)}</td>
-                    <td data-label="Artista">${escapeHTML(artistaNombre)}</td>
-                    <td data-label="Total">$${safeMoney(c.total)}</td>
-                    <td data-label="Acciones" class="table-actions">
-                        <button class="btn btn-sm btn-outline-primary" title="Aprobar y Agendar" onclick="app.aprobarCotizacion('${escapeHTML(c._id)}')"><i class="bi bi-check-circle"></i></button>
-                        <button class="btn btn-sm btn-outline-info" title="Ver Cotización PDF" onclick="console.log('[Botón] Click en previewPDF, ID:', '${escapeHTML(c._id)}'); app.previewPDF('${escapeHTML(c._id)}')"><i class="bi bi-file-earmark-pdf"></i></button>
-                        ${btnContrato}${btnFirma}
-                        <button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.cargarCotizacionParaEditar('${escapeHTML(c._id)}')"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${escapeHTML(c._id)}', true)"><i class="bi bi-trash"></i></button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        renderTableControls('tablaCotizacionesBody', 'cotizaciones', page, totalPages);
-    }
-
     async function cargarPapelera() {
         const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
         for (const endpoint of endpoints) {
@@ -3715,7 +3577,6 @@ Fecha de firma: {{FECHA}}`;
         renderPaginatedList(endpoint, null); 
     }
 
-    // FASE 8 PASO 8: Wrapper para paginación de tablas que delega a UIManager
     function changeTablePage(listKey, delta) {
         if (typeof window.UIManager?.changePage === 'function') {
             return window.UIManager.changePage(listKey, delta);
@@ -3723,10 +3584,10 @@ Fecha de firma: {{FECHA}}`;
         // Fallback legacy
         if (tablePagination[listKey]) {
             tablePagination[listKey].page += delta;
-            if (listKey === 'historial') renderHistorialTable();
-            if (listKey === 'cotizaciones') renderCotizacionesTable();
-            if (listKey === 'pagosPendientes') renderPagosPendientesTable();
-            if (listKey === 'pagosHistorial') renderPagosHistorialTable();
+            if (listKey === 'historial') window.UIManager.renderHistorialTable(historialCacheados, tablePagination.historial);
+            if (listKey === 'cotizaciones') window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
+            if (listKey === 'pagosPendientes') window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
+            if (listKey === 'pagosHistorial') window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
         }
     }
     
@@ -3912,49 +3773,9 @@ Fecha de firma: {{FECHA}}`;
             return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; 
         }); 
         tablePagination.pagosPendientes.page = 1;
-        renderPagosPendientesTable();
+        window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
     }
     
-    function renderPagosPendientesTable() {
-        const tabla = document.getElementById('tablaPendientesBody');
-        let items = pagosPendientesCacheados ||[];
-        const userInfo = getUserRoleAndId(); 
-        const isClient = userInfo.role === 'cliente'; 
-
-        const filterText = tablePagination.pagosPendientes.filter || '';
-        if(filterText) {
-            items = items.filter(p => {
-                const artista = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General';
-                const proyecto = p.nombreProyecto || 'Proyecto sin nombre';
-                return `${artista} ${proyecto}`.toLowerCase().includes(filterText);
-            });
-        }
-
-        const { page, limit } = tablePagination.pagosPendientes;
-        const start = (page - 1) * limit;
-        const paginatedItems = items.slice(start, start + limit);
-        const totalPages = Math.ceil(items.length / limit) || 1;
-
-        if (items.length === 0) { 
-            tabla.innerHTML = '<tr><td colspan="5" class="text-center">¡Todo al día! No hay pagos pendientes.</td></tr>'; 
-            renderTableControls('tablaPendientesBody', 'pagosPendientes', 1, 0);
-            return; 
-        } 
-        
-        tabla.innerHTML = paginatedItems.map(p => { 
-            const deuda = p.total - (p.montoPagado || 0); 
-            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Cliente General'; 
-            const proyectoNombre = p.nombreProyecto || 'Proyecto sin nombre'; 
-            let buttons = ''; 
-            if (!isClient) { 
-                buttons = `<button class="btn btn-sm btn-success" onclick="app.registrarPago('${p._id}')">Cobrar <i class="bi bi-cash"></i></button><button class="btn btn-sm btn-outline-primary" onclick="app.compartirRecordatorioPago('${p._id}')">Recordar <i class="bi bi-whatsapp"></i></button>`; 
-            } 
-            return `<tr><td data-label="Proyecto"><div style="font-weight:bold;">${escapeHTML(proyectoNombre)}</div><div style="font-size:0.85em; color:var(--text-color-light);">${escapeHTML(artistaNombre)}</div></td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Restante" style="color:var(--danger-color); font-weight:700;">$${safeMoney(deuda)}</td><td data-label="Acciones" class="table-actions">${buttons}</td></tr>`; 
-        }).join('');
-        
-        renderTableControls('tablaPendientesBody', 'pagosPendientes', page, totalPages);
-    }
-
     async function cargarHistorialPagos() { 
         const tablaBody = document.getElementById('tablaPagosBody'); 
         tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
@@ -3984,49 +3805,12 @@ Fecha de firma: {{FECHA}}`;
             pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); 
             pagosHistorialCacheados = pagos;
             tablePagination.pagosHistorial.page = 1;
-            renderPagosHistorialTable();
+            window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
         } catch (e) { 
             tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; 
         } 
     }
     
-    function renderPagosHistorialTable() {
-        const tablaBody = document.getElementById('tablaPagosBody');
-        let items = pagosHistorialCacheados ||[];
-        const userInfo = getUserRoleAndId(); 
-        const isClient = userInfo.role === 'cliente'; 
-
-        const filterText = tablePagination.pagosHistorial.filter || '';
-        if (filterText) {
-            items = items.filter(p => {
-                return p.artista.toLowerCase().includes(filterText) || p.metodo.toLowerCase().includes(filterText);
-            });
-        }
-
-        const { page, limit } = tablePagination.pagosHistorial;
-        const start = (page - 1) * limit;
-        const paginatedItems = items.slice(start, start + limit);
-        const totalPages = Math.ceil(items.length / limit) || 1;
-
-        if (items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos registrados en el historial.</td></tr>`;
-            renderTableControls('tablaPagosBody', 'pagosHistorial', 1, 0);
-            return;
-        }
-
-        tablaBody.innerHTML = paginatedItems.map(p => {
-            let buttons = `<button class="btn btn-sm btn-outline-secondary" title="Ver Recibo PDF" onclick="app.previewReciboPDF('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-file-earmark-pdf"></i></button>`;
-            buttons += `<button class="btn btn-sm btn-outline-success" title="Enviar por WhatsApp" onclick="app.enviarReciboWhatsApp('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-whatsapp"></i></button>`;
-            buttons += `<button class="btn btn-sm btn-outline-primary" title="Enviar por Correo" onclick="app.enviarReciboCorreo('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-envelope"></i></button>`;
-            if (!isClient) {
-                buttons += `<button class="btn btn-sm btn-outline-danger" title="Eliminar Pago" onclick="app.eliminarPago('${p.proyectoId}', '${p.pagoId}')"><i class="bi bi-trash"></i></button>`;
-            }
-            return `<tr><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Proyecto">${escapeHTML(p.artista)}</td><td data-label="Monto">${safeMoney(p.monto)}</td><td data-label="Método">${escapeHTML(p.metodo)}</td><td data-label="Acciones" class="table-actions">${buttons}</td></tr>`;
-        }).join('');
-
-        renderTableControls('tablaPagosBody', 'pagosHistorial', page, totalPages);
-    }
-
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(pago, proyecto); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const restante = proyecto.total - (proyecto.montoPagado || 0); const mensaje = `¡Hola ${nombreCliente}! Te enviamos un recordatorio de FiaRecords sobre tu proyecto "${proyecto.nombreProyecto || 'General'}".\n\nEl saldo pendiente es de: *$${safeMoney(restante)} MXN*.\n\nQuedamos a tus órdenes.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch(e) { showToast('Error al obtener datos del proyecto', 'error'); } }
     async function eliminarPago(proyectoId, pagoId) { Swal.fire({ title: '¿Eliminar este pago?', text: "Esta acción afectará el saldo del proyecto.", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed){ try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Pago eliminado.', 'success'); cargarPagos(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
@@ -5159,7 +4943,6 @@ Fecha de firma: {{FECHA}}`;
         abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
-        fetchPublicLogo, // Exportar para recarga de logo multi-tenant
         loadInitialConfig, cargarConfiguracion, // Exportar para recarga desde empresas.js
         // FASE 5: FLUJO DE TRABAJO REACTIVO
         cargarFlujoDeTrabajo, // Exportar para recarga manual
@@ -5369,9 +5152,3 @@ if ('serviceWorker' in navigator) {
         }); 
     }); 
 }
-
-// FASE 8 PASO 8: Eliminadas definiciones duplicadas de:
-// - handleGoogleDriveCallback
-// - buscarOCrearCarpeta, obtenerNombreEmpresaActual, obtenerCarpetaMaestra
-// - processDriveUpload, hideLoader, formatBytes, getIconByMimeType
-// Todas estas funciones ahora se encuentran en public/js/drive.js
