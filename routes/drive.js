@@ -207,7 +207,9 @@ router.post('/upload', upload.array('files'), async (req, res) => {
                 webContentLink: uploadedFile.data.webContentLink, // Link de descarga directa
                 tipo: tipoArchivo,
                 mimeType: uploadedFile.data.mimeType || file.mimetype,
-                size: parseInt(uploadedFile.data.size || fileSize),
+                // FIX: Priorizar tamaño de Multer (fileSize) sobre respuesta de Drive
+                // Google Drive a veces retorna size=0 o undefined para archivos recién creados
+                size: parseInt(fileSize) || parseInt(uploadedFile.data.size) || 0,
                 subidoEn: new Date()
             };
 
@@ -246,6 +248,131 @@ router.post('/upload', upload.array('files'), async (req, res) => {
 
         res.status(500).json({
             error: 'Error al subir archivos a Drive',
+            details: error.message
+        });
+    }
+});
+
+// TASK 2: ENDPOINT DE SINCRONIZACIÓN DE CARPETA
+// Sincroniza archivos de Drive con la base de datos local
+const Proyecto = require('../models/Proyecto');
+
+router.get('/sync/:proyectoId', async (req, res) => {
+    const { proyectoId } = req.params;
+    
+    try {
+        console.log(`[DRIVE SYNC] Iniciando sincronización para proyecto: ${proyectoId}`);
+        
+        // 1. Buscar el proyecto en la base de datos
+        const proyecto = await Proyecto.findById(proyectoId);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+        
+        if (!proyecto.enlaceEntrega) {
+            return res.status(400).json({ error: 'El proyecto no tiene carpeta de Drive asociada' });
+        }
+        
+        // 2. Extraer folderId del enlace de Drive
+        const enlaceDrive = proyecto.enlaceEntrega;
+        let folderId = null;
+        
+        if (enlaceDrive.includes('/folders/')) {
+            folderId = enlaceDrive.split('/folders/')[1].split('?')[0].split('/')[0];
+        } else if (enlaceDrive.includes('id=')) {
+            folderId = enlaceDrive.split('id=')[1].split('&')[0];
+        }
+        
+        if (!folderId) {
+            return res.status(400).json({ error: 'No se pudo extraer ID de carpeta del enlace' });
+        }
+        
+        console.log(`[DRIVE SYNC] Folder ID detectado: ${folderId}`);
+        
+        // 3. Listar archivos en la carpeta de Drive
+        const driveResponse = await drive.files.list({
+            q: `'${folderId}' in parents and trashed = false`,
+            fields: 'files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime)',
+            spaces: 'drive'
+        });
+        
+        const archivosDrive = driveResponse.data.files || [];
+        console.log(`[DRIVE SYNC] ${archivosDrive.length} archivos encontrados en Drive`);
+        
+        // 4. Obtener archivos actuales del proyecto
+        const archivosActuales = proyecto.archivos || [];
+        const archivosActualizados = [];
+        const archivosDriveIds = new Set();
+        
+        // 5. Procesar cada archivo de Drive
+        for (const file of archivosDrive) {
+            // Ignorar carpetas
+            if (file.mimeType === 'application/vnd.google-apps.folder') continue;
+            
+            archivosDriveIds.add(file.id);
+            
+            // Detectar tipo de archivo
+            const nombreLow = file.name.toLowerCase();
+            let tipoArchivo = 'otro';
+            if (nombreLow.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff|wma)$/)) tipoArchivo = 'audio';
+            else if (nombreLow.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv|mpg|mpeg)$/)) tipoArchivo = 'video';
+            else if (nombreLow.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg|ico)$/)) tipoArchivo = 'imagen';
+            else if (nombreLow.match(/\.(zip|rar|7z|tar|gz|bz2|xz|tgz)$/)) tipoArchivo = 'comprimido';
+            else if (nombreLow.match(/\.(pdf)$/)) tipoArchivo = 'pdf';
+            else if (nombreLow.match(/\.(txt|rtf|doc|docx|odt|md|csv)$/)) tipoArchivo = 'documento';
+            
+            // Verificar si el archivo ya existe en la base de datos
+            const archivoExistente = archivosActuales.find(a => a.driveId === file.id);
+            
+            if (archivoExistente) {
+                // Actualizar información del archivo existente
+                archivosActualizados.push({
+                    ...archivoExistente.toObject(),
+                    nombre: file.name,
+                    mimeType: file.mimeType,
+                    size: parseInt(file.size) || 0,
+                    webViewLink: file.webViewLink,
+                    webContentLink: file.webContentLink,
+                    urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
+                    urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
+                    tipo: tipoArchivo,
+                    subidoEn: file.createdTime || new Date()
+                });
+            } else {
+                // Crear nuevo registro de archivo
+                archivosActualizados.push({
+                    nombre: file.name,
+                    driveId: file.id,
+                    mimeType: file.mimeType,
+                    size: parseInt(file.size) || 0,
+                    webViewLink: file.webViewLink,
+                    webContentLink: file.webContentLink,
+                    urlDirecta: file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`,
+                    urlDescarga: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
+                    tipo: tipoArchivo,
+                    subidoEn: file.createdTime || new Date()
+                });
+            }
+        }
+        
+        // 6. Actualizar el proyecto con los archivos sincronizados
+        proyecto.archivos = archivosActualizados;
+        await proyecto.save();
+        
+        console.log(`[DRIVE SYNC] Sincronización completada. ${archivosActualizados.length} archivos en total.`);
+        
+        res.json({
+            success: true,
+            message: 'Sincronización completada',
+            archivosEncontrados: archivosDrive.length,
+            archivosSincronizados: archivosActualizados.length,
+            archivos: archivosActualizados
+        });
+        
+    } catch (error) {
+        console.error('[DRIVE SYNC] Error:', error);
+        res.status(500).json({
+            error: 'Error al sincronizar carpeta',
             details: error.message
         });
     }

@@ -891,10 +891,12 @@ let proyectoIdEnEdicion = null;
 
         if(proj.archivos && proj.archivos.length > 0) {
             htmlList += proj.archivos.map(file => {
-                let icon = 'bi-file-earmark';
-                if (file.tipo === 'audio') icon = 'bi-music-note-beamed text-info';
-                if (file.tipo === 'video') icon = 'bi-film text-danger';
-                if (file.tipo === 'imagen') icon = 'bi-image text-success';
+                // NUEVO: Usar función inteligente para obtener icono
+                const iconClass = getIconByMimeType(file.mimeType, file.nombre);
+                
+                // NUEVO: Formatear tamaño y fecha
+                const sizeFormatted = formatBytes(file.size);
+                const dateFormatted = file.subidoEn ? new Date(file.subidoEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '';
                 
                 // Para videos, SIEMPRE usar el formato /preview para evitar CSP
                 let urlToUse;
@@ -902,15 +904,56 @@ let proyectoIdEnEdicion = null;
                     urlToUse = `https://drive.google.com/file/d/${file.driveId}/preview`;
                 } else {
                     urlToUse = file.urlDirecta || file.url || (file.driveId ? `https://drive.google.com/file/d/${file.driveId}/preview` : '');
-                } 
+                }
+                
+                // NUEVO: Usar webViewLink y webContentLink si están disponibles
+                const viewLink = file.webViewLink || urlToUse;
+                const downloadLink = file.webContentLink || (file.driveId ? `https://drive.google.com/uc?export=download&id=${file.driveId}` : '');
 
+                // NUEVO: Layout de tarjeta elegante con icono, info y botones
                 return `
-                <button class="list-group-item list-group-item-action text-white border-bottom border-secondary track-btn d-flex align-items-center" 
-                        style="background-color: transparent;" 
-                        onclick="app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
-                    <i class="bi ${icon} me-3 fs-5"></i> 
-                    <span class="text-truncate">${escapeHTML(file.nombre)}</span>
-                </button>`;
+                <div class="file-card d-flex align-items-center p-2 border-bottom border-secondary" 
+                     style="background-color: rgba(255,255,255,0.03); border-radius: 6px; margin-bottom: 4px; cursor: pointer;"
+                     onclick="app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this)">
+                    
+                    <!-- Icono del archivo -->
+                    <div class="file-icon me-3 flex-shrink-0" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <i class="bi ${iconClass} fs-4"></i>
+                    </div>
+                    
+                    <!-- Info del archivo (nombre, tamaño, fecha) -->
+                    <div class="file-info flex-grow-1 min-width-0" style="min-width: 0;">
+                        <div class="file-name text-truncate text-white" style="font-size: 0.9rem; font-weight: 500;">
+                            ${escapeHTML(file.nombre)}
+                        </div>
+                        <div class="file-meta text-muted" style="font-size: 0.75rem;">
+                            ${sizeFormatted}${sizeFormatted && dateFormatted ? ' • ' : ''}${dateFormatted}
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="file-actions d-flex gap-1 ms-2 flex-shrink-0">
+                        <!-- Botón Ver (Preview) -->
+                        <button class="btn btn-sm btn-outline-light" 
+                                style="padding: 4px 8px;"
+                                title="Ver archivo"
+                                onclick="event.stopPropagation(); app.playMedia('${urlToUse}', '${escapeHTML(file.nombre)}', '${file.tipo}', this.closest('.file-card'))">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        
+                        <!-- Botón Descargar -->
+                        ${downloadLink ? `
+                        <a href="${downloadLink}" 
+                           target="_blank" 
+                           class="btn btn-sm btn-success" 
+                           style="padding: 4px 8px;"
+                           title="Descargar archivo"
+                           onclick="event.stopPropagation();">
+                            <i class="bi bi-download"></i>
+                        </a>
+                        ` : ''}
+                    </div>
+                </div>`;
             }).join('');
             hasPlayableItems = true;
         }
@@ -930,10 +973,25 @@ let proyectoIdEnEdicion = null;
              htmlList = '<div class="p-3 text-center text-muted small border-top border-secondary">No hay contenido multimedia ni enlaces.</div>';
         }
 
-        playlist.innerHTML = htmlList;
+        // TASK 3: Agregar header con título y botón de sincronización
+        const headerHtml = `
+            <div class="d-flex justify-content-between align-items-center p-2 border-bottom border-secondary bg-dark" style="background-color: rgba(0,0,0,0.2) !important;">
+                <span class="text-white fw-bold small">
+                    <i class="bi bi-folder-fill me-2 text-warning"></i>Archivos del Proyecto
+                    <span class="badge bg-secondary ms-2" style="font-size: 0.7rem;">${proj.archivos ? proj.archivos.length : 0}</span>
+                </span>
+                <button class="btn btn-sm btn-outline-info" 
+                        onclick="app.sincronizarCarpeta('${proj._id}')"
+                        title="Sincronizar con Google Drive">
+                    <i class="bi bi-arrow-clockwise"></i> Refrescar
+                </button>
+            </div>
+        `;
+        
+        playlist.innerHTML = headerHtml + htmlList;
         
         if(hasPlayableItems) {
-            setTimeout(() => { const firstBtn = playlist.querySelector('.track-btn'); if(firstBtn) firstBtn.click(); }, 300);
+            setTimeout(() => { const firstCard = playlist.querySelector('.file-card'); if(firstCard) firstCard.click(); }, 300);
         } else {
              container.innerHTML = `<div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted small">
                 <i class="bi bi-music-note-list fs-1 mb-2"></i>
@@ -942,6 +1000,38 @@ let proyectoIdEnEdicion = null;
         }
 
         new bootstrap.Modal(document.getElementById('player-modal')).show();
+    }
+
+    // TASK 3: Nueva función para sincronizar carpeta con backend
+    async function sincronizarCarpeta(projectId) {
+        console.log(`[SYNC] Sincronizando carpeta para proyecto: ${projectId}`);
+        
+        showToast('Sincronizando archivos con Google Drive...', 'info');
+        
+        try {
+            const response = await fetchAPI(`/api/drive/sync/${projectId}`);
+            
+            if (response.success) {
+                showToast(`¡Sincronizado! ${response.archivosSincronizados} archivos encontrados.`, 'success');
+                
+                // Actualizar caché local
+                if (window.localCache && localCache.proyectos) {
+                    const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
+                    if (indexCache !== -1) {
+                        localCache.proyectos[indexCache].archivos = response.archivos;
+                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                    }
+                }
+                
+                // Recargar el reproductor para mostrar archivos actualizados
+                openPlayer(projectId);
+            } else {
+                showToast(response.message || 'Error al sincronizar', 'error');
+            }
+        } catch (error) {
+            console.error('[SYNC] Error:', error);
+            showToast('Error al sincronizar carpeta: ' + error.message, 'error');
+        }
     }
 
     async function sincronizarArchivosDrive(projectId) {
@@ -1108,13 +1198,26 @@ let proyectoIdEnEdicion = null;
             `;
         }
 
+        // NUEVO: Resetear tanto tarjetas antiguas (.track-btn) como nuevas (.file-card)
         document.querySelectorAll('.track-btn').forEach(b => {
             b.classList.remove('active', 'bg-primary');
             b.style.backgroundColor = 'transparent';
         });
+        document.querySelectorAll('.file-card').forEach(c => {
+            c.style.backgroundColor = 'rgba(255,255,255,0.03)';
+            c.style.borderLeft = 'none';
+        });
+        
         if(btnElement) {
-            btnElement.classList.add('active', 'bg-primary');
-            btnElement.style.backgroundColor = 'var(--primary-color)';
+            // Soporte para nuevo sistema de tarjetas
+            if (btnElement.classList.contains('file-card')) {
+                btnElement.style.backgroundColor = 'rgba(255,255,255,0.15)';
+                btnElement.style.borderLeft = '3px solid var(--primary-color)';
+            } else {
+                // Fallback para sistema antiguo
+                btnElement.classList.add('active', 'bg-primary');
+                btnElement.style.backgroundColor = 'var(--primary-color)';
+            }
         }
     }
 
@@ -5174,7 +5277,7 @@ Fecha de firma: {{FECHA}}`;
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive,
+        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive, sincronizarCarpeta,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
@@ -5603,4 +5706,59 @@ async function processDriveUpload() {
 // ... (rest of the code remains the same)
 function hideLoader() {
     console.log('[Loader] Ocultado');
+}
+
+// ==================================================================
+// UTILIDADES PARA VISUALIZACIÓN DE ARCHIVOS (NUEVO)
+// ==================================================================
+
+/**
+ * Formatea bytes a formato legible (KB, MB, GB)
+ * @param {number} bytes - Tamaño en bytes
+ * @returns {string} - Formato legible (ej: "1.5 MB")
+ */
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * Devuelve la clase de Bootstrap Icon según el tipo MIME o extensión del archivo
+ * @param {string} mimeType - Tipo MIME del archivo
+ * @param {string} nombre - Nombre del archivo (fallback por extensión)
+ * @returns {string} - Clase de Bootstrap Icon
+ */
+function getIconByMimeType(mimeType, nombre) {
+    const nombreLow = (nombre || '').toLowerCase();
+    const mime = (mimeType || '').toLowerCase();
+
+    // Audio
+    if (mime.includes('audio/') || nombreLow.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff|wma)$/)) {
+        return 'bi-music-note-beamed text-info';
+    }
+    // Video
+    if (mime.includes('video/') || nombreLow.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv|mpg|mpeg)$/)) {
+        return 'bi-play-btn text-danger';
+    }
+    // Imágenes
+    if (mime.includes('image/') || nombreLow.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg|ico)$/)) {
+        return 'bi-image text-success';
+    }
+    // Comprimidos
+    if (nombreLow.match(/\.(zip|rar|7z|tar|gz|bz2|xz|tgz)$/)) {
+        return 'bi-box-seam text-warning';
+    }
+    // PDF
+    if (mime.includes('application/pdf') || nombreLow.endsWith('.pdf')) {
+        return 'bi-file-pdf text-danger';
+    }
+    // Documentos de texto
+    if (mime.includes('text/') || nombreLow.match(/\.(txt|rtf|doc|docx|odt|md|csv)$/)) {
+        return 'bi-file-text text-secondary';
+    }
+    // Default
+    return 'bi-file-earmark text-secondary';
 }
