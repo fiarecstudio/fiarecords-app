@@ -82,15 +82,11 @@ const applyTenantFilter = async (req, res, next) => {
                     console.log(`[TenantFilter DEBUG] esEmpresaPrincipal: ${esEmpresaPrincipal}`);
                     
                     if (esEmpresaPrincipal) {
-                        // Si es la empresa principal, incluir proyectos SIN empresaId (compatibilidad hacia atrás)
+                        // EMPRESA PRINCIPAL: Solo proyectos con empresaId explícito - SIN compatibilidad hacia atrás
                         req.tenantFilter = {
-                            $or: [
-                                { empresaId: new mongoose.Types.ObjectId(selectedEmpresaId) },
-                                { empresaId: { $exists: false } },
-                                { empresaId: null }
-                            ]
+                            empresaId: new mongoose.Types.ObjectId(selectedEmpresaId)
                         };
-                        console.log(`[TenantFilter] Super Admin filtrando por EMPRESA PRINCIPAL: ${selectedEmpresaId} (incluye proyectos sin empresaId)`);
+                        console.log(`[TenantFilter] Super Admin filtrando por EMPRESA PRINCIPAL: ${selectedEmpresaId}`);
                     } else {
                         // Otra empresa: filtro normal
                         req.tenantFilter = { 
@@ -120,15 +116,11 @@ const applyTenantFilter = async (req, res, next) => {
         const esEmpresaPrincipal = req.user.empresaId === empresaPrincipalId;
         
         if (esEmpresaPrincipal) {
-            // Usuario de empresa principal: ver proyectos de su empresa + sin empresaId
+            // Usuario de empresa principal: SOLO proyectos con empresaId explícito
             req.tenantFilter = {
-                $or: [
-                    { empresaId: new mongoose.Types.ObjectId(req.user.empresaId) },
-                    { empresaId: { $exists: false } },
-                    { empresaId: null }
-                ]
+                empresaId: new mongoose.Types.ObjectId(req.user.empresaId)
             };
-            console.log(`[TenantFilter] Usuario de EMPRESA PRINCIPAL - incluye proyectos sin empresaId`);
+            console.log(`[TenantFilter] Usuario de EMPRESA PRINCIPAL - filtro estricto aplicado`);
         } else {
             // Usuario de otra empresa: solo su empresa
             req.tenantFilter = { 
