@@ -204,28 +204,27 @@
         const totalPages = Math.ceil(items.length / limit);
 
         if (!items || items.length === 0) {
-            tablaBody.innerHTML = `<tr><td colspan="6" class="text-center">No hay pagos registrados.</td></tr>`;
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos registrados.</td></tr>`;
             renderTableControls(tableBodyId, 'pagos', 1, 0);
             return;
         }
 
         tablaBody.innerHTML = paginatedItems.map(p => {
-            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'N/A';
+            const displayName = p.artista || 'N/A';
 
             return `
             <tr>
                 <td data-label="Fecha">${safeDate(p.fecha)}</td>
-                <td data-label="Artista">${escapeHTML(artistaNombre)}</td>
-                <td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td>
-                <td data-label="Monto Pagado">$${safeMoney(p.montoPagado || 0)}</td>
+                <td data-label="Proyecto/Artista">${escapeHTML(displayName)}</td>
+                <td data-label="Monto Pagado">$${safeMoney(p.monto || 0)}</td>
                 <td data-label="Método">
-                    <span class="badge bg-${getMetodoBadgeColor(p.metodoPago)}">${p.metodoPago || 'N/A'}</span>
+                    <span class="badge bg-${getMetodoBadgeColor(p.metodo)}">${p.metodo || 'N/A'}</span>
                 </td>
                 <td data-label="Acciones" class="table-actions">
-                    <button class="btn btn-sm btn-outline-info" onclick="app.verDetallePago('${p._id}')" title="Ver Detalle">
+                    <button class="btn btn-sm btn-outline-info" onclick="app.verDetallePago('${p.proyectoId}', '${p.pagoId}')" title="Ver Detalle">
                         <i class="bi bi-eye"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.descargarRecibo('${p._id}')" title="Descargar Recibo">
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.descargarRecibo('${p.proyectoId}', '${p.pagoId}')" title="Descargar Recibo">
                         <i class="bi bi-download"></i>
                     </button>
                 </td>

@@ -4920,11 +4920,55 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
+    // ==========================================
+    // FUNCIONES PARA TABLA DE HISTORIAL DE PAGOS
+    // ==========================================
+
+    async function verDetallePago(proyectoId, pagoId) {
+        try {
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+            const pago = proyecto.pagos.find(p => p._id === pagoId);
+            if (!pago) return showToast('Pago no encontrado.', 'error');
+
+            const artistaNombre = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General';
+            const fecha = new Date(pago.fecha).toLocaleDateString();
+            
+            Swal.fire({
+                title: 'Detalle del Pago',
+                html: `
+                    <div class="text-start">
+                        <p><strong>Proyecto:</strong> ${proyecto.nombreProyecto || 'Sin nombre'}</p>
+                        <p><strong>Artista:</strong> ${artistaNombre}</p>
+                        <p><strong>Monto:</strong> $${safeMoney(pago.monto)}</p>
+                        <p><strong>Método:</strong> ${pago.metodo || 'N/A'}</p>
+                        <p><strong>Fecha:</strong> ${fecha}</p>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'Cerrar'
+            });
+        } catch (e) {
+            showToast('Error al cargar detalle del pago.', 'error');
+        }
+    }
+
+    async function descargarRecibo(proyectoId, pagoId) {
+        try {
+            const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
+            const pago = proyecto.pagos.find(p => p._id === pagoId);
+            if (!pago) return showToast('Pago no encontrado.', 'error');
+            await generarReciboPDF(pago, proyecto);
+        } catch (e) {
+            showToast('Error al generar recibo.', 'error');
+        }
+    }
+
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
         quitarDeProyecto, agregarAProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF,
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
+        verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
         compartirDatosBancariosWhatsApp, openDeliveryModal, saveDeliveryLink, editarInfoProyecto,
         filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
@@ -4943,25 +4987,19 @@ Fecha de firma: {{FECHA}}`;
         abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
-        loadInitialConfig, cargarConfiguracion, // Exportar para recarga desde empresas.js
-        // FASE 5: FLUJO DE TRABAJO REACTIVO
-        cargarFlujoDeTrabajo, // Exportar para recarga manual
-        recargarKanbanReactivo, // Exportar para cambio de empresa en tiempo real
-        // FASE 5: OVERLAY DEL KANBAN (para transiciones suaves sin flicker)
-        mostrarOverlayKanban, // Mostrar spinner sobrepuesto
-        ocultarOverlayKanban, // Ocultar spinner con transición suave
-        // PREVISUALIZACIÓN DE PDF
+        loadInitialConfig, cargarConfiguracion,
+        cargarFlujoDeTrabajo,
+        recargarKanbanReactivo,
+        mostrarOverlayKanban,
+        ocultarOverlayKanban,
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
-        // ZOOM E IMPRESIÓN DE PDF
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
-        // VISTA DE IMPRESIÓN INTEGRADA
         cerrarPrintPreview, ejecutarImpresion
     };
 
     // ==================================================================
     // ACORDEÓN KANBAN - Expandir/Colapsar columnas + Contador de proyectos
     // ==================================================================
-    // ... (rest of the code remains the same)
     function actualizarContadoresKanban() {
         document.querySelectorAll('.kanban-column').forEach(column => {
             const contenido = column.querySelector('.kanban-column-content');
@@ -5013,7 +5051,7 @@ Fecha de firma: {{FECHA}}`;
             const count = columna.querySelectorAll('.project-card').length;
             if (count > 0 && !columna.classList.contains('expanded')) {
                 columna.classList.add('expanded');
-                break; // Solo la primera con proyectos
+                break;
             }
         }
     }
@@ -5116,32 +5154,24 @@ Fecha de firma: {{FECHA}}`;
     // INTERCEPTAR Ctrl+P CUANDO EL MODAL DE PDF ESTÁ ABIERTO
     // ==================================================================
     document.addEventListener('keydown', function(e) {
-        // Detectar Ctrl+P (o Cmd+P en Mac)
         if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-            // Verificar si el modal de previsualización está abierto
             const modalPreview = document.getElementById('modalPreviewDocumento');
             const isModalOpen = modalPreview && modalPreview.style.display === 'flex';
             
             if (isModalOpen) {
-                console.log('[Print] Ctrl+P detectado con modal de PDF abierto');
-                e.preventDefault(); // Prevenir comportamiento por defecto
+                e.preventDefault();
                 e.stopPropagation();
-                
-                // Ejecutar impresión de alta calidad (con protección)
                 if (typeof imprimirDocumentoPDF === 'function') {
                     imprimirDocumentoPDF();
                 } else {
-                    console.error('[Print] ERROR: imprimirDocumentoPDF no está definida');
                     showToast('Error: función de impresión no disponible', 'error');
                 }
-                
                 return false;
             }
         }
     }, true); // Usar capture para interceptar antes
 
-}); // <-- CIERRE DEL DOMCONTENTLOADED
-
+});
 // --- SERVICE WORKER ---
 if ('serviceWorker' in navigator) { 
     window.addEventListener('load', function () { 
