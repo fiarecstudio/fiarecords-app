@@ -561,17 +561,19 @@ let proyectoIdEnEdicion = null;
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
 
-    // ==================================================================
-    // 4. FETCH API
-    // ==================================================================
+    // PASO 7: Flags para evitar bucle infinito de refresh
+    let isRefreshing = false;
+    let refreshPromise = null;
+
     async function fetchAPI(url, options = {}) {
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
-        const token = localStorage.getItem('token');
+        let token = localStorage.getItem('token');
         const isPublic = url.includes('/auth/') || url.includes('/configuracion/public'); 
 
-        if (!token && !isPublic) { 
-            showLogin(); 
-            throw new Error('No autenticado'); 
+        // PASO 7: Si estamos haciendo refresh, no redirigir inmediatamente
+        if (!token && !isPublic && !isRefreshing) {
+            showLogin();
+            throw new Error('No autenticado');
         }
 
         const headers = { 'Authorization': `Bearer ${token}` };
@@ -640,9 +642,69 @@ let proyectoIdEnEdicion = null;
         }
         
         try {
-            const res = await fetch(`${API_URL}${url}`, fetchOptions);
-            
-            if (res.status === 401 && !isPublic) { showLogin(); throw new Error('Sesión expirada.'); }
+            let res = await fetch(`${API_URL}${url}`, fetchOptions);
+
+            // PASO 7: Manejar 401 con intento de refresh token
+            if (res.status === 401 && !isPublic) {
+                console.log('[Auth] Token expirado, intentando refresh...');
+
+                const refreshToken = localStorage.getItem('refreshToken');
+
+                if (!refreshToken) {
+                    console.log('[Auth] No hay refresh token, redirigiendo a login');
+                    showLogin();
+                    throw new Error('Sesión expirada.');
+                }
+
+                // Evitar múltiples llamadas simultáneas de refresh
+                if (!isRefreshing) {
+                    isRefreshing = true;
+                    refreshPromise = fetch(`${API_URL}/api/auth/refresh`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refreshToken })
+                    });
+                }
+
+                try {
+                    const refreshRes = await refreshPromise;
+                    const refreshData = await refreshRes.json();
+
+                    if (!refreshRes.ok) {
+                        console.log('[Auth] Refresh token inválido o expirado');
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('refreshToken');
+                        isRefreshing = false;
+                        refreshPromise = null;
+                        showLogin();
+                        throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
+                    }
+
+                    // Refresh exitoso, guardar nuevo token
+                    console.log('[Auth] Token refrescado exitosamente');
+                    localStorage.setItem('token', refreshData.accessToken);
+
+                    // Reintentar petición original con nuevo token
+                    token = refreshData.accessToken;
+                    fetchOptions.headers['Authorization'] = `Bearer ${token}`;
+
+                    isRefreshing = false;
+                    refreshPromise = null;
+
+                    console.log('[Auth] Reintentando petición original:', url);
+                    res = await fetch(`${API_URL}${url}`, fetchOptions);
+
+                } catch (refreshError) {
+                    isRefreshing = false;
+                    refreshPromise = null;
+                    console.error('[Auth] Error al refrescar token:', refreshError);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('refreshToken');
+                    showLogin();
+                    throw new Error('Error al renovar sesión. Por favor inicia sesión nuevamente.');
+                }
+            }
+
             if (res.status === 401 && url.includes('/configuracion')) { return null; }
             if (res.status === 204) return { ok: true };
             
@@ -3261,8 +3323,9 @@ Fecha de firma: {{FECHA}}`;
     
     function showLogin() {
         document.body.classList.add('auth-visible');
-        // FASE 5: LIMPIEZA COMPLETA al cerrar sesión
+        // FASE 5 + PASO 7: LIMPIEZA COMPLETA al cerrar sesión
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');  // PASO 7: Limpiar refresh token
         localStorage.removeItem('empresaActiva');
         localStorage.removeItem('selected_empresa_id');  // Crítico: limpiar selección de Super Admin
         localStorage.removeItem('fia_identity_cache');   // Limpiar caché de identidad
@@ -3357,13 +3420,23 @@ Fecha de firma: {{FECHA}}`;
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
-                
+
+                // PASO 7: Manejar nuevos tokens (accessToken + refreshToken)
+                const accessToken = data.accessToken || data.token; // Fallback por si acaso
+                const refreshToken = data.refreshToken;
+
+                if (!accessToken) throw new Error('No se recibió token de acceso');
+
                 // FASE 5: Extraer datos del token ANTES de cualquier operación
-                const payload = JSON.parse(atob(data.token.split('.')[1]));
-                console.log('[Login] Token recibido. Payload:', payload);
-                
-                // PASO 1: Guardar token y empresaId
-                localStorage.setItem('token', data.token);
+                const payload = JSON.parse(atob(accessToken.split('.')[1]));
+                console.log('[Login] Access Token recibido. Payload:', payload);
+
+                // PASO 1: Guardar tokens y empresaId
+                localStorage.setItem('token', accessToken); // 'token' mantiene compatibilidad con el resto de la app
+                if (refreshToken) {
+                    localStorage.setItem('refreshToken', refreshToken);
+                    console.log('[Login] Refresh Token guardado');
+                }
                 if (payload.empresaId) {
                     localStorage.setItem('empresaActiva', payload.empresaId);
                     console.log('[Login] empresaActiva guardada:', payload.empresaId);

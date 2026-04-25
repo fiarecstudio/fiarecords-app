@@ -115,17 +115,39 @@ router.post('/register', validate(registerSchema), async (req, res) => {
             await savedUser.save();
         }
 
-        // Generar Token (FASE 2: Incluyendo contexto multi-tenant)
-        const token = jwt.sign({ 
-            id: savedUser._id, 
+        // PASO 7: Generar Tokens para el nuevo usuario
+        // Access Token: 15 minutos
+        const accessToken = jwt.sign({
+            id: savedUser._id,
             role: savedUser.role,
             // --- FASE 2: MULTI-TENANT - CONTEXTO DE SESIÓN ---
             empresaId: savedUser.empresaId ? savedUser.empresaId.toString() : null,
             isSuperAdmin: savedUser.isSuperAdmin || false
             // -------------------------------------------------
-        }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        }, process.env.JWT_SECRET, { expiresIn: '15m' });
 
-        res.status(201).json({ token });
+        // Refresh Token: 7 días
+        const refreshToken = jwt.sign({
+            id: savedUser._id,
+            type: 'refresh'
+        }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        // Guardar refreshToken en BD
+        const refreshTokenHash = require('crypto')
+            .createHash('sha256')
+            .update(refreshToken)
+            .digest('hex');
+        
+        savedUser.refreshToken = refreshTokenHash;
+        savedUser.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await savedUser.save();
+
+        res.status(201).json({
+            accessToken,
+            refreshToken,
+            role: savedUser.role,
+            expiresIn: 900
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al registrar.' });
@@ -206,21 +228,43 @@ router.post('/login', validate(loginSchema), async (req, res) => {
             artistaId = artistaVinculado._id;
         }
 
-        // D. Generar Token (INCLUYENDO EL ARTISTA ID Y DATOS MULTI-TENANT)
-        const token = jwt.sign({ 
-            id: user._id, 
-            username: user.username, 
+        // D. Generar Tokens (PASO 7: Rotación de Tokens)
+        // Access Token: 15 minutos (corto para seguridad)
+        const accessToken = jwt.sign({
+            id: user._id,
+            username: user.username,
             role: user.role,
             permisos: user.permisos || [],
-            artistaId: artistaId, // <--- ESTO ES LO QUE USA EL FRONTEND
+            artistaId: artistaId,
             nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username,
             // --- FASE 2: MULTI-TENANT - CONTEXTO DE SESIÓN ---
             empresaId: user.empresaId ? user.empresaId.toString() : null,
             isSuperAdmin: user.isSuperAdmin || false
             // -------------------------------------------------
-        }, process.env.JWT_SECRET, { expiresIn: '8h' });
+        }, process.env.JWT_SECRET, { expiresIn: '15m' });
 
-        res.json({ token, role: user.role });
+        // Refresh Token: 7 días (largo para mantener sesión)
+        const refreshToken = jwt.sign({
+            id: user._id,
+            type: 'refresh'
+        }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        // Guardar refreshToken en BD (hashed para seguridad)
+        const refreshTokenHash = require('crypto')
+            .createHash('sha256')
+            .update(refreshToken)
+            .digest('hex');
+        
+        user.refreshToken = refreshTokenHash;
+        user.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
+        await user.save();
+
+        res.json({
+            accessToken,
+            refreshToken,
+            role: user.role,
+            expiresIn: 900 // 15 minutos en segundos
+        });
 
     } catch (error) { 
         console.error(error);
@@ -232,7 +276,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
 // 3. RECUPERAR CONTRASEÑA (SOLICITUD)
 // ============================================================
 router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res) => {
-    console.log("📩 Iniciando solicitud de recuperación...");
+    console.log(" Iniciando solicitud de recuperación...");
     
     try {
         const { email } = req.body;
@@ -270,7 +314,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res)
         res.json({ message: 'Correo enviado correctamente.' });
 
     } catch (error) {
-        console.error("❌ ERROR:", error);
+        console.error(" ERROR:", error);
         res.status(500).json({ error: 'Error al enviar el correo.' });
     }
 });
@@ -310,6 +354,101 @@ router.post('/reset-password/:token', async (req, res) => {
 
 router.post('/reset-password', async (req, res) => {
     return procesarResetPassword(req, res, req.body.token);
+});
+
+// ============================================================
+// PASO 7: ENDPOINT DE RENOVACIÓN DE ACCESS TOKEN
+// ============================================================
+router.post('/refresh', async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(401).json({ error: 'Refresh token requerido' });
+        }
+
+        // Verificar el refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(403).json({ error: 'Refresh token inválido o expirado' });
+        }
+
+        // Buscar usuario y verificar que el token coincida con el de BD (hashed)
+        const refreshTokenHash = require('crypto')
+            .createHash('sha256')
+            .update(refreshToken)
+            .digest('hex');
+
+        const user = await Usuario.findOne({
+            _id: decoded.id,
+            refreshToken: refreshTokenHash,
+            refreshTokenExpires: { $gt: Date.now() },
+            isDeleted: false
+        });
+
+        if (!user) {
+            return res.status(403).json({ error: 'Refresh token no válido o revocado' });
+        }
+
+        // Buscar artista vinculado para incluir en el nuevo token
+        let artistaId = null;
+        let artistaVinculado = null;
+        
+        if (user.artistaId) {
+            artistaVinculado = await Artista.findById(user.artistaId);
+        }
+        if (!artistaVinculado) {
+            artistaVinculado = await Artista.findOne({ usuarioId: user._id });
+        }
+        if (artistaVinculado) {
+            artistaId = artistaVinculado._id;
+        }
+
+        // Generar NUEVO Access Token (15 minutos)
+        const newAccessToken = jwt.sign({
+            id: user._id,
+            username: user.username,
+            role: user.role,
+            permisos: user.permisos || [],
+            artistaId: artistaId,
+            nombre: artistaVinculado ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre) : user.username,
+            empresaId: user.empresaId ? user.empresaId.toString() : null,
+            isSuperAdmin: user.isSuperAdmin || false
+        }, process.env.JWT_SECRET, { expiresIn: '15m' });
+
+        res.json({
+            accessToken: newAccessToken,
+            expiresIn: 900 // 15 minutos en segundos
+        });
+
+    } catch (error) {
+        console.error('[POST /refresh] Error:', error);
+        res.status(500).json({ error: 'Error al renovar token' });
+    }
+});
+
+// ============================================================
+// PASO 7: LOGOUT SEGURO - INVALIDA REFRESH TOKEN
+// ============================================================
+const auth = require('../middleware/auth');
+
+router.post('/logout', auth, async (req, res) => {
+    try {
+        // Limpiar el refreshToken del usuario actual
+        const user = await Usuario.findById(req.user.id);
+        if (user) {
+            user.refreshToken = null;
+            user.refreshTokenExpires = null;
+            await user.save();
+        }
+
+        res.json({ message: 'Sesión cerrada correctamente' });
+    } catch (error) {
+        console.error('[POST /logout] Error:', error);
+        res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
 });
 
 module.exports = router;

@@ -66,6 +66,11 @@ const UsuarioSchema = new mongoose.Schema({
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
 
+    // --- PASO 7: REFRESH TOKEN PARA ROTACIÓN DE SESIÓN ---
+    refreshToken: { type: String, default: null },
+    refreshTokenExpires: { type: Date, default: null },
+    // ----------------------------------------------------
+
 }, { 
     timestamps: true 
 });
