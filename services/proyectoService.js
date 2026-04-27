@@ -299,30 +299,39 @@ class ProyectoService {
     
     /**
      * Obtener todos los pagos de todos los proyectos
+     * @param {Object} tenantFilter - Filtro de tenant (empresaId)
+     * @param {string} [artistaId] - Opcional: filtrar pagos de un artista específico (para clientes)
      */
-    async listarTodosPagos(tenantFilter) {
-        const filtro = this._buildQueryFilter(tenantFilter, {
+    async listarTodosPagos(tenantFilter, artistaId = null) {
+        const baseFiltro = {
             "pagos.0": { $exists: true }
+        };
+
+        // Si se especifica artistaId, agregar al filtro
+        if (artistaId) {
+            baseFiltro.artista = artistaId;
+        }
+
+        const filtro = this._buildQueryFilter(tenantFilter, baseFiltro);
+        const proyectos = await Proyecto.find(filtro).populate('artista');
+
+        let todosPagos = [];
+        proyectos.forEach(p => {
+            if (p.pagos && p.pagos.length > 0) {
+                p.pagos.forEach(pago => {
+                    todosPagos.push({
+                        pagoId: pago._id,
+                        proyectoId: p._id,
+                        monto: pago.monto,
+                        metodo: pago.metodo,
+                        fecha: pago.fecha,
+                        artista: p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'General'
+                    });
+                });
+            }
         });
-        const proyectos = await Proyecto.find(filtro).populate('artista'); 
-        
-        let todosPagos = []; 
-        proyectos.forEach(p => { 
-            if (p.pagos && p.pagos.length > 0) { 
-                p.pagos.forEach(pago => { 
-                    todosPagos.push({ 
-                        pagoId: pago._id, 
-                        proyectoId: p._id, 
-                        monto: pago.monto, 
-                        metodo: pago.metodo, 
-                        fecha: pago.fecha, 
-                        artista: p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'General' 
-                    }); 
-                }); 
-            } 
-        }); 
-        
-        todosPagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); 
+
+        todosPagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         return todosPagos;
     }
     

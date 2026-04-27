@@ -154,28 +154,38 @@
     /**
      * Renderiza la tabla de pagos pendientes
      */
-    function renderPagosPendientesTable(items, tableBodyId = 'tablaPendientesBody') {
+    function renderPagosPendientesTable(items, pagination, tableBodyId = 'tablaPendientesBody') {
         const tabla = document.getElementById(tableBodyId);
         if (!tabla) return;
 
         const userInfo = typeof window.getUserRoleAndId === 'function' ? window.getUserRoleAndId() : { role: 'admin' };
         const esCliente = userInfo.role === 'cliente';
 
+        const { page = 1, limit = 10 } = pagination || {};
+        const start = (page - 1) * limit;
+        const paginatedItems = items.slice(start, start + limit);
+        const totalPages = Math.ceil(items.length / limit);
+
         if (!items || items.length === 0) {
-            tabla.innerHTML = `<tr><td colspan="6" class="text-center">No hay pagos pendientes.</td></tr>`;
+            tabla.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos pendientes.</td></tr>`;
+            renderTableControls(tableBodyId, 'pagosPendientes', 1, 0);
             return;
         }
 
-        tabla.innerHTML = items.map(p => {
+        tabla.innerHTML = paginatedItems.map(p => {
             const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'N/A';
             const restante = p.total - (p.montoPagado || 0);
+            const proyectoInfo = `
+                <div class="fw-bold">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</div>
+                <small class="text-muted">${escapeHTML(artistaNombre)}</small><br>
+                <small class="text-muted">${safeDate(p.fecha)}</small>
+            `;
 
             return `
             <tr>
-                <td data-label="Fecha">${safeDate(p.fecha)}</td>
-                <td data-label="Artista">${escapeHTML(artistaNombre)}</td>
-                <td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</td>
+                <td data-label="Proyecto">${proyectoInfo}</td>
                 <td data-label="Total">$${safeMoney(p.total)}</td>
+                <td data-label="Pagado">$${safeMoney(p.montoPagado || 0)}</td>
                 <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
                 <td data-label="Acciones" class="table-actions">
                     ${!esCliente ? `
@@ -183,12 +193,14 @@
                         <i class="bi bi-cash-stack"></i> Cobrar
                     </button>
                     ` : ''}
-                    <button class="btn btn-sm btn-outline-info" onclick="app.verDetallePago('${p._id}')" title="Ver Detalle">
+                    <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}')" title="Ver Detalle / Cobrar">
                         <i class="bi bi-eye"></i>
                     </button>
                 </td>
             </tr>`;
         }).join('');
+
+        renderTableControls(tableBodyId, 'pagosPendientes', page, totalPages);
     }
 
     /**
@@ -205,7 +217,7 @@
 
         if (!items || items.length === 0) {
             tablaBody.innerHTML = `<tr><td colspan="5" class="text-center">No hay pagos registrados.</td></tr>`;
-            renderTableControls(tableBodyId, 'pagos', 1, 0);
+            renderTableControls(tableBodyId, 'pagosHistorial', 1, 0);
             return;
         }
 
@@ -231,7 +243,7 @@
             </tr>`;
         }).join('');
 
-        renderTableControls(tableBodyId, 'pagos', page, totalPages);
+        renderTableControls(tableBodyId, 'pagosHistorial', page, totalPages);
     }
 
     function getMetodoBadgeColor(metodo) {
@@ -271,11 +283,11 @@
         const nextDisabled = page >= totalPages ? 'disabled' : '';
 
         controls.innerHTML = `
-            <button class="btn btn-sm btn-outline-secondary" ${prevDisabled} onclick="UIManager.changePage('${listKey}', -1)">
+            <button class="btn btn-sm btn-outline-secondary" ${prevDisabled} onclick="window.app.changeTablePage('${listKey}', -1)">
                 <i class="bi bi-chevron-left"></i> Anterior
             </button>
             <span class="text-muted small">Página ${page} de ${totalPages}</span>
-            <button class="btn btn-sm btn-outline-secondary" ${nextDisabled} onclick="UIManager.changePage('${listKey}', 1)">
+            <button class="btn btn-sm btn-outline-secondary" ${nextDisabled} onclick="window.app.changeTablePage('${listKey}', 1)">
                 Siguiente <i class="bi bi-chevron-right"></i>
             </button>
         `;
@@ -299,10 +311,15 @@
         const renderers = {
             'historial': () => renderHistorialTable(window.historialCacheados || [], pagination),
             'cotizaciones': () => renderCotizacionesTable(window.cotizacionesCacheadas || [], pagination),
-            'pagos': () => renderPagosHistorialTable(window.pagosHistorialCacheados || [], pagination)
+            'pagos': () => renderPagosHistorialTable(window.pagosHistorialCacheados || [], pagination),
+            'pagosPendientes': () => renderPagosPendientesTable(window.pagosPendientesCacheados || [], pagination),
+            'pagosHistorial': () => renderPagosHistorialTable(window.pagosHistorialCacheados || [], pagination)
         };
 
-        if (renderers[listKey]) renderers[listKey]();
+        if (renderers[listKey]) {
+            console.log('[Paginación] Ejecutando (ui.js):', listKey, 'Página:', pagination.page);
+            renderers[listKey]();
+        }
     }
 
     // ==================================================================
@@ -426,11 +443,11 @@
         const nextDisabled = currentPage >= totalPages ? 'disabled' : '';
 
         controls.innerHTML = `
-            <button class="btn btn-sm btn-outline-secondary" ${prevDisabled} onclick="UIManager.renderPaginatedList('${endpoint}', ${filterText ? `'${filterText}'` : 'null'}, ${currentPage - 1})">
+            <button class="btn btn-sm btn-outline-secondary" ${prevDisabled} onclick="window.app.changePage('${endpoint}', -1)">
                 <i class="bi bi-chevron-left"></i>
             </button>
             <span class="text-muted small">${currentPage} / ${totalPages}</span>
-            <button class="btn btn-sm btn-outline-secondary" ${nextDisabled} onclick="UIManager.renderPaginatedList('${endpoint}', ${filterText ? `'${filterText}'` : 'null'}, ${currentPage + 1})">
+            <button class="btn btn-sm btn-outline-secondary" ${nextDisabled} onclick="window.app.changePage('${endpoint}', 1)">
                 <i class="bi bi-chevron-right"></i>
             </button>
         `;

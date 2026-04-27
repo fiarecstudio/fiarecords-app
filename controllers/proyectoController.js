@@ -76,10 +76,12 @@ class ProyectoController {
     
     /**
      * GET /pagos/todos - Listar todos los pagos
+     * Query params: artistaId (opcional, para filtrar pagos de un artista específico)
      */
     async listarTodosPagos(req, res, next) {
         try {
-            const pagos = await proyectoService.listarTodosPagos(req.tenantFilter);
+            const { artistaId } = req.query;
+            const pagos = await proyectoService.listarTodosPagos(req.tenantFilter, artistaId);
             res.json(pagos);
         } catch (error) {
             next(error);

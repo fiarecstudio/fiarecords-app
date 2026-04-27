@@ -3068,7 +3068,7 @@ Fecha de firma: {{FECHA}}`;
             if (document.getElementById('vista-pagos-pendientes').style.display !== 'none') {
                 tablePagination.pagosPendientes.filter = query;
                 tablePagination.pagosPendientes.page = 1;
-                window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
+                window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
             } else {
                 tablePagination.pagosHistorial.filter = query;
                 tablePagination.pagosHistorial.page = 1;
@@ -3568,26 +3568,61 @@ Fecha de firma: {{FECHA}}`;
         container.parentNode.appendChild(controls); 
     }
     
-    function changePage(endpoint, delta) { 
-        // Wrapper: delega a UIManager si está disponible para tablas, o usa implementación legacy para listas
-        if (typeof window.UIManager?.changePage === 'function' && ['historial', 'cotizaciones', 'pagos'].includes(endpoint)) {
-            return window.UIManager.changePage(endpoint, delta);
+    function changePage(endpoint, delta) {
+        console.log('[Paginación] Ejecutando changePage:', endpoint, 'Delta:', delta);
+
+        // Claves de tabla → delegar a changeTablePage
+        const tableKeys = ['historial', 'cotizaciones', 'pagos', 'pagosPendientes', 'pagosHistorial'];
+        if (tableKeys.includes(endpoint)) {
+            return changeTablePage(endpoint, delta);
         }
-        paginationState[endpoint].page += delta; 
-        renderPaginatedList(endpoint, null); 
+
+        // Claves de lista (artistas, servicios, usuarios, papelera*)
+        const listKeys = ['artistas', 'servicios', 'usuarios', 'papeleraProyectos', 'papeleraArtistas', 'papeleraServicios', 'papeleraUsuarios'];
+        if (listKeys.includes(endpoint) && paginationState[endpoint]) {
+            paginationState[endpoint].page += delta;
+            console.log('[Paginación] Lista', endpoint, '→ página:', paginationState[endpoint].page);
+            renderPaginatedList(endpoint, null);
+            return;
+        }
+
+        console.warn('[Paginación] Clave desconocida:', endpoint);
     }
 
     function changeTablePage(listKey, delta) {
-        if (typeof window.UIManager?.changePage === 'function') {
-            return window.UIManager.changePage(listKey, delta);
+        console.log('[Paginación] Ejecutando changeTablePage:', listKey, 'Delta:', delta);
+
+        if (!tablePagination[listKey]) {
+            console.warn('[Paginación] Clave de tabla desconocida:', listKey);
+            return;
         }
-        // Fallback legacy
-        if (tablePagination[listKey]) {
-            tablePagination[listKey].page += delta;
-            if (listKey === 'historial') window.UIManager.renderHistorialTable(historialCacheados, tablePagination.historial);
-            if (listKey === 'cotizaciones') window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
-            if (listKey === 'pagosPendientes') window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
-            if (listKey === 'pagosHistorial') window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
+
+        const pagination = tablePagination[listKey];
+        const newPage = pagination.page + delta;
+
+        // Validar límites
+        if (newPage < 1) {
+            console.log('[Paginación] Ya estás en la primera página');
+            return;
+        }
+
+        // Actualizar página
+        pagination.page = newPage;
+        console.log('[Paginación] Tabla', listKey, '→ página:', newPage);
+
+        // Renderizar según la clave
+        const renderers = {
+            'historial': () => window.UIManager?.renderHistorialTable(historialCacheados, pagination),
+            'cotizaciones': () => window.UIManager?.renderCotizacionesTable(cotizacionesCacheadas, pagination),
+            'pagos': () => window.UIManager?.renderPagosHistorialTable(pagosHistorialCacheados, pagination),
+            'pagosPendientes': () => window.UIManager?.renderPagosPendientesTable(pagosPendientesCacheados, pagination),
+            'pagosHistorial': () => window.UIManager?.renderPagosHistorialTable(pagosHistorialCacheados, pagination)
+        };
+
+        if (renderers[listKey]) {
+            renderers[listKey]();
+        } else {
+            console.warn('[Paginación] No hay renderer para:', listKey);
         }
     }
     
@@ -3758,59 +3793,59 @@ Fecha de firma: {{FECHA}}`;
             }
         });
     }
+
     async function cargarPagos() { document.querySelector('#pagos .btn-group button.active')?.classList.remove('active'); const btnPendientes = document.querySelector('#pagos .btn-group button'); if (btnPendientes) btnPendientes.classList.add('active'); mostrarSeccionPagos('pendientes', btnPendientes); }
     function mostrarSeccionPagos(vista, btn) { document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active')); if (btn) btn.classList.add('active'); if (vista === 'pendientes') { document.getElementById('vista-pagos-pendientes').style.display = 'block'; document.getElementById('vista-pagos-historial').style.display = 'none'; cargarPagosPendientes(); } else { document.getElementById('vista-pagos-pendientes').style.display = 'none'; document.getElementById('vista-pagos-historial').style.display = 'block'; cargarHistorialPagos(); } }
     
-    async function cargarPagosPendientes() { 
-        const tabla = document.getElementById('tablaPendientesBody'); 
-        tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>'; 
-        await fetchAPI('/api/proyectos'); 
-        const userInfo = getUserRoleAndId(); 
-        const isClient = userInfo.role === 'cliente'; 
-        pagosPendientesCacheados = localCache.proyectos.filter(p => { 
-            if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false; 
-            const pagado = p.montoPagado || 0; 
-            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted; 
-        }); 
+    async function cargarPagosPendientes() {
+        const tabla = document.getElementById('tablaPendientesBody');
+        tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
+        await fetchAPI('/api/proyectos');
+        const userInfo = getUserRoleAndId();
+        const isClient = userInfo.role === 'cliente';
+        pagosPendientesCacheados = localCache.proyectos.filter(p => {
+            if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
+            const pagado = p.montoPagado || 0;
+            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
+        });
         tablePagination.pagosPendientes.page = 1;
-        window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados);
+        window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
     }
-    
-    async function cargarHistorialPagos() { 
-        const tablaBody = document.getElementById('tablaPagosBody'); 
-        tablaBody.innerHTML = `<tr><td colspan="5">Cargando historial de pagos...</td></tr>`; 
-        const userInfo = getUserRoleAndId(); 
-        const isClient = userInfo.role === 'cliente'; 
-        try { 
-            const proyectosFresh = await fetchAPI('/api/proyectos'); 
-            let pagos =[]; 
-            if (isClient) { 
-                const misProyectos = proyectosFresh.filter(p => p.artista && p.artista._id === userInfo.artistaId); 
-                misProyectos.forEach(proj => { 
-                    if (proj.pagos && proj.pagos.length > 0) { 
-                        proj.pagos.forEach(pago => { 
-                            pagos.push({ fecha: pago.fecha || new Date().toISOString(), artista: proj.nombreProyecto || 'Proyecto', monto: pago.monto, metodo: pago.metodo, proyectoId: proj._id, pagoId: pago._id }); 
-                        }); 
-                    } 
-                }); 
-            } else { 
-                proyectosFresh.forEach(proj => { 
-                    if (proj.pagos && proj.pagos.length > 0) { 
-                        proj.pagos.forEach(pago => { 
-                            pagos.push({ fecha: pago.fecha || new Date().toISOString(), artista: proj.artista ? (proj.artista.nombreArtistico || proj.artista.nombre) : 'Público General', monto: pago.monto, metodo: pago.metodo, proyectoId: proj._id, pagoId: pago._id }); 
-                        }); 
-                    } 
-                }); 
-            } 
-            pagos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); 
-            pagosHistorialCacheados = pagos;
+
+    async function cargarHistorialPagos() {
+        const tablaBody = document.getElementById('tablaPagosBody');
+        if (tablaBody) tablaBody.innerHTML = '<tr><td colspan="5">Cargando historial...</td></tr>';
+
+        try {
+            const userInfo = getUserRoleAndId();
+            const isClient = userInfo.role === 'cliente';
+
+            let url = '/api/proyectos/pagos/todos';
+            if (isClient) url += `?artistaId=${userInfo.artistaId}`;
+
+            const pagos = await fetchAPI(url);
+            pagosHistorialCacheados = pagos.map(p => ({
+                fecha: p.fecha || new Date().toISOString(),
+                artista: p.artista || 'N/A',
+                monto: p.monto || 0,
+                metodo: p.metodo || 'N/A',
+                proyectoId: p.proyectoId,
+                pagoId: p.pagoId
+            }));
+
             tablePagination.pagosHistorial.page = 1;
-            window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
-        } catch (e) { 
-            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`; 
-        } 
+            if (window.UIManager) {
+                window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
+            }
+        } catch (e) {
+            console.error('[cargarHistorialPagos] Error:', e);
+            if (tablaBody) {
+                tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`;
+            }
+            showToast('Error al cargar historial de pagos', 'error');
+        }
     }
-    
+
     async function reimprimirRecibo(proyectoId, pagoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const pago = proyecto.pagos.find(p => p._id === pagoId); if (!pago) return showToast('Pago no encontrado en el proyecto.', 'error'); await generarReciboPDF(pago, proyecto); } catch (e) { showToast('Error al generar recibo.', 'error'); } }
     async function compartirRecordatorioPago(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const restante = proyecto.total - (proyecto.montoPagado || 0); const mensaje = `¡Hola ${nombreCliente}! Te enviamos un recordatorio de FiaRecords sobre tu proyecto "${proyecto.nombreProyecto || 'General'}".\n\nEl saldo pendiente es de: *$${safeMoney(restante)} MXN*.\n\nQuedamos a tus órdenes.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch(e) { showToast('Error al obtener datos del proyecto', 'error'); } }
     async function eliminarPago(proyectoId, pagoId) { Swal.fire({ title: '¿Eliminar este pago?', text: "Esta acción afectará el saldo del proyecto.", icon: 'error', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed){ try { await fetchAPI(`/api/proyectos/${proyectoId}/pagos/${pagoId}`, { method: 'DELETE' }); showToast('Pago eliminado.', 'success'); cargarPagos(); } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
