@@ -424,8 +424,13 @@
             <section id="historial-proyectos" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
-                    <div class="card-header pt-3 pb-0 border-0">
-                        <h2>Historial de Proyectos</h2>
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h2 class="mb-0"><i class="bi bi-archive"></i> Historial de Proyectos</h2>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-success active" onclick="app.cargarHistorial('completos', this)">Completados</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="app.cargarHistorial('cancelados', this)">Cancelados</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="app.cargarHistorial('todos', this)">Todos</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -538,7 +543,13 @@
                 <div class="card mb-4">
                     <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <h2 class="mb-0 text-danger"><i class="bi bi-wallet2"></i> Mis Deudas Personales</h2>
-                        <button class="btn btn-primary" onclick="app.abrirModalNuevaDeuda()"><i class="bi bi-plus"></i> Registrar Deuda</button>
+                        <div class="d-flex gap-2">
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-danger active" onclick="app.mostrarSeccionDeudas('pendientes', this)">Pendientes</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="app.mostrarSeccionDeudas('historial', this)">Pagadas</button>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="app.abrirModalNuevaDeuda()"><i class="bi bi-plus"></i> Registrar</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="row mb-4">

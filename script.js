@@ -1608,7 +1608,7 @@ let proyectoIdEnEdicion = null;
                 }
                 
                 card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group">${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
-            }); 
+            });
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
@@ -1616,17 +1616,44 @@ let proyectoIdEnEdicion = null;
 
     // CARGAR HISTORIAL (BOTÓN VISOR)
     // ==============================================================
-    async function cargarHistorial() { 
-        const tablaBody = document.getElementById('tablaHistorialBody'); 
-        tablaBody.innerHTML = `<tr><td colspan="7">Cargando historial...</td></tr>`; 
-        try { 
-            historialCacheados = await fetchAPI('/api/proyectos/completos'); 
-            tablePagination.historial.page = 1;
-            window.UIManager.renderHistorialTable(historialCacheados, tablePagination.historial);
-        } catch (error) { 
+    async function cargarHistorial(statusFilter = 'completos', btnElement = null) {
+        window.historialFilterActivo = statusFilter;
+        
+        if (btnElement) {
+            const btnGroup = btnElement.parentElement;
+            btnGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        const tablaBody = document.getElementById('tablaHistorialBody');
+        if (!tablaBody) return;
+        
+        tablaBody.innerHTML = `<tr><td colspan="7" class="text-center">Cargando historial...</td></tr>`;
+        try {
+            historialCacheados = await fetchAPI('/api/proyectos/completos');
+            
+            // Aplicar filtro según el status seleccionado
+            if (statusFilter && statusFilter !== 'todos') {
+                historialCacheados = historialCacheados.filter(p => {
+                    if (statusFilter === 'completos') return p.proceso === 'Completo' && p.estatus !== 'Cancelado';
+                    if (statusFilter === 'en-proceso') return p.proceso !== 'Completo' && p.estatus !== 'Cancelado';
+                    if (statusFilter === 'cancelados') return p.estatus === 'Cancelado';
+                    return true;
+                });
+            }
+            
+            // Asegurar que la paginación global exista
+            if (typeof tablePagination !== 'undefined' && tablePagination.historial) {
+                tablePagination.historial.page = 1;
+            }
+            
+            if (window.UIManager && window.UIManager.renderHistorialTable) {
+                window.UIManager.renderHistorialTable(historialCacheados, typeof tablePagination !== 'undefined' ? tablePagination.historial : {page: 1, limit: 10});
+            }
+        } catch (error) {
             console.error(error);
-            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error al cargar historial.</td></tr>`; 
-        } 
+            tablaBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error al cargar historial.</td></tr>`;
+        }
     }
 
     async function eliminarProyecto(id, desdeCotizaciones = false) { Swal.fire({ title: '¿Mover a papelera?', text: "El proyecto se ocultará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, mover', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}`, { method: 'DELETE' }); showToast('Movido a papelera.', 'info'); if (desdeCotizaciones) { cargarCotizaciones(); } else if (document.getElementById('historial-proyectos').classList.contains('active')) { cargarHistorial(); } else if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtroActual); } } catch (error) { showToast(`Error: ${error.message}`, 'error'); } } }); }
@@ -4216,9 +4243,16 @@ Fecha de firma: {{FECHA}}`;
                             <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                          </div>`;
             }
-        } 
-        navContainer.innerHTML = html; 
-        document.querySelectorAll('.nav-link-sidebar').forEach(link => { link.addEventListener('click', (e) => { if(!e.currentTarget.onclick) { e.preventDefault(); mostrarSeccion(e.currentTarget.dataset.seccion); } }); }); 
+        }
+        navContainer.innerHTML = html;
+        document.querySelectorAll('.nav-link-sidebar').forEach(link => {
+            link.addEventListener('click', (e) => {
+                if (!e.currentTarget.onclick) {
+                    e.preventDefault();
+                    mostrarSeccion(e.currentTarget.dataset.seccion);
+                }
+            });
+        });
     }
 
     // ==================================================================
@@ -4226,7 +4260,7 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     async function cargarDeudas() {
         const tabla = document.getElementById('tablaDeudasBody');
-        if(!tabla) return;
+        if (!tabla) return;
         tabla.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
         try {
             const data = await fetchAPI('/api/deudas');
@@ -4237,26 +4271,29 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
-    function renderDeudas() {
+    function renderDeudas(deudasToRender = null) {
         const tabla = document.getElementById('tablaDeudasBody');
-        if(!tabla) return;
+        if (!tabla) return;
         let totalGlobal = 0;
 
-        if (!localCache.deudas || localCache.deudas.length === 0) {
+        // Usar deudas pasadas como parámetro o fallback a localCache.deudas
+        const deudasReales = deudasToRender || localCache.deudas || [];
+
+        if (!deudasReales || deudasReales.length === 0) {
             tabla.innerHTML = '<tr><td colspan="6" class="text-center">No hay deudas registradas. ¡Excelente!</td></tr>';
             document.getElementById('total-deuda-global').textContent = '$0.00';
             return;
         }
 
-        tabla.innerHTML = localCache.deudas.map(d => {
+        tabla.innerHTML = deudasReales.map(d => {
             const restante = d.total - d.montoPagado;
             totalGlobal += restante;
 
-            const badge = d.estatus === 'Liquidada' 
-                ? '<span class="badge bg-success">Liquidada</span>' 
+            const badge = d.estatus === 'Liquidada'
+                ? '<span class="badge bg-success">Liquidada</span>'
                 : '<span class="badge bg-danger">Pendiente</span>';
-            
-            let btnPagar = d.estatus !== 'Liquidada' 
+
+            let btnPagar = d.estatus !== 'Liquidada'
                 ? `<button class="btn btn-sm btn-success text-white" title="Abonar" onclick="app.abonarDeuda('${d._id}', ${restante})"><i class="bi bi-cash"></i></button>`
                 : '';
 
@@ -4276,6 +4313,35 @@ Fecha de firma: {{FECHA}}`;
         }).join('');
 
         document.getElementById('total-deuda-global').textContent = `$${safeMoney(totalGlobal)}`;
+    }
+
+    window.deudaFiltroActivo = 'pendientes';
+    async function mostrarSeccionDeudas(tipo, btnElement) {
+        window.deudaFiltroActivo = tipo;
+
+        // Actualizar botones visualmente
+        if (btnElement) {
+            const btnGroup = btnElement.parentElement;
+            btnGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        // Filtrar deudas cacheadas (usa localCache.deudas)
+        const deudasReales = localCache.deudas || [];
+
+        console.log('[Deudas] Filtrando:', tipo, 'Total:', deudasReales.length);
+
+        const filtradas = deudasReales.filter(deuda => {
+            const restante = deuda.total - (deuda.montoPagado || 0);
+            if (tipo === 'pendientes') return deuda.estatus !== 'Liquidada' || restante > 0;
+            if (tipo === 'historial') return deuda.estatus === 'Liquidada' || restante <= 0;
+            return true;
+        });
+
+        console.log('[Deudas] Filtradas:', filtradas.length);
+
+        // Renderizar tabla
+        renderDeudas(filtradas);
     }
 
     function abrirModalNuevaDeuda() {
@@ -4310,9 +4376,8 @@ Fecha de firma: {{FECHA}}`;
 
     function abonarDeuda(id, maxRestante) {
         Swal.fire({
-            title: 'Registrar Abono',
+            title: 'Abonar Deuda',
             html: `
-                <p>Restante: <strong class="text-danger">$${safeMoney(maxRestante)}</strong></p>
                 <input id="abono-monto" type="number" class="swal2-input" placeholder="Monto a abonar" value="${maxRestante}" step="0.01" min="0.01" max="${maxRestante}">
                 <input id="abono-nota" class="swal2-input" placeholder="Nota (Opcional)">
             `,
@@ -5015,7 +5080,7 @@ Fecha de firma: {{FECHA}}`;
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
         toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive, sincronizarCarpeta, notificarArtista,
-        cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda,
+        cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda, mostrarSeccionDeudas, cargarHistorial,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
         generarContratoPDF,
