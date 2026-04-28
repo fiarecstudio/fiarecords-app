@@ -5271,14 +5271,15 @@ Fecha de firma: {{FECHA}}`;
         }
     }, true); // Usar capture para interceptar antes
 
-});
-// --- SERVICE WORKER ---
-if ('serviceWorker' in navigator) { 
-    window.addEventListener('load', function () { 
-        navigator.serviceWorker.register('sw.js').then(function (registration) { 
-            console.log('ServiceWorker OK: ', registration.scope); 
-        }, function (err) { 
-            console.log('ServiceWorker Falló: ', err); 
+    // --- SERVICE WORKER ---
+    if ('serviceWorker' in navigator) { 
+        window.addEventListener('load', function () { 
+            navigator.serviceWorker.register('sw.js').then(function (registration) { 
+                console.log('ServiceWorker OK: ', registration.scope); 
+            }).catch(function (err) { 
+                console.log('ServiceWorker Falló: ', err); 
+            }); 
         }); 
-    }); 
-}
+    }
+
+}); // Cierre del DOMContentLoaded principal
