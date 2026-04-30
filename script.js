@@ -269,6 +269,16 @@ let proyectoIdEnEdicion = null;
         pagosHistorial: { page: 1, limit: 10 }
     };
 
+    // Paginación para Respaldos (Backups)
+    const backupPagination = {
+        local: { page: 1, limit: 5 },
+        drive: { page: 1, limit: 5 }
+    };
+
+    // Caché para datos de backups
+    let backupsCacheLocal = [];
+    let backupsCacheDrive = [];
+
     // Configuración Google API
     const GAP_CONFIG = {
         apiKey: 'AIzaSyDlUR3S-I0p3VKDt8QCi7YVsejBxoeQfho',
@@ -1873,6 +1883,33 @@ let proyectoIdEnEdicion = null;
         }
     }
 
+    /**
+     * Función auxiliar centralizada para obtener el mapeo de placeholders del contrato.
+     * Single Source of Truth - Evita duplicación de código entre previewContratoPDF y addFirmaToPdf
+     * @param {Object} proyecto - El objeto del proyecto con todos sus datos
+     * @returns {Object} dataMap con todos los placeholders y sus valores
+     */
+    function obtenerMapeoContrato(proyecto) {
+        const costoMensual = (proyecto.total + (proyecto.descuento || 0)) / (proyecto.duracionMeses || 1);
+        const descuentoTexto = proyecto.descuento > 0 
+            ? `DESCUENTO APLICADO: Se ha otorgado un descuento único de $${safeMoney(proyecto.descuento)} MXN aplicable al monto total del proyecto.\n` 
+            : '';
+        
+        return {
+            'CLIENTE': proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General',
+            'PROYECTO': proyecto.nombreProyecto || 'Proyecto sin nombre',
+            'TOTAL': `$${safeMoney(proyecto.total)}`,
+            'PAGADO': `$${safeMoney(proyecto.montoPagado || 0)}`,
+            'RESTANTE': `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`,
+            'FECHA': safeDate(proyecto.fecha),
+            'MODALIDAD': proyecto.esPlanMensual ? 'PLAN MENSUAL RECURRENTE' : 'SERVICIO ÚNICO',
+            'DURACION_MESES': proyecto.duracionMeses || '1',
+            'CANTIDAD_MENSUAL': proyecto.serviciosPorMes || '1',
+            'COSTO_MENSUAL': `$${costoMensual.toFixed(2)}`,
+            'DESCUENTO_INFO': descuentoTexto
+        };
+    }
+
     async function addFirmaToPdf(pdf, docType, finalFileName, proyecto, yStartPos = 80) { 
         if (!configCache) await loadInitialConfig();
         
@@ -1893,26 +1930,10 @@ let proyectoIdEnEdicion = null;
             terminos = configCache?.plantillasDoc?.plantillaContrato || "CONTRATO DE PRESTACIÓN DE SERVICIOS";
         }
 
-        // 2. LOGICA DE REEMPLAZO "TODO TERRENO" (Ignora espacios y comillas raras)
+        // 2. LOGICA DE REEMPLAZO "TODO TERRENO" usando función auxiliar centralizada
         if (proyecto) {
+            const dataMap = obtenerMapeoContrato(proyecto);
             const costoMensual = (proyecto.total + (proyecto.descuento || 0)) / (proyecto.duracionMeses || 1);
-            const descuentoTexto = proyecto.descuento > 0 
-                ? `DESCUENTO APLICADO: Se ha otorgado un descuento único de $${safeMoney(proyecto.descuento)} MXN aplicable al monto total del proyecto.\n` 
-                : '';
-            
-            const dataMap = {
-                'CLIENTE': proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General',
-                'PROYECTO': proyecto.nombreProyecto || 'Proyecto sin nombre',
-                'TOTAL': `$${safeMoney(proyecto.total)}`,
-                'PAGADO': `$${safeMoney(proyecto.montoPagado || 0)}`,
-                'RESTANTE': `$${safeMoney(proyecto.total - (proyecto.montoPagado || 0))}`,
-                'FECHA': safeDate(proyecto.fecha),
-                'MODALIDAD': proyecto.esPlanMensual ? 'PLAN MENSUAL RECURRENTE' : 'SERVICIO ÚNICO',
-                'DURACION_MESES': proyecto.duracionMeses || '1',
-                'CANTIDAD_MENSUAL': proyecto.serviciosPorMes || '1',
-                'COSTO_MENSUAL': `$${costoMensual.toFixed(2)}`,
-                'DESCUENTO_INFO': descuentoTexto
-            };
 
             // Reemplazo masivo con regex flexible: busca {{ TAG }}, {{TAG}}, {{ "TAG" }}, etc.
             Object.keys(dataMap).forEach(key => {
@@ -2438,15 +2459,8 @@ Ambas partes se comprometen a mantener confidencialidad sobre la información in
 
 Fecha de firma: {{FECHA}}`;
 
-            // Reemplazar variables
-            const costoMensual = (proyecto.total + (proyecto.descuento || 0)) / (proyecto.duracionMeses || 1);
-            const dataMap = {
-                'CLIENTE': proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'Público General',
-                'PROYECTO': proyecto.nombreProyecto || 'Proyecto sin nombre',
-                'TOTAL': `$${safeMoney(proyecto.total)}`,
-                'FECHA': safeDate(proyecto.fecha),
-                'MODALIDAD': proyecto.esPlanMensual ? 'PLAN MENSUAL RECURRENTE' : 'SERVICIO ÚNICO'
-            };
+            // Reemplazar variables usando función auxiliar centralizada
+            const dataMap = obtenerMapeoContrato(proyecto);
 
             Object.keys(dataMap).forEach(key => {
                 const regex = new RegExp(`{{\\s*["'""]?${key}["'""]?\\s*}}`, 'g');
@@ -3295,6 +3309,7 @@ Fecha de firma: {{FECHA}}`;
     
     async function cargarBackups() {
         const tablaBody = document.getElementById('tabla-backups-body');
+        const paginationContainer = document.getElementById('backups-pagination-controls');
         tablaBody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div> Cargando...</td></tr>';
         
         try {
@@ -3302,60 +3317,129 @@ Fecha de firma: {{FECHA}}`;
             
             if (!data.backups || data.backups.length === 0) {
                 tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay backups disponibles. Crea uno primero.</td></tr>';
+                if (paginationContainer) paginationContainer.innerHTML = '';
                 return;
             }
             
-            // Agrupar backups por fecha
-            const backupsPorFecha = {};
-            data.backups.forEach(b => {
-                if (!backupsPorFecha[b.fecha]) backupsPorFecha[b.fecha] = [];
-                backupsPorFecha[b.fecha].push(b);
+            // Guardar en caché y ordenar por fecha (más reciente primero)
+            backupsCacheLocal = data.backups.sort((a, b) => {
+                return new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha);
             });
             
-            // Ordenar fechas de más reciente a más antigua
-            const fechas = Object.keys(backupsPorFecha).sort().reverse();
-            
-            tablaBody.innerHTML = fechas.map(fecha => {
-                const backups = backupsPorFecha[fecha];
-                const fechaFormateada = fecha.replace(/_/g, ' ').replace(/-/g, '/');
-                
-                return backups.map(b => `
-                    <tr>
-                        <td><span class="badge bg-info">${b.coleccion}</span></td>
-                        <td><small>${fechaFormateada}</small></td>
-                        <td><small>${b.tamano}</small></td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-success" 
-                                    onclick="app.descargarBackup('${b.nombre}')">
-                                <i class="bi bi-download"></i> Descargar
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
-            }).join('');
-            
+            // Renderizar con paginación
+            renderBackupsPaginated();
             showToast(`${data.total} backups cargados`, 'success');
             
         } catch (e) {
             tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error al cargar backups</td></tr>';
+            if (paginationContainer) paginationContainer.innerHTML = '';
             showToast('Error al cargar backups', 'error');
         }
     }
-    
+
+    function renderBackupsPaginated() {
+        const tablaBody = document.getElementById('tabla-backups-body');
+        const paginationContainer = document.getElementById('backups-pagination-controls');
+        
+        if (!backupsCacheLocal || backupsCacheLocal.length === 0) {
+            tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay backups disponibles.</td></tr>';
+            if (paginationContainer) paginationContainer.innerHTML = '';
+            return;
+        }
+        
+        const { page, limit } = backupPagination.local;
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        const paginatedItems = backupsCacheLocal.slice(start, end);
+        const totalPages = Math.ceil(backupsCacheLocal.length / limit);
+        
+        // Renderizar items de la página actual
+        tablaBody.innerHTML = paginatedItems.map(b => {
+            const fechaFormateada = b.fecha ? b.fecha.replace(/_/g, ' ').replace(/-/g, '/') : 'Sin fecha';
+            return `
+                <tr>
+                    <td><span class="badge bg-info">${b.coleccion}</span></td>
+                    <td><small>${fechaFormateada}</small></td>
+                    <td><small>${b.tamano}</small></td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-success" 
+                                onclick="app.descargarBackup('${b.nombre}')">
+                            <i class="bi bi-download"></i> Descargar
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Renderizar controles de paginación
+        renderBackupPaginationControls(paginationContainer, totalPages, 'local');
+    }
+
+    function renderBackupPaginationControls(container, totalPages, type) {
+        if (!container) return;
+        
+        const currentPage = backupPagination[type].page;
+        
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mt-2 px-2">
+                <small class="text-muted">
+                    Página ${currentPage} de ${totalPages} (${backupsCacheLocal.length} total)
+                </small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" 
+                            onclick="app.changeBackupPage('${type}', -1)" 
+                            ${currentPage === 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i> Anterior
+                    </button>
+                    <button class="btn btn-outline-secondary" 
+                            onclick="app.changeBackupPage('${type}', 1)" 
+                            ${currentPage === totalPages ? 'disabled' : ''}>
+                        Siguiente <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function changeBackupPage(type, delta) {
+        // Validar que backupPagination esté inicializado
+        if (!backupPagination[type]) {
+            backupPagination[type] = { page: 1, limit: 5 };
+        }
+        backupPagination[type].page += delta;
+        if (type === 'local') {
+            renderBackupsPaginated();
+        } else {
+            renderBackupsDrivePaginated();
+        }
+    }
+
     async function crearBackupManual() {
         try {
             const btn = document.querySelector('button[onclick="app.crearBackupManual()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Creando...';
-            btn.disabled = true;
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Creando...';
+                btn.disabled = true;
+            }
             
             await fetchAPI('/api/backups/crear', { method: 'POST' });
             
             showToast('Backup creado y subido a Drive exitosamente', 'success');
-            await cargarBackups(); // Recargar lista local
+            
+            // Recargar ambas listas
+            await cargarBackups();
+            if (document.getElementById('drive-backups')?.classList.contains('active')) {
+                await cargarBackupsDrive();
+            }
             
         } catch (e) {
             showToast('Error al crear backup', 'error');
+            console.error(e);
         } finally {
             const btn = document.querySelector('button[onclick="app.crearBackupManual()"]');
             if (btn) {
@@ -3364,65 +3448,123 @@ Fecha de firma: {{FECHA}}`;
             }
         }
     }
-    
+
     async function cargarBackupsDrive() {
         const tablaBody = document.getElementById('tabla-backups-drive-body');
+        const paginationContainer = document.getElementById('backups-drive-pagination-controls');
+        
+        if (!tablaBody) {
+            console.error('[cargarBackupsDrive] No se encontró tabla-backups-drive-body');
+            return;
+        }
+        
         tablaBody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div> Cargando desde Drive...</td></tr>';
         
         try {
             const data = await fetchAPI('/api/backups/drive');
             
-            if (!data.backups || data.backups.length === 0) {
+            if (!data || !data.backups || data.backups.length === 0) {
                 tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay backups en Google Drive aún. Crea un backup primero.</td></tr>';
+                if (paginationContainer) paginationContainer.innerHTML = '';
                 return;
             }
             
-            // Agrupar backups por fecha
-            const backupsPorFecha = {};
-            data.backups.forEach(b => {
-                const fecha = b.nombre.match(/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}/)?.[0] || 'desconocida';
-                if (!backupsPorFecha[fecha]) backupsPorFecha[fecha] = [];
-                backupsPorFecha[fecha].push(b);
+            backupsCacheDrive = [...data.backups].sort((a, b) => {
+                const fechaA = a.nombre?.match(/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}/)?.[0] || '';
+                const fechaB = b.nombre?.match(/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}/)?.[0] || '';
+                return fechaB.localeCompare(fechaA);
             });
             
-            // Ordenar fechas de más reciente a más antigua
-            const fechas = Object.keys(backupsPorFecha).sort().reverse();
+            if (!backupPagination.drive) backupPagination.drive = { page: 1, limit: 5 };
+            backupPagination.drive.page = 1;
             
-            tablaBody.innerHTML = fechas.map(fecha => {
-                const backups = backupsPorFecha[fecha];
-                const fechaFormateada = fecha.replace(/_/g, ' ').replace(/-/g, '/');
-                
-                return backups.map(b => {
-                    const coleccion = b.nombre.split('_')[0];
-                    return `
-                    <tr>
-                        <td><span class="badge bg-info">${coleccion}</span></td>
-                        <td><small>${fechaFormateada}</small></td>
-                        <td><small>${b.tamano}</small></td>
-                        <td class="text-end">
-                            <a href="${b.viewLink}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i> Ver
-                            </a>
-                            <a href="${b.downloadLink}" target="_blank" class="btn btn-sm btn-outline-success">
-                                <i class="bi bi-download"></i> Descargar
-                            </a>
-                        </td>
-                    </tr>
-                `}).join('');
-            }).join('');
-            
-            showToast(`${data.total} backups en Google Drive`, 'success');
+            renderBackupsDrivePaginated();
+            showToast(`${data.total || backupsCacheDrive.length} backups en Google Drive`, 'success');
             
         } catch (e) {
+            console.error('[cargarBackupsDrive] Error:', e);
             tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error al cargar backups de Drive</td></tr>';
+            if (paginationContainer) paginationContainer.innerHTML = '';
             showToast('Error al cargar backups de Drive', 'error');
         }
     }
-    
-    // ==========================================
-    // FIN FUNCIONES BACKUPS
-    // ==========================================
-    
+
+    function renderBackupsDrivePaginated() {
+        const tablaBody = document.getElementById('tabla-backups-drive-body');
+        const paginationContainer = document.getElementById('backups-drive-pagination-controls');
+        
+        if (!tablaBody) {
+            console.error('[renderBackupsDrivePaginated] No se encontró tabla-backups-drive-body');
+            return;
+        }
+        
+        if (!backupsCacheDrive || backupsCacheDrive.length === 0) {
+            tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No se encontraron respaldos.</td></tr>';
+            if (paginationContainer) paginationContainer.innerHTML = '';
+            return;
+        }
+        
+        if (!backupPagination.drive) backupPagination.drive = { page: 1, limit: 5 };
+        
+        const { page, limit } = backupPagination.drive;
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        const paginatedItems = [...backupsCacheDrive].slice(start, end);
+        const totalPages = Math.ceil(backupsCacheDrive.length / limit);
+        
+        tablaBody.innerHTML = '';
+        
+        if (paginatedItems.length === 0) {
+            tablaBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay más respaldos en esta página.</td></tr>';
+        } else {
+            tablaBody.innerHTML = paginatedItems.map(b => {
+                const fecha = b.nombre?.match(/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}/)?.[0] || 'desconocida';
+                const fechaFormateada = fecha.replace(/_/g, ' ').replace(/-/g, '/');
+                const coleccion = b.nombre?.split('_')[0] || 'backup';
+                return `
+                    <tr>
+                        <td><span class="badge bg-info">${coleccion}</span></td>
+                        <td><small>${fechaFormateada}</small></td>
+                        <td><small>${b.tamano || 'N/A'}</small></td>
+                        <td class="text-end">
+                            ${b.viewLink ? `<a href="${b.viewLink}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> Ver</a>` : ''}
+                            ${b.downloadLink ? `<a href="${b.downloadLink}" target="_blank" class="btn btn-sm btn-outline-success ms-1"><i class="bi bi-download"></i> Descargar</a>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        renderBackupDrivePaginationControls(paginationContainer, totalPages);
+    }
+
+    function renderBackupDrivePaginationControls(container, totalPages) {
+        if (!container) return;
+        if (!backupPagination.drive) backupPagination.drive = { page: 1, limit: 5 };
+        
+        const currentPage = backupPagination.drive.page;
+        const totalItems = backupsCacheDrive?.length || 0;
+        
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mt-2 px-2">
+                <small class="text-muted">Página ${currentPage} de ${totalPages} (${totalItems} total)</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="app.changeBackupPage('drive', -1)" ${currentPage === 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i> Anterior
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="app.changeBackupPage('drive', 1)" ${currentPage === totalPages ? 'disabled' : ''}>
+                        Siguiente <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     async function cargarCotizaciones() { 
         const tablaBody = document.getElementById('tablaCotizacionesBody'); 
         tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
@@ -5087,6 +5229,7 @@ Fecha de firma: {{FECHA}}`;
         abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
+        changeBackupPage, renderBackupsPaginated, renderBackupsDrivePaginated,
         loadInitialConfig, cargarConfiguracion,
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,

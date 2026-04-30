@@ -15,8 +15,9 @@
       }
     ],
     "createdAt": "2026-03-04T18:08:57.875Z",
-    "updatedAt": "2026-03-14T19:17:12.453Z",
-    "__v": 1
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a881bfe428a567aa91e229",
@@ -34,14 +35,15 @@
       }
     ],
     "createdAt": "2026-03-04T19:02:23.742Z",
-    "updatedAt": "2026-03-04T19:03:03.260Z",
-    "__v": 1
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a881f1e428a567aa91e234",
     "concepto": "PRESTAMO SUEGRA ",
     "total": 3000,
-    "montoPagado": 1800,
+    "montoPagado": 2700,
     "estatus": "Pendiente",
     "isDeleted": false,
     "pagos": [
@@ -80,11 +82,30 @@
         "nota": "pago 6",
         "_id": "69d3e966ddfa8459c20e3248",
         "fecha": "2026-04-06T17:12:06.380Z"
+      },
+      {
+        "monto": 300,
+        "nota": "Pago 7 ",
+        "_id": "69e085bc71b801579e9ba104",
+        "fecha": "2026-04-16T06:46:20.316Z"
+      },
+      {
+        "monto": 300,
+        "nota": "8 de 10 19 abr-26",
+        "_id": "69ef7842eb738e58da7da774",
+        "fecha": "2026-04-27T14:52:50.921Z"
+      },
+      {
+        "monto": 300,
+        "nota": "9 de 10 26 abr-26",
+        "_id": "69ef785aeb738e58da7da792",
+        "fecha": "2026-04-27T14:53:14.628Z"
       }
     ],
     "createdAt": "2026-03-04T19:03:13.521Z",
-    "updatedAt": "2026-04-06T17:12:06.381Z",
-    "__v": 6
+    "updatedAt": "2026-04-27T14:53:14.629Z",
+    "__v": 9,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a8c712620c5d305ced7471",
@@ -95,8 +116,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-03-04T23:58:10.881Z",
-    "updatedAt": "2026-03-04T23:58:24.980Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a9b8ee620c5d305ced77b1",
@@ -114,8 +136,9 @@
       }
     ],
     "createdAt": "2026-03-05T17:10:06.373Z",
-    "updatedAt": "2026-03-14T17:53:09.126Z",
-    "__v": 1
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69aa0365a6cb032557afd730",
@@ -126,8 +149,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-03-05T22:27:49.085Z",
-    "updatedAt": "2026-03-06T15:13:44.598Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b2d693d4706f1a126daf6f",
@@ -145,14 +169,15 @@
       }
     ],
     "createdAt": "2026-03-12T15:06:59.521Z",
-    "updatedAt": "2026-03-15T23:28:34.057Z",
-    "__v": 1
+    "updatedAt": "2026-04-10T22:14:00.115Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b5b44d7493e0212d4657e7",
     "concepto": "EDER",
     "total": 11000,
-    "montoPagado": 1000,
+    "montoPagado": 1500,
     "estatus": "Pendiente",
     "isDeleted": false,
     "pagos": [
@@ -167,18 +192,25 @@
         "nota": "Pago 2",
         "_id": "69c9e3179877150f69e568c5",
         "fecha": "2026-03-30T02:42:31.363Z"
+      },
+      {
+        "monto": 500,
+        "nota": "3 de 22 ",
+        "_id": "69e08a3771b801579e9ba1de",
+        "fecha": "2026-04-16T07:05:27.629Z"
       }
     ],
     "createdAt": "2026-03-14T19:17:33.029Z",
-    "updatedAt": "2026-03-30T02:42:31.367Z",
-    "__v": 2
+    "updatedAt": "2026-04-16T07:05:27.630Z",
+    "__v": 3,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69ced112856778fde8bcdefe",
     "concepto": "Perfume 722969020309122033",
     "total": 475,
-    "montoPagado": 300,
-    "estatus": "Pendiente",
+    "montoPagado": 475,
+    "estatus": "Liquidada",
     "isDeleted": false,
     "pagos": [
       {
@@ -186,22 +218,50 @@
         "nota": "efectivo",
         "_id": "69d3e93eddfa8459c20e3235",
         "fecha": "2026-04-06T17:11:26.674Z"
+      },
+      {
+        "monto": 175,
+        "nota": "Pagado ",
+        "_id": "69e0859471b801579e9ba0eb",
+        "fecha": "2026-04-16T06:45:40.192Z"
       }
     ],
     "createdAt": "2026-04-02T20:26:58.846Z",
-    "updatedAt": "2026-04-06T17:11:26.687Z",
-    "__v": 1
+    "updatedAt": "2026-04-16T06:45:40.193Z",
+    "__v": 2,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69d51a07bc8b2c1e42f1a1e0",
     "concepto": "BEBA",
     "total": 2530,
+    "montoPagado": 460,
+    "estatus": "Pendiente",
+    "isDeleted": false,
+    "pagos": [
+      {
+        "monto": 460,
+        "nota": "Pago 1",
+        "_id": "69e0858971b801579e9ba0d8",
+        "fecha": "2026-04-16T06:45:29.804Z"
+      }
+    ],
+    "createdAt": "2026-04-07T14:51:51.340Z",
+    "updatedAt": "2026-04-16T06:45:29.806Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69ef7881eb738e58da7da7a8",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "concepto": "PRESTAMO $1000 SUEGRA",
+    "total": 1500,
     "montoPagado": 0,
     "estatus": "Pendiente",
     "isDeleted": false,
     "pagos": [],
-    "createdAt": "2026-04-07T14:51:51.340Z",
-    "updatedAt": "2026-04-07T14:51:51.340Z",
+    "createdAt": "2026-04-27T14:53:53.111Z",
+    "updatedAt": "2026-04-27T14:53:53.111Z",
     "__v": 0
   }
 ]

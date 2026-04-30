@@ -4,110 +4,121 @@
     "nombre": "Dagx Resendiz",
     "isDeleted": false,
     "createdAt": "2025-11-04T23:55:01.679Z",
-    "updatedAt": "2026-02-07T17:45:45.313Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "dagxresendiz@gmail.com",
     "nombreArtistico": "Dagx Resendiz",
-    "telefono": "8132520539"
+    "telefono": "8132520539",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690d746b308166001e51daff",
     "nombre": "SERGIO VALENTE ",
     "isDeleted": false,
     "createdAt": "2025-11-07T04:24:11.295Z",
-    "updatedAt": "2026-02-16T22:31:43.803Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "sergiovalenteoficial@gmail.com",
     "nombreArtistico": "SERGIO VALENTE ",
-    "telefono": "8115796166"
+    "telefono": "8115796166",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690e1d2fffe51c8382418244",
     "nombre": "prueba 2",
     "isDeleted": true,
     "createdAt": "2025-11-07T16:24:15.415Z",
-    "updatedAt": "2026-02-07T19:34:59.834Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f6eef7484abdd662b3b4b",
     "nombre": "GERARDO LUNA",
     "isDeleted": false,
     "createdAt": "2025-11-08T16:25:19.509Z",
-    "updatedAt": "2026-02-24T15:47:13.161Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f7349dec858a72f25d4a6",
     "nombre": "SERGIO VALENTE",
     "isDeleted": true,
     "createdAt": "2025-11-08T16:43:53.026Z",
-    "updatedAt": "2026-02-16T22:31:13.673Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "sergiovalenteoficial@gmail.com",
     "nombreArtistico": "SERGIO VALENTE",
     "telefono": "8115796166",
-    "usuarioId": "698b78fb11163dd559534958"
+    "usuarioId": "698b78fb11163dd559534958",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f837a4abe26fe0256d98c",
     "nombre": "DANIEL MONTALVO",
     "isDeleted": false,
     "createdAt": "2025-11-08T17:52:58.072Z",
-    "updatedAt": "2025-11-13T15:34:59.687Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "DANIEL MONTALVO",
-    "telefono": "8116068848"
+    "telefono": "8116068848",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6913c84bed5679dda6190e0e",
     "nombre": "WR",
     "isDeleted": false,
     "createdAt": "2025-11-11T23:35:39.505Z",
-    "updatedAt": "2025-11-13T15:34:22.093Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "WR",
-    "telefono": "8126135099"
+    "telefono": "8126135099",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6913e7995ff1fb4432db2465",
     "nombre": "BLEIKER JIMENEZ",
     "isDeleted": false,
     "createdAt": "2025-11-12T01:49:13.210Z",
-    "updatedAt": "2025-11-13T15:33:56.292Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "BLEIKER JIMENEZ",
-    "telefono": "8261513592"
+    "telefono": "8261513592",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69160c0b747853067569e855",
     "nombre": "MOREL UNDER",
     "isDeleted": false,
     "createdAt": "2025-11-13T16:49:15.588Z",
-    "updatedAt": "2025-11-13T16:49:15.588Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691747d1ddaecf04e507ef70",
     "nombre": "JOTAENE",
     "isDeleted": false,
     "createdAt": "2025-11-14T15:16:33.746Z",
-    "updatedAt": "2025-11-14T15:16:33.746Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6917480dddaecf04e507ef81",
     "nombre": "SENKRABOY",
     "isDeleted": false,
     "createdAt": "2025-11-14T15:17:33.007Z",
-    "updatedAt": "2025-11-14T19:01:24.872Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "SENKRABOY",
-    "telefono": "8113116039"
+    "telefono": "8113116039",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691772a2763ae2b709cbe577",
@@ -117,8 +128,9 @@
     "correo": "",
     "isDeleted": false,
     "createdAt": "2025-11-14T18:19:14.931Z",
-    "updatedAt": "2026-02-07T19:34:39.405Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691772ec763ae2b709cbe586",
@@ -128,124 +140,138 @@
     "correo": "",
     "isDeleted": false,
     "createdAt": "2025-11-14T18:20:28.945Z",
-    "updatedAt": "2025-11-14T18:20:28.945Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6917870fd6a124bbf240c1cc",
     "nombre": "WEDASDA",
     "isDeleted": true,
     "createdAt": "2025-11-14T19:46:23.988Z",
-    "updatedAt": "2025-11-14T19:46:50.181Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691c925b2579b1af3720bcab",
     "nombre": "William Verses",
     "isDeleted": false,
     "createdAt": "2025-11-18T15:35:55.249Z",
-    "updatedAt": "2025-11-18T15:35:55.249Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6923c0593ebe086f71e59198",
     "nombre": "JUSS MKIAVEL",
     "isDeleted": false,
     "createdAt": "2025-11-24T02:18:01.302Z",
-    "updatedAt": "2025-11-24T02:18:01.302Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "692ddf10bfddf292af683650",
     "nombre": "Karlos Corona",
     "isDeleted": false,
     "createdAt": "2025-12-01T18:31:44.632Z",
-    "updatedAt": "2026-02-23T17:23:53.361Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "Karlos Corona",
-    "telefono": "8125805915"
+    "telefono": "8125805915",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69371fa712fd9025b8de13a8",
     "nombre": "ABDIEL GUERRA",
     "isDeleted": false,
     "createdAt": "2025-12-08T18:57:43.946Z",
-    "updatedAt": "2026-02-07T19:37:33.448Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "ABDIEL GUERRA ",
-    "telefono": "8131140201"
+    "telefono": "8131140201",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69372ea573b1b580464b3826",
     "nombre": "Gera",
     "isDeleted": true,
     "createdAt": "2025-12-08T20:01:41.525Z",
-    "updatedAt": "2026-02-07T19:35:17.417Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "693754949a58e63a8f187e16",
     "nombre": "Gera",
     "isDeleted": false,
     "createdAt": "2025-12-08T22:43:32.539Z",
-    "updatedAt": "2026-02-13T15:34:52.841Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6938ba46edeaa06a5de3befb",
     "nombre": "Prueba",
     "isDeleted": true,
     "createdAt": "2025-12-10T00:09:42.447Z",
-    "updatedAt": "2026-02-07T19:34:51.611Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6938bbe4edeaa06a5de3bf19",
     "nombre": "Nuevo calis",
     "isDeleted": true,
     "createdAt": "2025-12-10T00:16:36.122Z",
-    "updatedAt": "2026-02-07T19:35:12.820Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6939abec2e435946460a54e0",
     "nombre": "Prueba 2",
     "isDeleted": true,
     "createdAt": "2025-12-10T17:20:44.637Z",
-    "updatedAt": "2026-02-07T19:34:55.070Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6962a4908d4db1c10aa1b686",
     "nombre": "Nose",
     "isDeleted": true,
     "createdAt": "2026-01-10T19:12:16.955Z",
-    "updatedAt": "2026-02-06T23:52:54.286Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69890ed027aabfdb36ce71b6",
     "nombre": "ABRAHAM AVALOS",
     "isDeleted": false,
     "createdAt": "2026-02-08T22:31:44.805Z",
-    "updatedAt": "2026-02-08T22:32:44.801Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "ABRAHAM AVALOS ",
-    "telefono": "8120074767"
+    "telefono": "8120074767",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698a5f0f2c9ce13861d82e20",
     "nombre": "para pruebas",
     "isDeleted": true,
     "createdAt": "2026-02-09T22:26:23.319Z",
-    "updatedAt": "2026-02-14T16:06:21.032Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "",
     "nombreArtistico": "pruebas 123",
-    "telefono": "1234567890"
+    "telefono": "1234567890",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698cc8d755e6421f114008d0",
@@ -255,8 +281,9 @@
     "correo": "erick_adr@hotmail.com",
     "isDeleted": false,
     "createdAt": "2026-02-11T18:22:15.450Z",
-    "updatedAt": "2026-02-12T23:56:32.357Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698d0d671ba252463270da1e",
@@ -267,8 +294,9 @@
     "usuarioId": "698d0d671ba252463270da1c",
     "isDeleted": false,
     "createdAt": "2026-02-11T23:14:47.675Z",
-    "updatedAt": "2026-02-11T23:14:47.675Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6990951edd4fdc6d73d3fb8f",
@@ -279,8 +307,9 @@
     "usuarioId": "6990951edd4fdc6d73d3fb8d",
     "isDeleted": false,
     "createdAt": "2026-02-14T15:30:38.772Z",
-    "updatedAt": "2026-02-16T17:00:23.096Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69909fd80d3bdad031fab5d0",
@@ -291,8 +320,9 @@
     "usuarioId": "69909fd80d3bdad031fab5ce",
     "isDeleted": true,
     "createdAt": "2026-02-14T16:16:24.821Z",
-    "updatedAt": "2026-02-24T15:46:26.923Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6997a360ec134f70a2e6ca5c",
@@ -303,8 +333,9 @@
     "usuarioId": "6997a360ec134f70a2e6ca5a",
     "isDeleted": false,
     "createdAt": "2026-02-19T23:57:20.894Z",
-    "updatedAt": "2026-02-19T23:57:20.894Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a0431a1d3ca45395568b46",
@@ -315,8 +346,9 @@
     "usuarioId": "69a043191d3ca45395568b44",
     "isDeleted": false,
     "createdAt": "2026-02-26T12:56:58.131Z",
-    "updatedAt": "2026-02-26T12:56:58.131Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a3a3da67176168c3469106",
@@ -324,8 +356,9 @@
     "nombreArtistico": "Rafael",
     "isDeleted": false,
     "createdAt": "2026-03-01T02:26:34.240Z",
-    "updatedAt": "2026-03-01T02:26:34.240Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a9c889620c5d305ced7822",
@@ -336,8 +369,9 @@
     "usuarioId": "69a9c888620c5d305ced7820",
     "isDeleted": false,
     "createdAt": "2026-03-05T18:16:41.199Z",
-    "updatedAt": "2026-03-05T18:25:47.223Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b2d5b5d4706f1a126daeaf",
@@ -347,8 +381,9 @@
     "correo": "pacocumbiareal420@gmail.com",
     "isDeleted": false,
     "createdAt": "2026-03-12T15:03:17.118Z",
-    "updatedAt": "2026-03-12T15:03:17.118Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b5a7e27493e0212d465676",
@@ -356,10 +391,11 @@
     "nombreArtistico": "Rafa Coria",
     "isDeleted": false,
     "createdAt": "2026-03-14T18:24:34.471Z",
-    "updatedAt": "2026-03-14T18:30:02.383Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
     "__v": 0,
     "correo": "rafacoria753@gmail.com",
-    "telefono": "8180877027"
+    "telefono": "8180877027",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69bf44ce9dc06ae5866bea41",
@@ -367,8 +403,9 @@
     "nombreArtistico": "Keys",
     "isDeleted": false,
     "createdAt": "2026-03-22T01:24:30.205Z",
-    "updatedAt": "2026-03-22T01:24:30.205Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c5d306f4c6dd9956a215e1",
@@ -376,8 +413,9 @@
     "nombreArtistico": "JAVIER MURILLO",
     "isDeleted": false,
     "createdAt": "2026-03-27T00:44:54.925Z",
-    "updatedAt": "2026-03-27T00:44:54.925Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c71fc684d1076fc0b023c4",
@@ -385,7 +423,74 @@
     "nombreArtistico": "PARA PRUEBAS",
     "isDeleted": false,
     "createdAt": "2026-03-28T00:24:38.208Z",
-    "updatedAt": "2026-03-28T00:24:38.208Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d94e44df857cda4358f78d",
+    "nombre": "ROLIE",
+    "nombreArtistico": "ROLIE",
+    "isDeleted": false,
+    "createdAt": "2026-04-10T19:23:48.876Z",
+    "updatedAt": "2026-04-10T22:13:59.736Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69dd44ac8f79ff40eabcda0f",
+    "nombre": "ROLIE",
+    "nombreArtistico": "ROLIE",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isDeleted": false,
+    "createdAt": "2026-04-13T19:31:56.824Z",
+    "updatedAt": "2026-04-13T19:31:56.824Z",
     "__v": 0
+  },
+  {
+    "_id": "69de71117a1cf095d8688d55",
+    "nombre": "Ivan Flores",
+    "nombreArtistico": "Smer Subsane",
+    "telefono": "",
+    "correo": "",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isDeleted": false,
+    "createdAt": "2026-04-14T16:53:37.544Z",
+    "updatedAt": "2026-04-14T16:53:37.544Z",
+    "__v": 0
+  },
+  {
+    "_id": "69e01b6d71b801579e9b9fdb",
+    "nombre": "Brandon Sanchez",
+    "nombreArtistico": "Sreo",
+    "telefono": "",
+    "correo": "",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isDeleted": false,
+    "createdAt": "2026-04-15T23:12:45.595Z",
+    "updatedAt": "2026-04-15T23:12:45.595Z",
+    "__v": 0
+  },
+  {
+    "_id": "69e2c3a2fdc73e27616f219f",
+    "nombre": "DIMAS",
+    "nombreArtistico": "DIMAS",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isDeleted": false,
+    "createdAt": "2026-04-17T23:34:58.896Z",
+    "updatedAt": "2026-04-17T23:34:58.896Z",
+    "__v": 0
+  },
+  {
+    "_id": "69ec11b5d6f53c23b0ea6ad9",
+    "nombre": "DAGX RESENDIZ",
+    "nombreArtistico": "DAGX RESENDIZ",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isDeleted": false,
+    "createdAt": "2026-04-25T00:58:29.839Z",
+    "updatedAt": "2026-04-25T01:02:54.308Z",
+    "__v": 0,
+    "correo": "dagxresendiz@gmail.com",
+    "telefono": "8132520539"
   }
 ]

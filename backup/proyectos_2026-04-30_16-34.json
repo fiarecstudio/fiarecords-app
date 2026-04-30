@@ -18,8 +18,9 @@
     "prioridad": "Alta",
     "isDeleted": true,
     "createdAt": "2025-11-07T04:24:59.875Z",
-    "updatedAt": "2026-02-28T00:20:13.179Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690e7e3d05276f7de565e81e",
@@ -41,7 +42,7 @@
     "prioridad": "Normal",
     "isDeleted": false,
     "createdAt": "2025-11-07T23:18:21.059Z",
-    "updatedAt": "2026-03-03T22:41:22.959Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 1,
     "montoPagado": 3000,
     "pagos": [
@@ -77,7 +78,8 @@
         "tipo": "audio",
         "_id": "69a76392eb35d0ec096a50df"
       }
-    ]
+    ],
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f67e3a0704a42782fc19a",
@@ -99,8 +101,9 @@
     "prioridad": "Normal",
     "isDeleted": true,
     "createdAt": "2025-11-08T15:55:15.426Z",
-    "updatedAt": "2025-11-08T19:16:55.399Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f6f397484abdd662b3b59",
@@ -122,8 +125,9 @@
     "prioridad": "Normal",
     "isDeleted": true,
     "createdAt": "2025-11-08T16:26:33.484Z",
-    "updatedAt": "2025-11-08T19:04:10.867Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f735ddec858a72f25d4a9",
@@ -146,12 +150,13 @@
     "montoPagado": 0,
     "pagos": [],
     "createdAt": "2025-11-08T16:44:13.723Z",
-    "updatedAt": "2025-11-08T18:30:33.645Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 4,
     "detallesDistribucion": {
       "tracks": []
     },
-    "esAlbum": false
+    "esAlbum": false,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f8cb661f7cab67b274406",
@@ -191,7 +196,7 @@
       }
     ],
     "createdAt": "2025-11-08T18:32:22.733Z",
-    "updatedAt": "2025-11-24T02:22:44.198Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 2,
     "detallesContrato": {
       "nombreAlbum": "QUEDATE SERIO ",
@@ -201,7 +206,8 @@
       "pagoFinal": 1100
     },
     "enlaceEntrega": "https://drive.google.com/file/d/1J9K2gdMB8ANm_9AYRKieJmqr3aLBmPwg/view?usp=sharing",
-    "nombreProyecto": "REGGETON DANIEL MONTALVO"
+    "nombreProyecto": "REGGETON DANIEL MONTALVO",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f8d2061f7cab67b27442c",
@@ -241,10 +247,11 @@
       }
     ],
     "createdAt": "2025-11-08T18:34:08.731Z",
-    "updatedAt": "2025-11-15T18:19:29.098Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 2,
     "enlaceEntrega": "https://drive.google.com/drive/folders/1vTg0y4EdODFbIRvFJN_K9_5rP8utZ8pm",
-    "nombreProyecto": "MI UNICO CAMINO"
+    "nombreProyecto": "MI UNICO CAMINO",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "690f94bd7b2414068358dd7d",
@@ -271,8 +278,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-08T19:06:37.613Z",
-    "updatedAt": "2025-11-08T19:16:53.154Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6913c832ed5679dda6190dfb",
@@ -299,8 +307,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-11T23:35:14.601Z",
-    "updatedAt": "2025-11-11T23:35:25.214Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6913c858ed5679dda6190e11",
@@ -327,8 +336,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-11T23:35:52.300Z",
-    "updatedAt": "2025-11-16T18:32:19.690Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6913e7c65ff1fb4432db246e",
@@ -362,10 +372,11 @@
       }
     ],
     "createdAt": "2025-11-12T01:49:58.590Z",
-    "updatedAt": "2025-11-13T16:48:35.977Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 1,
     "enlaceEntrega": "https://drive.google.com/drive/folders/1Go4rexBkcHM3YR4oHlPDcsnHJh8d1oRv?usp=sharing",
-    "nombreProyecto": "STEMS HUGO ALARCON"
+    "nombreProyecto": "STEMS HUGO ALARCON",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69160c21747853067569e858",
@@ -393,8 +404,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-13T16:49:37.948Z",
-    "updatedAt": "2025-11-21T19:52:20.741Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691747d4ddaecf04e507ef73",
@@ -422,8 +434,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-14T15:16:36.674Z",
-    "updatedAt": "2025-11-16T21:26:28.901Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69174812ddaecf04e507ef84",
@@ -451,8 +464,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-14T15:17:38.454Z",
-    "updatedAt": "2025-11-14T18:59:26.068Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6917731c763ae2b709cbe58b",
@@ -488,8 +502,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-14T18:21:16.179Z",
-    "updatedAt": "2025-11-14T18:25:19.805Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69177470763ae2b709cbe5c4",
@@ -525,8 +540,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-14T18:26:56.579Z",
-    "updatedAt": "2025-11-14T18:26:56.579Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "691c92672579b1af3720bcae",
@@ -549,7 +565,7 @@
     "estatus": "Pagado",
     "montoPagado": 500,
     "esAlbum": false,
-    "enlaceEntrega": "",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1fg-5BQ268OQ4TOKIqWEYcDmFAYLNO15-",
     "detallesDistribucion": {
       "tracks": []
     },
@@ -562,8 +578,15 @@
       }
     ],
     "createdAt": "2025-11-18T15:36:07.651Z",
-    "updatedAt": "2025-12-13T19:52:25.316Z",
-    "__v": 1
+    "updatedAt": "2026-04-22T16:56:31.721Z",
+    "__v": 2,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "archivos": [],
+    "descuento": 0,
+    "duracionMeses": 1,
+    "esPlanMensual": false,
+    "metodoPago": "Pendiente",
+    "serviciosPorMes": 1
   },
   {
     "_id": "691c92be2579b1af3720bcc0",
@@ -592,8 +615,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-18T15:37:34.649Z",
-    "updatedAt": "2025-11-18T15:37:34.649Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6923c0703ebe086f71e5919b",
@@ -615,18 +639,22 @@
     "estatus": "Pagado",
     "montoPagado": 0,
     "esAlbum": false,
-    "enlaceEntrega": "https://drive.google.com/file/d/1fDuqZf74u2OnZhAB6t7JmXPtyZh09hSg/view?usp=sharing",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1GqXmS8LRUBWiXeIooUob-Of5DeGe4mz5",
     "detallesDistribucion": {
       "tracks": []
     },
     "pagos": [],
     "createdAt": "2025-11-24T02:18:24.596Z",
-    "updatedAt": "2026-03-21T01:15:11.445Z",
+    "updatedAt": "2026-04-24T23:58:42.683Z",
     "__v": 1,
     "archivos": [],
     "descuento": 0,
     "firmaCliente": "data:image/png;base64,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",
-    "metodoPago": "Pendiente"
+    "metodoPago": "Pendiente",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "duracionMeses": 1,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1
   },
   {
     "_id": "69275c273fb3b70acd162c27",
@@ -654,8 +682,9 @@
     },
     "pagos": [],
     "createdAt": "2025-11-26T19:59:35.205Z",
-    "updatedAt": "2025-11-26T20:00:47.198Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "692e1a9179282dcb25ec3800",
@@ -684,8 +713,9 @@
     },
     "pagos": [],
     "createdAt": "2025-12-01T22:45:37.273Z",
-    "updatedAt": "2026-02-27T15:53:11.910Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69371fc212fd9025b8de13ab",
@@ -714,8 +744,9 @@
     },
     "pagos": [],
     "createdAt": "2025-12-08T18:58:10.711Z",
-    "updatedAt": "2026-02-27T15:52:54.298Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6939b9cec2724f748fe8db66",
@@ -744,8 +775,9 @@
     },
     "pagos": [],
     "createdAt": "2025-12-10T18:19:58.903Z",
-    "updatedAt": "2026-02-27T15:53:03.823Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "693ae82251e9556de57aa965",
@@ -774,8 +806,9 @@
     },
     "pagos": [],
     "createdAt": "2025-12-11T15:49:54.510Z",
-    "updatedAt": "2026-02-27T15:52:58.735Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "693dc3e58531a0696ea036ca",
@@ -798,7 +831,7 @@
     "estatus": "Pagado",
     "montoPagado": 500,
     "esAlbum": false,
-    "enlaceEntrega": "",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1tqdQgwUhT223dQrIRjtPiNDmErL1hK1A",
     "detallesDistribucion": {
       "tracks": []
     },
@@ -811,8 +844,15 @@
       }
     ],
     "createdAt": "2025-12-13T19:52:05.327Z",
-    "updatedAt": "2025-12-13T19:54:37.512Z",
-    "__v": 1
+    "updatedAt": "2026-04-22T16:41:04.616Z",
+    "__v": 2,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "archivos": [],
+    "descuento": 0,
+    "duracionMeses": 1,
+    "esPlanMensual": false,
+    "metodoPago": "Pendiente",
+    "serviciosPorMes": 1
   },
   {
     "_id": "6962a4918d4db1c10aa1b688",
@@ -841,8 +881,9 @@
     },
     "pagos": [],
     "createdAt": "2026-01-10T19:12:17.384Z",
-    "updatedAt": "2026-02-27T15:52:47.191Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6962adbcf15ffcc5adde402a",
@@ -871,8 +912,9 @@
     },
     "pagos": [],
     "createdAt": "2026-01-10T19:51:24.737Z",
-    "updatedAt": "2026-01-10T19:51:24.737Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6984d4ccf90c81a39b2a9d81",
@@ -922,12 +964,13 @@
       }
     ],
     "createdAt": "2026-02-05T17:35:08.525Z",
-    "updatedAt": "2026-03-28T15:46:57.789Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 3,
     "archivos": [],
     "descuento": 0,
     "metodoPago": "Pendiente",
-    "firmaCliente": null
+    "firmaCliente": null,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69875d6461e5ea25ad914ca0",
@@ -966,7 +1009,8 @@
         "_id": "69a73304eb35d0ec096a4db4"
       }
     ],
-    "updatedAt": "2026-03-03T19:14:18.238Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698777b759c6f5b812048681",
@@ -988,7 +1032,9 @@
     "pagos": [],
     "createdAt": "2026-02-07T17:34:47.951Z",
     "__v": 0,
-    "enlaceEntrega": "https://drive.google.com/file/d/1uyjmaRjS6nxkklbmSvXYtuDTJNodfv0c/view?usp=drivesdk"
+    "enlaceEntrega": "https://drive.google.com/file/d/1uyjmaRjS6nxkklbmSvXYtuDTJNodfv0c/view?usp=drivesdk",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "69878aa4c1b3606a0e617165",
@@ -1015,7 +1061,9 @@
     "pagos": [],
     "createdAt": "2026-02-07T18:55:32.050Z",
     "__v": 0,
-    "isDeleted": true
+    "isDeleted": true,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "69879539b8fbd4cfed476bee",
@@ -1060,7 +1108,8 @@
         "_id": "69a7249aeb35d0ec096a4d72"
       }
     ],
-    "updatedAt": "2026-03-03T18:12:42.367Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69890ead27aabfdb36ce7141",
@@ -1087,7 +1136,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-02-08T22:31:09.710Z",
-    "__v": 0
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "69890ee627aabfdb36ce71b9",
@@ -1130,7 +1181,9 @@
     ],
     "createdAt": "2026-02-08T22:32:06.633Z",
     "__v": 2,
-    "enlaceEntrega": "https://drive.google.com/drive/folders/1yL4hUqNVOB6Qk2wohm4l4_qVfktLE1st"
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1yL4hUqNVOB6Qk2wohm4l4_qVfktLE1st",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698a00739f19c79793bf3859",
@@ -1194,9 +1247,13 @@
     "createdAt": "2026-02-09T15:42:43.106Z",
     "__v": 5,
     "enlaceEntrega": "",
-    "updatedAt": "2026-03-21T03:49:39.572Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "archivos": [],
-    "firmaCliente": null
+    "firmaCliente": null,
+    "duracionMeses": 1,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698a03439f19c79793bf38c4",
@@ -1230,7 +1287,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-02-09T15:54:43.744Z",
-    "__v": 0
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698a167b128ca5b7dd7e38fc",
@@ -1258,7 +1317,9 @@
     "pagos": [],
     "createdAt": "2026-02-09T17:16:43.340Z",
     "__v": 0,
-    "enlaceEntrega": "https://drive.google.com/drive/folders/1sqj5hg_bC-fj1Muku1MeFVWWIYzC1aFo"
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1sqj5hg_bC-fj1Muku1MeFVWWIYzC1aFo",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698a185c128ca5b7dd7e39a5",
@@ -1317,7 +1378,8 @@
         "_id": "69a73348eb35d0ec096a4df3"
       }
     ],
-    "updatedAt": "2026-03-03T19:15:20.903Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698a5f222c9ce13861d82e23",
@@ -1345,7 +1407,9 @@
     "pagos": [],
     "createdAt": "2026-02-09T22:26:42.691Z",
     "__v": 0,
-    "enlaceEntrega": "https://drive.google.com/drive/folders/1zPMXzKILJKeAjUSgKXCte7EIotd59grI"
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1zPMXzKILJKeAjUSgKXCte7EIotd59grI",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698a5f972c9ce13861d82ec1",
@@ -1373,7 +1437,9 @@
     "pagos": [],
     "createdAt": "2026-02-09T22:28:39.555Z",
     "__v": 0,
-    "enlaceEntrega": "https://drive.google.com/drive/folders/1N-E22BU52cbOc64_6G-0Ag7kjwRnd0YL"
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1N-E22BU52cbOc64_6G-0Ag7kjwRnd0YL",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698b93338c54ac73fc0d5d4d",
@@ -1400,7 +1466,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-02-10T20:21:07.816Z",
-    "__v": 0
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "698e8a8803667b0bb03ab40f",
@@ -1453,7 +1521,12 @@
         "_id": "69a76377eb35d0ec096a50c1"
       }
     ],
-    "updatedAt": "2026-03-03T22:40:55.299Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "duracionMeses": 1,
+    "esPlanMensual": false,
+    "firmaCliente": null,
+    "serviciosPorMes": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6995e26b461e54ebd1591591",
@@ -1491,7 +1564,8 @@
         "_id": "69a7354ceb35d0ec096a4ef6"
       }
     ],
-    "updatedAt": "2026-03-03T19:27:25.934Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6997a3adec134f70a2e6ca65",
@@ -1519,7 +1593,8 @@
     "pagos": [],
     "createdAt": "2026-02-19T23:58:37.445Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:23:31.576Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998b1119906efcd23caa619",
@@ -1547,7 +1622,8 @@
     "pagos": [],
     "createdAt": "2026-02-20T19:08:01.890Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:52:20.893Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998b2c89906efcd23caa728",
@@ -1575,7 +1651,8 @@
     "pagos": [],
     "createdAt": "2026-02-20T19:15:20.292Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:52:35.082Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998b868962a5fdda5e65641",
@@ -1604,7 +1681,8 @@
     "createdAt": "2026-02-20T19:39:20.634Z",
     "__v": 0,
     "enlaceEntrega": "https://drive.google.com/drive/folders/1zCDpN50GaJEzb22q5q_3xDD17YPDdd0L",
-    "updatedAt": "2026-02-27T15:52:14.791Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998b9e5962a5fdda5e656ad",
@@ -1632,7 +1710,8 @@
     "pagos": [],
     "createdAt": "2026-02-20T19:45:41.961Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:52:38.325Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998bb1ac6b74450c0fc9fc3",
@@ -1660,7 +1739,8 @@
     "pagos": [],
     "createdAt": "2026-02-20T19:50:51.002Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:52:25.418Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6998bb94c6b74450c0fca009",
@@ -1688,7 +1768,8 @@
     "pagos": [],
     "createdAt": "2026-02-20T19:52:52.721Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:52:29.741Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6999108571aacbcac7cdf983",
@@ -1715,7 +1796,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-02-21T01:55:17.241Z",
-    "__v": 0
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "updatedAt": "2026-04-10T22:13:59.856Z"
   },
   {
     "_id": "699a0c4341f8ea6b602d14aa",
@@ -1752,7 +1835,7 @@
     "createdAt": "2026-02-21T19:49:23.814Z",
     "__v": 1,
     "enlaceEntrega": "https://drive.google.com/drive/folders/1EOHu1uHX14gMwfFDFNp5P3tmjpsSoMvI",
-    "updatedAt": "2026-03-03T19:41:57.041Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "archivos": [
       {
         "nombre": "3000 AÑOS REMASTER FINAL KARLOS CORONA.wav",
@@ -1768,7 +1851,8 @@
         "tipo": "audio",
         "_id": "69a73985eb35d0ec096a508c"
       }
-    ]
+    ],
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "699cf1b7f615ebb97e13d707",
@@ -1796,7 +1880,8 @@
     "pagos": [],
     "createdAt": "2026-02-24T00:32:55.510Z",
     "__v": 0,
-    "updatedAt": "2026-02-27T15:23:26.619Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "699f2409743f1183e2dfd39a",
@@ -1825,7 +1910,8 @@
     "createdAt": "2026-02-25T16:32:09.480Z",
     "__v": 0,
     "enlaceEntrega": "https://drive.google.com/drive/folders/1SlFIk83R6i762Mw34JadXj1LGTIZnUUu?usp=sharing",
-    "updatedAt": "2026-03-02T23:15:23.265Z"
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a3174667176168c3468f33",
@@ -1852,7 +1938,7 @@
     "isDeleted": false,
     "pagos": [],
     "createdAt": "2026-02-28T16:26:46.376Z",
-    "updatedAt": "2026-03-03T17:38:10.007Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 0,
     "archivos": [
       {
@@ -1876,7 +1962,8 @@
         "tipo": "video",
         "_id": "69a71c82eb35d0ec096a4c7a"
       }
-    ]
+    ],
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a3a4b267176168c346916a",
@@ -1903,8 +1990,9 @@
     "isDeleted": true,
     "pagos": [],
     "createdAt": "2026-03-01T02:30:10.699Z",
-    "updatedAt": "2026-03-04T14:39:25.646Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a5dc2a3e6a85753e066d5b",
@@ -1931,8 +2019,9 @@
     "isDeleted": false,
     "pagos": [],
     "createdAt": "2026-03-02T18:51:22.456Z",
-    "updatedAt": "2026-03-02T18:51:22.456Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a5e61bf74c3811c82ed63b",
@@ -1968,8 +2057,9 @@
     ],
     "pagos": [],
     "createdAt": "2026-03-02T19:33:47.107Z",
-    "updatedAt": "2026-03-03T17:37:44.352Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a7366ceb35d0ec096a4f96",
@@ -2012,8 +2102,9 @@
     ],
     "pagos": [],
     "createdAt": "2026-03-03T19:28:44.179Z",
-    "updatedAt": "2026-03-03T19:30:22.835Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a8443f44d9621b48075b6b",
@@ -2041,8 +2132,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-04T14:39:59.744Z",
-    "updatedAt": "2026-03-04T14:40:07.523Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a8445b44d9621b48075c29",
@@ -2077,8 +2169,9 @@
       }
     ],
     "createdAt": "2026-03-04T14:40:27.225Z",
-    "updatedAt": "2026-03-06T15:13:22.660Z",
-    "__v": 1
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a848f144d9621b48075c95",
@@ -2106,8 +2199,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-04T15:00:01.509Z",
-    "updatedAt": "2026-03-04T15:00:23.773Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a9dd90a6cb032557afd3e5",
@@ -2149,8 +2243,9 @@
     ],
     "pagos": [],
     "createdAt": "2026-03-05T19:46:24.973Z",
-    "updatedAt": "2026-03-05T19:50:20.644Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a9ded5a6cb032557afd5a8",
@@ -2192,8 +2287,9 @@
     ],
     "pagos": [],
     "createdAt": "2026-03-05T19:51:49.301Z",
-    "updatedAt": "2026-03-05T19:54:21.671Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69af4fed8350536aeb7cdbd0",
@@ -2235,8 +2331,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-09T22:55:41.369Z",
-    "updatedAt": "2026-03-09T23:33:04.180Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69af58c98350536aeb7cdc69",
@@ -2271,8 +2368,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-09T23:33:29.548Z",
-    "updatedAt": "2026-03-09T23:33:29.548Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b2d6e9d4706f1a126daf81",
@@ -2300,8 +2398,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-12T15:08:25.786Z",
-    "updatedAt": "2026-03-14T18:26:27.894Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b3485d63e17fa18a8e729c",
@@ -2329,8 +2428,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-12T23:12:29.836Z",
-    "updatedAt": "2026-03-12T23:12:29.836Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b5a7f37493e0212d465682",
@@ -2371,8 +2471,9 @@
       }
     ],
     "createdAt": "2026-03-14T18:24:51.170Z",
-    "updatedAt": "2026-03-16T02:00:45.092Z",
-    "__v": 2
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 2,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b9d4dd5619301484a73a05",
@@ -2407,8 +2508,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-17T22:25:33.982Z",
-    "updatedAt": "2026-03-17T22:25:33.982Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69bf44899dc06ae5866be9de",
@@ -2436,8 +2538,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-22T01:23:21.834Z",
-    "updatedAt": "2026-03-22T01:23:21.834Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69bf44e09dc06ae5866bea44",
@@ -2465,8 +2568,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-22T01:24:48.555Z",
-    "updatedAt": "2026-03-22T01:24:48.555Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c4713e9d98129f27265419",
@@ -2494,8 +2598,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-25T23:35:26.840Z",
-    "updatedAt": "2026-03-25T23:35:43.614Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c5ae08e2dada1eb2a95476",
@@ -2526,8 +2631,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-26T22:07:04.138Z",
-    "updatedAt": "2026-03-26T22:07:04.138Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c5d348f4c6dd9956a215e4",
@@ -2558,9 +2664,10 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-27T00:46:00.722Z",
-    "updatedAt": "2026-03-28T00:21:00.587Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
     "__v": 0,
-    "firmaCliente": null
+    "firmaCliente": null,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c6df7a7db57cde82c8bee2",
@@ -2588,8 +2695,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-27T19:50:18.246Z",
-    "updatedAt": "2026-03-28T00:04:12.446Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c71f3c84d1076fc0b02345",
@@ -2617,8 +2725,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-28T00:22:20.413Z",
-    "updatedAt": "2026-03-28T19:02:06.922Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c821244c01217050b7d16a",
@@ -2646,8 +2755,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-28T18:42:44.594Z",
-    "updatedAt": "2026-03-28T19:02:15.006Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c823838c7d2af6aa9585aa",
@@ -2678,8 +2788,9 @@
     "archivos": [],
     "pagos": [],
     "createdAt": "2026-03-28T18:52:51.021Z",
-    "updatedAt": "2026-03-28T19:02:19.819Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69c824e68c7d2af6aa95861b",
@@ -2717,7 +2828,975 @@
       }
     ],
     "createdAt": "2026-03-28T18:58:46.889Z",
-    "updatedAt": "2026-04-06T17:14:00.975Z",
+    "updatedAt": "2026-04-10T22:13:59.856Z",
+    "__v": 3,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d919e9df857cda4358f770",
+    "artista": "690d746b308166001e51daff",
+    "nombreProyecto": "PELEA DE GALLOS",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-16T16:22:00.000Z",
+    "items": [
+      {
+        "servicio": "690d67e56d72c78d99547fbe",
+        "nombre": "MASTER",
+        "unidades": 11,
+        "precioUnitario": 300,
+        "_id": "69d919e9df857cda4358f771"
+      },
+      {
+        "servicio": "69370c98eb528f17537122c1",
+        "nombre": "PORTADA DISCO",
+        "unidades": 1,
+        "precioUnitario": 300,
+        "_id": "69d919e9df857cda4358f772"
+      }
+    ],
+    "total": 3600,
+    "descuento": 0,
+    "montoPagado": 3600,
+    "estatus": "Pagado",
+    "proceso": "Completo",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/15cxnC8HL5yhW9wWEawKQsndt21GQoXjq",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "Copia de SERGIO VALENTE PELA DE GALLOS.jpg",
+        "driveId": "1VjTafwqNjYFddzWKPK0pV8yk7WasKH0K",
+        "urlDirecta": "https://drive.google.com/file/d/1VjTafwqNjYFddzWKPK0pV8yk7WasKH0K/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1VjTafwqNjYFddzWKPK0pV8yk7WasKH0K&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1VjTafwqNjYFddzWKPK0pV8yk7WasKH0K/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1VjTafwqNjYFddzWKPK0pV8yk7WasKH0K&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/jpeg",
+        "size": 1402751,
+        "subidoEn": "2026-04-24T00:56:17.335Z",
+        "_id": "69f3875fb0d4bc7afe049cfd"
+      },
+      {
+        "nombre": "11. el cachanilla.mp3",
+        "driveId": "1jADBEzQTb9dBDqd0ySFNq0qVMpd7276R",
+        "urlDirecta": "https://drive.google.com/file/d/1jADBEzQTb9dBDqd0ySFNq0qVMpd7276R/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1jADBEzQTb9dBDqd0ySFNq0qVMpd7276R&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1jADBEzQTb9dBDqd0ySFNq0qVMpd7276R/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1jADBEzQTb9dBDqd0ySFNq0qVMpd7276R&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 7884858,
+        "subidoEn": "2026-04-23T23:45:09.744Z",
+        "_id": "69eaaf1bd2d12a0deb097997"
+      },
+      {
+        "nombre": "10. corrido de monterrey.mp3",
+        "driveId": "1RtLB4kHwWoDfJy_weLg2qMq_R7qHXdr1",
+        "urlDirecta": "https://drive.google.com/file/d/1RtLB4kHwWoDfJy_weLg2qMq_R7qHXdr1/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1RtLB4kHwWoDfJy_weLg2qMq_R7qHXdr1&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1RtLB4kHwWoDfJy_weLg2qMq_R7qHXdr1/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1RtLB4kHwWoDfJy_weLg2qMq_R7qHXdr1&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 7829478,
+        "subidoEn": "2026-04-23T23:45:08.791Z",
+        "_id": "69eaaf1bd2d12a0deb097998"
+      },
+      {
+        "nombre": "9. corrido de chihuahua.mp3",
+        "driveId": "1Y9QN0TNcb2e92BlAdGpA-RRM2ws5gYrj",
+        "urlDirecta": "https://drive.google.com/file/d/1Y9QN0TNcb2e92BlAdGpA-RRM2ws5gYrj/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1Y9QN0TNcb2e92BlAdGpA-RRM2ws5gYrj&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1Y9QN0TNcb2e92BlAdGpA-RRM2ws5gYrj/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1Y9QN0TNcb2e92BlAdGpA-RRM2ws5gYrj&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 8337298,
+        "subidoEn": "2026-04-23T23:45:07.402Z",
+        "_id": "69eaaf1bd2d12a0deb097999"
+      },
+      {
+        "nombre": "8. que bonita es mi tierra.mp3",
+        "driveId": "1Lnh6qBmbn912A8ApTsl-5IInm2B7cJxJ",
+        "urlDirecta": "https://drive.google.com/file/d/1Lnh6qBmbn912A8ApTsl-5IInm2B7cJxJ/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1Lnh6qBmbn912A8ApTsl-5IInm2B7cJxJ&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1Lnh6qBmbn912A8ApTsl-5IInm2B7cJxJ/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1Lnh6qBmbn912A8ApTsl-5IInm2B7cJxJ&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 6020760,
+        "subidoEn": "2026-04-23T23:45:06.298Z",
+        "_id": "69eaaf1bd2d12a0deb09799a"
+      },
+      {
+        "nombre": "7. veracruz.mp3",
+        "driveId": "1vRjxiPVBaodKaVje854iIt5_HLgceC3T",
+        "urlDirecta": "https://drive.google.com/file/d/1vRjxiPVBaodKaVje854iIt5_HLgceC3T/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1vRjxiPVBaodKaVje854iIt5_HLgceC3T&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1vRjxiPVBaodKaVje854iIt5_HLgceC3T/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1vRjxiPVBaodKaVje854iIt5_HLgceC3T&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 6962213,
+        "subidoEn": "2026-04-23T23:45:04.876Z",
+        "_id": "69eaaf1bd2d12a0deb09799b"
+      },
+      {
+        "nombre": "6. el sinaloense.mp3",
+        "driveId": "1KvZ9RGrCbqHNhuM6nY6f_O1j6skp5Q9J",
+        "urlDirecta": "https://drive.google.com/file/d/1KvZ9RGrCbqHNhuM6nY6f_O1j6skp5Q9J/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1KvZ9RGrCbqHNhuM6nY6f_O1j6skp5Q9J&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1KvZ9RGrCbqHNhuM6nY6f_O1j6skp5Q9J/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1KvZ9RGrCbqHNhuM6nY6f_O1j6skp5Q9J&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 7192090,
+        "subidoEn": "2026-04-23T23:45:03.666Z",
+        "_id": "69eaaf1bd2d12a0deb09799c"
+      },
+      {
+        "nombre": "5. juan colorado.mp3",
+        "driveId": "1fUxEvDsJjajqdd1fue-t9f3sKky6EBcH",
+        "urlDirecta": "https://drive.google.com/file/d/1fUxEvDsJjajqdd1fue-t9f3sKky6EBcH/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1fUxEvDsJjajqdd1fue-t9f3sKky6EBcH&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1fUxEvDsJjajqdd1fue-t9f3sKky6EBcH/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1fUxEvDsJjajqdd1fue-t9f3sKky6EBcH&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 8900498,
+        "subidoEn": "2026-04-23T23:45:02.384Z",
+        "_id": "69eaaf1bd2d12a0deb09799d"
+      },
+      {
+        "nombre": "4. sonora querida.mp3",
+        "driveId": "1U3jpBm0cXBYZ4Pf5xjfuM4Pl2LWsPhsT",
+        "urlDirecta": "https://drive.google.com/file/d/1U3jpBm0cXBYZ4Pf5xjfuM4Pl2LWsPhsT/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1U3jpBm0cXBYZ4Pf5xjfuM4Pl2LWsPhsT&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1U3jpBm0cXBYZ4Pf5xjfuM4Pl2LWsPhsT/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1U3jpBm0cXBYZ4Pf5xjfuM4Pl2LWsPhsT&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 8530605,
+        "subidoEn": "2026-04-23T23:45:01.229Z",
+        "_id": "69eaaf1bd2d12a0deb09799e"
+      },
+      {
+        "nombre": "3. el gallo negro.mp3",
+        "driveId": "1NPLxapNN49O-ae9pJyTD7qqWiaEvY9YI",
+        "urlDirecta": "https://drive.google.com/file/d/1NPLxapNN49O-ae9pJyTD7qqWiaEvY9YI/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1NPLxapNN49O-ae9pJyTD7qqWiaEvY9YI&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1NPLxapNN49O-ae9pJyTD7qqWiaEvY9YI/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1NPLxapNN49O-ae9pJyTD7qqWiaEvY9YI&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 6242278,
+        "subidoEn": "2026-04-23T23:44:59.960Z",
+        "_id": "69eaaf1bd2d12a0deb09799f"
+      },
+      {
+        "nombre": "2. sangre caliente.mp3",
+        "driveId": "13LleVGgBXFQGwG2GS7g51NqAJ-HGcF-Z",
+        "urlDirecta": "https://drive.google.com/file/d/13LleVGgBXFQGwG2GS7g51NqAJ-HGcF-Z/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=13LleVGgBXFQGwG2GS7g51NqAJ-HGcF-Z&export=download",
+        "webViewLink": "https://drive.google.com/file/d/13LleVGgBXFQGwG2GS7g51NqAJ-HGcF-Z/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=13LleVGgBXFQGwG2GS7g51NqAJ-HGcF-Z&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 7035356,
+        "subidoEn": "2026-04-23T23:44:58.653Z",
+        "_id": "69eaaf1bd2d12a0deb0979a0"
+      },
+      {
+        "nombre": "1. pelea de gallos.mp3",
+        "driveId": "1_1W1txoOsLPUB4TKGNk6jw-EwJLIGMmJ",
+        "urlDirecta": "https://drive.google.com/file/d/1_1W1txoOsLPUB4TKGNk6jw-EwJLIGMmJ/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1_1W1txoOsLPUB4TKGNk6jw-EwJLIGMmJ&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1_1W1txoOsLPUB4TKGNk6jw-EwJLIGMmJ/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1_1W1txoOsLPUB4TKGNk6jw-EwJLIGMmJ&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 7294490,
+        "subidoEn": "2026-04-23T23:44:57.428Z",
+        "_id": "69eaaf1bd2d12a0deb0979a1"
+      }
+    ],
+    "pagos": [
+      {
+        "monto": 600,
+        "metodo": "Transferencia",
+        "fecha": "2026-04-17T15:21:38.983Z",
+        "_id": "69e25002da4d025d5d88bedf"
+      },
+      {
+        "monto": 3000,
+        "metodo": "Transferencia",
+        "fecha": "2026-04-17T15:21:54.730Z",
+        "_id": "69e25012da4d025d5d88bf5c"
+      }
+    ],
+    "createdAt": "2026-04-10T15:40:25.476Z",
+    "updatedAt": "2026-04-30T16:46:23.044Z",
+    "__v": 4,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d94f25df857cda4358f7a2",
+    "artista": "69d94e44df857cda4358f78d",
+    "nombreProyecto": "CRISTALES GIRASOLES",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-11T02:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69d94eb8df857cda4358f791",
+        "nombre": "PAQUETE VIDEO LYRICS + PORTADA + MINIATURA",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69d94f25df857cda4358f7a3"
+      }
+    ],
+    "total": 500,
+    "descuento": 200,
+    "montoPagado": 0,
+    "estatus": "Pendiente de Pago",
+    "proceso": "Agendado",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-10T19:27:33.828Z",
+    "updatedAt": "2026-04-17T15:25:01.984Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d979e8523cb9c0a311d550",
+    "artista": "690f837a4abe26fe0256d98c",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "nombreProyecto": "MES DE FEBRERO ",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-10T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "690a8df3668309813aeecd5b",
+        "nombre": "GRABACION DE VOZ, MEZCLA Y MASTARING",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69d979e8523cb9c0a311d551"
+      }
+    ],
+    "total": 700,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cotizacion",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-10T22:30:00.878Z",
+    "updatedAt": "2026-04-10T22:30:36.713Z",
+    "__v": 0
+  },
+  {
+    "_id": "69d97a42df857cda4358f895",
+    "artista": null,
+    "nombreProyecto": "prueba 123456",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-10T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "690a8df3668309813aeecd5b",
+        "nombre": "GRABACION DE VOZ, MEZCLA Y MASTARING",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69d97a42df857cda4358f896"
+      }
+    ],
+    "total": 700,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cotizacion",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-10T22:31:30.109Z",
+    "updatedAt": "2026-04-10T22:31:36.978Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d97a5cdf857cda4358f91e",
+    "artista": null,
+    "nombreProyecto": "prueba ",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-10T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "690a8df3668309813aeecd5b",
+        "nombre": "GRABACION DE VOZ, MEZCLA Y MASTARING",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69d97a5cdf857cda4358f91f"
+      }
+    ],
+    "total": 700,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cotizacion",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-10T22:31:56.637Z",
+    "updatedAt": "2026-04-10T22:41:10.210Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69d97c4686cbff3b86dfa7e1",
+    "artista": null,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "nombreProyecto": "nuevo",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-10T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "690a8df3668309813aeecd5b",
+        "nombre": "GRABACION DE VOZ, MEZCLA Y MASTARING",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69d97c4686cbff3b86dfa7e2"
+      }
+    ],
+    "total": 700,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cotizacion",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-10T22:40:06.487Z",
+    "updatedAt": "2026-04-10T22:41:05.150Z",
+    "__v": 0
+  },
+  {
+    "_id": "69dd69b5badcc21d900ff537",
+    "artista": null,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "nombreProyecto": "Sin nombre",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-13T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69dd445c8f79ff40eabcda06",
+        "nombre": "PAQUETE VIDEO LYRIC + MINIATURA YT + COVERART",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69dd69b5badcc21d900ff538"
+      }
+    ],
+    "total": 700,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cancelado",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": true,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-13T22:09:57.189Z",
+    "updatedAt": "2026-04-25T20:33:32.983Z",
+    "__v": 0
+  },
+  {
+    "_id": "69dd6a13badcc21d900ff5f4",
+    "artista": "69dd44ac8f79ff40eabcda0f",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "CRISTALES GIRASOLES",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-13T00:26:00.000Z",
+    "items": [
+      {
+        "servicio": "69dd445c8f79ff40eabcda06",
+        "nombre": "PAQUETE VIDEO LYRIC + MINIATURA YT + COVERART",
+        "unidades": 1,
+        "precioUnitario": 700,
+        "_id": "69dd6a13badcc21d900ff5f5"
+      }
+    ],
+    "total": 500,
+    "descuento": 200,
+    "montoPagado": 500,
+    "estatus": "Pagado",
+    "proceso": "Completo",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1dHdu_gWE_iJTM8_hS3dQlT_iip7Wmqm4",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "7.png",
+        "driveId": "1uLt81CamUJn7LWrLCuDjIgGduSo3vecf",
+        "urlDirecta": "https://drive.google.com/file/d/1uLt81CamUJn7LWrLCuDjIgGduSo3vecf/preview",
+        "tipo": "imagen",
+        "_id": "69eaa81bd22ec83101b176bf"
+      },
+      {
+        "nombre": "CRISTALES GIRASOLES  FINAL YT.mp4",
+        "driveId": "1dKm6XSlHrpe7HZaz3HJJY8rQQNN-IBTM",
+        "urlDirecta": "https://drive.google.com/file/d/1dKm6XSlHrpe7HZaz3HJJY8rQQNN-IBTM/preview",
+        "tipo": "video",
+        "_id": "69eaa81bd22ec83101b176c0"
+      }
+    ],
+    "pagos": [
+      {
+        "monto": 500,
+        "metodo": "Transferencia",
+        "fecha": "2026-04-14T15:26:18.088Z",
+        "_id": "69de5c9a374faa472a51487c"
+      }
+    ],
+    "createdAt": "2026-04-13T22:11:31.292Z",
+    "updatedAt": "2026-04-23T23:15:39.923Z",
+    "__v": 4,
+    "firmaCliente": null
+  },
+  {
+    "_id": "69e2c3c3fdc73e27616f21ae",
+    "artista": "69e2c3a2fdc73e27616f219f",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "MES DE ABRIL 2026",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-18T02:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69e2c3c3fdc73e27616f21af"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Pendiente de Pago",
+    "proceso": "Completo",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1090FpyYSMneCC_ZRIF6d0Ifre02meInF",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "4.png",
+        "driveId": "1kF7WoPuQQKYGSUOb0_BTRdjFXjt-zT6P",
+        "urlDirecta": "https://drive.google.com/file/d/1kF7WoPuQQKYGSUOb0_BTRdjFXjt-zT6P/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c1382d"
+      },
+      {
+        "nombre": "3.png",
+        "driveId": "1phoXK2QpMSCrfq46dwVsFJjCOae9IY4o",
+        "urlDirecta": "https://drive.google.com/file/d/1phoXK2QpMSCrfq46dwVsFJjCOae9IY4o/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c1382e"
+      },
+      {
+        "nombre": "2.png",
+        "driveId": "1p9f_BEsOjTMPDBS1jvMK3rwZ0WjPvciB",
+        "urlDirecta": "https://drive.google.com/file/d/1p9f_BEsOjTMPDBS1jvMK3rwZ0WjPvciB/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c1382f"
+      },
+      {
+        "nombre": "1.png",
+        "driveId": "1awo7JCb0hbNYZQd0VYst-EVSVSH5C3cn",
+        "urlDirecta": "https://drive.google.com/file/d/1awo7JCb0hbNYZQd0VYst-EVSVSH5C3cn/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13830"
+      },
+      {
+        "nombre": "6.png",
+        "driveId": "1AEN_iPlTZXLa9aECI5HzGebYqGk0tCNt",
+        "urlDirecta": "https://drive.google.com/file/d/1AEN_iPlTZXLa9aECI5HzGebYqGk0tCNt/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13831"
+      },
+      {
+        "nombre": "5.png",
+        "driveId": "1c3Ma8LUAYQp0jqcAkvvrCulfMnbhkGXf",
+        "urlDirecta": "https://drive.google.com/file/d/1c3Ma8LUAYQp0jqcAkvvrCulfMnbhkGXf/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13832"
+      },
+      {
+        "nombre": "10.png",
+        "driveId": "1tpu22MEd0iS7lQYCGSxc7v3BCm8iBM7V",
+        "urlDirecta": "https://drive.google.com/file/d/1tpu22MEd0iS7lQYCGSxc7v3BCm8iBM7V/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13833"
+      },
+      {
+        "nombre": "9.png",
+        "driveId": "1INNqEKjr5_UXQnO4dyGS7Z4uBL7GQMWK",
+        "urlDirecta": "https://drive.google.com/file/d/1INNqEKjr5_UXQnO4dyGS7Z4uBL7GQMWK/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13834"
+      },
+      {
+        "nombre": "8.png",
+        "driveId": "1m4uFMITV92lPq6UUKm45dQeHTfCisGje",
+        "urlDirecta": "https://drive.google.com/file/d/1m4uFMITV92lPq6UUKm45dQeHTfCisGje/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13835"
+      },
+      {
+        "nombre": "7.png",
+        "driveId": "1_ehxJzgw36I2RbBIwwAr19aSkRRbDlED",
+        "urlDirecta": "https://drive.google.com/file/d/1_ehxJzgw36I2RbBIwwAr19aSkRRbDlED/preview",
+        "tipo": "imagen",
+        "_id": "69eaa355902bae6b87c13836"
+      }
+    ],
+    "pagos": [],
+    "createdAt": "2026-04-17T23:35:31.660Z",
+    "updatedAt": "2026-04-23T22:55:17.064Z",
     "__v": 1
+  },
+  {
+    "_id": "69eba2aee46f68293d4227fb",
+    "artista": "69e2c3a2fdc73e27616f219f",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "PRUEBA 2",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-24T14:07:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69eba2aee46f68293d4227fc"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cancelado",
+    "proceso": "Agendado",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": false,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-24T17:04:46.750Z",
+    "updatedAt": "2026-04-24T17:20:35.561Z",
+    "__v": 0,
+    "firmaCliente": null
+  },
+  {
+    "_id": "69ebb15570b27851376ea43c",
+    "artista": "69e2c3a2fdc73e27616f219f",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "PRUEBA 2",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-25T03:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69ebb15570b27851376ea43d"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cancelado",
+    "proceso": "Agendado",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1QHHIcUfzoGd--jIAgWyaHKHLB8a05ZM0",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "soundcloudaud.com_Escuchame Dagx(FiaRec).mp3",
+        "driveId": "1yzqJQwGvlOmXWTN4EcEINiUps-WIm3op",
+        "urlDirecta": "https://drive.google.com/file/d/1yzqJQwGvlOmXWTN4EcEINiUps-WIm3op/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1yzqJQwGvlOmXWTN4EcEINiUps-WIm3op&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1yzqJQwGvlOmXWTN4EcEINiUps-WIm3op/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1yzqJQwGvlOmXWTN4EcEINiUps-WIm3op&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 4082206,
+        "subidoEn": "2026-04-25T00:02:34.844Z",
+        "_id": "69ec0789b7be55301a6040c2"
+      },
+      {
+        "nombre": "10.png",
+        "driveId": "1vhcaKiVzWbKT5iyy7CyGURkcCwX1odqF",
+        "urlDirecta": "https://drive.google.com/file/d/1vhcaKiVzWbKT5iyy7CyGURkcCwX1odqF/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1vhcaKiVzWbKT5iyy7CyGURkcCwX1odqF&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1vhcaKiVzWbKT5iyy7CyGURkcCwX1odqF/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1vhcaKiVzWbKT5iyy7CyGURkcCwX1odqF&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 890273,
+        "subidoEn": "2026-04-24T23:56:46.285Z",
+        "_id": "69ec0344aee30a4ba17f6946"
+      },
+      {
+        "nombre": "9.png",
+        "driveId": "1QJWhdgRrQWNqcogBDN9WwdDrGbNtGZRg",
+        "urlDirecta": "https://drive.google.com/file/d/1QJWhdgRrQWNqcogBDN9WwdDrGbNtGZRg/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1QJWhdgRrQWNqcogBDN9WwdDrGbNtGZRg&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1QJWhdgRrQWNqcogBDN9WwdDrGbNtGZRg/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1QJWhdgRrQWNqcogBDN9WwdDrGbNtGZRg&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 890289,
+        "subidoEn": "2026-04-24T23:56:45.020Z",
+        "_id": "69ec0344aee30a4ba17f6947"
+      },
+      {
+        "nombre": "8.png",
+        "driveId": "1Rvh-atHhIjfMIDiQo_QnHME4-3xwfqUU",
+        "urlDirecta": "https://drive.google.com/file/d/1Rvh-atHhIjfMIDiQo_QnHME4-3xwfqUU/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1Rvh-atHhIjfMIDiQo_QnHME4-3xwfqUU&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1Rvh-atHhIjfMIDiQo_QnHME4-3xwfqUU/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1Rvh-atHhIjfMIDiQo_QnHME4-3xwfqUU&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 1005484,
+        "subidoEn": "2026-04-24T23:56:44.057Z",
+        "_id": "69ec0344aee30a4ba17f6948"
+      },
+      {
+        "nombre": "7.png",
+        "driveId": "1B0XhklOKwwTvdRsWtopTO1Vt3E6O762I",
+        "urlDirecta": "https://drive.google.com/file/d/1B0XhklOKwwTvdRsWtopTO1Vt3E6O762I/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1B0XhklOKwwTvdRsWtopTO1Vt3E6O762I&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1B0XhklOKwwTvdRsWtopTO1Vt3E6O762I/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1B0XhklOKwwTvdRsWtopTO1Vt3E6O762I&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 475048,
+        "subidoEn": "2026-04-24T23:56:42.982Z",
+        "_id": "69ec0344aee30a4ba17f6949"
+      }
+    ],
+    "pagos": [],
+    "createdAt": "2026-04-24T18:07:17.614Z",
+    "updatedAt": "2026-04-25T00:15:05.514Z",
+    "__v": 2
+  },
+  {
+    "_id": "69ec11c0d6f53c23b0ea6ade",
+    "artista": "69ec11b5d6f53c23b0ea6ad9",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "Sin nombre",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-25T05:04:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69ec11c0d6f53c23b0ea6adf"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Pendiente de Pago",
+    "proceso": "Completo",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/1ooV6loo91GNytH7xkz-biZjHAPovdrva",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "Cotizacion-DAGX_RESENDIZ.pdf",
+        "driveId": "17YJlaofv6myu4Oq03i4UWqeaKWfs_CKs",
+        "urlDirecta": "https://drive.google.com/file/d/17YJlaofv6myu4Oq03i4UWqeaKWfs_CKs/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=17YJlaofv6myu4Oq03i4UWqeaKWfs_CKs&export=download",
+        "webViewLink": "https://drive.google.com/file/d/17YJlaofv6myu4Oq03i4UWqeaKWfs_CKs/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=17YJlaofv6myu4Oq03i4UWqeaKWfs_CKs&export=download",
+        "tipo": "documento",
+        "mimeType": "application/pdf",
+        "size": 136085,
+        "subidoEn": "2026-04-25T01:16:44.931Z",
+        "_id": "69ec16063479bd0d6c1526b7"
+      },
+      {
+        "nombre": "soundcloudaud.com_Escuchame Dagx(FiaRec).mp3",
+        "driveId": "1_lQ6yenB8vO5utqaNKvagtFpz7E97vFT",
+        "urlDirecta": "https://drive.google.com/file/d/1_lQ6yenB8vO5utqaNKvagtFpz7E97vFT/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1_lQ6yenB8vO5utqaNKvagtFpz7E97vFT&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1_lQ6yenB8vO5utqaNKvagtFpz7E97vFT/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1_lQ6yenB8vO5utqaNKvagtFpz7E97vFT&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 4082206,
+        "subidoEn": "2026-04-25T01:04:34.396Z",
+        "_id": "69ec1329d6f53c23b0ea6c17"
+      }
+    ],
+    "pagos": [],
+    "createdAt": "2026-04-25T00:58:40.374Z",
+    "updatedAt": "2026-04-25T15:39:52.000Z",
+    "__v": 3
+  },
+  {
+    "_id": "69ec1c24f0e33d5e45982a1d",
+    "artista": "69ec11b5d6f53c23b0ea6ad9",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "PURBA 2",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-24T06:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69ec1c24f0e33d5e45982a1e"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Cotizacion",
+    "proceso": "Solicitud",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "",
+    "isDeleted": false,
+    "archivos": [],
+    "pagos": [],
+    "createdAt": "2026-04-25T01:43:00.569Z",
+    "updatedAt": "2026-04-25T01:43:00.569Z",
+    "__v": 0
+  },
+  {
+    "_id": "69ece03e87ff6f92d8e7584a",
+    "artista": "69ec11b5d6f53c23b0ea6ad9",
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "nombreProyecto": "prueba 3",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-04-25T23:00:00.000Z",
+    "items": [
+      {
+        "servicio": "69e2c396fdc73e27616f2196",
+        "nombre": "PAQUETE IMAGENES",
+        "unidades": 1,
+        "precioUnitario": 0,
+        "_id": "69ece03e87ff6f92d8e7584b"
+      }
+    ],
+    "total": 0,
+    "descuento": 0,
+    "montoPagado": 0,
+    "estatus": "Pendiente de Pago",
+    "proceso": "Completo",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/187QFOD8ddfTUajfO235Ej4EhQBr_ibC4",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "logo covert.png",
+        "driveId": "1PV5-DI4trbDF-3zHaLao1xB7PvI0RaCY",
+        "urlDirecta": "https://drive.google.com/file/d/1PV5-DI4trbDF-3zHaLao1xB7PvI0RaCY/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1PV5-DI4trbDF-3zHaLao1xB7PvI0RaCY&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1PV5-DI4trbDF-3zHaLao1xB7PvI0RaCY/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1PV5-DI4trbDF-3zHaLao1xB7PvI0RaCY&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 181535,
+        "subidoEn": "2026-04-25T17:48:52.466Z",
+        "_id": "69ecfe85b8d27f8fd326f75c"
+      },
+      {
+        "nombre": "Un Salvaje - El Salvaje de Nuevo Leon 2 REMASTER.mp3",
+        "driveId": "17hR088l-n3Jk1jsij4OK9Gv4x5KnyaNg",
+        "urlDirecta": "https://drive.google.com/file/d/17hR088l-n3Jk1jsij4OK9Gv4x5KnyaNg/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=17hR088l-n3Jk1jsij4OK9Gv4x5KnyaNg&export=download",
+        "webViewLink": "https://drive.google.com/file/d/17hR088l-n3Jk1jsij4OK9Gv4x5KnyaNg/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=17hR088l-n3Jk1jsij4OK9Gv4x5KnyaNg&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 6713527,
+        "subidoEn": "2026-04-25T17:42:54.665Z",
+        "_id": "69ed153734673b981944746e"
+      },
+      {
+        "nombre": "Jade a la Pista v2 (Final Edit).mp3",
+        "driveId": "14pH_8gfHz0iD5RNnrtHxdKoJMfz4asBh",
+        "urlDirecta": "https://drive.google.com/file/d/14pH_8gfHz0iD5RNnrtHxdKoJMfz4asBh/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=14pH_8gfHz0iD5RNnrtHxdKoJMfz4asBh&export=download",
+        "webViewLink": "https://drive.google.com/file/d/14pH_8gfHz0iD5RNnrtHxdKoJMfz4asBh/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=14pH_8gfHz0iD5RNnrtHxdKoJMfz4asBh&export=download",
+        "tipo": "audio",
+        "mimeType": "audio/mpeg",
+        "size": 1608772,
+        "subidoEn": "2026-04-25T17:41:34.935Z",
+        "_id": "69ed153734673b981944746f"
+      },
+      {
+        "nombre": "10.png",
+        "driveId": "1K6ido-2DPLs7QMe_AMq1jlTwArnFcHC2",
+        "urlDirecta": "https://drive.google.com/file/d/1K6ido-2DPLs7QMe_AMq1jlTwArnFcHC2/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1K6ido-2DPLs7QMe_AMq1jlTwArnFcHC2&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1K6ido-2DPLs7QMe_AMq1jlTwArnFcHC2/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1K6ido-2DPLs7QMe_AMq1jlTwArnFcHC2&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 890273,
+        "subidoEn": "2026-04-25T15:40:48.558Z",
+        "_id": "69ed153734673b9819447470"
+      },
+      {
+        "nombre": "Cotizacion-DAGX_RESENDIZ (1).pdf",
+        "driveId": "1FmMa_V_YKaT4NmZKwvQPQgooETkYHTer",
+        "urlDirecta": "https://drive.google.com/file/d/1FmMa_V_YKaT4NmZKwvQPQgooETkYHTer/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1FmMa_V_YKaT4NmZKwvQPQgooETkYHTer&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1FmMa_V_YKaT4NmZKwvQPQgooETkYHTer/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1FmMa_V_YKaT4NmZKwvQPQgooETkYHTer&export=download",
+        "tipo": "documento",
+        "mimeType": "application/pdf",
+        "size": 136085,
+        "subidoEn": "2026-04-25T15:40:47.878Z",
+        "_id": "69ed153734673b9819447471"
+      }
+    ],
+    "pagos": [],
+    "createdAt": "2026-04-25T15:39:42.404Z",
+    "updatedAt": "2026-04-25T19:25:43.882Z",
+    "__v": 6
+  },
+  {
+    "_id": "69f3871fb0d4bc7afe049bc7",
+    "artista": "690d746b308166001e51daff",
+    "empresaId": "69d97627b41527e3e37013c0",
+    "nombreProyecto": "MI CARIÑITO ",
+    "esAlbum": false,
+    "esPlanMensual": false,
+    "serviciosPorMes": 1,
+    "duracionMeses": 1,
+    "fecha": "2026-05-05T02:00:00.000Z",
+    "items": [
+      {
+        "servicio": "690d67e56d72c78d99547fbe",
+        "nombre": "MASTER",
+        "unidades": 11,
+        "precioUnitario": 300,
+        "_id": "69f3871fb0d4bc7afe049bc8"
+      },
+      {
+        "servicio": "69370c98eb528f17537122c1",
+        "nombre": "PORTADA DISCO",
+        "unidades": 1,
+        "precioUnitario": 300,
+        "_id": "69f3871fb0d4bc7afe049bc9"
+      }
+    ],
+    "total": 3600,
+    "descuento": 0,
+    "montoPagado": 600,
+    "estatus": "Pendiente de Pago",
+    "proceso": "Agendado",
+    "metodoPago": "Pendiente",
+    "enlaceEntrega": "https://drive.google.com/drive/folders/10yP0kGEP6_pmsqfdE7DcvAacbV_DzQKv",
+    "isDeleted": false,
+    "archivos": [
+      {
+        "nombre": "VALENTE-CD-MICARIÃITO.pdf",
+        "driveId": "1rIqluLkdrQz2K3SGmIffn7iyovLXQNo1",
+        "urlDirecta": "https://drive.google.com/file/d/1rIqluLkdrQz2K3SGmIffn7iyovLXQNo1/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1rIqluLkdrQz2K3SGmIffn7iyovLXQNo1&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1rIqluLkdrQz2K3SGmIffn7iyovLXQNo1/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1rIqluLkdrQz2K3SGmIffn7iyovLXQNo1&export=download",
+        "tipo": "documento",
+        "mimeType": "application/pdf",
+        "size": 3591932,
+        "subidoEn": "2026-04-30T17:34:29.638Z",
+        "_id": "69f392a6b0d4bc7afe04a041"
+      },
+      {
+        "nombre": "MI CARIÃITO COVERT.png",
+        "driveId": "1lkqoHXent600b2RereEK8hVZ55bVCynW",
+        "urlDirecta": "https://drive.google.com/file/d/1lkqoHXent600b2RereEK8hVZ55bVCynW/view?usp=drivesdk",
+        "urlDescarga": "https://drive.google.com/uc?id=1lkqoHXent600b2RereEK8hVZ55bVCynW&export=download",
+        "webViewLink": "https://drive.google.com/file/d/1lkqoHXent600b2RereEK8hVZ55bVCynW/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1lkqoHXent600b2RereEK8hVZ55bVCynW&export=download",
+        "tipo": "imagen",
+        "mimeType": "image/png",
+        "size": 1778780,
+        "subidoEn": "2026-04-30T16:48:29.758Z",
+        "_id": "69f3d3d5aed8fb3888380c16"
+      }
+    ],
+    "pagos": [
+      {
+        "monto": 600,
+        "metodo": "Transferencia",
+        "fecha": "2026-04-30T16:45:44.665Z",
+        "_id": "69f38738b0d4bc7afe049c49"
+      }
+    ],
+    "createdAt": "2026-04-30T16:45:19.974Z",
+    "updatedAt": "2026-04-30T22:12:37.527Z",
+    "__v": 4
   }
 ]

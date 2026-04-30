@@ -6,8 +6,13 @@
     "role": "admin",
     "isDeleted": false,
     "createdAt": "2025-11-04T22:12:19.880Z",
-    "updatedAt": "2026-02-10T00:12:56.894Z",
-    "__v": 0
+    "updatedAt": "2026-04-30T17:19:42.375Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "isSuperAdmin": true,
+    "permisos": [],
+    "refreshToken": "ac22ea1b52954ae691d46c0aa055a6a0f2e86c3948a1686681ba9327928d5374",
+    "refreshTokenExpires": "2026-05-07T17:19:42.374Z"
   },
   {
     "_id": "690a8827668309813aeecd53",
@@ -16,8 +21,13 @@
     "role": "admin",
     "isDeleted": false,
     "createdAt": "2025-11-04T23:11:35.243Z",
-    "updatedAt": "2026-02-10T00:13:39.147Z",
-    "__v": 0
+    "updatedAt": "2026-04-30T22:33:03.911Z",
+    "__v": 1,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "isSuperAdmin": false,
+    "permisos": [],
+    "refreshToken": "3c70e6b3332ae0cdd78e7f5c971ee807ef6c240259a10ded48801b1448977dbd",
+    "refreshTokenExpires": "2026-05-07T22:33:03.909Z"
   },
   {
     "_id": "698a763728e5c9670ef263ec",
@@ -26,11 +36,12 @@
     "role": "ingeniero",
     "isDeleted": true,
     "createdAt": "2026-02-10T00:05:11.177Z",
-    "updatedAt": "2026-02-23T14:29:05.418Z",
+    "updatedAt": "2026-04-10T22:13:59.440Z",
     "__v": 12,
     "permisos": [
       "agenda"
-    ]
+    ],
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698b70ac0071f5f6ace5606c",
@@ -44,12 +55,13 @@
       "cotizaciones",
       "gestion-artistas"
     ],
-    "isDeleted": false,
+    "isDeleted": true,
     "createdAt": "2026-02-10T17:53:48.820Z",
-    "updatedAt": "2026-02-24T22:43:22.685Z",
+    "updatedAt": "2026-04-11T14:57:48.992Z",
     "__v": 14,
     "artistaId": null,
-    "email": "charliefg92@gmail.com"
+    "email": "charliefg92@gmail.com",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698b78fb11163dd559534958",
@@ -61,10 +73,11 @@
     ],
     "isDeleted": false,
     "createdAt": "2026-02-10T18:29:15.774Z",
-    "updatedAt": "2026-02-17T16:55:40.606Z",
+    "updatedAt": "2026-04-10T22:13:59.440Z",
     "__v": 0,
     "email": "sergiovalenteoficial@gmail.com",
-    "artistaId": "690d746b308166001e51daff"
+    "artistaId": "690d746b308166001e51daff",
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698cc8d655e6421f114008ce",
@@ -77,11 +90,12 @@
     ],
     "isDeleted": false,
     "createdAt": "2026-02-11T18:22:14.813Z",
-    "updatedAt": "2026-02-20T19:13:58.321Z",
+    "updatedAt": "2026-04-10T22:13:59.440Z",
     "__v": 0,
     "resetPasswordExpires": "2026-02-13T01:03:40.585Z",
     "resetPasswordToken": "33059ecdcadd0fecc0e97c369585afc69edac0da",
-    "artistaId": null
+    "artistaId": null,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698d0d671ba252463270da1c",
@@ -97,8 +111,9 @@
     ],
     "isDeleted": false,
     "createdAt": "2026-02-11T23:14:47.135Z",
-    "updatedAt": "2026-02-12T22:07:50.394Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "698f4194caa113397429ac34",
@@ -111,8 +126,9 @@
     ],
     "isDeleted": false,
     "createdAt": "2026-02-13T15:21:56.547Z",
-    "updatedAt": "2026-02-16T18:48:30.583Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6990951edd4fdc6d73d3fb8d",
@@ -127,9 +143,10 @@
     ],
     "isDeleted": false,
     "createdAt": "2026-02-14T15:30:38.548Z",
-    "updatedAt": "2026-02-20T19:12:54.786Z",
+    "updatedAt": "2026-04-10T22:13:59.440Z",
     "__v": 0,
-    "artistaId": null
+    "artistaId": null,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69909fd80d3bdad031fab5ce",
@@ -145,8 +162,9 @@
     ],
     "isDeleted": true,
     "createdAt": "2026-02-14T16:16:24.149Z",
-    "updatedAt": "2026-02-20T19:11:53.686Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "6997a360ec134f70a2e6ca5a",
@@ -163,8 +181,9 @@
     "artistaId": "6997a360ec134f70a2e6ca5c",
     "isDeleted": false,
     "createdAt": "2026-02-19T23:57:20.261Z",
-    "updatedAt": "2026-02-19T23:57:20.972Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "699dc4f04156fbbd86ef6f45",
@@ -178,10 +197,11 @@
       "gestion-servicios"
     ],
     "artistaId": null,
-    "isDeleted": false,
+    "isDeleted": true,
     "createdAt": "2026-02-24T15:34:08.178Z",
-    "updatedAt": "2026-03-14T18:32:22.533Z",
-    "__v": 0
+    "updatedAt": "2026-04-14T23:12:20.926Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a043191d3ca45395568b44",
@@ -197,8 +217,9 @@
     "artistaId": "692ddf10bfddf292af683650",
     "isDeleted": false,
     "createdAt": "2026-02-26T12:56:57.333Z",
-    "updatedAt": "2026-02-26T15:56:08.609Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69a9c888620c5d305ced7820",
@@ -215,8 +236,9 @@
     "artistaId": "69a9c889620c5d305ced7822",
     "isDeleted": false,
     "createdAt": "2026-03-05T18:16:40.643Z",
-    "updatedAt": "2026-03-05T18:16:41.264Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b2d361d4706f1a126dae00",
@@ -232,8 +254,9 @@
     "artistaId": "69b2d5b5d4706f1a126daeaf",
     "isDeleted": false,
     "createdAt": "2026-03-12T14:53:21.233Z",
-    "updatedAt": "2026-03-12T15:05:48.118Z",
-    "__v": 0
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
   },
   {
     "_id": "69b5a98b7493e0212d465719",
@@ -249,7 +272,115 @@
     "artistaId": "69b5a7e27493e0212d465676",
     "isDeleted": false,
     "createdAt": "2026-03-14T18:31:39.359Z",
-    "updatedAt": "2026-03-14T18:33:02.790Z",
+    "updatedAt": "2026-04-10T22:13:59.440Z",
+    "__v": 0,
+    "empresaId": "69d97627b41527e3e37013c0"
+  },
+  {
+    "_id": "69da6207233671ea185dd2ab",
+    "username": "Charlie Flores",
+    "email": null,
+    "password": "$2b$10$9vSIvAJ73sswjqlG5PGDguPCIp954J8AXEuJEfdCieRolt8miKG3a",
+    "role": "admin",
+    "permisos": [],
+    "artistaId": null,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "isSuperAdmin": false,
+    "isDeleted": true,
+    "createdAt": "2026-04-11T15:00:23.927Z",
+    "updatedAt": "2026-04-14T23:12:01.617Z",
+    "__v": 0
+  },
+  {
+    "_id": "69da6609c702202a6d88208e",
+    "username": "alfonso",
+    "email": "alfonso@gmail.com",
+    "password": "$2b$10$fcxYzql1Yk58WqIHqfrng.UDSffD/.Mol/21zIZ0Dxnk96KJhHZEW",
+    "role": "admin",
+    "permisos": [],
+    "artistaId": null,
+    "empresaId": "69d97627b41527e3e37013c0",
+    "isSuperAdmin": false,
+    "isDeleted": true,
+    "createdAt": "2026-04-11T15:17:29.920Z",
+    "updatedAt": "2026-04-14T23:12:11.450Z",
+    "__v": 0
+  },
+  {
+    "_id": "69da663ac702202a6d8820a6",
+    "username": "rodrigo",
+    "email": "rodrigo@gmail.com",
+    "password": "$2b$10$RYLxCQJOXrWZttzYR1MYy.IjMbmERm/Ji4aFG1B7B1kDBuu1i8JTW",
+    "role": "admin",
+    "permisos": [],
+    "artistaId": null,
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isSuperAdmin": false,
+    "isDeleted": true,
+    "createdAt": "2026-04-11T15:18:18.409Z",
+    "updatedAt": "2026-04-14T23:02:05.141Z",
+    "__v": 0
+  },
+  {
+    "_id": "69da680e0ded64f4aa05cfae",
+    "username": "manuel",
+    "email": "1234@gmail.com",
+    "password": "$2b$10$JBX4ZXYKMTqEDXCZGJ.tceURNIzeihfTwUTKfEy9q0i5pguJYuuWi",
+    "role": "admin",
+    "permisos": [],
+    "artistaId": null,
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isSuperAdmin": false,
+    "isDeleted": true,
+    "createdAt": "2026-04-11T15:26:06.291Z",
+    "updatedAt": "2026-04-11T15:26:22.508Z",
+    "__v": 0
+  },
+  {
+    "_id": "69da6ee6cdbfd63cdc844637",
+    "username": "charlie",
+    "email": null,
+    "password": "$2b$10$peepmnte/uXUems5Tt.Sm.wjuxXdwoFdRnB8sSAJ1twwcVl.GFIc6",
+    "role": "admin",
+    "permisos": [
+      "dashboard",
+      "agenda",
+      "flujo-trabajo",
+      "cotizaciones",
+      "pagos",
+      "gestion-usuarios",
+      "gestion-artistas",
+      "gestion-servicios"
+    ],
+    "artistaId": null,
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isSuperAdmin": false,
+    "isDeleted": false,
+    "createdAt": "2026-04-11T15:55:18.985Z",
+    "updatedAt": "2026-04-25T20:56:37.331Z",
+    "__v": 0,
+    "refreshToken": "0f1e00b4c03a02efab028068dbe504e9fcb6d925b311eaa1ae1396ce786ee764",
+    "refreshTokenExpires": "2026-05-02T20:56:37.328Z"
+  },
+  {
+    "_id": "69dec365becda27a606a37b5",
+    "username": "JOEL",
+    "email": null,
+    "password": "$2b$10$vdMTOnBx4Rdvc1/qeyzenOD2V.KgBS30KTRJW0z1j6foFmYQmMVVC",
+    "role": "ingeniero",
+    "permisos": [
+      "agenda",
+      "flujo-trabajo",
+      "cotizaciones",
+      "pagos",
+      "gestion-artistas"
+    ],
+    "artistaId": null,
+    "empresaId": "69d990ffc2eca55d74f47def",
+    "isSuperAdmin": false,
+    "isDeleted": true,
+    "createdAt": "2026-04-14T22:44:53.692Z",
+    "updatedAt": "2026-04-14T23:02:08.814Z",
     "__v": 0
   }
 ]
