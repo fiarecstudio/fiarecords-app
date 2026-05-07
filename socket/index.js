@@ -1,0 +1,258 @@
+const { Server } = require('socket.io');
+
+/**
+ * Socket.io Initialization Module
+ * FASE 1: Configuración base del servidor WebSocket
+ * 
+ * Inicializa Socket.io con CORS, autenticación, y manejo de namespaces.
+ * Preparado para escalar con Redis Adapter en fases posteriores.
+ */
+
+let io = null;
+let chatNamespace = null;
+
+/**
+ * Inicializa Socket.io con el servidor HTTP
+ * @param {http.Server} httpServer - Servidor HTTP de Express
+ * @returns {Server} Instancia de Socket.io
+ */
+const initializeSocket = (httpServer) => {
+    try {
+        // Configuración de Socket.io
+        io = new Server(httpServer, {
+            cors: {
+                origin: process.env.FRONTEND_URL || "*",
+                methods: ["GET", "POST"],
+                credentials: true
+            },
+            // Configuración para reconexión automática
+            pingTimeout: 60000,      // 60 segundos sin respuesta = desconectado
+            pingInterval: 25000,     // Ping cada 25 segundos
+            // Permitir transportes websocket y polling (fallback)
+            transports: ['websocket', 'polling']
+        });
+
+        console.log('✅ Socket.io inicializado');
+
+        // FASE 2: Aquí se agregará Redis Adapter para escalabilidad
+        // if (process.env.REDIS_URL) {
+        //     const { createAdapter } = require('@socket.io/redis-adapter');
+        //     const { createClient } = require('redis');
+        //     const pubClient = createClient({ url: process.env.REDIS_URL });
+        //     const subClient = pubClient.duplicate();
+        //     io.adapter(createAdapter(pubClient, subClient));
+        // }
+
+        // Namespace específico para chat
+        // Permite separar lógica y escalar independientemente
+        chatNamespace = io.of('/chat');
+        
+        // Middleware de autenticación JWT
+        // Se ejecuta para CADA conexión al namespace /chat
+        chatNamespace.use(require('./middleware/auth'));
+        
+        // Handler principal de conexiones
+        chatNamespace.on('connection', (socket) => {
+            console.log(`🔌 Nueva conexión Socket: ${socket.user.username} (${socket.id})`);
+            
+            // FASE 2: Handlers base
+            require('./handlers/connection')(socket, chatNamespace);
+            require('./handlers/rooms')(socket, chatNamespace);
+            require('./handlers/messages')(socket, chatNamespace);
+            
+            // FASE 4: Handlers avanzados
+            require('./handlers/presence')(socket, chatNamespace);
+            require('./handlers/support')(socket, chatNamespace);
+        });
+
+        // Manejo de errores a nivel de namespace
+        chatNamespace.on('error', (error) => {
+            console.error('[Socket.io Namespace Error]', error);
+        });
+
+        console.log('✅ Namespace /chat configurado con autenticación JWT');
+        
+        // Namespace público para soporte (visitantes sin auth)
+        const supportNamespace = io.of('/support');
+        const mongoose = require('mongoose');
+        
+        supportNamespace.on('connection', (socket) => {
+            console.log(`🔌 Visitante conectado a soporte: ${socket.id}`);
+            
+            // Extraer datos de autenticación del handshake
+            const { ticketId, empresaId, visitorName, visitorEmail } = socket.handshake.auth;
+            
+            // Generar visitorId único (ObjectId válido) para este visitante
+            const visitorId = new mongoose.Types.ObjectId();
+            
+            // Guardar info en el socket para uso posterior
+            socket.visitorId = visitorId;
+            socket.ticketId = ticketId;
+            socket.empresaId = empresaId;
+            socket.visitorName = visitorName;
+            socket.visitorEmail = visitorEmail;
+            
+            console.log(`[Support] Visitante asignado ID: ${visitorId}`);
+            
+            // Unir a la sala de la conversación si tiene ticketId
+            if (ticketId) {
+                const roomName = `conversation:${ticketId}`;
+                socket.join(roomName);
+                console.log(`[Support] Visitante unido a sala: ${roomName}`);
+                
+                // Notificar a la sala que el visitante está online
+                supportNamespace.to(roomName).emit('visitor:online', {
+                    ticketId,
+                    visitorName,
+                    timestamp: new Date()
+                });
+            }
+            
+            // Handler para enviar mensaje
+            socket.on('message:send', async (data) => {
+                try {
+                    const { ticketId, content } = data;
+                    const Message = require('../models/Message');
+                    const Conversation = require('../models/Conversation');
+
+                    // Verificar que el ticket existe y pertenece a la empresa
+                    const conversation = await Conversation.findOne({
+                        _id: ticketId,
+                        empresaId: socket.empresaId,
+                        isSupportTicket: true
+                    });
+                    
+                    if (!conversation) {
+                        socket.emit('error', { message: 'Ticket no encontrado' });
+                        return;
+                    }
+                    
+                    // Crear mensaje usando visitorId como senderId
+                    const message = new Message({
+                        empresaId: socket.empresaId,
+                        conversationId: ticketId,
+                        senderId: socket.visitorId, // ObjectId válido del visitante
+                        senderName: socket.visitorName,
+                        senderRole: 'member',
+                        content,
+                        type: 'text',
+                        isSystemMessage: false
+                    });
+                    
+                    await message.save();
+                    
+                    // Actualizar último mensaje
+                    await Conversation.updateOne(
+                        { _id: ticketId },
+                        {
+                            lastMessage: {
+                                content,
+                                senderId: socket.visitorId,
+                                senderName: socket.visitorName,
+                                sentAt: new Date()
+                            },
+                            updatedAt: new Date()
+                        }
+                    );
+                    
+                    // Emitir a la sala
+                    const roomName = `conversation:${ticketId}`;
+                    const messageData = {
+                        _id: message._id,
+                        conversationId: ticketId,
+                        senderId: socket.visitorId,
+                        senderName: socket.visitorName,
+                        senderRole: 'member',
+                        content,
+                        type: 'text',
+                        createdAt: message.createdAt
+                    };
+                    
+                    // Emitir a todos en la sala (incluyendo admins en /chat)
+                    io.of('/chat').to(roomName).emit('message:received', { message: messageData });
+                    io.of('/support').to(roomName).emit('message:received', { message: messageData });
+                    
+                    // También emitir a la sala de empresa para que todos los agentes reciban el mensaje
+                    const empresaRoom = `empresa:${socket.empresaId}`;
+                    io.of('/chat').to(empresaRoom).emit('conversation:updated', {
+                        conversationId: ticketId,
+                        lastMessage: {
+                            content,
+                            senderName: socket.visitorName,
+                            sentAt: new Date()
+                        },
+                        type: 'support',
+                        unreadIncrement: 1
+                    });
+                    
+                    console.log(`[Support] Mensaje enviado por visitante ${socket.visitorName} al ticket ${ticketId}`);
+                    
+                } catch (error) {
+                    console.error('[Support] Error enviando mensaje:', error);
+                    socket.emit('error', { message: 'Error enviando mensaje' });
+                }
+            });
+            
+            // Handler para unirse a una sala de ticket
+            socket.on('ticket:join', async (data) => {
+                const { ticketId } = data;
+                if (ticketId) {
+                    const roomName = `conversation:${ticketId}`;
+                    socket.join(roomName);
+                    socket.ticketId = ticketId;
+                    console.log(`[Support] Visitante unido manualmente a: ${roomName}`);
+                    socket.emit('ticket:joined', { ticketId, success: true });
+                }
+            });
+            
+            socket.on('disconnect', () => {
+                console.log(`🔌 Visitante desconectado de soporte: ${socket.id}`);
+                if (socket.ticketId) {
+                    supportNamespace.to(`conversation:${socket.ticketId}`).emit('visitor:offline', {
+                        ticketId: socket.ticketId,
+                        visitorName: socket.visitorName,
+                        timestamp: new Date()
+                    });
+                }
+            });
+        });
+        
+        console.log('✅ Namespace /support configurado (público para visitantes)');
+        
+        return io;
+        
+    } catch (error) {
+        console.error('❌ Error inicializando Socket.io:', error);
+        throw error;
+    }
+};
+
+/**
+ * Obtiene la instancia de Socket.io
+ * @returns {Server} Instancia de Socket.io
+ * @throws {Error} Si Socket.io no ha sido inicializado
+ */
+const getIO = () => {
+    if (!io) {
+        throw new Error('Socket.io no ha sido inicializado. Llama initializeSocket primero.');
+    }
+    return io;
+};
+
+/**
+ * Obtiene el namespace de chat
+ * @returns {Namespace} Namespace /chat
+ * @throws {Error} Si no ha sido inicializado
+ */
+const getChatNamespace = () => {
+    if (!chatNamespace) {
+        throw new Error('Chat namespace no ha sido inicializado.');
+    }
+    return chatNamespace;
+};
+
+module.exports = {
+    initializeSocket,
+    getIO,
+    getChatNamespace
+};

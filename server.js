@@ -9,6 +9,7 @@ const path = require('path');
 const mongoSanitize = require('express-mongo-sanitize');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
+const { initializeSocket } = require('./socket');
 
 let limiters = {};
 try {
@@ -146,14 +147,30 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/deudas', require('./routes/deudas'));
 app.use('/api/backups', require('./routes/backups'));
 app.use('/api/empresas', require('./routes/empresas')); // FASE 4: Gestión de Empresas (Super Admin)
+app.use('/api/support/public', require('./routes/supportPublic')); // FASE 5: Soporte público (sin auth)
 app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google Drive
+app.use('/api/chat', require('./routes/chat')); // FASE 2: Sistema de Chat
 
 // --- 4. Servir Archivos Estáticos ---
 app.use(express.static(path.join(__dirname)));
 
-// --- 5. Ruta Catch-All ---
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'index.html'));
+// --- 5. Ruta Catch-All (SPA) ---
+// Usar middleware en lugar de app.get para evitar problemas con Express 5
+app.use((req, res, next) => {
+  // Si es una ruta de API, devolver 404 JSON
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ 
+      success: false, 
+      error: 'API endpoint no encontrado: ' + req.path 
+    });
+  }
+  
+  // Para rutas de frontend (GET), servir el SPA
+  if (req.method === 'GET') {
+    return res.sendFile(path.resolve(__dirname, 'index.html'));
+  }
+  
+  next();
 });
 
 // --- 6. Conexión a Base de Datos y Servidor ---
@@ -178,6 +195,10 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
     server = app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
     });
+    
+    // --- INICIALIZAR SOCKET.IO ---
+    initializeSocket(server);
+    // -----------------------------
   })
   .catch((err) => {
     console.error('❌ Error fatal de conexión a MongoDB:', err.message);
@@ -195,7 +216,32 @@ const gracefulShutdown = async (signal) => {
   }, 10000);
   
   try {
-    // Cerrar servidor HTTP primero (dejar de aceptar nuevas conexiones)
+    // 1. Desconectar todos los sockets forzosamente
+    const { getIO } = require('./socket');
+    try {
+      const io = getIO();
+      console.log('[Shutdown] Desconectando sockets...');
+      io.disconnectSockets(true); // true = forzar cierre
+      console.log('✅ Sockets desconectados');
+    } catch (e) {
+      // Socket.io podría no estar inicializado
+      console.log('[Shutdown] Socket.io no estaba inicializado');
+    }
+    
+    // 2. Cerrar servidor Socket.io
+    try {
+      const io = getIO();
+      await new Promise((resolve) => {
+        io.close(() => {
+          console.log('✅ Servidor Socket.io cerrado');
+          resolve();
+        });
+      });
+    } catch (e) {
+      // Ignorar si ya estaba cerrado
+    }
+    
+    // 3. Cerrar servidor HTTP (dejar de aceptar nuevas conexiones)
     if (server) {
       await new Promise((resolve) => {
         server.close(() => {
@@ -205,11 +251,12 @@ const gracefulShutdown = async (signal) => {
       });
     }
     
-    // Cerrar conexión MongoDB
-    await mongoose.connection.close();
+    // 4. Cerrar conexión MongoDB
+    await mongoose.connection.close(false);
     console.log('✅ Conexión MongoDB cerrada');
     
     clearTimeout(forceExit);
+    console.log('✅ Shutdown completado exitosamente');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error durante graceful shutdown:', error.message);

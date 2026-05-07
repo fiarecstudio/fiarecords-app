@@ -34,8 +34,17 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener("fetch", event => {
+  // Ignorar requests de extensiones de Chrome (causan errores)
+  if (event.request.url.startsWith('chrome-extension://')) return;
+  if (event.request.url.startsWith('moz-extension://')) return;
+  
   // Solo cacheamos GET. El navegador prohíbe cache.put() con POST/PUT/DELETE.
   if (event.request.method !== 'GET') return;
+  
+  // Solo cacheamos http/https (no chrome-extension, etc.)
+  const url = new URL(event.request.url);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  
   // Estrategia: Network First (Red primero, si falla, usa Caché)
   event.respondWith(
     fetch(event.request)
