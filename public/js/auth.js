@@ -46,6 +46,9 @@
     function getAplicarIdentidadVisual() {
         return window.aplicarIdentidadVisual || (() => Promise.resolve());
     }
+    
+    // Flag global para prevenir doble ejecución
+    let _aplicandoIdentidad = false;
 
     function getMostrarSeccion() {
         return window.mostrarSeccion || (() => {});
@@ -68,12 +71,12 @@
 
         // Guardar accessToken como 'token' para compatibilidad
         localStorage.setItem('token', accessToken);
-        console.log('[Auth] Access Token guardado');
+        if (window.Logger) Logger.debug('Auth', 'Access Token guardado');
 
         // Guardar refreshToken si existe
         if (refreshToken) {
             localStorage.setItem('refreshToken', refreshToken);
-            console.log('[Auth] Refresh Token guardado');
+            if (window.Logger) Logger.debug('Auth', 'Refresh Token guardado');
         }
 
         // Extraer y guardar empresaId del payload
@@ -81,7 +84,7 @@
             const payload = JSON.parse(atob(accessToken.split('.')[1]));
             if (payload.empresaId) {
                 localStorage.setItem('empresaActiva', payload.empresaId);
-                console.log('[Auth] empresaActiva guardada:', payload.empresaId);
+                if (window.Logger) Logger.debug('Auth', 'empresaActiva guardada:', payload.empresaId);
             }
             return payload;
         } catch (e) {
@@ -133,7 +136,7 @@
         localStorage.removeItem('fia_identity_cache');
         localStorage.removeItem('fia_identity_timestamp');
         localStorage.removeItem('fia_logo_cache');
-        console.log('[Auth] Sesión limpiada completamente');
+        if (window.Logger) Logger.debug('Auth', 'Sesión limpiada');
     }
 
     /**
@@ -202,10 +205,15 @@
         document.body.style.opacity = '1';
         document.body.style.visibility = 'visible';
 
-        // Aplicar identidad visual (mostrar FIA RECORDS por defecto)
-        getAplicarIdentidadVisual()(true);
+        // Aplicar identidad visual (mostrar FIA RECORDS por defecto) - con protección de doble ejecución
+        if (!_aplicandoIdentidad) {
+            _aplicandoIdentidad = true;
+            getAplicarIdentidadVisual()(true).finally(() => {
+                _aplicandoIdentidad = false;
+            });
+        }
 
-        console.log('[Auth] Mostrando pantalla de login');
+        if (window.Logger) Logger.debug('Auth', 'Mostrando pantalla de login');
     }
 
     /**
@@ -249,10 +257,20 @@
                 throw new Error('Error al procesar el token de acceso');
             }
 
-            console.log('[Auth] Login exitoso. Usuario:', payload.username);
+            if (window.Logger) Logger.info('Auth', 'Login exitoso:', payload.username);
 
-            // Aplicar identidad visual inmediatamente
-            await getAplicarIdentidadVisual()(true);
+            // Aplicar identidad visual inmediatamente (con protección)
+            if (!_aplicandoIdentidad) {
+                _aplicandoIdentidad = true;
+                await getAplicarIdentidadVisual()(true).finally(() => {
+                    _aplicandoIdentidad = false;
+                });
+            }
+            
+            // Inicializar chat después del login
+            if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
+                setTimeout(() => window.chatInit.autoInit(), 500);
+            }
 
             return payload;
 
@@ -296,7 +314,7 @@
 
             const payload = guardarTokens(accessToken, refreshToken);
 
-            console.log('[Auth] Registro exitoso. Usuario:', payload?.username || userData.username);
+            if (window.Logger) Logger.info('Auth', 'Registro exitoso:', payload?.username || userData.username);
 
             return payload;
 
@@ -321,7 +339,7 @@
                             'Content-Type': 'application/json'
                         }
                     });
-                    console.log('[Auth] Logout notificado al servidor');
+                    if (window.Logger) Logger.debug('Auth', 'Logout notificado al servidor');
                 }
             } catch (e) {
                 console.warn('[Auth] Error notificando logout al servidor:', e);
@@ -334,8 +352,13 @@
         // Mostrar login
         showLogin();
 
+        // Reiniciar chat como visitante
+        if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
+            setTimeout(() => window.chatInit.autoInit(), 500);
+        }
+
         getShowToast()('Sesión cerrada correctamente', 'info');
-        console.log('[Auth] Logout completado');
+        if (window.Logger) Logger.debug('Auth', 'Logout completado');
     }
 
     // ==================================================================
@@ -414,7 +437,7 @@
         }
 
         loginForm.dataset.authListenersAttached = 'true';
-        console.log('[Auth] Listeners de autenticación configurados');
+        if (window.Logger) Logger.debug('Auth', 'Listeners configurados');
     }
 
     // ==================================================================
@@ -445,5 +468,5 @@
     window.logout = logout;
     window.setupAuthListeners = setupAuthListeners;
 
-    console.log('[auth.js] Módulo de autenticación cargado correctamente');
+    if (window.Logger) Logger.debug('auth.js', 'Módulo cargado');
 })();

@@ -606,6 +606,6 @@
 
     // Exportar al espacio global
     window.ChatManager = ChatManager;
-    console.log('[ChatManager] Clase cargada correctamente');
+    if (window.Logger) Logger.debug('ChatManager', 'Clase cargada');
 
 })();

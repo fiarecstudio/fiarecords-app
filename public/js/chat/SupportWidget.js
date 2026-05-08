@@ -927,6 +927,6 @@
 
     // Exportar
     window.SupportWidget = SupportWidget;
-    console.log('[SupportWidget] Clase cargada correctamente');
+    if (window.Logger) Logger.debug('SupportWidget', 'Clase cargada');
 
 })();

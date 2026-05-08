@@ -1186,6 +1186,6 @@
 
     // Exportar
     window.ChatWidget = ChatWidget;
-    console.log('[ChatWidget] Clase cargada correctamente');
+    if (window.Logger) Logger.debug('ChatWidget', 'Clase cargada');
 
 })();

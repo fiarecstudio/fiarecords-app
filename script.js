@@ -2944,9 +2944,18 @@ Fecha de firma: {{FECHA}}`;
         localStorage.removeItem('fia_logo_cache');         // Limpiar caché de logo
         
         history.pushState("", document.title, window.location.pathname);
-        DOMElements.loginContainer.style.display = 'flex'; 
+        
         DOMElements.appWrapper.style.display = 'none';
-        toggleAuth('login');
+        DOMElements.loginContainer.style.display = 'flex';
+        
+        // Reiniciar chat como visitante
+        if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
+            setTimeout(() => window.chatInit.autoInit(), 500);
+        }
+        
+        // Resetear formulario
+        document.getElementById('login-form').reset();
+        
         document.body.style.opacity = '1'; document.body.style.visibility = 'visible';
         // Forzar 'all' para que siempre muestre FIA RECORDS en login
         aplicarIdentidadVisual(true);
@@ -3059,6 +3068,11 @@ Fecha de firma: {{FECHA}}`;
                 
                 // PASO 3: Mostrar app
                 await showApp(payload);
+                
+                // PASO 4: Inicializar chat después del login
+                if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
+                    setTimeout(() => window.chatInit.autoInit(), 500);
+                }
             } catch (error) { 
                 document.getElementById('login-error').textContent = error.message; 
             } finally { 
@@ -4666,6 +4680,11 @@ Fecha de firma: {{FECHA}}`;
                 await aplicarIdentidadVisual(false);
                 // PASO 4: Mostrar app
                 await showApp(payload);
+                
+                // PASO 5: Inicializar chat
+                if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
+                    setTimeout(() => window.chatInit.autoInit(), 500);
+                }
             } catch (e) { 
                 console.error('[Init] Error en inicialización:', e);
                 showLogin(); 

@@ -84,7 +84,7 @@
      * Inicializa el chat de soporte para visitantes (no autenticados) o clientes
      */
     window.initSupportWidget = async function() {
-        console.log('[ChatInit] Inicializando SupportWidget...');
+        Logger.debug('ChatInit', 'Inicializando SupportWidget...');
         
         // Limpiar widget anterior si existe
         if (window.supportWidget?.elements?.container) {
@@ -96,7 +96,7 @@
         // para evitar que interfieran con la detección de empresa
         const token = localStorage.getItem('token');
         if (!token) {
-            console.log('[ChatInit] Visitante detectado, limpiando datos de sesiones previas');
+            Logger.debug('ChatInit', 'Visitante detectado, limpiando datos de sesiones previas');
             localStorage.removeItem('empresaId');
             localStorage.removeItem('currentEmpresaId');
             // NOTA: No limpiamos support_empresa_id para permitir recordar selección previa
@@ -126,11 +126,11 @@
         
         // Si aún no hay empresaId, mostrará selector de empresas
         if (!empresaId) {
-            console.log('[ChatInit] Sin empresaId, SupportWidget mostrará selector de empresas');
+            Logger.debug('ChatInit', 'Sin empresaId, SupportWidget mostrará selector de empresas');
         }
         
         try {
-            console.log('[ChatInit] Inicializando SupportWidget para empresa:', empresaId);
+            Logger.debug('ChatInit', 'Inicializando SupportWidget para empresa:', empresaId);
             
             supportWidget = new SupportWidget({
                 empresaId: empresaId,
@@ -140,11 +140,11 @@
             await supportWidget.init();
             window.supportWidget = supportWidget;
             
-            console.log('[ChatInit] ✅ SupportWidget inicializado');
+            Logger.info('ChatInit', '✅ SupportWidget inicializado');
             return true;
             
         } catch (error) {
-            console.error('[ChatInit] Error inicializando SupportWidget:', error);
+            Logger.error('ChatInit', 'Error inicializando SupportWidget:', error);
             return false;
         }
     };
@@ -156,7 +156,7 @@
         // Verificar que el usuario esté autenticado
         const token = localStorage.getItem('token');
         if (!token) {
-            console.log('[ChatInit] Usuario no autenticado, inicializando SupportWidget...');
+            Logger.debug('ChatInit', 'Usuario no autenticado, inicializando SupportWidget...');
             // Inicializar widget de soporte para visitantes
             await window.initSupportWidget();
             return false;
@@ -164,74 +164,73 @@
 
         // Verificar que las clases estén cargadas
         if (typeof ChatManager === 'undefined' || typeof SocketClient === 'undefined') {
-            console.error('[ChatInit] ChatManager o SocketClient no están cargados');
+            Logger.error('ChatInit', 'ChatManager o SocketClient no están cargados');
             return false;
         }
 
         // Si ya está inicializado, no hacer nada
         // NOTA: Usar window.chatManager para detectar reinicios correctamente
-        console.log('[ChatInit] Verificando estado:', {
+        Logger.debug('ChatInit', 'Verificando estado', {
             windowChatManager: !!window.chatManager,
             windowChatManagerState: window.chatManager?.state,
             windowChatManagerInitialized: window.chatManager?.state?.isInitialized,
             localChatManager: !!chatManager
         });
         if (window.chatManager && window.chatManager.state?.isInitialized) {
-            console.log('[ChatInit] Chat ya inicializado (window.chatManager)');
+            Logger.debug('ChatInit', 'Chat ya inicializado');
             return true;
         }
 
         try {
-            console.log('[ChatInit] Inicializando chat...');
+            Logger.debug('ChatInit', 'Inicializando chat...');
 
             // Crear instancia del ChatManager
             chatManager = new ChatManager();
 
             // Registrar callbacks de UI (ejemplos)
             chatManager.on('onConnected', (data) => {
-                console.log('[ChatInit] ✅ Chat conectado:', data);
+                Logger.info('ChatInit', '✅ Chat conectado:', data);
             });
 
             chatManager.on('onDisconnected', (data) => {
-                console.log('[ChatInit] 🔌 Chat desconectado:', data);
+                Logger.info('ChatInit', '🔌 Chat desconectado:', data);
             });
 
             chatManager.on('onMessageReceived', (data) => {
-                console.log('[ChatInit] 📨 Nuevo mensaje:', data.message);
+                Logger.info('ChatInit', '📨 Nuevo mensaje de', data.message.senderName);
                 
                 // Ejemplo: Mostrar notificación simple
                 const message = data.message;
-                console.log(`[ChatInit] De: ${message.senderName}: ${message.content}`);
             });
 
             chatManager.on('onConversationUpdated', (data) => {
-                console.log('[ChatInit] 📝 Conversación actualizada:', data);
+                Logger.debug('ChatInit', '📝 Conversación actualizada:', data);
             });
 
             chatManager.on('onUserOnline', (data) => {
-                console.log('[ChatInit] 🟢 Usuario online:', data.username);
+                Logger.debug('ChatInit', '🟢 Usuario online:', data.username);
             });
 
             chatManager.on('onUserOffline', (data) => {
-                console.log('[ChatInit] 🔴 Usuario offline:', data.username);
+                Logger.debug('ChatInit', '🔴 Usuario offline:', data.username);
             });
 
             chatManager.on('onError', (error) => {
-                console.error('[ChatInit] ❌ Error:', error);
+                Logger.error('ChatInit', '❌ Error:', error);
             });
 
             // Inicializar
             await chatManager.initialize();
 
-            console.log('[ChatInit] ✅ Chat inicializado correctamente');
-            console.log('[ChatInit] Estado:', chatManager.getState());
+            Logger.info('ChatInit', '✅ Chat inicializado correctamente');
+            Logger.debug('ChatInit', 'Estado:', chatManager.getState());
 
             // FASE 4: Inicializar widget de UI si existe
             if (typeof ChatWidget !== 'undefined') {
                 chatWidget = new ChatWidget(chatManager);
                 chatWidget.init();
                 window.chatWidget = chatWidget;
-                console.log('[ChatInit] ✅ ChatWidget inicializado');
+                Logger.info('ChatInit', '✅ ChatWidget inicializado');
             }
 
             // Guardar en variable global para acceso desde consola
@@ -240,7 +239,7 @@
             return true;
 
         } catch (error) {
-            console.error('[ChatInit] Error inicializando chat:', error);
+            Logger.error('ChatInit', 'Error inicializando chat:', error);
             return false;
         }
     };
@@ -427,6 +426,9 @@
         console.log('Total:', conversations.length);
     };
 
+    // Variable para tracking del tipo de sesión actual
+    let currentSessionType = null; // 'authenticated' | 'visitor' | null
+
     /**
      * Auto-inicializar cuando el DOM esté listo
      * Las inicializaciones son independientes - si una falla, la otra puede continuar
@@ -436,57 +438,74 @@
             const token = localStorage.getItem('token');
             const role = getUserRole();
             
-            console.log('[ChatInit] Auto-inicializando... Token:', !!token, 'Rol:', role);
+            // Determinar el tipo de sesión necesaria
+            const requiredSessionType = token ? 'authenticated' : 'visitor';
+            
+            // Si cambió el tipo de sesión, limpiar widget anterior
+            if (currentSessionType && currentSessionType !== requiredSessionType) {
+                Logger.info('ChatInit', `Cambio de sesión: ${currentSessionType} → ${requiredSessionType}, limpiando widget anterior...`);
+                
+                // Limpiar widget anterior
+                if (window.chatWidget?.elements?.container) {
+                    window.chatWidget.elements.container.remove();
+                    window.chatWidget = null;
+                    Logger.debug('ChatInit', 'ChatWidget eliminado');
+                }
+                if (window.supportWidget?.elements?.container) {
+                    window.supportWidget.elements.container.remove();
+                    window.supportWidget = null;
+                    Logger.debug('ChatInit', 'SupportWidget eliminado');
+                }
+                if (window.chatManager?.socketClient) {
+                    window.chatManager.socketClient.disconnect();
+                    window.chatManager = null;
+                    Logger.debug('ChatInit', 'Socket desconectado');
+                }
+            }
+            
+            // Actualizar tipo de sesión actual
+            currentSessionType = requiredSessionType;
             
             if (token && role && ['admin', 'empleado', 'soporte', 'ingeniero', 'diseñador'].includes(role.toLowerCase())) {
                 // Es empleado/admin - usar ChatWidget interno
-                console.log('[ChatInit] Detectado empleado/admin, inicializando Chat...');
+                Logger.debug('ChatInit', 'Detectado empleado/admin, inicializando Chat...');
                 try {
                     await window.initChat();
                 } catch (chatError) {
-                    console.error('[ChatInit] Chat falló:', chatError.message);
+                    Logger.error('ChatInit', 'Chat falló:', chatError.message);
                 }
             } else if (token) {
                 // Es cliente autenticado - usar ChatWidget para ver conversaciones directas
-                console.log('[ChatInit] Detectado cliente autenticado, inicializando Chat...');
-                
-                // Limpiar datos antiguos del SupportWidget para evitar confusiones
-                localStorage.removeItem('support_ticket_id');
-                localStorage.removeItem('support_visitor_name');
-                localStorage.removeItem('support_visitor_email');
-                console.log('[ChatInit] Datos antiguos de SupportWidget limpiados');
-                
+                Logger.debug('ChatInit', 'Detectado cliente autenticado, inicializando Chat...');
+                Logger.debug('ChatInit', 'Detectado visitante, inicializando SupportWidget...');
                 try {
-                    await window.initChat();
-                } catch (error) {
-                    console.error('[ChatInit] Chat falló:', error.message);
-                    // Solo si falla completamente, intentar SupportWidget como fallback
-                    console.log('[ChatInit] Intentando SupportWidget como fallback...');
                     await window.initSupportWidget();
+                } catch (error) {
+                    Logger.error('ChatInit', 'SupportWidget falló:', error.message);
                 }
             } else {
-                // Visitante no autenticado - solo SupportWidget
-                console.log('[ChatInit] Detectado visitante, inicializando SupportWidget...');
+                // No hay token - inicializar SupportWidget para visitantes
+                Logger.debug('ChatInit', 'Sin sesión, inicializando SupportWidget para visitantes...');
                 try {
                     await window.initSupportWidget();
                 } catch (error) {
-                    console.error('[ChatInit] SupportWidget falló:', error.message);
+                    Logger.error('ChatInit', 'SupportWidget falló:', error.message);
                 }
             }
         } catch (error) {
-            console.error('[ChatInit] Error en auto-inicialización:', error);
+            Logger.error('ChatInit', 'Error en auto-inicialización:', error);
         }
     }
     
-    // Ejecutar auto-inicialización
+    // Ejecutar auto-inicialización inmediatamente (sin delay)
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('[ChatInit] DOM listo, esperando antes de inicializar...');
-            setTimeout(autoInit, 2000);
+            Logger.debug('ChatInit', 'DOM listo, ejecutando autoInit...');
+            autoInit();
         });
     } else {
-        console.log('[ChatInit] DOM ya listo, esperando antes de inicializar...');
-        setTimeout(autoInit, 2000);
+        Logger.debug('ChatInit', 'DOM ya listo, ejecutando autoInit...');
+        autoInit();
     }
 
     /**
@@ -496,52 +515,50 @@
     window.restartChat = async function() {
         // Evitar reinicios múltiples simultáneos
         if (isRestarting) {
-            console.log('[ChatInit] Reinicio ya en progreso, ignorando...');
+            Logger.debug('ChatInit', 'Reinicio ya en progreso, ignorando...');
             return;
         }
         
         isRestarting = true;
-        console.log('[ChatInit] 🔄 Reiniciando chat...');
+        Logger.info('ChatInit', '🔄 Reiniciando chat...');
         
         try {
             // Limpiar todo inmediatamente para evitar widgets parpadeando
             if (window.chatWidget?.elements?.container) {
                 window.chatWidget.elements.container.remove();
-                console.log('[ChatInit] ChatWidget eliminado');
+                Logger.debug('ChatInit', 'ChatWidget eliminado');
             }
             if (window.supportWidget?.elements?.container) {
                 window.supportWidget.elements.container.remove();
-                console.log('[ChatInit] SupportWidget eliminado');
+                Logger.debug('ChatInit', 'SupportWidget eliminado');
             }
             if (window.chatManager?.socketClient) {
                 window.chatManager.socketClient.disconnect();
-                console.log('[ChatInit] Socket desconectado');
+                Logger.debug('ChatInit', 'Socket desconectado');
             }
             
             // Reiniciar variables
             window.chatManager = null;
             window.chatWidget = null;
             window.supportWidget = null;
+            currentSessionType = null; // Reset para forzar re-inicialización
             
             // Pequeño delay para permitir que el token se estabilice
             await new Promise(resolve => setTimeout(resolve, 800));
             
             // Re-inicializar
             await autoInit();
-            console.log('[ChatInit] ✅ Chat reiniciado');
+            Logger.info('ChatInit', '✅ Chat reiniciado');
         } finally {
             isRestarting = false;
         }
     };
     
-    // Escuchar cambios de token para reiniciar automáticamente (con debounce)
-    let lastToken = localStorage.getItem('token');
+    // Escuchar cambios de token usando storage event (más eficiente que polling)
     let restartTimeout = null;
-    setInterval(() => {
-        const currentToken = localStorage.getItem('token');
-        if (currentToken !== lastToken) {
-            console.log('[ChatInit] 🔄 Token cambiado detectado');
-            lastToken = currentToken;
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'token') {
+            Logger.info('ChatInit', '🔄 Token cambiado detectado (storage event)');
             
             // Cancelar reinicio anterior si existe
             if (restartTimeout) {
@@ -550,24 +567,19 @@
             
             // Esperar 1 segundo antes de reiniciar (debounce)
             restartTimeout = setTimeout(() => {
-                console.log('[ChatInit] Ejecutando reinicio después de debounce...');
+                Logger.debug('ChatInit', 'Ejecutando reinicio después de debounce...');
                 window.restartChat();
             }, 1000);
         }
-    }, 2000); // Verificar cada 2 segundos
+    });
     
-    console.log('[ChatInit] ✅ FASE 5: Script cargado. Funciones disponibles:');
-    console.log('- initChat() - Inicializar chat manualmente');
-    console.log('- initSupportWidget() - Inicializar widget de soporte (visitantes)');
-    console.log('- restartChat() - 🆕 Reiniciar chat (al cambiar usuario)');
-    console.log('- testChatConnection() - Probar conexión');
-    console.log('- testSendMessage(convId, text) - Enviar mensaje de prueba');
-    console.log('- createDirectChat(userId) - Crear chat 1:1');
-    console.log('- createTestConversation() - 🆕 Crear conversación de prueba AUTO');
-    console.log('- showChatStatus() - Ver estado');
-    console.log('- listConversations() - Listar conversaciones');
-    console.log('- chatWidget.toggle() - Abrir/cerrar widget UI');
-    console.log('%c👉 Para probar: ejecuta createTestConversation() en consola', 'color: #6366f1; font-weight: bold;');
-    console.log('FASES: 1✅ 2✅ 3✅ 4✅ 5✅ - Sistema de chat completo + Soporte');
+    // FASE 5: Sistema de chat completo cargado
+    Logger.debug('ChatInit', '✅ FASE 5: Script cargado');
+    
+    // Exportar API pública
+    window.chatInit = {
+        autoInit: autoInit,
+        restartChat: window.restartChat
+    };
 
 })();

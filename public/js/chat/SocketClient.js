@@ -307,6 +307,6 @@
 
     // Exportar al espacio global
     window.SocketClient = SocketClient;
-    console.log('[SocketClient] Clase cargada correctamente');
+    if (window.Logger) Logger.debug('SocketClient', 'Clase cargada');
 
 })();

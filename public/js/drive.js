@@ -795,6 +795,6 @@
         startGoogleLibsCheck();
     }
 
-    console.log('[DriveManager] Módulo cargado y listo');
+    if (window.Logger) Logger.debug('drive.js', 'Módulo cargado');
 
 })();

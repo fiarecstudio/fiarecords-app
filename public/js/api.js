@@ -250,6 +250,6 @@
     window.fetchAPI = fetchAPI;
     window.fetchPublic = fetchPublic;
 
-    // Logs de inicialización
-    console.log('[api.js] Módulo de API cargado correctamente');
+    // Logs de inicialización (solo en desarrollo)
+    if (window.Logger) Logger.debug('api.js', 'Módulo de API cargado');
 })();
