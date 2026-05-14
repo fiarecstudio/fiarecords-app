@@ -281,7 +281,7 @@ class ProyectoService {
             ...filtroUsuario,
             estatus: 'Cotizacion'
         });
-        return await Proyecto.find(filtro).populate('artista');
+        return await Proyecto.find(filtro).populate('artista').sort({ createdAt: -1 });
     }
     
     /**
@@ -410,7 +410,9 @@ class ProyectoService {
         }
         
         // Admin/empleado pueden actualizar campos permitidos
-        const camposPermitidos = ['firmaCliente', 'detallesContrato', 'detallesDistribucion'];
+        const camposPermitidos = ['firmaCliente', 'detallesContrato', 'detallesDistribucion',
+                                  'items', 'total', 'descuento', 'nombreProyecto',
+                                  'esAlbum', 'esPlanMensual', 'serviciosPorMes', 'duracionMeses'];
         camposPermitidos.forEach(campo => {
             if (datos[campo] !== undefined) {
                 proyecto[campo] = datos[campo];

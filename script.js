@@ -1111,36 +1111,58 @@ let proyectoIdEnEdicion = null;
 
         // CAMBIO: Solo resetear si NO hay un ID en edición
         if (!proyectoIdEnEdicion) {
-            proyectoActual = {}; 
-            mostrarProyectoActual(); 
+            proyectoActual = {};
+            mostrarProyectoActual();
             document.getElementById('formProyecto').reset();
             if (document.getElementById('camposPlanMensual')) {
                 document.getElementById('camposPlanMensual').style.display = 'none';
+            }
+
+            // Restaurar texto original de botones
+            const btnGenerarCotizacion = document.getElementById('btnGenerarCotizacion');
+            const btnEnviarAFlujo = document.getElementById('btnEnviarAFlujo');
+            if (btnGenerarCotizacion) {
+                btnGenerarCotizacion.innerHTML = '<i class="bi bi-file-text"></i> Solo Cotizar';
+            }
+            if (btnEnviarAFlujo) {
+                btnEnviarAFlujo.innerHTML = '<i class="bi bi-check-circle"></i> Agendar al Estudio';
             }
         }
     }
 
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
-    function quitarDeProyecto(id) { delete proyectoActual[id]; mostrarProyectoActual(); }
-    function mostrarProyectoActual() { 
-        const lista = document.getElementById('listaProyectoActual'); 
-        let subtotal = 0; 
-        lista.innerHTML = Object.values(proyectoActual).map(item => { const itemTotal = item.precioUnitario * item.unidades; subtotal += itemTotal; return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`; }).join(''); 
-        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0; 
-        
+    function quitarDeProyecto(id) {
+        delete proyectoActual[id];
+        mostrarProyectoActual();
+    }
+    function mostrarProyectoActual() {
+        const lista = document.getElementById('listaProyectoActual');
+        if (!lista) {
+            return;
+        }
+
+        let subtotal = 0;
+        lista.innerHTML = Object.values(proyectoActual).map(item => {
+            const itemTotal = item.precioUnitario * item.unidades;
+            subtotal += itemTotal;
+            return `<li class="list-group-item d-flex justify-content-between align-items-center"><span>${item.unidades}x ${escapeHTML(item.nombre)}</span><span>$${itemTotal.toFixed(2)} <button class="btn btn-sm btn-outline-danger ms-2" style="padding:0.1rem 0.4rem;" onclick="app.quitarDeProyecto('${item.id}')"><i class="bi bi-x-lg"></i></button></span></li>`;
+        }).join('');
+
+        const descuento = parseFloat(document.getElementById('proyectoDescuento').value) || 0;
+
         // --- LÓGICA VISUAL DEL PLAN MENSUAL ---
         const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
         let total = subtotal - descuento;
-        
+
         if (esPlanMensual) {
             const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
             const duracionMeses = parseInt(document.getElementById('duracionMeses')?.value) || 1;
-            
+
             // Lógica para mostrar desglose...
             const subtotalMensual = subtotal * serviciosPorMes;
             const totalConPlan = subtotalMensual * duracionMeses - descuento;
             total = Math.max(0, totalConPlan);
-            
+
             // Opcional: Mostrar información adicional en la UI
             const infoPlan = document.createElement('div');
             infoPlan.className = 'alert alert-info mt-2 small';
@@ -1151,11 +1173,11 @@ let proyectoIdEnEdicion = null;
                 • Subtotal mensual: $${subtotalMensual.toFixed(2)}<br>
                 • Total del contrato: $${total.toFixed(2)}
             `;
-            
+
             // Eliminar información anterior si existe
             const infoAnterior = lista.parentNode.querySelector('.alert-info');
             if (infoAnterior) infoAnterior.remove();
-            
+
             // Agregar nueva información
             lista.parentNode.insertBefore(infoPlan, lista.nextSibling);
         } else {
@@ -1163,8 +1185,11 @@ let proyectoIdEnEdicion = null;
             const infoPlan = lista.parentNode.querySelector('.alert-info');
             if (infoPlan) infoPlan.remove();
         }
-        
-        document.getElementById('totalAPagar').textContent = `$${total.toFixed(2)}`; 
+
+        const totalAPagar = document.getElementById('totalAPagar');
+        if (totalAPagar) {
+            totalAPagar.textContent = `$${total.toFixed(2)}`;
+        }
     }
 
     async function guardarProyecto(procesoDestino) {
@@ -1197,7 +1222,7 @@ let proyectoIdEnEdicion = null;
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
 
         const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
-        
+
         // --- LÓGICA DE PLAN MENSUAL ---
         const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
         const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
@@ -1239,15 +1264,15 @@ let proyectoIdEnEdicion = null;
             empresaId: empresaActiva
         };
 
-        try { 
+        try {
             const url = proyectoIdEnEdicion ? `/api/proyectos/${proyectoIdEnEdicion}` : '/api/proyectos';
             const metodo = proyectoIdEnEdicion ? 'PUT' : 'POST';
             // FASE 4: Asegurar que se envíe el header X-Empresa-Id
-            const res = await fetchAPI(url, { 
-                method: metodo, 
+            const res = await fetchAPI(url, {
+                method: metodo,
                 body: JSON.stringify(body),
                 headers: { 'X-Empresa-Id': empresaActiva }
-            }); 
+            });
             proyectoIdEnEdicion = null; // Resetear después de guardar
             return res;
         } catch (error) { 
@@ -1256,7 +1281,15 @@ let proyectoIdEnEdicion = null;
         }
     }
 
-    async function generarCotizacion() { const nuevoProyecto = await guardarProyecto('Cotizacion'); if (nuevoProyecto) { showToast('Cotización guardada.', 'success'); await generarCotizacionPDF(nuevoProyecto._id || nuevoProyecto); cargarOpcionesParaProyecto(); mostrarSeccion('cotizaciones'); } }
+    async function generarCotizacion() {
+        const nuevoProyecto = await guardarProyecto('Cotizacion');
+        if (nuevoProyecto) {
+            showToast('Cotización guardada.', 'success');
+            await generarCotizacionPDF(nuevoProyecto);
+            cargarOpcionesParaProyecto();
+            mostrarSeccion('cotizaciones');
+        }
+    }
     
     async function enviarAFlujoDirecto() { 
         // FASE 4: Validar empresa específica
@@ -3579,16 +3612,16 @@ Fecha de firma: {{FECHA}}`;
         `;
     }
 
-    async function cargarCotizaciones() { 
-        const tablaBody = document.getElementById('tablaCotizacionesBody'); 
-        tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`; 
-        try { 
-            cotizacionesCacheadas = await fetchAPI('/api/proyectos/cotizaciones'); 
+    async function cargarCotizaciones() {
+        const tablaBody = document.getElementById('tablaCotizacionesBody');
+        tablaBody.innerHTML = `<tr><td colspan="4">Cargando cotizaciones...</td></tr>`;
+        try {
+            cotizacionesCacheadas = await fetchAPI('/api/proyectos/cotizaciones');
             tablePagination.cotizaciones.page = 1;
             window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
-        } catch (e) { 
-            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`; 
-        } 
+        } catch (e) {
+            tablaBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar.</td></tr>`;
+        }
     }
     
     async function cargarPapelera() {
@@ -5051,6 +5084,16 @@ Fecha de firma: {{FECHA}}`;
             document.getElementById('duracionMeses').value = proyecto.duracionMeses || 1;
         }
 
+        // 7. Cambiar texto de botones para modo edición
+        const btnGenerarCotizacion = document.getElementById('btnGenerarCotizacion');
+        const btnEnviarAFlujo = document.getElementById('btnEnviarAFlujo');
+        if (btnGenerarCotizacion) {
+            btnGenerarCotizacion.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Actualizar Cotización';
+        }
+        if (btnEnviarAFlujo) {
+            btnEnviarAFlujo.innerHTML = '<i class="bi bi-check-circle"></i> Actualizar y Agendar';
+        }
+
         mostrarProyectoActual();
         showToast('Cotización cargada para editar', 'info');
     }
@@ -5247,6 +5290,7 @@ Fecha de firma: {{FECHA}}`;
         generarContratoPDF,
         abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
+        editarCotizacion: cargarCotizacionParaEditar,
         cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
         changeBackupPage, renderBackupsPaginated, renderBackupsDrivePaginated,
         loadInitialConfig, cargarConfiguracion,

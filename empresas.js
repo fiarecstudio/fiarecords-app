@@ -119,8 +119,6 @@ async function cargarEmpresasSelector() {
             if (emp._id === selected) option.selected = true;
             selector.appendChild(option);
         });
-        
-        console.log('[EmpresaContext] Selector cargado con', empresas.length, 'empresas');
     } catch (e) {
         console.error('[EmpresaContext] Error cargando empresas:', e);
     }
@@ -134,8 +132,6 @@ async function cambiarEmpresaContexto(empresaId) {
     // Actualizar empresaActiva para sincronización
     const empresaFinalId = (empresaId && empresaId !== '') ? empresaId : 'all';
     localStorage.setItem('empresaActiva', empresaFinalId);
-    
-    console.log('[EmpresaContext] Cambiando contexto a:', empresaFinalId === 'all' ? 'VISTA GLOBAL' : empresaFinalId);
     
     // FASE 5: PASO 2 - Determinar qué elementos necesitan actualización
     const seccionActiva = document.querySelector('section.active');
@@ -160,7 +156,6 @@ async function cambiarEmpresaContexto(empresaId) {
                 } else if (window.app && window.app.aplicarIdentidadVisual) {
                     await window.app.aplicarIdentidadVisual(true);
                 }
-                console.log('[EmpresaContext] ✓ Identidad visual actualizada');
             } catch (e) {
                 console.warn('[EmpresaContext] Error aplicando identidad visual:', e);
             }
@@ -177,7 +172,6 @@ async function cambiarEmpresaContexto(empresaId) {
                     await localforage.removeItem('cache_proyectos');
                     
                     await window.app.recargarKanbanReactivo(empresaFinalId);
-                    console.log('[EmpresaContext] ✓ Kanban actualizado');
                 } catch (e) {
                     console.warn('[EmpresaContext] Error recargando Kanban:', e);
                 }
@@ -518,7 +512,6 @@ window.empresasApp = {
     refreshCurrentView
 };
 
-console.log('[empresas.js] Módulo de empresas cargado correctamente');
 
 // ==================================================================
 // 5. INTEGRACIÓN CON APP PRINCIPAL
@@ -539,8 +532,6 @@ function integrarConApp() {
     window.app.editarEmpresa = editarEmpresa;
     window.app.desactivarEmpresa = desactivarEmpresa;
     
-    console.log('[empresas.js] ✅ Funciones integradas en window.app:', 
-        'cambiarEmpresaContexto, abrirModalEmpresas, guardarEmpresa, editarEmpresa, desactivarEmpresa');
 }
 
 // Bandera para evitar ejecución múltiple

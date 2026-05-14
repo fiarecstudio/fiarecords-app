@@ -119,9 +119,9 @@
 
         tablaBody.innerHTML = paginatedItems.map(p => {
             const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General';
-            const servicios = Array.isArray(p.servicios) ? p.servicios : [];
+            const servicios = Array.isArray(p.items) ? p.items : [];
             const serviciosTexto = servicios.length > 0
-                ? servicios.slice(0, 2).map(s => s.servicio?.nombre || 'Servicio').join(', ') + (servicios.length > 2 ? '...' : '')
+                ? servicios.slice(0, 2).map(s => s.nombre || 'Servicio').join(', ') + (servicios.length > 2 ? '...' : '')
                 : 'Sin servicios';
 
             return `
@@ -317,7 +317,6 @@
         };
 
         if (renderers[listKey]) {
-            console.log('[Paginación] Ejecutando (ui.js):', listKey, 'Página:', pagination.page);
             renderers[listKey]();
         }
     }
@@ -562,5 +561,3 @@
     window.changePage = changePage;
 
     console.log('[UIManager] Módulo cargado y listo');
-
-})();

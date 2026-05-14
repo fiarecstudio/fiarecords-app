@@ -52,4 +52,12 @@
 
     // Exportar globalmente
     window.Logger = Logger;
+
+    // En producción, deshabilitar console.log, console.info, console.debug
+    // Pero mantener console.error y console.warn
+    if (Logger.isProduction) {
+        console.log = function() {};
+        console.info = function() {};
+        console.debug = function() {};
+    }
 })();
