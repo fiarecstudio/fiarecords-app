@@ -561,3 +561,5 @@
     window.changePage = changePage;
 
     console.log('[UIManager] Módulo cargado y listo');
+
+})();
