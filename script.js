@@ -1131,6 +1131,78 @@ let proyectoIdEnEdicion = null;
     }
 
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
+    
+    async function agregarServicioManual() {
+        const nombreInput = document.getElementById('servicioManualNombre');
+        const precioInput = document.getElementById('servicioManualPrecio');
+        const guardarEnCatalogoCheckbox = document.getElementById('guardarEnCatalogo');
+        
+        const nombre = nombreInput.value.trim();
+        const precio = parseFloat(precioInput.value);
+        
+        if (!nombre) {
+            showToast('Por favor ingresa el nombre del servicio.', 'error');
+            return;
+        }
+        
+        if (isNaN(precio) || precio < 0) {
+            showToast('Por favor ingresa un precio válido.', 'error');
+            return;
+        }
+        
+        const guardarEnCatalogo = guardarEnCatalogoCheckbox.checked;
+        
+        try {
+            if (guardarEnCatalogo) {
+                // Create new service in catalog
+                const nuevoServicio = await fetchAPI('/api/servicios', {
+                    method: 'POST',
+                    body: JSON.stringify({ nombre, precio })
+                });
+                
+                // Add to proyectoActual with the real service ID
+                const id = `item-${nuevoServicio._id}-${Date.now()}`;
+                proyectoActual[id] = {
+                    id,
+                    servicioId: nuevoServicio._id,
+                    nombre: nuevoServicio.nombre,
+                    unidades: 1,
+                    precioUnitario: nuevoServicio.precio,
+                    esProvisional: false
+                };
+                
+                // Reload service list
+                cargarOpcionesParaSelect('/api/servicios', 'proyectoServicio', '_id', item => `${item.nombre} - $${item.precio.toFixed(2)}`);
+                
+                showToast('Servicio guardado en catálogo y agregado a la cotización.', 'success');
+            } else {
+                // Create temporary item without saving to catalog
+                const id = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                proyectoActual[id] = {
+                    id,
+                    servicioId: null,
+                    nombre: nombre,
+                    unidades: 1,
+                    precioUnitario: precio,
+                    esProvisional: true
+                };
+                
+                showToast('Servicio provisional agregado a la cotización.', 'success');
+            }
+            
+            // Clear inputs
+            nombreInput.value = '';
+            precioInput.value = '';
+            guardarEnCatalogoCheckbox.checked = false;
+            
+            // Update display
+            mostrarProyectoActual();
+        } catch (error) {
+            console.error('Error al agregar servicio manual:', error);
+            showToast('Error al agregar servicio manual.', 'error');
+        }
+    }
+    
     function quitarDeProyecto(id) {
         delete proyectoActual[id];
         mostrarProyectoActual();
@@ -1221,7 +1293,7 @@ let proyectoIdEnEdicion = null;
 
         if (Object.keys(proyectoActual).length === 0) { showToast('Debes agregar al menos un servicio.', 'error'); return null; }
 
-        const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario }));
+        const items = Object.values(proyectoActual).map(i => ({ servicio: i.servicioId, nombre: i.nombre, unidades: i.unidades, precioUnitario: i.precioUnitario, esProvisional: i.esProvisional || false }));
 
         // --- LÓGICA DE PLAN MENSUAL ---
         const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
@@ -4203,6 +4275,16 @@ Fecha de firma: {{FECHA}}`;
             duracionMesesInput.addEventListener('input', mostrarProyectoActual);
         }
         
+        // Manual Service toggle event listener
+        const modoServicioManualCheckbox = document.getElementById('modoServicioManual');
+        const camposServicioManual = document.getElementById('camposServicioManual');
+        
+        if (modoServicioManualCheckbox && camposServicioManual) {
+            modoServicioManualCheckbox.addEventListener('change', (e) => {
+                camposServicioManual.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
+        
         const modalDatosBancarios = document.getElementById('modalDatosBancarios'); 
         if (modalDatosBancarios) { modalDatosBancarios.addEventListener('show.bs.modal', function () { cargarDatosBancariosEnModal(); }); } 
         setupMobileMenu(); 
@@ -5065,13 +5147,14 @@ Fecha de firma: {{FECHA}}`;
         // 5. Mapear servicios al carrito
         proyectoActual = {};
         proyecto.items.forEach(item => {
-            const tempId = `item-${item.servicio}-${Date.now()}-${Math.random()}`;
+            const tempId = item.esProvisional ? `temp-${Date.now()}-${Math.random()}` : `item-${item.servicio}-${Date.now()}-${Math.random()}`;
             proyectoActual[tempId] = { 
                 id: tempId, 
                 servicioId: item.servicio, 
                 nombre: item.nombre, 
                 unidades: item.unidades, 
-                precioUnitario: item.precioUnitario 
+                precioUnitario: item.precioUnitario,
+                esProvisional: item.esProvisional || false
             };
         });
 
@@ -5270,7 +5353,7 @@ Fecha de firma: {{FECHA}}`;
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
-        quitarDeProyecto, agregarAProyecto, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF,
+        quitarDeProyecto, agregarAProyecto, agregarServicioManual, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF,
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
         verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,

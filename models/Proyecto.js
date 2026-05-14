@@ -4,7 +4,8 @@ const ItemSchema = new mongoose.Schema({
     servicio: { type: mongoose.Schema.Types.ObjectId, ref: 'Servicio' },
     nombre: String,
     unidades: { type: Number, default: 1 },
-    precioUnitario: Number
+    precioUnitario: Number,
+    esProvisional: { type: Boolean, default: false }
 });
 
 const PagoSchema = new mongoose.Schema({
