@@ -4536,7 +4536,7 @@ Fecha de firma: {{FECHA}}`;
         try {
             const data = await fetchAPI('/api/deudas');
             localCache.deudas = data;
-            renderDeudas();
+            mostrarSeccionDeudas(window.deudaFiltroActivo || 'pendientes');
         } catch (error) {
             tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar o acceso denegado.</td></tr>';
         }
