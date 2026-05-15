@@ -186,6 +186,28 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
     
+    // --- ELIMINAR ÍNDICE FANTASMA singletonId_1 ---
+    mongoose.connection.once('open', async () => {
+      try {
+        await mongoose.connection.db.collection('configuracions').dropIndex('singletonId_1');
+        console.log('✅ Índice fantasma "singletonId_1" eliminado con éxito de la base de datos.');
+      } catch (error) {
+        // Si el índice ya no existe o ya fue borrado, ignoramos el error de forma segura
+        console.log('ℹ️ El índice "singletonId_1" no existía o ya había sido eliminado.');
+      }
+      
+      // --- SINCRONIZAR ÍNDICES CON EL SCHEMA ACTUAL ---
+      try {
+        const Configuracion = require('./models/Configuracion');
+        await Configuracion.syncIndexes();
+        console.log('✅ Índices de Configuracion sincronizados con el schema actual.');
+      } catch (syncError) {
+        console.warn('⚠️ Error al sincronizar índices:', syncError.message);
+      }
+      // ------------------------------------------------
+    });
+    // ---------------------------------------------
+    
     // --- ACTIVAR BACKUP AUTOMÁTICO ---
     const { iniciarCronJob } = require('./utils/backupDatabase');
     iniciarCronJob();

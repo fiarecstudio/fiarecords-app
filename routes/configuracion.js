@@ -97,54 +97,115 @@ const isAdmin = (req, res, next) => {
 
 // FASE 3: Helper para obtener/crear config de la empresa del usuario
 const getOrCreateConfig = async (empresaId) => {
-    let config = await Configuracion.findOne({ empresaId });
-    if (!config) {
-        config = new Configuracion({ empresaId });
-        await config.save();
+    try {
+        console.log('[Config] getOrCreateConfig llamado con empresaId:', empresaId);
+        
+        // 🔥 FUERZA BRUTA: Eliminar índice fantasma singletonId_1
+        try {
+            await Configuracion.collection.dropIndex('singletonId_1');
+            console.log('🔥 Índice singletonId_1 destruido en caliente (getOrCreateConfig).');
+        } catch (e) {
+            // Se ignora silenciosamente si no existe
+        }
+        
+        // Validar que sea un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(empresaId)) {
+            console.error('[Config] empresaId inválido:', empresaId);
+            throw new Error('empresaId inválido');
+        }
+        
+        let config = await Configuracion.findOneAndUpdate(
+            { empresaId: new mongoose.Types.ObjectId(empresaId) },
+            { $setOnInsert: { empresaId: new mongoose.Types.ObjectId(empresaId) } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+        
+        console.log('[Config] Configuración obtenida/creada:', config ? 'SÍ' : 'NO');
+        return config;
+    } catch (err) {
+        console.error('[Config] Error en getOrCreateConfig:', err);
+        throw err;
     }
-    return config;
 };
 
 router.get('/', async (req, res) => {
     try {
+        console.log('[Config] GET / llamado');
+        console.log('[Config] req.user:', req.user);
+        
         // FASE 4: Identidad Automática - Priorizar header o usar empresa del usuario
         const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
-        
+
         // 1. Prioridad Máxima: El header del Super Admin (si no es 'all')
         let finalEmpresaId = (headerId && headerId !== 'all') ? headerId : null;
-        
+
         // 2. Prioridad de Identidad: Si no hay header válido, usar el ID del usuario logueado
         if (!finalEmpresaId && req.user && req.user.empresaId) {
             finalEmpresaId = req.user.empresaId;
         }
-        
+
         console.log('[Config] Usuario:', req.user?.username, '| Rol:', req.user?.role, '| Header:', headerId, '| Empresa Final:', finalEmpresaId);
-        
+
         if (!finalEmpresaId) {
+            console.error('[Config] No se pudo determinar la empresa');
             return res.status(400).json({ error: 'No se pudo determinar la empresa' });
         }
-        
+
+        console.log('[Config] Llamando a getOrCreateConfig con:', finalEmpresaId);
         let config = await getOrCreateConfig(finalEmpresaId);
-        
+
         // FASE 4: Fallback de logo - Si la empresa no tiene logo, usar el de FIA RECORDS
-        if (!config.logoBase64) {
+        if (!config || !config.logoBase64) {
             console.log(`[Config] Empresa ${finalEmpresaId} no tiene logo, buscando fallback de FIA RECORDS`);
-            const empresaPrincipal = await Empresa.findOne({ isDefault: true });
-            if (empresaPrincipal) {
-                const configPrincipal = await Configuracion.findOne({ empresaId: empresaPrincipal._id });
-                if (configPrincipal && configPrincipal.logoBase64) {
-                    console.log('[Config] Aplicando logo de FIA RECORDS como fallback');
-                    config = config.toObject(); // Convertir a objeto plano para modificar
-                    config.logoBase64 = configPrincipal.logoBase64;
-                    config.faviconBase64 = configPrincipal.faviconBase64;
+            try {
+                const empresaPrincipal = await Empresa.findOne({ isDefault: true });
+                if (empresaPrincipal) {
+                    const configPrincipal = await Configuracion.findOne({ empresaId: empresaPrincipal._id });
+                    if (configPrincipal && configPrincipal.logoBase64) {
+                        console.log('[Config] Aplicando logo de FIA RECORDS como fallback');
+                        if (!config) {
+                            // Si config es null, crear un objeto por defecto con el empresaId
+                            config = { empresaId: finalEmpresaId };
+                        } else {
+                            config = config.toObject(); // Convertir a objeto plano para modificar
+                        }
+                        config.logoBase64 = configPrincipal.logoBase64;
+                        config.faviconBase64 = configPrincipal.faviconBase64;
+                    }
                 }
+            } catch (fallbackError) {
+                console.warn('[Config] Error al obtener fallback de logo:', fallbackError);
+                // Continuar sin fallback
             }
         }
-        
+
+        // Si config sigue siendo null, devolver un objeto por defecto
+        if (!config) {
+            console.warn('[Config] No se pudo obtener o crear configuración, devolviendo defaults');
+            config = { empresaId: finalEmpresaId };
+        }
+
         res.json(config);
-    } catch (err) { 
-        console.error('[Config] Error:', err);
-        res.status(500).json({ error: 'Error config' }); 
+    } catch (err) {
+        console.error('[Config] Error completo:', err);
+        console.error('[Config] Stack:', err.stack);
+        // En caso de error, devolver configuración por defecto para no romper el frontend
+        res.status(500).json({ 
+            error: 'Error interno del servidor',
+            empresaId: req.user?.empresaId || null,
+            logoBase64: null,
+            faviconBase64: null,
+            firmaBase64: null,
+            datosBancarios: {},
+            horarioLaboral: {},
+            plantillasDoc: {
+                encabezado1: "FiaRecords Studio",
+                encabezado2: "Juárez N.L.",
+                terminosCotizacion: "Este presupuesto tiene una vigencia de 15 días.",
+                terminosRecibo: "¡Gracias por confiar en FiaRecords!",
+                plantillaContrato: "CONTRATO DE PRESTACIÓN DE SERVICIOS"
+            }
+        });
     }
 });
 
@@ -241,8 +302,19 @@ router.post('/upload-firma', [isAdmin, upload.single('firmaFile')], async (req, 
 });
 
 router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No archivo' });
     try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No archivo' });
+        }
+        
+        // 🔥 FUERZA BRUTA: Eliminar índice fantasma singletonId_1
+        try {
+            await Configuracion.collection.dropIndex('singletonId_1');
+            console.log('🔥 Índice singletonId_1 destruido en caliente (upload-logo).');
+        } catch (e) {
+            // Se ignora silenciosamente si no existe
+        }
+        
         // FASE 5: Prioridad ABSOLUTA: header X-Empresa-Id, fallback a empresa del usuario
         const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
         const userEmpresaId = req.user && req.user.empresaId ? req.user.empresaId.toString() : null;
@@ -256,6 +328,12 @@ router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, re
             });
         }
         
+        // Validar que sea un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(targetId)) {
+            console.error('[Upload Logo] empresaId inválido:', targetId);
+            return res.status(400).json({ error: 'ID de empresa inválido' });
+        }
+        
         console.log(`[Upload Logo] Subiendo logo para empresa: ${targetId} (Header: ${headerId || 'N/A'}, Usuario: ${userEmpresaId || 'N/A'})`);
         
         const b64 = Buffer.from(req.file.buffer).toString('base64');
@@ -263,16 +341,17 @@ router.post('/upload-logo', [isAdmin, upload.single('logoFile')], async (req, re
         
         // Usar upsert: true para crear la configuración si no existe
         const config = await Configuracion.findOneAndUpdate(
-            { empresaId: new mongoose.Types.ObjectId(targetId) }, 
+            { empresaId: new mongoose.Types.ObjectId(targetId) },
             { $set: { logoBase64: dataURI } },
-            { new: true, upsert: true }
+            { new: true, upsert: true, setDefaultsOnInsert: true }
         );
         
         console.log(`[Upload Logo] Logo guardado exitosamente para empresa: ${targetId}`);
-        res.json({ message: 'Logo guardado exitosamente', logoBase64: config.logoBase64 });
+        res.json({ message: 'Logo guardado exitosamente', logoBase64: config ? config.logoBase64 : null });
     } catch (err) { 
         console.error('[Upload Logo] Error:', err);
-        res.status(500).json({ error: 'Error al subir el logo', details: err.message }); 
+        console.error('[Upload Logo] Stack:', err.stack);
+        res.status(500).json({ error: 'Error interno del servidor al subir el logo' }); 
     }
 });
 

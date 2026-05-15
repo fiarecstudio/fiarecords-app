@@ -454,11 +454,17 @@ let proyectoIdEnEdicion = null;
         try {
             // Carga centralizada con empresaId explícito
             // Si no se pasa empresaId, se obtiene de localStorage o se usa 'all'
-            const finalEmpresaId = empresaId || 
-                                   localStorage.getItem('empresaActiva') || 
-                                   localStorage.getItem('selected_empresa_id') || 
+            let finalEmpresaId = empresaId ||
+                                   localStorage.getItem('empresaActiva') ||
+                                   localStorage.getItem('selected_empresa_id') ||
                                    'all';
-            
+
+            const isObjectIdValido = /^[0-9a-fA-F]{24}$/.test(finalEmpresaId);
+            if (finalEmpresaId && finalEmpresaId !== 'all' && !isObjectIdValido) {
+                console.warn('[loadInitialConfig] ID de empresa inválido detectado en el frontend. Usando "all" por seguridad.');
+                finalEmpresaId = 'all';
+            }
+
             console.log('[loadInitialConfig] Solicitando config con empresaId:', finalEmpresaId);
             
             const config = await fetchAPI('/api/configuracion', {
@@ -1438,8 +1444,47 @@ let proyectoIdEnEdicion = null;
                 } finally {
                     hideLoader();
                 }
-            } 
-        }); 
+            }
+        });
+    }
+
+    async function aceptarCotizacion(id) {
+        Swal.fire({
+            title: 'Aceptar Cotización',
+            text: '¿Estás seguro de aceptar esta cotización? El estatus cambiará a "Aceptado".',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, Aceptar',
+            cancelButtonText: 'Cancelar'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                showLoader();
+                try {
+                    await fetchAPI(`/api/proyectos/${id}/proceso`, { 
+                        method: 'PUT', 
+                        body: JSON.stringify({ proceso: 'Aceptado' }) 
+                    });
+                    
+                    // Actualizar localCache inmediatamente
+                    const proyectoIndex = localCache.proyectos.findIndex(p => p._id === id);
+                    if (proyectoIndex !== -1) {
+                        localCache.proyectos[proyectoIndex].proceso = 'Aceptado';
+                        localCache.proyectos[proyectoIndex].estatus = 'Aceptado';
+                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                    }
+                    
+                    showToast('¡Cotización aceptada con éxito!', 'success');
+                    // Recargar la vista de cotizaciones
+                    if (typeof cargarCotizaciones === 'function') {
+                        cargarCotizaciones();
+                    }
+                } catch (error) {
+                    showToast(`Error al aceptar: ${error.message}`, 'error');
+                } finally {
+                    hideLoader();
+                }
+            }
+        });
     }
 
     async function compartirPorWhatsApp(proyectoId) { try { const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`); const nombreCliente = proyecto.artista ? (proyecto.artista.nombreArtistico || proyecto.artista.nombre) : 'cliente'; const mensaje = `¡Hola ${nombreCliente}! Aquí tienes el resumen de tu cotización en FiaRecords:\n\n*Servicios:*\n${proyecto.items.map(i => `- ${i.unidades}x ${i.nombre}`).join('\n')}\n\n*Total a Pagar: $${safeMoney(proyecto.total)} MXN*\n\nQuedamos a tus órdenes para confirmar y agendar tu proyecto.`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); } catch (error) { showToast('Error al obtener datos', 'error'); } }
@@ -2025,9 +2070,9 @@ let proyectoIdEnEdicion = null;
         
         // 1. CARGAR PLANTILLA SEGÚN TIPO
         if (docType === 'cotizacion') {
-            terminos = `Este presupuesto es válido por 15 días. Para agendar, se requiere un anticipo del 50%. La entrega de archivos finales se realizará únicamente cuando el saldo pendiente esté liquidado al 100%.`;
+            terminos = configCache?.plantillasDoc?.terminosCotizacion || "Este presupuesto es válido por 15 días. Para agendar, se requiere un anticipo del 50%. La entrega de archivos finales se realizará únicamente cuando el saldo pendiente esté liquidado al 100%.";
             if (proyecto?.esPlanMensual) {
-                terminos = `Este presupuesto es válido por 15 días. Para iniciar el plan mensual, se requiere el pago del primer mes. Los pagos subsecuentes se realizarán mensualmente. La entrega de archivos finales está sujeta a que todos los pagos estén al día.`;
+                terminos = configCache?.plantillasDoc?.terminosCotizacion || "Este presupuesto es válido por 15 días. Para iniciar el plan mensual, se requiere el pago del primer mes. Los pagos subsecuentes se realizarán mensualmente. La entrega de archivos finales está sujeta a que todos los pagos estén al día.";
             }
         } else if (docType === 'recibo') {
             terminos = configCache?.plantillasDoc?.terminosRecibo || "¡Gracias por confiar en FiaRecords!";
@@ -5353,11 +5398,10 @@ Fecha de firma: {{FECHA}}`;
     // --- EXPORTS ---
     window.app = {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
-        quitarDeProyecto, agregarAProyecto, agregarServicioManual, cambiarAtributo, aprobarCotizacion, generarCotizacionPDF,
+        quitarDeProyecto, agregarAProyecto, agregarServicioManual, cambiarAtributo, aprobarCotizacion, aceptarCotizacion, generarCotizacionPDF,
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
         verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
-        compartirDatosBancariosWhatsApp, openDeliveryModal, saveDeliveryLink, editarInfoProyecto,
         filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
@@ -5365,8 +5409,6 @@ Fecha de firma: {{FECHA}}`;
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
         enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
-        toggleInputsHorario, guardarHorariosConfig, changeTrashPage, changeTablePage,
-        toggleTheme, openPlayer, playMedia, sincronizarArchivosDrive, sincronizarCarpeta, notificarArtista,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda, mostrarSeccionDeudas, cargarHistorial,
         abrirModalProyectoDirecto, guardarProyectoDirecto,
         guardarPlantillasConfig,
@@ -5374,13 +5416,13 @@ Fecha de firma: {{FECHA}}`;
         abrirModalFirma, cerrarModalFirma, limpiarCanvas, guardarFirmaCliente, borrarFirmaCliente,
         cargarCotizacionParaEditar,
         editarCotizacion: cargarCotizacionParaEditar,
-        cargarBackups, crearBackupManual, descargarBackup, cargarBackupsDrive,
+        abrirModalEditarCotizacion: cargarCotizacionParaEditar, descargarBackup, cargarBackupsDrive,
         changeBackupPage, renderBackupsPaginated, renderBackupsDrivePaginated,
         loadInitialConfig, cargarConfiguracion,
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        ocultarOverlayKanban,
+// ... (rest of the code remains the same)
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         cerrarPrintPreview, ejecutarImpresion

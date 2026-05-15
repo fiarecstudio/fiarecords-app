@@ -26,14 +26,80 @@
         }
 
         /**
+         * Verifica si el token está expirado y lo refresca si es necesario
+         * @returns {Promise<string>} - Token válido (actualizado si estaba expirado)
+         */
+        async getValidToken() {
+            const token = localStorage.getItem('token');
+            const refreshToken = localStorage.getItem('refreshToken');
+            
+            if (!token) {
+                throw new Error('No hay token JWT disponible');
+            }
+
+            // Verificar si el token está expirado
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const isExpired = payload.exp * 1000 < Date.now();
+                
+                if (!isExpired) {
+                    return token; // Token aún válido
+                }
+                
+                // Token expirado, intentar refrescar
+                if (!refreshToken) {
+                    throw new Error('Token expirado y no hay refresh token');
+                }
+                
+                console.log('[SocketClient] Token expirado, intentando refrescar...');
+                const API_URL = window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:5000'
+                    : 'https://fiarecords-app.onrender.com';
+                
+                const res = await fetch(`${API_URL}/api/auth/refresh-token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+                
+                if (!res.ok) {
+                    throw new Error('Error al refrescar token');
+                }
+                
+                const data = await res.json();
+                const newAccessToken = data.accessToken || data.token;
+                
+                if (newAccessToken) {
+                    localStorage.setItem('token', newAccessToken);
+                    console.log('[SocketClient] Token refrescado exitosamente');
+                    return newAccessToken;
+                }
+                
+                throw new Error('No se recibió nuevo token');
+                
+            } catch (error) {
+                console.error('[SocketClient] Error al verificar/refrescar token:', error);
+                throw error;
+            }
+        }
+
+        /**
          * Inicializa la conexión Socket.io
          * @returns {Promise<boolean>} - true si conectó exitosamente
          */
         async connect() {
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
                 try {
-                    // Obtener token JWT del localStorage
-                    const token = localStorage.getItem('token');
+                    // Obtener token válido (con refresh automático si está expirado)
+                    let token;
+                    try {
+                        token = await this.getValidToken();
+                    } catch (tokenError) {
+                        console.error('[SocketClient] Error obteniendo token:', tokenError);
+                        reject(new Error('No autenticado'));
+                        return;
+                    }
                     
                     if (!token) {
                         console.error('[SocketClient] No hay token JWT disponible');
