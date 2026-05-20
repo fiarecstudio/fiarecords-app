@@ -159,13 +159,13 @@
         <header class="main-header d-flex flex-column p-3 gap-2">
             <div class="d-flex justify-content-between align-items-center w-100">
                 <div class="d-flex align-items-center gap-2">
-                    <button id="hamburger-menu" class="btn btn-light d-md-none">
+                    <button id="hamburger-menu" class="btn btn-light sidebar-toggle-btn" type="button" aria-label="Abrir menú">
                         <i class="bi bi-list fs-4"></i>
                     </button>
-                    <div id="welcome-user" class="fw-bold fs-5 text-truncate" style="max-width: 280px;"></div>
+                    <div id="welcome-user" class="fw-bold fs-5 text-truncate header-welcome-user"></div>
                 </div>
                   
-                <div class="search-box flex-grow-1 mx-3 d-none d-md-block">
+                <div class="search-box search-box-desktop flex-grow-1 mx-3">
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                         <input type="text" id="globalSearchPC" class="form-control border-start-0" placeholder="Buscar proyecto, artista..." onkeyup="app.filtrarTablas(this.value)">
@@ -174,7 +174,7 @@
                 
                 <div id="empresa-selector-container" class="d-none align-items-center gap-2 me-3">
                     <span class="small text-muted"><i class="bi bi-building"></i> Empresa:</span>
-                    <select id="empresa-selector" class="form-select form-select-sm" style="width: 180px;" onchange="app.cambiarEmpresaContexto(this.value)">
+                    <select id="empresa-selector" class="form-select form-select-sm empresa-selector-input" onchange="app.cambiarEmpresaContexto(this.value)">
                         <option value="">Todas (Global)</option>
                     </select>
                     <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalEmpresas()" title="Gestión de Empresas">
@@ -194,7 +194,7 @@
                 </div>
             </div>
 
-            <div class="search-box-mobile w-100 d-md-none">
+            <div class="search-box-mobile search-box-mobile-alt w-100">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                     <input type="text" id="globalSearchMobile" class="form-control border-start-0" placeholder="Buscar..." onkeyup="app.filtrarTablas(this.value)">
@@ -228,7 +228,7 @@
                 </div>
                 <div class="card mt-4 p-3 shadow-sm">
                     <h3>Tendencia de Ingresos</h3>
-                    <div style="height: 350px;"><canvas id="incomeChart"></canvas></div>
+                    <div class="chart-container-responsive"><canvas id="incomeChart"></canvas></div>
                 </div>
             </section>
 
@@ -307,7 +307,7 @@
 
             <section id="registrar-proyecto" class="section-view">
               <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
-              <div class="card" style="max-width: 800px; margin: auto;">
+              <div class="card form-card-centered">
                 <div class="card-header bg-primary text-white d-flex align-items-center gap-3">
                     <h2 class="mb-0 text-white"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</h2>
                 </div>
@@ -398,7 +398,7 @@
 
                         <div id="containerDescuento" class="d-flex justify-content-end align-items-center mb-3">
                             <label class="me-2">Descuento ($):</label>
-                            <input type="number" id="proyectoDescuento" class="form-control" style="width: 100px;">
+                            <input type="number" id="proyectoDescuento" class="form-control input-descuento-narrow">
                         </div>
                         
                         <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
@@ -1214,7 +1214,7 @@
 
   <!-- MODAL PREVISUALIZACION PDF - OVERLAY SIMPLE -->
   <div id="modalPreviewDocumento" class="firma-overlay" style="display:none;">
-    <div class="firma-modal" style="max-width: 900px; width: 95vw;">
+    <div class="firma-modal firma-modal-wide">
       <div class="firma-modal-header">
         <h5 class="firma-modal-title"><i class="bi bi-eye"></i> Previsualización de Documento</h5>
         <button type="button" class="btn-close" onclick="app.cerrarModalPreview()" aria-label="Cerrar"></button>

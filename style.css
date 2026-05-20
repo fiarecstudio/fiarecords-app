@@ -185,7 +185,8 @@ body.dark-mode #canvas-firma {
 
 .firma-modal-body .mb-3 {
     width: 100%;
-    min-width: 300px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 #canvas-firma {
@@ -219,7 +220,7 @@ body.dark-mode #canvas-firma {
 .nav-link-sidebar:hover { background-color: var(--secondary-button-bg); color: var(--text-color-dark); }
 .nav-link-sidebar.active { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); font-weight: 700; border-left: 3px solid var(--primary-color); }
 .nav-link-sidebar i { font-size: 1.1rem; }
-.main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); }
+.main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); min-width: 0; }
 
 /* HEADER */
 .main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); min-height: 70px; }
@@ -230,9 +231,20 @@ body.dark-mode .btn-back-inline { color: #818cf8; }
 .search-box-mobile .input-group-text, .search-box-mobile input { background-color: var(--input-bg); }
 main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
     .btn-back-inline { display: none !important; }
 }
+
+/* Utilidades responsive (header, formularios, sidebar) */
+.sidebar-toggle-btn { display: none; }
+.search-box-desktop { display: block; }
+.search-box-mobile-alt { display: none; }
+.header-welcome-user { max-width: 280px; min-width: 0; }
+.empresa-selector-input { width: 100%; max-width: 180px; min-width: 120px; }
+.form-card-centered { width: 100%; max-width: 800px; margin-left: auto; margin-right: auto; }
+.chart-container-responsive { width: 100%; height: 350px; min-height: 220px; }
+.input-descuento-narrow { width: 100%; max-width: 100px; }
+.firma-modal-wide { width: 95vw; max-width: 900px; }
 
 /* =========================================
    LOGIN
@@ -748,23 +760,94 @@ body.dark-mode .project-card:hover {
     }
 }
 
-/* Tablet (769px - 1023px) */
-@media (min-width: 769px) and (max-width: 1023px) {
-    .sidebar { width: 240px; }
-    .kanban-column { min-width: 260px; width: 260px; }
-    .grid-container { grid-template-columns: repeat(2, 1fr); }
+/* =========================================
+   RESPONSIVE: Tablet y móvil (≤1024px)
+   ========================================= */
+@media (max-width: 1024px) {
+    .sidebar-toggle-btn { display: inline-flex !important; align-items: center; justify-content: center; }
+    .search-box-desktop { display: none !important; }
+    .search-box-mobile-alt { display: block !important; }
+
+    .sidebar {
+        position: fixed;
+        left: -100%;
+        top: 0;
+        bottom: 0;
+        width: min(85%, 300px);
+        max-width: 300px;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+        transition: left 0.3s ease;
+    }
+    .sidebar.show { left: 0; }
+    #sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        backdrop-filter: blur(2px);
+    }
+    #sidebar-overlay.show { display: block; }
+
+    main { padding: 1.25rem; overflow-x: hidden; }
+    .main-header { padding: 0.75rem 1rem !important; min-height: auto; }
+    .main-header > .d-flex.justify-content-between { flex-wrap: wrap; gap: 0.5rem; }
+    .header-welcome-user { max-width: 100%; font-size: 1rem; }
+    .header-actions { flex-shrink: 0; }
+    #empresa-selector-container { max-width: 100%; flex-wrap: wrap; }
+    .empresa-selector-input { max-width: 100%; flex: 1 1 140px; }
+
+    .grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .config-grid { grid-template-columns: 1fr; }
+    .config-grid .card { margin-bottom: 0; }
+
+    .kanban-board {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        overflow-x: visible;
+        padding-bottom: 1rem;
+        align-items: stretch;
+        scroll-snap-type: none;
+    }
+    .kanban-column {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        flex: none;
+    }
+
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+    .pagination-controls,
+    .pagination-controls-mini { flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+
+    .modal .col-md-2,
+    .modal .col-md-3,
+    .modal .col-md-4,
+    .modal .col-md-6,
+    .section-view .col-md-6 { flex: 0 0 100%; max-width: 100%; }
+
+    .firma-modal,
+    .firma-modal-wide { max-width: 95vw; width: 95vw; }
+    .chart-container-responsive { height: 280px; }
+    #flujo-trabajo .d-flex.justify-content-between,
+    .section-view .card-header.d-flex { flex-wrap: wrap; gap: 0.5rem; }
+    #containerDescuento { flex-wrap: wrap; }
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    .grid-container { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .kanban-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    main { padding: 1rem 1.25rem; }
+    .chart-container-responsive { height: 240px; min-height: 180px; }
 }
 
 @media (max-width: 768px) {
     #app-wrapper { height: 100dvh; }
-    .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 85%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.2); transition: left 0.3s ease; }
-    .sidebar.show { left: 0; }
-    #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px); }
-    #sidebar-overlay.show { display: block; }
     main { padding: 1rem; overflow-x: hidden; }
     .table-responsive { border: none; overflow: hidden; }
-    
-    /* KPIs en móvil: 1 columna para mejor legibilidad */
+
     .grid-container { grid-template-columns: 1fr; gap: 1rem; }
     .kpi-card { min-height: 100px; padding: 1rem; }
     .table thead { display: none; }
@@ -774,41 +857,36 @@ body.dark-mode .project-card:hover {
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
     .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
-    
-    /* KANBOARD MOBILE - Opción B: Sin scroll, columnas apiladas verticalmente */
-    .kanban-board { 
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        overflow-x: visible;
-        padding-bottom: 1rem;
-        align-items: stretch;
-    }
-    .kanban-column { 
+
+    .kanban-board { grid-template-columns: 1fr; }
+    .kanban-column {
         width: 100%;
-        min-width: auto;
-        background-color: var(--secondary-button-bg); 
-        border-radius: 12px; 
-        padding: 1rem; 
-        border: 1px solid var(--border-color); 
-        display: flex; 
-        flex-direction: column; 
+        min-width: 0;
+        background-color: var(--secondary-button-bg);
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
         gap: 0.75rem;
         min-height: auto;
     }
-    
-    /* MODALES RESPONSIVE */
-    .modal-dialog { 
-        max-width: 95%; 
-        margin: 0.5rem auto;
-    }
-    .modal-content {
-        max-width: 100%;
-        margin: 0;
-    }
-    
-    #welcome-user { font-size: 0.9rem; }
+
+    .modal-dialog { max-width: 95%; margin: 0.5rem auto; }
+    .modal-content { max-width: 100%; margin: 0; }
+
+    .header-welcome-user { font-size: 0.9rem; }
+    .input-descuento-narrow { max-width: 100%; }
     .theme-toggle-login { top: 10px; right: 10px; padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+    .chart-container-responsive { height: 220px; min-height: 180px; }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    .kanban-board { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    main { padding: 0.75rem 1rem; }
+    .chart-container-responsive { height: 200px; min-height: 160px; }
+    .card { padding: 1rem; }
 }
 
 .theme-toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--secondary-button-bg); border-radius: 8px; margin-top: auto; }

@@ -5427,6 +5427,23 @@ Fecha de firma: {{FECHA}}`;
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         cerrarPrintPreview, ejecutarImpresion
     };
+    // Cableado: funciones usadas en onclick/HTML pero fuera del objeto window.app
+    window.app.toggleTheme = toggleTheme;
+    window.app.compartirDatosBancariosWhatsApp = compartirDatosBancariosWhatsApp;
+    window.app.guardarHorariosConfig = guardarHorariosConfig;
+    window.app.cargarBackups = cargarBackups;
+    window.app.crearBackupManual = crearBackupManual;
+    window.app.openPlayer = openPlayer;
+    window.app.playMedia = playMedia;
+    window.app.sincronizarArchivosDrive = sincronizarArchivosDrive;
+    window.app.sincronizarCarpeta = sincronizarCarpeta;
+    window.app.notificarArtista = notificarArtista;
+    window.app.editarInfoProyecto = editarInfoProyecto;
+    window.app.toggleInputsHorario = toggleInputsHorario;
+    window.app.changeTrashPage = changeTrashPage;
+    window.app.changeTablePage = changeTablePage;
+    window.app.openDeliveryModal = openDeliveryModal;
+    window.app.saveDeliveryLink = saveDeliveryLink;
 
     // ==================================================================
     // ACORDEÓN KANBAN - Expandir/Colapsar columnas + Contador de proyectos
