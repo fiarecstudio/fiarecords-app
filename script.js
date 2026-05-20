@@ -1912,22 +1912,20 @@ let proyectoIdEnEdicion = null;
         try {
             const [proyectos, artistaInfo] = await Promise.all([fetchAPI(`/api/proyectos/por-artista/${artistaId}`), fetchAPI(`/api/artistas/${artistaId}`)]);
             
-            let html = `<div class="mb-3">${!isClientView ? `<button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>` : ''}<h2 class="mb-0" id="vista-artista-nombre">${escapeHTML(nombreArtistico || nombre)}</h2></div>
-                        <div class="card mb-4" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);"><div class="card-body"><div class="d-flex justify-content-between align-items-start flex-wrap"><div><p class="mb-1"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p><p class="mb-1"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p><p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p></div>`;
-            
-            if (!isClientView) { 
-                html += `<div class="btn-group mt-2 mt-md-0">
+            let accionesPerfilHtml = '';
+            if (!isClientView) {
+                accionesPerfilHtml = `<div class="btn-group flex-wrap mt-3">
                             <button class="btn btn-sm btn-outline-secondary" onclick="app.abrirModalEditarArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(artistaInfo.nombreArtistico || '')}', '${escapeHTML(artistaInfo.telefono || '')}', '${escapeHTML(artistaInfo.correo || '')}')"><i class="bi bi-pencil"></i> Editar</button>
                             <button class="btn btn-sm btn-info text-white" onclick="app.abrirModalProyectoDirecto('${artistaInfo._id}')"><i class="bi bi-archive"></i> Catálogo Antiguo</button>
                             <button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button>
-                         </div>`; 
-            } else { 
-                html += `<div class="btn-group mt-2 mt-md-0"><button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button></div>`; 
+                         </div>`;
+            } else {
+                accionesPerfilHtml = `<div class="btn-group mt-3"><button class="btn btn-sm btn-primary" onclick="app.nuevoProyectoParaArtista('${artistaInfo._id}', '${escapeHTML(artistaInfo.nombre)}')"><i class="bi bi-plus-circle"></i> Nuevo Proyecto</button></div>`;
             }
-            
-            html += `</div></div></div><h3>Historial de Proyectos</h3>`;
+
+            let proyectosTabHtml = '<h3 class="mb-3">Historial de Proyectos</h3>';
             if (proyectos.length) { 
-                html += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
+                proyectosTabHtml += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
                     // Botones de Contrato y Firma
                     const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
@@ -1962,10 +1960,35 @@ let proyectoIdEnEdicion = null;
                     if (p.enlaceEntrega) accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Carpeta"><i class="bi bi-cloud-download"></i></a>`; 
                     if (!isClientView) { accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button><button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`; } 
                     
-                    html += `<tr><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Estado"><span class="badge" style="background-color: var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})">${p.proceso}</span></td><td data-label="Acciones" class="table-actions">${accionesHtml}</td></tr>`; 
+                    proyectosTabHtml += `<tr><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Estado"><span class="badge" style="background-color: var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})">${p.proceso}</span></td><td data-label="Acciones" class="table-actions">${accionesHtml}</td></tr>`; 
                 }); 
-                html += '</tbody></table></div>'; 
-            } else { html += '<p>Este artista aún no tiene proyectos registrados.</p>'; }
+                proyectosTabHtml += '</tbody></table></div>'; 
+            } else { proyectosTabHtml += '<p>Este artista aún no tiene proyectos registrados.</p>'; }
+
+            const html = `<div class="mb-3">${!isClientView ? `<button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>` : ''}<h2 class="mb-0" id="vista-artista-nombre">${escapeHTML(nombreArtistico || nombre)}</h2></div>
+                <ul class="nav nav-tabs mb-3" id="artistaPerfilTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="artista-tab-info-btn" data-bs-toggle="tab" data-bs-target="#artista-tab-info" type="button" role="tab" aria-controls="artista-tab-info" aria-selected="true">Información</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="artista-tab-proyectos-btn" data-bs-toggle="tab" data-bs-target="#artista-tab-proyectos" type="button" role="tab" aria-controls="artista-tab-proyectos" aria-selected="false">Proyectos y Finanzas</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="artistaPerfilTabsContent">
+                    <div class="tab-pane fade show active" id="artista-tab-info" role="tabpanel" aria-labelledby="artista-tab-info-btn" tabindex="0">
+                        <div class="card mb-0" style="background-color: var(--card-bg, inherit); color: var(--text-color, inherit);">
+                            <div class="card-body">
+                                <p class="mb-2"><strong>Nombre Real:</strong> ${escapeHTML(artistaInfo.nombre)}</p>
+                                <p class="mb-2"><strong>Tel:</strong> ${escapeHTML(artistaInfo.telefono || 'N/A')}</p>
+                                <p class="mb-0"><strong>Email:</strong> ${escapeHTML(artistaInfo.correo || 'N/A')}</p>
+                                ${accionesPerfilHtml}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="artista-tab-proyectos" role="tabpanel" aria-labelledby="artista-tab-proyectos-btn" tabindex="0">
+                        ${proyectosTabHtml}
+                    </div>
+                </div>`;
             
             contenido.innerHTML = html; mostrarSeccion('vista-artista', false); 
         } catch (e) { contenido.innerHTML = '<p class="text-danger text-center">Error al cargar el historial.</p>'; console.error(e); }
@@ -3859,16 +3882,55 @@ Fecha de firma: {{FECHA}}`;
         const end = start + limit; 
         const paginatedItems = filteredData.slice(start, end); 
         const totalPages = Math.ceil(filteredData.length / limit) || 1; 
+
+        if (endpoint === 'artistas') {
+            const getIniciales = (a) => {
+                const name = (a.nombreArtistico || a.nombre || '?').trim();
+                const parts = name.split(/\s+/).filter(Boolean);
+                if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+                return name.substring(0, 2).toUpperCase();
+            };
+            const renderArtistaCard = (item) => {
+                const nombreDisplay = escapeHTML(item.nombreArtistico || item.nombre);
+                const nombreReal = escapeHTML(item.nombre);
+                const iniciales = escapeHTML(getIniciales(item));
+                const editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`;
+                const telDigits = (item.telefono || '').replace(/\D/g, '');
+                const waBtn = telDigits
+                    ? `<a href="https://wa.me/${telDigits}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" title="WhatsApp" onclick="event.stopPropagation();"><i class="bi bi-whatsapp"></i></a>`
+                    : `<button type="button" class="btn btn-sm btn-outline-success" disabled title="Sin teléfono"><i class="bi bi-whatsapp"></i></button>`;
+                const mailBtn = item.correo
+                    ? `<a href="mailto:${encodeURIComponent(item.correo)}" class="btn btn-sm btn-outline-primary" title="Correo" onclick="event.stopPropagation();"><i class="bi bi-envelope"></i></a>`
+                    : `<button type="button" class="btn btn-sm btn-outline-primary" disabled title="Sin correo"><i class="bi bi-envelope"></i></button>`;
+                let actionsHtml = `<div class="d-flex justify-content-center gap-2 flex-wrap">${waBtn}${mailBtn}`;
+                if (!isClient) {
+                    actionsHtml += `<button type="button" class="btn btn-sm btn-outline-secondary" title="Editar" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', 'artistas')"><i class="bi bi-trash"></i></button>`;
+                }
+                actionsHtml += '</div>';
+                return `<div class="col-md-4 col-sm-6 mb-4">
+                    <div class="card h-100 shadow-sm border-0" ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')" style="cursor:pointer;">
+                        <div class="card-body text-center d-flex flex-column align-items-center pt-4 pb-3">
+                            <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3 flex-shrink-0" style="width:64px;height:64px;font-size:1.15rem;font-weight:700;">${iniciales}</div>
+                            <h5 class="card-title mb-1 text-truncate w-100" title="${nombreDisplay}">${nombreDisplay}</h5>
+                            <p class="text-muted small mb-3 text-truncate w-100" title="${nombreReal}">${nombreReal}</p>
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                </div>`;
+            };
+            listEl.innerHTML = paginatedItems.length
+                ? `<div class="row g-2">${paginatedItems.map(renderArtistaCard).join('')}</div>`
+                : '<div class="col-12"><p class="text-center text-muted py-4 mb-0">No hay resultados.</p></div>';
+            renderPaginationControls(listEl, endpoint, page, totalPages);
+            return;
+        }
         
         listEl.innerHTML = paginatedItems.length ? paginatedItems.map(item => { 
             let displayName, editAction; 
             let viewButton = ''; 
 
-            if (endpoint === 'artistas') { 
-                displayName = `${item.nombreArtistico || item.nombre}`; 
-                editAction = `app.abrirModalEditarArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}', '${escapeHTML(item.telefono || '')}', '${escapeHTML(item.correo || '')}')`;
-                viewButton = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')" title="Ver Perfil"><i class="bi bi-eye"></i></button>`;
-            } else if (endpoint === 'usuarios') { 
+            if (endpoint === 'usuarios') { 
                 displayName = `${item.username} (${item.role})`; 
                 editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; 
             } else { 
@@ -3877,15 +3939,14 @@ Fecha de firma: {{FECHA}}`;
                 editAction = `app.abrirModalEditarServicio('${item._id}', '${escapeHTML(item.nombre)}', '${item.precio}', ${vis})`; 
             } 
             
-            const clickHandler = (endpoint === 'artistas') ? `ondblclick="app.irAVistaArtista('${item._id}', '${escapeHTML(item.nombre)}', '${escapeHTML(item.nombreArtistico || '')}')"` : ''; 
-            const listItemClass = `list-group-item d-flex justify-content-between align-items-center ${endpoint === 'artistas' ? 'list-group-item-action' : ''}`; 
+            const listItemClass = 'list-group-item d-flex justify-content-between align-items-center'; 
             let buttonsHtml = ''; 
             
             if (!isClient) { 
                 buttonsHtml = `<div class="btn-group">${viewButton}<button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
             } 
             
-            return `<li class="${listItemClass}" ${clickHandler} style="${endpoint === 'artistas' ? 'cursor:pointer;' : ''}"><span>${displayName}</span>${buttonsHtml}</li>`; 
+            return `<li class="${listItemClass}"><span>${displayName}</span>${buttonsHtml}</li>`; 
         }).join('') : `<li class="list-group-item">No hay resultados.</li>`; 
         
         renderPaginationControls(listEl, endpoint, page, totalPages); 
