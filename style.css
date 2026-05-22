@@ -349,6 +349,15 @@ main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
     border-color: rgba(16, 185, 129, 0.35);
 }
 
+/* Dashboard — Command Center mini-listas */
+.dashboard-command-center .list-group-item {
+    border-color: var(--border-color);
+    background-color: var(--card-background);
+}
+.dashboard-command-center .list-group-item:hover {
+    background-color: var(--secondary-button-bg);
+}
+
 /* =========================================
    LOGIN
    ========================================= */

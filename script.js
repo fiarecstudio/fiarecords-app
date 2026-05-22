@@ -999,7 +999,107 @@ let proyectoIdEnEdicion = null;
             }
             document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
+            await renderDashboardCommandCenter();
         } catch (e) { console.error("Error cargando dashboard:", e); } 
+    }
+
+    async function obtenerProyectosDesdeCache() {
+        if (localCache.proyectos && localCache.proyectos.length > 0) {
+            return localCache.proyectos;
+        }
+        try {
+            const stored = await localforage.getItem('cache_proyectos');
+            if (Array.isArray(stored) && stored.length > 0) {
+                localCache.proyectos = stored;
+                return stored;
+            }
+        } catch (e) {
+            console.warn('[Dashboard] No se pudo leer cache_proyectos:', e);
+        }
+        return [];
+    }
+
+    function fechaProyectoOrden(p) {
+        const raw = p.fecha || p.createdAt || p.updatedAt;
+        const t = raw ? new Date(raw).getTime() : 0;
+        return Number.isNaN(t) ? 0 : t;
+    }
+
+    function nombreProyectoDisplay(p) {
+        if (p.nombreProyecto && p.nombreProyecto.trim()) return p.nombreProyecto.trim();
+        if (p.artista) return p.artista.nombreArtistico || p.artista.nombre || 'Sin artista';
+        return 'Proyecto sin nombre';
+    }
+
+    function filtrarPagosPendientesCache(proyectos) {
+        const userInfo = getUserRoleAndId();
+        const isClient = userInfo.role === 'cliente';
+        return proyectos.filter((p) => {
+            if (!p || p.isDeleted || p.deleted) return false;
+            if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
+            const pagado = p.montoPagado || 0;
+            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion';
+        });
+    }
+
+    function renderDashboardListaVacia(mensaje) {
+        return `<li class="list-group-item text-muted small text-center py-3">${escapeHTML(mensaje)}</li>`;
+    }
+
+    function renderDashboardMiniItem(titulo, subtitulo, montoHtml) {
+        return `<li class="list-group-item py-2 px-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="min-w-0">
+                    <div class="fw-semibold text-truncate">${escapeHTML(titulo)}</div>
+                    <small class="text-muted">${escapeHTML(subtitulo)}</small>
+                </div>
+                <div class="text-end flex-shrink-0 small fw-bold">${montoHtml}</div>
+            </div>
+        </li>`;
+    }
+
+    async function renderDashboardCommandCenter() {
+        const listaProyectos = document.getElementById('dashboard-proyectos-recientes');
+        const listaPagos = document.getElementById('dashboard-pagos-pendientes');
+        if (!listaProyectos || !listaPagos) return;
+
+        const proyectos = await obtenerProyectosDesdeCache();
+
+        const recientes = [...proyectos]
+            .filter((p) => p && !p.isDeleted && !p.deleted)
+            .sort((a, b) => fechaProyectoOrden(b) - fechaProyectoOrden(a))
+            .slice(0, 5);
+
+        if (recientes.length === 0) {
+            listaProyectos.innerHTML = renderDashboardListaVacia('No hay proyectos en caché. Abre Flujo o Historial para sincronizar.');
+        } else {
+            listaProyectos.innerHTML = recientes.map((p) => {
+                const titulo = nombreProyectoDisplay(p);
+                const fecha = safeDate(p.fecha || p.createdAt);
+                const total = `$${safeMoney(p.total || 0)}`;
+                return renderDashboardMiniItem(titulo, fecha, total);
+            }).join('');
+        }
+
+        const pendientes = filtrarPagosPendientesCache(proyectos)
+            .sort((a, b) => {
+                const saldoA = (a.total || 0) - (a.montoPagado || 0);
+                const saldoB = (b.total || 0) - (b.montoPagado || 0);
+                return saldoB - saldoA;
+            })
+            .slice(0, 5);
+
+        if (pendientes.length === 0) {
+            listaPagos.innerHTML = renderDashboardListaVacia('No hay pagos pendientes en caché.');
+        } else {
+            listaPagos.innerHTML = pendientes.map((p) => {
+                const titulo = nombreProyectoDisplay(p);
+                const fecha = safeDate(p.fecha || p.createdAt);
+                const restante = (p.total || 0) - (p.montoPagado || 0);
+                const saldo = `<span class="text-danger">$${safeMoney(restante)}</span>`;
+                return renderDashboardMiniItem(titulo, fecha, saldo);
+            }).join('');
+        }
     }
 
     // ==================================================================

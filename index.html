@@ -229,6 +229,31 @@
                     <h3>Tendencia de Ingresos</h3>
                     <div class="chart-container-responsive"><canvas id="incomeChart"></canvas></div>
                 </div>
+
+                <div class="row mt-4 dashboard-command-center">
+                    <div class="col-lg-6 col-md-12 mb-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-header d-flex justify-content-between align-items-center py-3 border-0">
+                                <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Proyectos Recientes</h5>
+                                <button type="button" class="btn btn-sm btn-link text-decoration-none" onclick="app.mostrarSeccion('historial-proyectos')">Ver todos</button>
+                            </div>
+                            <ul id="dashboard-proyectos-recientes" class="list-group list-group-flush">
+                                <li class="list-group-item text-muted small py-3">Cargando...</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-6 col-md-12 mb-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-header d-flex justify-content-between align-items-center py-3 border-0">
+                                <h5 class="mb-0"><i class="bi bi-cash-stack me-2 text-warning"></i>Pagos Pendientes</h5>
+                                <button type="button" class="btn btn-sm btn-link text-decoration-none" onclick="app.mostrarSeccion('pagos')">Ver todos</button>
+                            </div>
+                            <ul id="dashboard-pagos-pendientes" class="list-group list-group-flush">
+                                <li class="list-group-item text-muted small py-3">Cargando...</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <section id="agenda" class="section-view">
