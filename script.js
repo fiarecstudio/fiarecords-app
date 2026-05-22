@@ -245,6 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isInitialized = false;
     let proyectoActual = {};
 let proyectoIdEnEdicion = null;
+    let proyectoWizardStep = 1;
+    const PROYECTO_WIZARD_TOTAL = 3;
     let logoBase64 = null; // Se mantiene para compatibilidad con PDFs
     let preseleccionArtistaId = null;
 
@@ -1133,7 +1135,50 @@ let proyectoIdEnEdicion = null;
             if (btnEnviarAFlujo) {
                 btnEnviarAFlujo.innerHTML = '<i class="bi bi-check-circle"></i> Agendar al Estudio';
             }
+            resetProyectoWizard();
         }
+    }
+
+    function setProyectoWizardStep(step) {
+        const form = document.getElementById('formProyecto');
+        if (!form) return;
+        const n = Math.max(1, Math.min(PROYECTO_WIZARD_TOTAL, step));
+        proyectoWizardStep = n;
+
+        form.querySelectorAll('.wizard-step').forEach((el) => {
+            const s = parseInt(el.getAttribute('data-step'), 10);
+            el.classList.toggle('d-none', s !== n);
+        });
+
+        form.querySelectorAll('.wizard-step-indicator').forEach((el) => {
+            const s = parseInt(el.getAttribute('data-step'), 10);
+            el.classList.toggle('active', s === n);
+            el.classList.toggle('completed', s < n);
+        });
+
+        const bar = document.getElementById('wizardProgressBar');
+        if (bar) {
+            bar.style.width = `${(n / PROYECTO_WIZARD_TOTAL) * 100}%`;
+            bar.setAttribute('aria-valuenow', String(n));
+        }
+        const progressWrap = bar?.closest('[role="progressbar"]');
+        if (progressWrap) progressWrap.setAttribute('aria-valuenow', String(n));
+    }
+
+    function nextProyectoWizardStep() {
+        if (proyectoWizardStep < PROYECTO_WIZARD_TOTAL) {
+            setProyectoWizardStep(proyectoWizardStep + 1);
+        }
+    }
+
+    function prevProyectoWizardStep() {
+        if (proyectoWizardStep > 1) {
+            setProyectoWizardStep(proyectoWizardStep - 1);
+        }
+    }
+
+    function resetProyectoWizard() {
+        setProyectoWizardStep(1);
     }
 
     function agregarAProyecto() { const select = document.getElementById('proyectoServicio'); if (!select.value) return; const id = `item-${select.value}-${Date.now()}`; proyectoActual[id] = { id, servicioId: select.value, nombre: select.options[select.selectedIndex].text.split(' - ')[0], unidades: parseInt(document.getElementById('proyectoUnidades').value) || 1, precioUnitario: parseFloat(select.options[select.selectedIndex].dataset.precio) }; mostrarProyectoActual(); }
@@ -5289,6 +5334,7 @@ Fecha de firma: {{FECHA}}`;
         }
 
         mostrarProyectoActual();
+        setProyectoWizardStep(2);
         showToast('Cotización cargada para editar', 'info');
     }
 
@@ -5472,8 +5518,10 @@ Fecha de firma: {{FECHA}}`;
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
-        cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario, generarCotizacion,
-        enviarAFlujoDirecto, toggleAuth, registerUser, recoverPassword, resetPassword,
+        cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
+        enviarAFlujoDirecto,
+        nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
+        toggleAuth, registerUser, recoverPassword, resetPassword,
         showResetPasswordView, changePage, irAlDashboard, verificarDisponibilidad,
         cargarDeudas, abrirModalNuevaDeuda, abonarDeuda, verHistorialDeuda, eliminarDeuda, mostrarSeccionDeudas, cargarHistorial,
         abrirModalProyectoDirecto, guardarProyectoDirecto,

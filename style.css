@@ -330,6 +330,25 @@ main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 .input-descuento-narrow { width: 100%; max-width: 100px; }
 .firma-modal-wide { width: 95vw; max-width: 900px; }
 
+/* Wizard — Registrar Proyecto */
+.proyecto-wizard-nav .wizard-step-indicator {
+    font-size: 0.8rem;
+    color: var(--text-color-light);
+    background-color: var(--secondary-button-bg);
+    border: 1px solid var(--border-color);
+    cursor: default;
+}
+.proyecto-wizard-nav .wizard-step-indicator.active {
+    background-color: rgba(99, 102, 241, 0.12);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    font-weight: 600;
+}
+.proyecto-wizard-nav .wizard-step-indicator.completed {
+    color: var(--success-color);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
 /* =========================================
    LOGIN
    ========================================= */

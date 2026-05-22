@@ -312,114 +312,152 @@
                 </div>
                 <div class="card-body">
                     <form id="formProyecto" onsubmit="return false;">
-                        <label>Artista/Cliente</label>
-                        <div class="d-flex gap-2 mb-3">
-                            <select id="proyectoArtista" class="form-select"><option value="publico_general">Público General</option></select>
-                            <button type="button" id="btnNuevoArtista" class="btn btn-secondary" onclick="document.getElementById('nuevoArtistaContainer').style.display='block'"><i class="bi bi-person-plus"></i></button>
+                        <div class="proyecto-wizard-nav mb-4">
+                            <div class="progress mb-3" style="height: 6px;" role="progressbar" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1">
+                                <div id="wizardProgressBar" class="progress-bar bg-primary" style="width: 33%;"></div>
+                            </div>
+                            <ul class="nav nav-pills nav-justified wizard-step-indicators gap-1">
+                                <li class="nav-item">
+                                    <span class="nav-link active wizard-step-indicator py-2" data-step="1">1. Cliente</span>
+                                </li>
+                                <li class="nav-item">
+                                    <span class="nav-link wizard-step-indicator py-2" data-step="2">2. Servicios</span>
+                                </li>
+                                <li class="nav-item">
+                                    <span class="nav-link wizard-step-indicator py-2" data-step="3">3. Finanzas y Fechas</span>
+                                </li>
+                            </ul>
                         </div>
-                        
-                        <div id="nuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display: none;">
-                            <label>Nombre Nuevo Artista</label>
-                            <div class="d-flex gap-2">
-                                <input type="text" id="nombreNuevoArtista" class="form-control" placeholder="Nombre">
-                                <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success" onclick="app.registrarNuevoArtistaDesdeFormulario()">Guardar</button>
+
+                        <!-- PASO 1: Cliente -->
+                        <div class="wizard-step" data-step="1">
+                            <h5 class="mb-3 text-primary"><i class="bi bi-person-badge me-2"></i>Cliente y proyecto</h5>
+                            <label>Artista/Cliente</label>
+                            <div class="d-flex gap-2 mb-3">
+                                <select id="proyectoArtista" class="form-select"><option value="publico_general">Público General</option></select>
+                                <button type="button" id="btnNuevoArtista" class="btn btn-secondary" onclick="document.getElementById('nuevoArtistaContainer').style.display='block'"><i class="bi bi-person-plus"></i></button>
+                            </div>
+                            
+                            <div id="nuevoArtistaContainer" class="p-3 mb-3 bg-light rounded border" style="display: none;">
+                                <label>Nombre Nuevo Artista</label>
+                                <div class="d-flex gap-2">
+                                    <input type="text" id="nombreNuevoArtista" class="form-control" placeholder="Nombre">
+                                    <button type="button" id="btnGuardarNuevoArtista" class="btn btn-success" onclick="app.registrarNuevoArtistaDesdeFormulario()">Guardar</button>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label>Nombre Proyecto (Opcional)</label>
+                                <input type="text" id="nombreProyecto" class="form-control">
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="esAlbum">
+                                <label class="form-check-label" for="esAlbum">Es un Disco/EP Completo</label>
+                            </div>
+
+                            <div class="d-flex justify-content-end pt-3 border-top mt-3">
+                                <button type="button" class="btn btn-primary" onclick="app.nextProyectoWizardStep()">Siguiente <i class="bi bi-arrow-right"></i></button>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label>Nombre Proyecto (Opcional)</label>
-                            <input type="text" id="nombreProyecto" class="form-control">
-                        </div>
-
-                        <div class="form-check mb-3">
-                            <input type="checkbox" class="form-check-input" id="esAlbum">
-                            <label class="form-check-label" for="esAlbum">Es un Disco/EP Completo</label>
-                        </div>
-
-                        <hr>
-                        <h5>Servicios</h5>
-                        <div class="row g-2 mb-3">
-                            <div class="col-12 col-md-8"><select id="proyectoServicio" class="form-select"></select></div>
-                            <div class="col-12 col-md-2"><input type="number" id="proyectoUnidades" class="form-control" value="1" min="1"></div>
-                            <div class="col-12 col-md-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100" onclick="app.agregarAProyecto()"><i class="bi bi-plus"></i> Añadir</button></div>
-                        </div>
-                        
-                        <!-- Manual Service Entry -->
-                        <div class="card border-secondary mb-3">
-                            <div class="card-body p-2">
-                                <div class="form-check form-switch mb-2">
-                                    <input class="form-check-input" type="checkbox" id="modoServicioManual">
-                                    <label class="form-check-label fw-bold text-secondary" for="modoServicioManual">Agregar Servicio Manual</label>
-                                </div>
-                                <div id="camposServicioManual" style="display: none;" class="mt-2">
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label small">Nombre del Servicio</label>
-                                            <input type="text" id="servicioManualNombre" class="form-control form-control-sm" placeholder="Ej: Servicio especial">
-                                        </div>
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label small">Precio</label>
-                                            <input type="number" id="servicioManualPrecio" class="form-control form-control-sm" placeholder="0.00" min="0" step="0.01">
-                                        </div>
+                        <!-- PASO 2: Servicios -->
+                        <div class="wizard-step d-none" data-step="2">
+                            <h5 class="mb-3 text-primary"><i class="bi bi-music-note-list me-2"></i>Servicios y modalidad</h5>
+                            <div class="row g-2 mb-3">
+                                <div class="col-12 col-md-8"><select id="proyectoServicio" class="form-select"></select></div>
+                                <div class="col-12 col-md-2"><input type="number" id="proyectoUnidades" class="form-control" value="1" min="1"></div>
+                                <div class="col-12 col-md-2"><button type="button" id="btnAgregarAProyecto" class="btn btn-outline-primary w-100" onclick="app.agregarAProyecto()"><i class="bi bi-plus"></i> Añadir</button></div>
+                            </div>
+                            
+                            <div class="card border-secondary mb-3">
+                                <div class="card-body p-2">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="modoServicioManual">
+                                        <label class="form-check-label fw-bold text-secondary" for="modoServicioManual">Agregar Servicio Manual</label>
                                     </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="guardarEnCatalogo">
-                                        <label class="form-check-label small" for="guardarEnCatalogo">Guardar en el catálogo de servicios para futuras ocasiones</label>
-                                    </div>
-                                    <button type="button" id="btnAgregarServicioManual" class="btn btn-sm btn-success w-100" onclick="app.agregarServicioManual()"><i class="bi bi-plus-circle"></i> Agregar a Cotización</button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <ul id="listaProyectoActual" class="list-group mb-3"></ul>
-
-                        <div class="card border-info mb-3">
-                            <div class="card-body p-2">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="esPlanMensual">
-                                    <label class="form-check-label fw-bold text-info" for="esPlanMensual">Modalidad: Plan Mensual</label>
-                                </div>
-                                <div id="camposPlanMensual" style="display: none;" class="mt-2">
-                                    <div class="row g-2">
-                                        <div class="col-6">
-                                            <label class="form-label small">Servicios/Mes</label>
-                                            <input type="number" class="form-control form-control-sm" id="serviciosPorMes" value="1" min="1">
+                                    <div id="camposServicioManual" style="display: none;" class="mt-2">
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small">Nombre del Servicio</label>
+                                                <input type="text" id="servicioManualNombre" class="form-control form-control-sm" placeholder="Ej: Servicio especial">
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small">Precio</label>
+                                                <input type="number" id="servicioManualPrecio" class="form-control form-control-sm" placeholder="0.00" min="0" step="0.01">
+                                            </div>
                                         </div>
-                                        <div class="col-6">
-                                            <label class="form-label small">Meses (Duración)</label>
-                                            <input type="number" class="form-control form-control-sm" id="duracionMeses" value="1" min="1">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="guardarEnCatalogo">
+                                            <label class="form-check-label small" for="guardarEnCatalogo">Guardar en el catálogo de servicios para futuras ocasiones</label>
                                         </div>
+                                        <button type="button" id="btnAgregarServicioManual" class="btn btn-sm btn-success w-100" onclick="app.agregarServicioManual()"><i class="bi bi-plus-circle"></i> Agregar a Cotización</button>
                                     </div>
-                                    <small class="text-muted mt-1 d-block" style="font-size: 0.75rem;">El total se multiplicará automáticamente.</small>
                                 </div>
                             </div>
-                        </div>
+                            
+                            <ul id="listaProyectoActual" class="list-group mb-3"></ul>
 
-                        <div id="containerDescuento" class="d-flex justify-content-end align-items-center mb-3">
-                            <label class="me-2">Descuento ($):</label>
-                            <input type="number" id="proyectoDescuento" class="form-control input-descuento-narrow">
-                        </div>
-                        
-                        <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
-
-                        <div class="row g-2 mb-3">
-                            <div class="col-12 col-md-6">
-                                <label>Fecha Inicio (Opcional para cotizar)</label>
-                                <input type="text" id="fechaProyecto" class="form-control" placeholder="Selecciona una fecha...">
+                            <div class="card border-info mb-3">
+                                <div class="card-body p-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="esPlanMensual">
+                                        <label class="form-check-label fw-bold text-info" for="esPlanMensual">Modalidad: Plan Mensual</label>
+                                    </div>
+                                    <div id="camposPlanMensual" style="display: none;" class="mt-2">
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <label class="form-label small">Servicios/Mes</label>
+                                                <input type="number" class="form-control form-control-sm" id="serviciosPorMes" value="1" min="1">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small">Meses (Duración)</label>
+                                                <input type="number" class="form-control form-control-sm" id="duracionMeses" value="1" min="1">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted mt-1 d-block" style="font-size: 0.75rem;">El total se multiplicará automáticamente.</small>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-12 col-md-6">
-                                <label>Hora</label>
-                                <select id="horaProyecto" class="form-select" disabled>
-                                    <option value="">← Primero elige una fecha</option>
-                                </select>
+
+                            <div class="d-flex justify-content-between pt-3 border-top mt-3">
+                                <button type="button" class="btn btn-outline-secondary" onclick="app.prevProyectoWizardStep()"><i class="bi bi-arrow-left"></i> Atrás</button>
+                                <button type="button" class="btn btn-primary" onclick="app.nextProyectoWizardStep()">Siguiente <i class="bi bi-arrow-right"></i></button>
                             </div>
                         </div>
-                        
-                        <div id="alerta-disponibilidad" class="alert alert-danger small py-2" style="display:none; font-weight:bold;"></div>
 
-                        <div class="d-flex flex-wrap gap-2 mt-3">
-                            <button id="btnGenerarCotizacion" class="btn btn-secondary flex-grow-1" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Solo Cotizar</button>
-                            <button id="btnEnviarAFlujo" class="btn btn-primary flex-grow-1" onclick="app.enviarAFlujoDirecto()"><i class="bi bi-check-circle"></i> Agendar al Estudio</button>
+                        <!-- PASO 3: Finanzas y Fechas -->
+                        <div class="wizard-step d-none" data-step="3">
+                            <h5 class="mb-3 text-primary"><i class="bi bi-calendar-check me-2"></i>Finanzas y fechas</h5>
+                            <div id="containerDescuento" class="d-flex justify-content-end align-items-center mb-3">
+                                <label class="me-2">Descuento ($):</label>
+                                <input type="number" id="proyectoDescuento" class="form-control input-descuento-narrow">
+                            </div>
+                            
+                            <h4 class="text-end mb-3">Total: <span id="totalAPagar" class="text-success">$0.00</span></h4>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-12 col-md-6">
+                                    <label>Fecha Inicio (Opcional para cotizar)</label>
+                                    <input type="text" id="fechaProyecto" class="form-control" placeholder="Selecciona una fecha...">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label>Hora</label>
+                                    <select id="horaProyecto" class="form-select" disabled>
+                                        <option value="">← Primero elige una fecha</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div id="alerta-disponibilidad" class="alert alert-danger small py-2" style="display:none; font-weight:bold;"></div>
+
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-3 flex-wrap gap-2">
+                                <button type="button" class="btn btn-outline-secondary" onclick="app.prevProyectoWizardStep()"><i class="bi bi-arrow-left"></i> Atrás</button>
+                                <div class="d-flex flex-wrap gap-2 flex-grow-1 justify-content-end">
+                                    <button type="button" id="btnGenerarCotizacion" class="btn btn-secondary" onclick="app.generarCotizacion()"><i class="bi bi-file-text"></i> Solo Cotizar</button>
+                                    <button type="button" id="btnEnviarAFlujo" class="btn btn-primary" onclick="app.enviarAFlujoDirecto()"><i class="bi bi-check-circle"></i> Agendar al Estudio</button>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
