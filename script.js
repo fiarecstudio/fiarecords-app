@@ -3765,6 +3765,10 @@ Fecha de firma: {{FECHA}}`;
     }
     
     async function cargarPapelera() {
+        const tabProyectos = document.getElementById('papelera-proyectos-tab');
+        if (tabProyectos && typeof bootstrap !== 'undefined') {
+            bootstrap.Tab.getOrCreateInstance(tabProyectos).show();
+        }
         const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
         for (const endpoint of endpoints) {
             try {
