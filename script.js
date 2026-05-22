@@ -254,8 +254,10 @@ let proyectoIdEnEdicion = null;
     const paginationState = {
         artistas: { page: 1, limit: 10, filter: '' },
         servicios: { page: 1, limit: 10, filter: '' },
-        usuarios: { page: 1, limit: 10, filter: '' }
+        usuarios: { page: 1, limit: 10, filter: '', estadoTab: 'activos' }
     };
+
+    let registroEmpresaInvitacion = sessionStorage.getItem('registro_empresa_invitacion') || null;
 
     const trashPagination = {
         proyectos: { page: 1, limit: 10 },
@@ -3336,6 +3338,7 @@ Fecha de firma: {{FECHA}}`;
         if (window.empresasApp && window.empresasApp.inicializarSelectorEmpresa) {
             await window.empresasApp.inicializarSelectorEmpresa();
         }
+        actualizarVisibilidadBotonInvitacion();
 
         if (role === 'cliente') {
              if(payload.artistaId) {
@@ -4037,7 +4040,16 @@ Fecha de firma: {{FECHA}}`;
                 const name = item.nombre || item.username || item.nombreArtistico || ''; 
                 return name.toLowerCase().includes(currentFilter); 
             }); 
-        } 
+        }
+
+        if (endpoint === 'usuarios') {
+            const tabUsuarios = paginationState.usuarios.estadoTab || 'activos';
+            filteredData = filteredData.filter((u) => {
+                const estado = u.estado || 'activo';
+                return tabUsuarios === 'pendientes' ? estado === 'pendiente' : estado !== 'pendiente';
+            });
+            actualizarBadgeUsuariosPendientes(data);
+        }
         
         const page = paginationState[endpoint].page; 
         const limit = paginationState[endpoint].limit; 
@@ -4094,7 +4106,10 @@ Fecha de firma: {{FECHA}}`;
             let viewButton = ''; 
 
             if (endpoint === 'usuarios') { 
-                displayName = `${item.username} (${item.role})`; 
+                const estadoBadge = item.estado === 'pendiente'
+                    ? ' <span class="badge bg-warning text-dark">Pendiente</span>'
+                    : '';
+                displayName = `${item.username} (${item.role})${estadoBadge}`; 
                 editAction = `app.abrirModalEditarUsuario('${escapeHTML(JSON.stringify(item))}')`; 
             } else { 
                 const vis = item.visible !== false; 
@@ -4105,8 +4120,11 @@ Fecha de firma: {{FECHA}}`;
             const listItemClass = 'list-group-item d-flex justify-content-between align-items-center'; 
             let buttonsHtml = ''; 
             
-            if (!isClient) { 
-                buttonsHtml = `<div class="btn-group">${viewButton}<button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
+            if (!isClient) {
+                const aprobarBtn = (endpoint === 'usuarios' && paginationState.usuarios.estadoTab === 'pendientes')
+                    ? `<button class="btn btn-sm btn-success" title="Aprobar" onclick="event.stopPropagation(); app.abrirModalAprobarUsuario('${escapeHTML(JSON.stringify(item))}')"><i class="bi bi-check-lg"></i> Aprobar</button>`
+                    : '';
+                buttonsHtml = `<div class="btn-group flex-wrap">${aprobarBtn}${viewButton}<button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); ${editAction}"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); app.eliminarItem('${item._id}', '${endpoint}')"><i class="bi bi-trash"></i></button></div>`; 
             } 
             
             return `<li class="${listItemClass}"><span>${displayName}</span>${buttonsHtml}</li>`; 
@@ -4336,7 +4354,102 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
-    async function abrirModalEditarUsuario(itemStr) {
+    function getEmpresaIdActivaParaInvitacion() {
+        const selector = document.getElementById('empresa-selector');
+        if (selector && selector.value && selector.value !== '' && selector.value !== 'all') {
+            return selector.value;
+        }
+        const empresaActiva = localStorage.getItem('empresaActiva');
+        if (empresaActiva && empresaActiva !== 'all') return empresaActiva;
+        const selectedContext = window.EmpresaContext?.getSelected?.();
+        if (selectedContext && selectedContext !== '' && selectedContext !== 'all') return selectedContext;
+        return window.EmpresaContext?.getUserEmpresaId?.() || null;
+    }
+
+    function actualizarVisibilidadBotonInvitacion() {
+        const btn = document.getElementById('btn-invitacion-empresa');
+        if (!btn) return;
+        const userInfo = getUserRoleAndId();
+        const token = localStorage.getItem('token');
+        let permisos = [];
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                permisos = payload.permisos || [];
+            } catch (e) { /* ignore */ }
+        }
+        const puedeInvitar = userInfo.role === 'admin'
+            || permisos.includes('gestion-usuarios')
+            || window.EmpresaContext?.isSuperAdmin?.() === true;
+        const empresaId = getEmpresaIdActivaParaInvitacion();
+        btn.classList.toggle('d-none', !(puedeInvitar && empresaId));
+    }
+
+    async function copiarEnlaceInvitacion() {
+        const empresaId = getEmpresaIdActivaParaInvitacion();
+        if (!empresaId) {
+            showToast('Selecciona una empresa en el header antes de copiar el enlace.', 'warning');
+            return;
+        }
+        const url = `${window.location.origin}${window.location.pathname}#login?empresa=${empresaId}`;
+        try {
+            await navigator.clipboard.writeText(url);
+            showToast('Enlace de invitación copiado al portapapeles.', 'success');
+        } catch (e) {
+            const input = document.createElement('textarea');
+            input.value = url;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showToast('Enlace copiado (modo alternativo).', 'success');
+        }
+    }
+
+    function capturarEmpresaInvitacionDesdeUrl() {
+        let empresaId = null;
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('empresa')) empresaId = searchParams.get('empresa');
+
+        const hashRaw = (location.hash || '').replace(/^#/, '');
+        if (hashRaw.includes('?')) {
+            const [section, queryString] = hashRaw.split('?');
+            const hashParams = new URLSearchParams(queryString);
+            if (hashParams.get('empresa')) empresaId = hashParams.get('empresa');
+            if (section === 'register') toggleAuth('register');
+            else if (section === 'login' || section.startsWith('login')) toggleAuth('login');
+        }
+
+        if (empresaId) {
+            registroEmpresaInvitacion = empresaId;
+            sessionStorage.setItem('registro_empresa_invitacion', empresaId);
+            const regView = document.getElementById('register-view');
+            if (regView && !regView.querySelector('.invitacion-empresa-hint')) {
+                const hint = document.createElement('p');
+                hint.className = 'invitacion-empresa-hint small text-info text-center mb-2';
+                hint.textContent = 'Invitación detectada: tu cuenta se vinculará al estudio automáticamente.';
+                regView.insertBefore(hint, regView.querySelector('form'));
+            }
+        }
+    }
+
+    function actualizarBadgeUsuariosPendientes(usuarios) {
+        const badge = document.getElementById('usuarios-pendientes-badge');
+        if (!badge) return;
+        const total = (usuarios || []).filter((u) => u.estado === 'pendiente').length;
+        badge.textContent = String(total);
+        badge.classList.toggle('d-none', total === 0);
+    }
+
+    function cambiarTabUsuarios(tab, btn) {
+        paginationState.usuarios.estadoTab = tab;
+        paginationState.usuarios.page = 1;
+        document.querySelectorAll('#usuariosHubTabs .nav-link').forEach((b) => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderPaginatedList('usuarios', paginationState.usuarios.filter || null);
+    }
+
+    async function abrirModalEditarUsuario(itemStr, opciones = {}) {
         let item;
         try {
             item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
@@ -4347,6 +4460,14 @@ Fecha de firma: {{FECHA}}`;
                 showToast('No se encontró el usuario en caché. Recarga la lista.', 'error');
                 return;
             }
+        }
+
+        const aprobarInput = document.getElementById('editUsuarioAprobar');
+        if (aprobarInput) aprobarInput.value = opciones.aprobar ? '1' : '0';
+
+        const modalTitle = document.querySelector('#modalEditarUsuario .modal-title');
+        if (modalTitle) {
+            modalTitle.textContent = opciones.aprobar ? '✅ Aprobar Usuario' : '👤 Editar Usuario';
         }
 
         document.getElementById('editUsuarioId').value = item._id;
@@ -4410,15 +4531,29 @@ Fecha de firma: {{FECHA}}`;
             body.empresaId = empresaSelect.value;
         }
 
+        const aprobar = document.getElementById('editUsuarioAprobar')?.value === '1';
+        if (aprobar) {
+            if (!empresaSelect || !empresaSelect.value) {
+                showToast('Selecciona la empresa definitiva antes de aprobar.', 'warning');
+                return;
+            }
+            body.estado = 'activo';
+        }
+
         try {
             await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-            showToast('Usuario actualizado y vinculado.', 'success');
+            showToast(aprobar ? 'Usuario aprobado y activado.' : 'Usuario actualizado y vinculado.', 'success');
             bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide();
+            if (document.getElementById('editUsuarioAprobar')) document.getElementById('editUsuarioAprobar').value = '0';
             localCache.usuarios = [];
             renderPaginatedList('usuarios');
         } catch (err) {
             showToast(err.message, 'error');
         }
+    }
+
+    async function abrirModalAprobarUsuario(itemStr) {
+        await abrirModalEditarUsuario(itemStr, { aprobar: true });
     }
     function editarInfoProyecto(id) { let proyecto = localCache.proyectos.find(p => p._id === id); if(!proyecto) proyecto = historialCacheados.find(p => p._id === id); if (!proyecto) return showToast('Proyecto no encontrado', 'error'); Swal.fire({ title: 'Editar Información', html: `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}"><input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`, focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-nombre').value, document.getElementById('swal-total').value ] } }).then(async (result) => { if (result.isConfirmed) { const [nuevoNombre, nuevoTotalStr] = result.value; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } } }); }
     async function registrarPago(proyectoId, desdeHistorial = false) {
@@ -4602,7 +4737,30 @@ Fecha de firma: {{FECHA}}`;
     function toggleAuth(view) {['login-view', 'register-view', 'recover-view', 'reset-password-view'].forEach(v => { const el = document.getElementById(v); if(el) el.style.display = 'none'; }); const active = document.getElementById(`${view}-view`); if(active) active.style.display = 'block'; document.getElementById('login-error').textContent = ''; }
     function showResetPasswordView(token) { document.body.classList.add('auth-visible'); DOMElements.appWrapper.style.display = 'none'; DOMElements.loginContainer.style.display = 'flex'; document.getElementById('reset-token').value = token; toggleAuth('reset'); }
     async function resetPassword(e) { e.preventDefault(); const token = document.getElementById('reset-token').value; const password = document.getElementById('new-password').value; try { const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: password }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Contraseña actualizada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
-    async function registerUser(e) { e.preventDefault(); const username = document.getElementById('reg-username').value; const email = document.getElementById('reg-email').value; const password = document.getElementById('reg-password').value; const nombreArtistico = document.getElementById('reg-artistname').value; try { const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role: 'Cliente', nombre: nombreArtistico, createArtist: true }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Cuenta creada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
+    async function registerUser(e) {
+        e.preventDefault();
+        const username = document.getElementById('reg-username').value;
+        const email = document.getElementById('reg-email').value;
+        const password = document.getElementById('reg-password').value;
+        const nombreArtistico = document.getElementById('reg-artistname').value;
+        const empresaInvitacion = registroEmpresaInvitacion || sessionStorage.getItem('registro_empresa_invitacion');
+        const body = { username, email, password, nombre: nombreArtistico, createArtist: true };
+        if (empresaInvitacion) body.empresaId = empresaInvitacion;
+        try {
+            const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            const msg = data.message || (data.estado === 'pendiente'
+                ? 'Cuenta creada. Espera la aprobación de un administrador.'
+                : '¡Cuenta creada!');
+            showToast(msg, 'success');
+            sessionStorage.removeItem('registro_empresa_invitacion');
+            registroEmpresaInvitacion = null;
+            toggleAuth('login');
+        } catch (err) {
+            document.getElementById('login-error').textContent = err.message;
+        }
+    }
     async function recoverPassword(e) { e.preventDefault(); const email = document.getElementById('rec-email').value; try { const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('Correo enviado.', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     
     function toggleInputsHorario(index) {
@@ -4636,8 +4794,16 @@ Fecha de firma: {{FECHA}}`;
         }
     }
     
-    function initAppEventListeners(payload) { 
-        window.addEventListener('hashchange', () => { const section = location.hash.replace('#', ''); if (section) mostrarSeccion(section, false); }); 
+    function initAppEventListeners(payload) {
+        window.addEventListener('hashchange', () => {
+            capturarEmpresaInvitacionDesdeUrl();
+            const hashRaw = (location.hash || '').replace(/^#/, '');
+            const section = hashRaw.includes('?') ? hashRaw.split('?')[0] : hashRaw;
+            if (section && !['login', 'register', 'recover', 'reset'].includes(section)) {
+                mostrarSeccion(section, false);
+            }
+        });
+        window.addEventListener('empresa-context-changed', () => actualizarVisibilidadBotonInvitacion());
         ['Servicios', 'Artistas', 'Usuarios'].forEach(type => { const form = document.getElementById(`form${type}`); if(form) form.addEventListener('submit', (e) => saveItem(e, type.toLowerCase())); }); 
         document.getElementById('formEditarArtista').addEventListener('submit', guardarEdicionArtista); 
         document.getElementById('formEditarServicio').addEventListener('submit', guardarEdicionServicio); 
@@ -5753,6 +5919,7 @@ Fecha de firma: {{FECHA}}`;
         filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
+        abrirModalAprobarUsuario, cambiarTabUsuarios, copiarEnlaceInvitacion,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
         enviarAFlujoDirecto,
@@ -5979,5 +6146,7 @@ Fecha de firma: {{FECHA}}`;
             }); 
         }); 
     }
+
+    capturarEmpresaInvitacionDesdeUrl();
 
 }); // Cierre del DOMContentLoaded principal

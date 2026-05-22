@@ -176,6 +176,9 @@
                 </div>
 
                 <div class="header-actions d-flex align-items-center gap-1 flex-shrink-0 ms-auto">
+                    <button type="button" id="btn-invitacion-empresa" class="btn btn-sm btn-outline-info header-btn-invite d-none" onclick="app.copiarEnlaceInvitacion()" title="Copiar enlace de invitación">
+                        <i class="bi bi-link-45deg"></i><span class="d-none d-md-inline ms-1">Invitación</span>
+                    </button>
                     <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()" title="Sincronizar">
                         <div class="status-indicator-dot"></div>
                         <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
@@ -559,13 +562,23 @@
             <section id="gestion-usuarios" class="section-view">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
-                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center">
-                        <h2>Usuarios del Sistema</h2>
+                    <div class="card-header pt-3 pb-0 border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h2 class="mb-0">Usuarios del Sistema</h2>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearUsuario">
                             <i class="bi bi-person-plus"></i> Crear Usuario
                         </button>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body pt-3">
+                        <ul class="nav nav-tabs mb-3 usuarios-hub-tabs" id="usuariosHubTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="usuarios-tab-activos-btn" type="button" role="tab" onclick="app.cambiarTabUsuarios('activos', this)">Activos</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="usuarios-tab-pendientes-btn" type="button" role="tab" onclick="app.cambiarTabUsuarios('pendientes', this)">
+                                    Pendientes de Aprobación <span id="usuarios-pendientes-badge" class="badge bg-warning text-dark ms-1 d-none">0</span>
+                                </button>
+                            </li>
+                        </ul>
                         <ul id="listaUsuarios" class="list-group"></ul>
                     </div>
                 </div>
@@ -1080,6 +1093,7 @@
             <div class="modal-body">
                 <form id="formEditarUsuario" onsubmit="app.guardarEdicionUsuario(event)">
                     <input type="hidden" id="editUsuarioId">
+                    <input type="hidden" id="editUsuarioAprobar" value="0">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3"><label class="form-label">Usuario</label><input type="text" class="form-control" id="editUsuarioName" required></div>

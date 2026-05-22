@@ -87,19 +87,28 @@ const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
 router.post('/register', validate(registerSchema), async (req, res) => {
     try {
         const { username, email, password, nombre, createArtist, empresaId } = req.body;
+        const tieneInvitacionEmpresa = Boolean(empresaId);
         
         // Validar si existe
         const userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
         if (userExists) return res.status(400).json({ error: 'Usuario o correo ya existe.' });
 
-        // Empresa temporal por defecto si el registro público no envía empresaId
         let empresaIdAsignar = empresaId;
-        if (!empresaIdAsignar) {
+        let estadoUsuario = 'activo';
+
+        if (tieneInvitacionEmpresa) {
+            const empresaInvitacion = await Empresa.findById(empresaIdAsignar);
+            if (!empresaInvitacion) {
+                return res.status(400).json({ error: 'La empresa de la invitación no es válida.' });
+            }
+            estadoUsuario = 'activo';
+        } else {
             const empresaDefault = await Empresa.findOne({ isDefault: true }) || await Empresa.findOne();
             if (!empresaDefault) {
                 return res.status(500).json({ error: 'No hay empresa configurada en el sistema. Contacta al administrador.' });
             }
             empresaIdAsignar = empresaDefault._id;
+            estadoUsuario = 'pendiente';
         }
 
         // Crear Usuario
@@ -107,7 +116,8 @@ router.post('/register', validate(registerSchema), async (req, res) => {
             username, email, password,
             role: 'cliente',
             permisos: ['dashboard', 'historial-proyectos', 'pagos', 'cotizaciones'],
-            empresaId: empresaIdAsignar
+            empresaId: empresaIdAsignar,
+            estado: estadoUsuario
         });
         const savedUser = await newUser.save();
 
@@ -159,7 +169,11 @@ router.post('/register', validate(registerSchema), async (req, res) => {
             accessToken,
             refreshToken,
             role: savedUser.role,
-            expiresIn: 900
+            estado: savedUser.estado,
+            expiresIn: 900,
+            message: savedUser.estado === 'pendiente'
+                ? 'Cuenta creada. Un administrador debe aprobar tu acceso.'
+                : 'Cuenta creada correctamente.'
         });
     } catch (error) {
         console.error(error);
@@ -192,6 +206,12 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         }
 
         if (!isMatch) return res.status(400).json({ error: 'Contraseña incorrecta.' });
+
+        if (user.estado === 'pendiente') {
+            return res.status(403).json({
+                error: 'Tu cuenta está pendiente de aprobación. Un administrador debe asignarte tu empresa.'
+            });
+        }
 
         // C. --- BÚSQUEDA DE ARTISTA VINCULADO ---
         let artistaId = null;

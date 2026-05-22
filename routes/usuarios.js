@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
 // ==========================================
 router.put('/:id', async (req, res) => {
     try {
-        const { username, email, role, permisos, password, artistaId, empresaId } = req.body;
+        const { username, email, role, permisos, password, artistaId, empresaId, estado } = req.body;
         const usuarioId = req.params.id;
 
         // 1. Validar si el email nuevo ya existe
@@ -134,6 +134,14 @@ router.put('/:id', async (req, res) => {
                 datosActualizar.empresaId = empresaId;
             } else {
                 return res.status(403).json({ error: 'No autorizado para asignar otra empresa.' });
+            }
+        }
+
+        if (estado !== undefined && ['activo', 'pendiente'].includes(estado)) {
+            if (req.user.isSuperAdmin || req.user.role === 'admin') {
+                datosActualizar.estado = estado;
+            } else {
+                return res.status(403).json({ error: 'No autorizado para cambiar el estado del usuario.' });
             }
         }
 

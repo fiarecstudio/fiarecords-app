@@ -50,6 +50,13 @@ const UsuarioSchema = new mongoose.Schema({
     },
     // ----------------------------------------------------
 
+    // Onboarding: invitación directa (activo) vs registro libre (pendiente de aprobación)
+    estado: {
+        type: String,
+        enum: ['activo', 'pendiente'],
+        default: 'activo'
+    },
+
     // --- FASE 1: MULTI-TENANT - ROL SUPER ADMIN ---
     isSuperAdmin: {
         type: Boolean,
