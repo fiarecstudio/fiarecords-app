@@ -1887,32 +1887,46 @@ let proyectoIdEnEdicion = null;
                 const serviciosHtml = (p.items && p.items.length > 0) ? p.items.map(i => `<li class="small">${escapeHTML(i.nombre)}</li>`).join('') : `<li>${escapeHTML(p.nombreProyecto || 'Sin servicios')}</li>`; 
                 const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'Público General'; 
                 
-                // Botones de Contrato y Firma
-                const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
-                
                 const userInfo = getUserRoleAndId();
-                let btnFirma = '';
-                
+                const buildDropdown = window.buildTableActionsDropdown || ((html) => html);
+
+                let menuItems = `<li><a class="dropdown-item" href="#" onclick="app.previewContratoPDF('${p._id}'); return false;"><i class="bi bi-file-earmark-ruled me-2"></i>Ver Contrato</a></li>`;
+
                 if (p.firmaCliente) {
                     if (userInfo.role !== 'cliente') {
-                        // Admin puede ver firmado + borrar
-                        btnFirma = `
-                            <div class="d-flex gap-1 align-items-center">
-                                <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
-                                <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${p._id}')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        `;
+                        menuItems += `
+                        <li><span class="dropdown-item-text text-success"><i class="bi bi-check-circle me-2"></i>Firmado</span></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.borrarFirmaCliente('${p._id}'); return false;"><i class="bi bi-trash me-2"></i>Borrar Firma</a></li>`;
                     } else {
-                        // Cliente solo ve que está firmado
-                        btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
+                        menuItems += `<li><span class="dropdown-item-text text-success"><i class="bi bi-check-circle me-2"></i>Firmado</span></li>`;
                     }
                 } else {
-                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
+                    menuItems += `<li><a class="dropdown-item" href="#" onclick="app.abrirModalFirma('${p._id}'); return false;"><i class="bi bi-pen me-2"></i>Firmar</a></li>`;
                 }
-                
-                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2"><strong class="text-primary ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong><select onchange="app.cambiarProceso('${p._id}', this.value)" class="form-select form-select-sm" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select></div><div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div><div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong><div class="btn-group">${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-primary" title="Pago" onclick="app.registrarPago('${p._id}')"><i class="bi bi-currency-dollar"></i></button><button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="app.editarInfoProyecto('${p._id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button></div></div>`; colEl.appendChild(card); 
+
+                menuItems += `
+                        <li><a class="dropdown-item" href="#" onclick="app.registrarPago('${p._id}'); return false;"><i class="bi bi-currency-dollar me-2"></i>Registrar Pago</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="app.editarInfoProyecto('${p._id}'); return false;"><i class="bi bi-pencil me-2"></i>Editar</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarProyecto('${p._id}'); return false;"><i class="bi bi-trash me-2"></i>Borrar</a></li>`;
+
+                const accionesDropdown = buildDropdown(menuItems).replace(
+                    'data-bs-toggle="dropdown"',
+                    'data-bs-toggle="dropdown" draggable="false" onclick="event.stopPropagation();"'
+                );
+
+                const selectProceso = `<select onchange="app.cambiarProceso('${p._id}', this.value)" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" class="form-select form-select-sm kanban-proceso-select" style="width: auto;">${procesos.filter(pr => pr !== 'Solicitud').map(proc => `<option value="${proc}" ${p.proceso === proc ? 'selected' : ''}>${proc}</option>`).join('')}</select>`;
+
+                card.innerHTML = `<div class="project-card-header d-flex justify-content-between align-items-center mb-2 gap-1">
+                    <strong class="text-primary min-w-0 flex-grow-1 ${p.artista ? 'clickable-artist' : ''}" ${p.artista ? `ondblclick="app.irAVistaArtista('${p.artista._id}', '${escapeHTML(p.artista.nombre)}', '')"` : ''}>${escapeHTML(p.nombreProyecto || artistaNombre)}</strong>
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0 kanban-card-header-actions">
+                        <div class="kanban-card-dropdown" onclick="event.stopPropagation();">${accionesDropdown}</div>
+                        ${selectProceso}
+                    </div>
+                </div>
+                <div class="project-card-body"><div class="small text-muted mb-2">🗓️ ${safeDate(p.fecha)}</div><ul class="list-unstyled mb-0 small">${serviciosHtml}</ul></div>
+                <div class="project-card-footer"><strong class="text-success">$${safeMoney(p.total)}</strong></div>`;
+                colEl.appendChild(card); 
             });
     }
     async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }

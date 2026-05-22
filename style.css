@@ -719,7 +719,21 @@ body.dark-mode .project-card:hover {
 .project-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--border-color); gap: 0.5rem; flex-wrap: wrap; }
 .project-card-footer .project-price { font-weight: 700; font-size: 1rem; color: var(--primary-color); white-space: nowrap; }
 
-/* BOTONES EN TARJETA KANBAN - FASE 3 */
+/* Acciones Kanban — menú ⋮ (Fase B.8) */
+.project-card-header .kanban-card-header-actions {
+    flex-shrink: 0;
+}
+.project-card-header .kanban-card-dropdown .dropdown .btn {
+    padding: 0.2rem 0.45rem;
+    line-height: 1;
+}
+.project-card-header .kanban-proceso-select {
+    min-width: 6.5rem;
+    max-width: 9.5rem;
+    font-size: 0.75rem;
+}
+
+/* BOTONES EN TARJETA KANBAN - FASE 3 (legacy btn-group) */
 .project-card .btn-group {
     opacity: 0.6;
     transition: opacity 0.2s ease;
