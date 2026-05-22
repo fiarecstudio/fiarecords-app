@@ -225,24 +225,106 @@ body.dark-mode #canvas-firma {
 .main-content { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; background-color: var(--background-color); min-width: 0; }
 
 /* HEADER */
-.main-header { background-color: var(--card-background); border-bottom: 1px solid var(--border-color); min-height: 70px; }
+.main-header {
+    background-color: var(--card-background);
+    border-bottom: 1px solid var(--border-color);
+    min-height: auto;
+    padding: 0.75rem 1rem;
+    flex-shrink: 0;
+}
+.header-top-row { row-gap: 0.5rem; }
+.header-brand { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.header-welcome-user { max-width: 280px; min-width: 0; line-height: 1.2; font-size: 1.1rem; }
+.header-empresa-wrap { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.header-empresa-label { white-space: nowrap; flex-shrink: 0; }
+.empresa-selector-input { width: 100%; max-width: 180px; min-width: 100px; flex: 1 1 120px; }
+.header-actions { flex-wrap: nowrap; }
+.header-btn-icon {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+/* Búsqueda global — tema claro/oscuro */
+.header-search-group .input-group-text,
+.header-search-group .form-control {
+    background-color: var(--input-bg);
+    border-color: var(--border-color);
+    color: var(--text-color-dark);
+}
+.header-search-group .input-group-text {
+    color: var(--text-color-light);
+}
+.header-search-group .form-control::placeholder {
+    color: var(--text-color-light);
+    opacity: 0.85;
+}
+.header-search-group .form-control:focus {
+    background-color: var(--card-background);
+    border-color: var(--primary-color);
+    color: var(--text-color-dark);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+/* Estado de conexión */
+.connection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    background-color: var(--secondary-button-bg);
+    color: var(--text-color-dark);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.connection-status:hover { background-color: var(--secondary-button-hover-bg); }
+.status-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.connection-status.status-online .status-indicator-dot { background-color: var(--success-color); }
+.connection-status.status-offline .status-indicator-dot { background-color: var(--danger-color); }
+.connection-status.status-syncing .status-indicator-dot {
+    background-color: var(--warning-color);
+    animation: header-pulse 1s ease-in-out infinite;
+}
+@keyframes header-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
 .btn-back-inline { background: none; border: none; color: var(--primary-color); font-weight: 600; font-size: 0.95rem; padding: 0; margin-bottom: 1rem; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease; }
 .btn-back-inline:hover { color: var(--primary-hover); transform: translateX(-4px); }
 .btn-back-inline i { font-size: 1.2rem; font-weight: bold; }
 body.dark-mode .btn-back-inline { color: #818cf8; }
-.search-box-mobile .input-group-text, .search-box-mobile input { background-color: var(--input-bg); }
 main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 
 @media (min-width: 1025px) {
     .btn-back-inline { display: none !important; }
+    .main-header { padding: 0.75rem 1.25rem; }
+    .header-top-row { flex-wrap: nowrap; }
+    #empresa-selector-container.d-flex {
+        flex: 0 1 auto;
+        width: auto;
+        max-width: none;
+        order: unset;
+    }
 }
 
 /* Utilidades responsive (header, formularios, sidebar) */
 .sidebar-toggle-btn { display: none; }
 .search-box-desktop { display: block; }
 .search-box-mobile-alt { display: none; }
-.header-welcome-user { max-width: 280px; min-width: 0; }
-.empresa-selector-input { width: 100%; max-width: 180px; min-width: 120px; }
 .form-card-centered { width: 100%; max-width: 800px; margin-left: auto; margin-right: auto; }
 .chart-container-responsive { width: 100%; height: 350px; min-height: 220px; }
 .input-descuento-narrow { width: 100%; max-width: 100px; }
@@ -792,12 +874,17 @@ body.dark-mode .project-card:hover {
     #sidebar-overlay.show { display: block; }
 
     main { padding: 1.25rem; overflow-x: hidden; }
-    .main-header { padding: 0.75rem 1rem !important; min-height: auto; }
-    .main-header > .d-flex.justify-content-between { flex-wrap: wrap; gap: 0.5rem; }
-    .header-welcome-user { max-width: 100%; font-size: 1rem; }
-    .header-actions { flex-shrink: 0; }
-    #empresa-selector-container { max-width: 100%; flex-wrap: wrap; }
-    .empresa-selector-input { max-width: 100%; flex: 1 1 140px; }
+    .main-header { padding: 0.65rem 0.85rem !important; }
+    .header-brand { flex: 1 1 calc(100% - 7rem); max-width: calc(100% - 7rem); }
+    .header-welcome-user { max-width: 100%; font-size: 0.95rem; }
+    .header-actions { flex-shrink: 0; margin-left: auto !important; }
+    #empresa-selector-container.d-flex {
+        flex: 1 1 100%;
+        width: 100%;
+        max-width: 100%;
+        order: 3;
+    }
+    .empresa-selector-input { max-width: none; flex: 1 1 auto; min-width: 0; }
 
     .grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
     .config-grid { grid-template-columns: 1fr; }
@@ -877,7 +964,21 @@ body.dark-mode .project-card:hover {
     .modal-dialog { max-width: 95%; margin: 0.5rem auto; }
     .modal-content { max-width: 100%; margin: 0; }
 
-    .header-welcome-user { font-size: 0.9rem; }
+    .header-top-row { gap: 0.5rem; align-items: center; }
+    .header-brand { flex: 1 1 auto; max-width: calc(100% - 5.5rem); }
+    .header-actions {
+        flex: 0 0 auto;
+        margin-left: auto !important;
+        justify-content: flex-end;
+    }
+    #empresa-selector-container.d-flex {
+        flex: 1 1 100%;
+        width: 100%;
+        order: 3;
+    }
+    .header-welcome-user { font-size: 0.875rem; }
+    .connection-status { padding: 0.15rem 0.4rem; font-size: 0.65rem; }
+    .header-btn-icon { width: 1.85rem; height: 1.85rem; }
     .input-descuento-narrow { max-width: 100%; }
     .theme-toggle-login { top: 10px; right: 10px; padding: 0.3rem 0.6rem; font-size: 0.85rem; }
     .chart-container-responsive { height: 220px; min-height: 180px; }
