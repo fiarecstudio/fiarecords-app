@@ -1927,39 +1927,39 @@ let proyectoIdEnEdicion = null;
             if (proyectos.length) { 
                 proyectosTabHtml += '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Total</th><th>Pagado</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>'; 
                 proyectos.forEach(p => { 
-                    // Botones de Contrato y Firma
-                    const btnContrato = `<button class="btn btn-sm btn-outline-secondary" title="Ver Contrato" onclick="app.previewContratoPDF('${p._id}')"><i class="bi bi-file-earmark-ruled"></i></button>`;
                     const userInfo = getUserRoleAndId();
-                let btnFirma = '';
-                
-                if (p.firmaCliente) {
-                    if (userInfo.role !== 'cliente') {
-                        // Admin puede ver firmado + borrar
-                        btnFirma = `
-                            <div class="d-flex gap-1 align-items-center">
-                                <span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>
-                                <button class="btn btn-sm btn-outline-danger" title="🗑️ Borrar Firma" onclick="app.borrarFirmaCliente('${p._id}')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        `;
+                    const buildDropdown = window.buildTableActionsDropdown || ((html) => html);
+                    let menuItems = `
+                        <li><a class="dropdown-item" href="#" onclick="app.previewContratoPDF('${p._id}'); return false;"><i class="bi bi-file-earmark-ruled me-2"></i>Ver Contrato</a></li>`;
+
+                    if (p.firmaCliente) {
+                        if (userInfo.role !== 'cliente') {
+                            menuItems += `
+                        <li><span class="dropdown-item-text text-success"><i class="bi bi-check-circle me-2"></i>Firmado</span></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.borrarFirmaCliente('${p._id}'); return false;"><i class="bi bi-trash me-2"></i>Borrar Firma</a></li>`;
+                        } else {
+                            menuItems += `<li><span class="dropdown-item-text text-success"><i class="bi bi-check-circle me-2"></i>Firmado</span></li>`;
+                        }
                     } else {
-                        // Cliente solo ve que está firmado
-                        btnFirma = `<span class="badge bg-success" style="font-size: 0.7rem;">✅ Firmado</span>`;
-                    }
-                } else {
-                    btnFirma = `<button class="btn btn-sm btn-outline-warning" title="✍️ Firmar" onclick="app.abrirModalFirma('${p._id}')"><i class="bi bi-pen"></i> Firmar</button>`;
-                }
-                    
-                    let accionesHtml = `${btnContrato}${btnFirma}<button class="btn btn-sm btn-outline-secondary" title="Cotización PDF" onclick="app.generarCotizacionPDF('${p._id}')"><i class="bi bi-file-earmark-pdf"></i></button>`; 
-                    
-                    if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
-                        accionesHtml += `<button class="btn btn-sm btn-info ms-1 text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>`;
+                        menuItems += `<li><a class="dropdown-item" href="#" onclick="app.abrirModalFirma('${p._id}'); return false;"><i class="bi bi-pen me-2"></i>Firmar</a></li>`;
                     }
 
-                    if (p.enlaceEntrega) accionesHtml += `<a href="${p.enlaceEntrega}" target="_blank" class="btn btn-sm btn-success ms-1" title="Descargar Carpeta"><i class="bi bi-cloud-download"></i></a>`; 
-                    if (!isClientView) { accionesHtml += `<button class="btn btn-sm btn-outline-primary ms-1" title="Entrega/Drive" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')"><i class="bi bi-cloud-arrow-up"></i></button><button class="btn btn-sm btn-outline-danger ms-1" title="Borrar" onclick="app.eliminarProyecto('${p._id}')"><i class="bi bi-trash"></i></button>`; } 
-                    
+                    menuItems += `<li><a class="dropdown-item" href="#" onclick="app.generarCotizacionPDF('${p._id}'); return false;"><i class="bi bi-file-earmark-pdf me-2"></i>Cotización PDF</a></li>`;
+
+                    if ((p.archivos && p.archivos.length > 0) || (p.enlaceEntrega && p.enlaceEntrega.length > 0)) {
+                        menuItems += `<li><a class="dropdown-item" href="#" onclick="app.openPlayer('${p._id}'); return false;"><i class="bi bi-play-circle-fill me-2"></i>Visor Multimedia</a></li>`;
+                    }
+                    if (p.enlaceEntrega) {
+                        menuItems += `<li><a class="dropdown-item" href="${p.enlaceEntrega}" target="_blank" rel="noopener"><i class="bi bi-cloud-download me-2"></i>Descargar Carpeta</a></li>`;
+                    }
+                    if (!isClientView) {
+                        menuItems += `
+                        <li><a class="dropdown-item" href="#" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaInfo.nombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}'); return false;"><i class="bi bi-cloud-arrow-up me-2"></i>Entrega / Drive</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarProyecto('${p._id}'); return false;"><i class="bi bi-trash me-2"></i>Borrar</a></li>`;
+                    }
+
+                    const accionesHtml = buildDropdown(menuItems);
                     proyectosTabHtml += `<tr><td data-label="Fecha">${safeDate(p.fecha)}</td><td data-label="Proyecto">${escapeHTML(p.nombreProyecto || 'Proyecto sin nombre')}</td><td data-label="Total">$${safeMoney(p.total)}</td><td data-label="Pagado">$${safeMoney(p.montoPagado)}</td><td data-label="Estado"><span class="badge" style="background-color: var(--proceso-${(p.proceso || '').replace(/\s+/g, '')})">${p.proceso}</span></td><td data-label="Acciones" class="table-actions">${accionesHtml}</td></tr>`; 
                 }); 
                 proyectosTabHtml += '</tbody></table></div>'; 
@@ -4670,9 +4670,12 @@ Fecha de firma: {{FECHA}}`;
                 ? '<span class="badge bg-success">Liquidada</span>'
                 : '<span class="badge bg-danger">Pendiente</span>';
 
-            let btnPagar = d.estatus !== 'Liquidada'
-                ? `<button class="btn btn-sm btn-success text-white" title="Abonar" onclick="app.abonarDeuda('${d._id}', ${restante})"><i class="bi bi-cash"></i></button>`
-                : '';
+            const buildDropdown = window.buildTableActionsDropdown || ((html) => html);
+            const menuDeuda = `
+                ${d.estatus !== 'Liquidada' ? `<li><a class="dropdown-item text-success" href="#" onclick="app.abonarDeuda('${d._id}', ${restante}); return false;"><i class="bi bi-cash me-2"></i>Abonar</a></li>` : ''}
+                <li><a class="dropdown-item" href="#" onclick="app.verHistorialDeuda('${d._id}'); return false;"><i class="bi bi-clock-history me-2"></i>Historial</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarDeuda('${d._id}'); return false;"><i class="bi bi-trash me-2"></i>Eliminar</a></li>`;
 
             return `
             <tr class="${d.estatus === 'Liquidada' ? 'fila-cancelada' : ''}">
@@ -4682,9 +4685,7 @@ Fecha de firma: {{FECHA}}`;
                 <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
                 <td data-label="Estatus">${badge}</td>
                 <td data-label="Acciones" class="table-actions">
-                    ${btnPagar}
-                    <button class="btn btn-sm btn-outline-info" title="Historial" onclick="app.verHistorialDeuda('${d._id}')"><i class="bi bi-clock-history"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="app.eliminarDeuda('${d._id}')"><i class="bi bi-trash"></i></button>
+                    ${buildDropdown(menuDeuda)}
                 </td>
             </tr>`;
         }).join('');

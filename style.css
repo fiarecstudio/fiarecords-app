@@ -85,6 +85,8 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .table-hover tbody tr:hover { background-color: var(--secondary-button-bg); }
 .table thead th { background-color: var(--secondary-button-bg); color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid var(--border-color); }
 .table td { vertical-align: middle; }
+.table-actions .dropdown { position: static; }
+.table-actions .dropdown-menu { z-index: 1050; }
 
 /* --- RESPONSIVE TABLES --- */
 .table-responsive { 

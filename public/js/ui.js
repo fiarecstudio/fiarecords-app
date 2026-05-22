@@ -38,6 +38,18 @@
         return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     }
 
+    /** Menú ⋮ de acciones para celdas de tabla (Bootstrap 5 dropdown) */
+    function buildTableActionsDropdown(menuItemsHtml) {
+        const items = (menuItemsHtml || '').trim();
+        if (!items) return '';
+        return `<div class="dropdown text-end">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" title="Acciones">
+                <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">${items}</ul>
+        </div>`;
+    }
+
     // ==================================================================
     // 2. RENDERIZADO DE TABLAS
     // ==================================================================
@@ -81,17 +93,13 @@
                 <td data-label="Pagado">$${safeMoney(p.montoPagado)}</td>
                 <td data-label="Estado">${estadoBadge}</td>
                 <td data-label="Acciones" class="table-actions">
-                    ${showPlayer ? `<button class="btn btn-sm btn-info text-white" title="Visor Multimedia" onclick="app.openPlayer('${p._id}')"><i class="bi bi-play-circle-fill"></i></button>` : ''}
-                    <button class="btn btn-sm btn-outline-primary" title="Entrega / Drive" 
-                        onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}')">
-                        <i class="bi bi-cloud-arrow-up"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}', true)" title="Pagos">
-                        <i class="bi bi-cash-stack"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}')" title="Mover a Papelera">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                    ${buildTableActionsDropdown(`
+                        ${showPlayer ? `<li><a class="dropdown-item" href="#" onclick="app.openPlayer('${p._id}'); return false;"><i class="bi bi-play-circle-fill me-2"></i>Visor Multimedia</a></li>` : ''}
+                        <li><a class="dropdown-item" href="#" onclick="app.openDeliveryModal('${p._id}', '${escapeHTML(artistaNombre)}', '${escapeHTML(p.nombreProyecto || 'Proyecto')}'); return false;"><i class="bi bi-cloud-arrow-up me-2"></i>Entrega / Drive</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="app.registrarPago('${p._id}', true); return false;"><i class="bi bi-cash-stack me-2"></i>Pagos</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarProyecto('${p._id}'); return false;"><i class="bi bi-trash me-2"></i>Mover a Papelera</a></li>
+                    `)}
                 </td>
             </tr>`;
         }).join('');
@@ -135,15 +143,12 @@
                     <span class="badge bg-${p.estatus === 'Por Confirmar' ? 'warning' : 'info'}">${p.estatus}</span>
                 </td>
                 <td data-label="Acciones" class="table-actions">
-                    <button class="btn btn-sm btn-success text-white" onclick="app.aceptarCotizacion('${p._id}')" title="Aceptar">
-                        <i class="bi bi-check-lg"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.editarCotizacion('${p._id}')" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarProyecto('${p._id}', true)" title="Eliminar">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                    ${buildTableActionsDropdown(`
+                        <li><a class="dropdown-item text-success" href="#" onclick="app.aceptarCotizacion('${p._id}'); return false;"><i class="bi bi-check-lg me-2"></i>Aceptar</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="app.editarCotizacion('${p._id}'); return false;"><i class="bi bi-pencil me-2"></i>Editar</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="app.eliminarProyecto('${p._id}', true); return false;"><i class="bi bi-trash me-2"></i>Eliminar</a></li>
+                    `)}
                 </td>
             </tr>`;
         }).join('');
@@ -188,14 +193,10 @@
                 <td data-label="Pagado">$${safeMoney(p.montoPagado || 0)}</td>
                 <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
                 <td data-label="Acciones" class="table-actions">
-                    ${!esCliente ? `
-                    <button class="btn btn-sm btn-success text-white" onclick="app.registrarPago('${p._id}')" title="Registrar Pago">
-                        <i class="bi bi-cash-stack"></i> Cobrar
-                    </button>
-                    ` : ''}
-                    <button class="btn btn-sm btn-outline-info" onclick="app.registrarPago('${p._id}')" title="Ver Detalle / Cobrar">
-                        <i class="bi bi-eye"></i>
-                    </button>
+                    ${buildTableActionsDropdown(`
+                        ${!esCliente ? `<li><a class="dropdown-item text-success" href="#" onclick="app.registrarPago('${p._id}'); return false;"><i class="bi bi-cash-stack me-2"></i>Cobrar</a></li>` : ''}
+                        <li><a class="dropdown-item" href="#" onclick="app.registrarPago('${p._id}'); return false;"><i class="bi bi-eye me-2"></i>Ver Detalle / Cobrar</a></li>
+                    `)}
                 </td>
             </tr>`;
         }).join('');
@@ -233,12 +234,10 @@
                     <span class="badge bg-${getMetodoBadgeColor(p.metodo)}">${p.metodo || 'N/A'}</span>
                 </td>
                 <td data-label="Acciones" class="table-actions">
-                    <button class="btn btn-sm btn-outline-info" onclick="app.verDetallePago('${p.proyectoId}', '${p.pagoId}')" title="Ver Detalle">
-                        <i class="bi bi-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="app.descargarRecibo('${p.proyectoId}', '${p.pagoId}')" title="Descargar Recibo">
-                        <i class="bi bi-download"></i>
-                    </button>
+                    ${buildTableActionsDropdown(`
+                        <li><a class="dropdown-item" href="#" onclick="app.verDetallePago('${p.proyectoId}', '${p.pagoId}'); return false;"><i class="bi bi-eye me-2"></i>Ver Detalle</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="app.descargarRecibo('${p.proyectoId}', '${p.pagoId}'); return false;"><i class="bi bi-download me-2"></i>Descargar Recibo</a></li>
+                    `)}
                 </td>
             </tr>`;
         }).join('');
@@ -524,6 +523,7 @@
         safeDate,
         safeMoney,
         escapeHTML,
+        buildTableActionsDropdown,
 
         // Tablas
         renderHistorialTable,
@@ -555,6 +555,7 @@
     window.renderPaginatedList = renderPaginatedList;
     window.renderPaginationControls = renderPaginationControls;
     window.renderSidebar = renderSidebar;
+    window.buildTableActionsDropdown = buildTableActionsDropdown;
 
     // Alias para compatibilidad con código legacy que usa changeTablePage
     window.changeTablePage = changePage;
