@@ -358,14 +358,15 @@ main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
     background-color: var(--secondary-button-bg);
 }
 
-/* Header — enlace de invitación */
-.header-btn-invite {
-    border-color: rgba(99, 102, 241, 0.45);
+/* Header — grupo de invitación */
+.header-invite-group .btn {
+    border-color: var(--border-color);
+}
+.header-invite-group .btn-outline-info {
     color: var(--primary-color);
 }
-.header-btn-invite:hover {
+.header-invite-group .btn-outline-info:hover {
     background-color: rgba(99, 102, 241, 0.12);
-    color: var(--primary-color);
 }
 
 /* Hub de usuarios — tabs de aprobación */

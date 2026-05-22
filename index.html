@@ -176,9 +176,17 @@
                 </div>
 
                 <div class="header-actions d-flex align-items-center gap-1 flex-shrink-0 ms-auto">
-                    <button type="button" id="btn-invitacion-empresa" class="btn btn-sm btn-outline-info header-btn-invite d-none" onclick="app.copiarEnlaceInvitacion()" title="Copiar enlace de invitación">
-                        <i class="bi bi-link-45deg"></i><span class="d-none d-md-inline ms-1">Invitación</span>
-                    </button>
+                    <div id="invitacion-empresa-group" class="btn-group btn-group-sm header-invite-group d-none" role="group" aria-label="Compartir invitación">
+                        <button type="button" class="btn btn-outline-info" onclick="app.copiarEnlaceInvitacion()" title="Copiar enlace">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="app.compartirInvitacionWhatsApp()" title="WhatsApp">
+                            <i class="bi bi-whatsapp"></i>
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="app.compartirInvitacionCorreo()" title="Correo">
+                            <i class="bi bi-envelope"></i>
+                        </button>
+                    </div>
                     <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()" title="Sincronizar">
                         <div class="status-indicator-dot"></div>
                         <span id="connection-text" class="d-none d-sm-inline">En Línea</span>

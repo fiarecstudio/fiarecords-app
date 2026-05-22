@@ -4366,9 +4366,7 @@ Fecha de firma: {{FECHA}}`;
         return window.EmpresaContext?.getUserEmpresaId?.() || null;
     }
 
-    function actualizarVisibilidadBotonInvitacion() {
-        const btn = document.getElementById('btn-invitacion-empresa');
-        if (!btn) return;
+    function puedeGestionarUsuariosInvitacion() {
         const userInfo = getUserRoleAndId();
         const token = localStorage.getItem('token');
         let permisos = [];
@@ -4378,20 +4376,36 @@ Fecha de firma: {{FECHA}}`;
                 permisos = payload.permisos || [];
             } catch (e) { /* ignore */ }
         }
-        const puedeInvitar = userInfo.role === 'admin'
+        return userInfo.role === 'admin'
             || permisos.includes('gestion-usuarios')
             || window.EmpresaContext?.isSuperAdmin?.() === true;
+    }
+
+    function actualizarVisibilidadBotonInvitacion() {
+        const group = document.getElementById('invitacion-empresa-group');
+        if (!group) return;
         const empresaId = getEmpresaIdActivaParaInvitacion();
-        btn.classList.toggle('d-none', !(puedeInvitar && empresaId));
+        group.classList.toggle('d-none', !(puedeGestionarUsuariosInvitacion() && empresaId));
+    }
+
+    function construirUrlInvitacionEmpresa() {
+        const empresaId = getEmpresaIdActivaParaInvitacion();
+        if (!empresaId) return null;
+        return `${window.location.origin}${window.location.pathname}#login?empresa=${empresaId}`;
+    }
+
+    function construirMensajeInvitacionEmpresa() {
+        const url = construirUrlInvitacionEmpresa();
+        if (!url) return null;
+        return `¡Hola! Te invitamos a unirte a FiaRecords. Crea tu cuenta con este enlace exclusivo del estudio:\n\n${url}`;
     }
 
     async function copiarEnlaceInvitacion() {
-        const empresaId = getEmpresaIdActivaParaInvitacion();
-        if (!empresaId) {
+        const url = construirUrlInvitacionEmpresa();
+        if (!url) {
             showToast('Selecciona una empresa en el header antes de copiar el enlace.', 'warning');
             return;
         }
-        const url = `${window.location.origin}${window.location.pathname}#login?empresa=${empresaId}`;
         try {
             await navigator.clipboard.writeText(url);
             showToast('Enlace de invitación copiado al portapapeles.', 'success');
@@ -4405,6 +4419,74 @@ Fecha de firma: {{FECHA}}`;
             showToast('Enlace copiado (modo alternativo).', 'success');
         }
     }
+
+    function compartirInvitacionWhatsApp() {
+        const mensaje = construirMensajeInvitacionEmpresa();
+        if (!mensaje) {
+            showToast('Selecciona una empresa en el header antes de compartir.', 'warning');
+            return;
+        }
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje)}`, '_blank', 'noopener');
+    }
+
+    function compartirInvitacionCorreo() {
+        const url = construirUrlInvitacionEmpresa();
+        if (!url) {
+            showToast('Selecciona una empresa en el header antes de compartir.', 'warning');
+            return;
+        }
+        const subject = encodeURIComponent('Invitación a FiaRecords');
+        const body = encodeURIComponent(`¡Hola!\n\nTe invitamos a crear tu cuenta en FiaRecords usando este enlace:\n\n${url}\n\nSaludos.`);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    }
+
+    function mostrarAlertaUsuarioPendiente(data) {
+        if (!puedeGestionarUsuariosInvitacion()) return;
+
+        const u = data?.usuarioNuevo || data;
+        if (!u || !u._id) return;
+
+        const nombre = escapeHTML(u.username || 'Nuevo usuario');
+        const userId = String(u._id);
+        const itemPayload = {
+            _id: u._id,
+            username: u.username,
+            email: u.email || '',
+            role: u.role || 'cliente',
+            permisos: u.permisos || [],
+            artistaId: u.artistaId || null,
+            empresaId: u.empresaId || null,
+            estado: 'pendiente'
+        };
+
+        if (localCache.usuarios && Array.isArray(localCache.usuarios)) {
+            const existe = localCache.usuarios.some((x) => String(x._id) === userId);
+            if (!existe) localCache.usuarios.unshift({ ...u, estado: 'pendiente' });
+            actualizarBadgeUsuariosPendientes(localCache.usuarios);
+        }
+
+        if (document.getElementById('gestion-usuarios')?.classList.contains('active')) {
+            renderPaginatedList('usuarios', paginationState.usuarios.filter || null);
+        }
+
+        Swal.fire({
+            icon: 'warning',
+            title: '🚨 Nuevo usuario registrado',
+            html: `<p class="mb-0"><strong>${nombre}</strong> está pendiente de aprobación.</p>`,
+            showCancelButton: true,
+            confirmButtonText: 'Aprobar ahora',
+            cancelButtonText: 'Después',
+            confirmButtonColor: '#6366f1',
+            background: 'var(--card-background)',
+            color: 'var(--text-color-dark)'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                abrirModalAprobarUsuario(JSON.stringify(itemPayload));
+            }
+        });
+    }
+
+    window.mostrarAlertaUsuarioPendiente = mostrarAlertaUsuarioPendiente;
 
     function capturarEmpresaInvitacionDesdeUrl() {
         let empresaId = null;
@@ -5920,6 +6002,7 @@ Fecha de firma: {{FECHA}}`;
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
         abrirModalAprobarUsuario, cambiarTabUsuarios, copiarEnlaceInvitacion,
+        compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
         enviarAFlujoDirecto,

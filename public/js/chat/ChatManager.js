@@ -93,6 +93,13 @@
                 this._triggerCallback('onDisconnected', data);
             });
 
+            // Alerta de usuario pendiente (onboarding)
+            this.socketClient.on('alerta_nuevo_pendiente', (data) => {
+                if (typeof window.mostrarAlertaUsuarioPendiente === 'function') {
+                    window.mostrarAlertaUsuarioPendiente(data);
+                }
+            });
+
             // Mensaje recibido
             this.socketClient.on('message_received', (data) => {
                 console.log('[ChatManager] Mensaje recibido:', data);

@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs'); // Necesario para la comparación manual en 
 const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
 const Empresa = require('../models/Empresa');
+const { getChatNamespace } = require('../socket');
 const { google } = require('googleapis');
 
 // PASO 4: Importar middleware de validación y esquemas Joi
@@ -164,6 +165,26 @@ router.post('/register', validate(registerSchema), async (req, res) => {
         savedUser.refreshToken = refreshTokenHash;
         savedUser.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         await savedUser.save();
+
+        if (savedUser.estado === 'pendiente') {
+            try {
+                const chatNs = getChatNamespace();
+                const usuarioPayload = {
+                    _id: savedUser._id,
+                    username: savedUser.username,
+                    email: savedUser.email,
+                    role: savedUser.role,
+                    estado: savedUser.estado,
+                    empresaId: savedUser.empresaId,
+                    createdAt: savedUser.createdAt
+                };
+                const empresaRoom = `empresa:${savedUser.empresaId}`;
+                chatNs.to(empresaRoom).emit('alerta_nuevo_pendiente', { usuarioNuevo: usuarioPayload });
+                chatNs.emit('alerta_nuevo_pendiente', { usuarioNuevo: usuarioPayload });
+            } catch (socketErr) {
+                console.warn('[Register] No se pudo emitir alerta_nuevo_pendiente:', socketErr.message);
+            }
+        }
 
         res.status(201).json({
             accessToken,

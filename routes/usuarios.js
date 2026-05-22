@@ -15,7 +15,7 @@ router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticam
 router.get('/', async (req, res) => {
     try {
         const filtro = buildQueryFilter(req, { isDeleted: false });
-        const usuarios = await Usuario.find(filtro).select('-password');
+        const usuarios = await Usuario.find(filtro).select('-password').sort({ createdAt: -1 });
         res.json(usuarios);
     } catch (err) {
         res.status(500).json({ error: 'Error al obtener usuarios' });
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 router.get('/papelera/all', async (req, res) => {
     try {
         const filtro = buildQueryFilter(req, { isDeleted: true });
-        const usuarios = await Usuario.find(filtro).select('-password');
+        const usuarios = await Usuario.find(filtro).select('-password').sort({ createdAt: -1 });
         res.json(usuarios);
     } catch (err) {
         res.status(500).json({ error: 'Error al obtener papelera de usuarios' });

@@ -251,6 +251,12 @@
                 console.log('[SocketClient] 📝 Conversación actualizada:', data);
                 this._triggerEvent('conversation_updated', data);
             });
+
+            // Onboarding: nuevo usuario pendiente de aprobación
+            this.socket.on('alerta_nuevo_pendiente', (data) => {
+                console.log('[SocketClient] 🚨 Nuevo usuario pendiente:', data);
+                this._triggerEvent('alerta_nuevo_pendiente', data);
+            });
         }
 
         /**
