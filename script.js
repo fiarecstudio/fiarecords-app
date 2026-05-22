@@ -4296,8 +4296,130 @@ Fecha de firma: {{FECHA}}`;
     async function guardarEdicionArtista(e) { e.preventDefault(); const id = document.getElementById('editArtistId').value; const body = { nombre: document.getElementById('editArtistNombre').value, nombreArtistico: document.getElementById('editArtistNombreArtístico').value, telefono: document.getElementById('editArtistTelefono').value, correo: document.getElementById('editArtistCorreo').value }; try { await fetchAPI(`/api/artistas/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Artista actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('edit-artist-modal')).hide(); if(document.getElementById('vista-artista').classList.contains('active')) mostrarVistaArtista(id, body.nombre, body.nombreArtistico); localCache.artistas =[]; renderPaginatedList('artistas'); } catch (e) { showToast(e.message, 'error'); } }
     function abrirModalEditarServicio(id, nombre, precio, visible) { document.getElementById('editServicioId').value = id; document.getElementById('editServicioNombre').value = nombre; document.getElementById('editServicioPrecio').value = precio; document.getElementById('editServicioVisible').checked = (visible === true || visible === 'true'); new bootstrap.Modal(document.getElementById('modalEditarServicio')).show(); }
     async function guardarEdicionServicio(e) { e.preventDefault(); const id = document.getElementById('editServicioId').value; const body = { nombre: document.getElementById('editServicioNombre').value, precio: parseFloat(document.getElementById('editServicioPrecio').value), visible: document.getElementById('editServicioVisible').checked }; try { await fetchAPI(`/api/servicios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Servicio actualizado', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarServicio')).hide(); localCache.servicios =[]; renderPaginatedList('servicios'); } catch (e) { showToast(e.message, 'error'); } }
-    async function abrirModalEditarUsuario(itemStr) { const item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"')); document.getElementById('editUsuarioId').value = item._id; document.getElementById('editUsuarioName').value = item.username; document.getElementById('editUsuarioEmail').value = item.email || ''; document.getElementById('editUsuarioRole').value = item.role; document.getElementById('editUsuarioPass').value = ''; const selectArtista = document.getElementById('editUsuarioArtista'); if (selectArtista) { selectArtista.innerHTML = '<option value="">Cargando...</option>'; try { let artistas = localCache.artistas; if (!artistas || artistas.length === 0) { artistas = await fetchAPI('/api/artistas'); localCache.artistas = artistas; } let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>'; artistas.forEach(a => { const selected = (item.artistaId === a._id) ? 'selected' : ''; opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`; }); selectArtista.innerHTML = opts; } catch (e) { selectArtista.innerHTML = '<option value="">Error al cargar</option>'; } } document.querySelectorAll('#editUsuarioPermisosContainer input').forEach(chk => chk.checked = false); if (item.permisos && Array.isArray(item.permisos)) { item.permisos.forEach(p => { const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`); if(chk) chk.checked = true; }); } new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show(); }
-    async function guardarEdicionUsuario(e) { e.preventDefault(); const id = document.getElementById('editUsuarioId').value; const pass = document.getElementById('editUsuarioPass').value; const artistaSelect = document.getElementById('editUsuarioArtista'); const artistaId = artistaSelect ? artistaSelect.value : null; const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked'); const permisos = Array.from(checkboxes).map(c => c.value); const body = { username: document.getElementById('editUsuarioName').value, email: document.getElementById('editUsuarioEmail').value, role: document.getElementById('editUsuarioRole').value, permisos: permisos, artistaId: artistaId }; if(pass) body.password = pass; try { await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }); showToast('Usuario actualizado y vinculado.', 'success'); bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide(); localCache.usuarios =[]; renderPaginatedList('usuarios'); } catch (e) { showToast(e.message, 'error'); } }
+    async function cargarEmpresasEnSelectEditUsuario(empresaIdActual) {
+        const selectEmpresa = document.getElementById('editUsuarioEmpresa');
+        if (!selectEmpresa) return;
+
+        selectEmpresa.innerHTML = '<option value="">Cargando...</option>';
+        const empresaActualStr = empresaIdActual ? String(empresaIdActual) : '';
+
+        try {
+            let empresas = [];
+            const isSuper = window.EmpresaContext?.isSuperAdmin?.() === true;
+
+            if (isSuper) {
+                empresas = await fetchAPI('/api/empresas');
+            } else {
+                const empId = window.EmpresaContext?.getUserEmpresaId?.()
+                    || localStorage.getItem('empresaActiva')
+                    || localStorage.getItem('selected_empresa_id');
+                if (empId) {
+                    empresas = [{ _id: empId, nombre: 'Mi Empresa' }];
+                }
+            }
+
+            if (!empresas || empresas.length === 0) {
+                selectEmpresa.innerHTML = '<option value="">-- Sin empresas disponibles --</option>';
+                return;
+            }
+
+            let opts = '<option value="">-- Seleccionar empresa --</option>';
+            empresas.forEach((emp) => {
+                const id = String(emp._id);
+                const selected = empresaActualStr && empresaActualStr === id ? 'selected' : '';
+                opts += `<option value="${id}" ${selected}>${escapeHTML(emp.nombre || 'Empresa')}</option>`;
+            });
+            selectEmpresa.innerHTML = opts;
+        } catch (e) {
+            console.error('[EditarUsuario] Error cargando empresas:', e);
+            selectEmpresa.innerHTML = '<option value="">Error al cargar empresas</option>';
+        }
+    }
+
+    async function abrirModalEditarUsuario(itemStr) {
+        let item;
+        try {
+            item = JSON.parse(itemStr.replace(/&apos;/g, "'").replace(/&quot;/g, '"'));
+        } catch (e) {
+            const id = itemStr;
+            item = (localCache.usuarios || []).find((u) => String(u._id) === String(id));
+            if (!item) {
+                showToast('No se encontró el usuario en caché. Recarga la lista.', 'error');
+                return;
+            }
+        }
+
+        document.getElementById('editUsuarioId').value = item._id;
+        document.getElementById('editUsuarioName').value = item.username;
+        document.getElementById('editUsuarioEmail').value = item.email || '';
+        document.getElementById('editUsuarioRole').value = item.role;
+        document.getElementById('editUsuarioPass').value = '';
+
+        const selectArtista = document.getElementById('editUsuarioArtista');
+        if (selectArtista) {
+            selectArtista.innerHTML = '<option value="">Cargando...</option>';
+            try {
+                let artistas = localCache.artistas;
+                if (!artistas || artistas.length === 0) {
+                    artistas = await fetchAPI('/api/artistas');
+                    localCache.artistas = artistas;
+                }
+                const artistaIdActual = item.artistaId ? String(item.artistaId) : '';
+                let opts = '<option value="">-- Ninguno / Sin Vínculo --</option>';
+                artistas.forEach((a) => {
+                    const selected = artistaIdActual === String(a._id) ? 'selected' : '';
+                    opts += `<option value="${a._id}" ${selected}>${escapeHTML(a.nombreArtistico || a.nombre)}</option>`;
+                });
+                selectArtista.innerHTML = opts;
+            } catch (err) {
+                selectArtista.innerHTML = '<option value="">Error al cargar</option>';
+            }
+        }
+
+        await cargarEmpresasEnSelectEditUsuario(item.empresaId);
+
+        document.querySelectorAll('#editUsuarioPermisosContainer input').forEach((chk) => { chk.checked = false; });
+        if (item.permisos && Array.isArray(item.permisos)) {
+            item.permisos.forEach((p) => {
+                const chk = document.querySelector(`#editUsuarioPermisosContainer input[value="${p}"]`);
+                if (chk) chk.checked = true;
+            });
+        }
+
+        new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show();
+    }
+
+    async function guardarEdicionUsuario(e) {
+        e.preventDefault();
+        const id = document.getElementById('editUsuarioId').value;
+        const pass = document.getElementById('editUsuarioPass').value;
+        const artistaSelect = document.getElementById('editUsuarioArtista');
+        const artistaId = artistaSelect ? artistaSelect.value : null;
+        const empresaSelect = document.getElementById('editUsuarioEmpresa');
+        const checkboxes = document.querySelectorAll('#editUsuarioPermisosContainer input:checked');
+        const permisos = Array.from(checkboxes).map((c) => c.value);
+        const body = {
+            username: document.getElementById('editUsuarioName').value,
+            email: document.getElementById('editUsuarioEmail').value,
+            role: document.getElementById('editUsuarioRole').value,
+            permisos: permisos,
+            artistaId: artistaId
+        };
+        if (pass) body.password = pass;
+        if (empresaSelect && empresaSelect.value) {
+            body.empresaId = empresaSelect.value;
+        }
+
+        try {
+            await fetchAPI(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('Usuario actualizado y vinculado.', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario')).hide();
+            localCache.usuarios = [];
+            renderPaginatedList('usuarios');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
     function editarInfoProyecto(id) { let proyecto = localCache.proyectos.find(p => p._id === id); if(!proyecto) proyecto = historialCacheados.find(p => p._id === id); if (!proyecto) return showToast('Proyecto no encontrado', 'error'); Swal.fire({ title: 'Editar Información', html: `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del Proyecto" value="${escapeHTML(proyecto.nombreProyecto || '')}"><input id="swal-total" type="number" class="swal2-input" placeholder="Precio Total ($)" value="${proyecto.total || 0}">`, focusConfirm: false, preConfirm: () => { return[ document.getElementById('swal-nombre').value, document.getElementById('swal-total').value ] } }).then(async (result) => { if (result.isConfirmed) { const [nuevoNombre, nuevoTotalStr] = result.value; const nuevoTotal = parseFloat(nuevoTotalStr); try { if (nuevoNombre.trim() !== proyecto.nombreProyecto) { await fetchAPI(`/api/proyectos/${id}/nombre`, { method: 'PUT', body: JSON.stringify({ nombreProyecto: nuevoNombre.trim() }) }); proyecto.nombreProyecto = nuevoNombre.trim(); } if (!isNaN(nuevoTotal) && nuevoTotal !== proyecto.total) { await fetchAPI(`/api/proyectos/${id}`, { method: 'PUT', body: JSON.stringify({ total: nuevoTotal }) }); proyecto.total = nuevoTotal; } showToast('Proyecto actualizado.', 'success'); if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtro = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; cargarFlujoDeTrabajo(filtro); } else if (document.getElementById('vista-artista').classList.contains('active')) { const nombreActual = document.getElementById('vista-artista-nombre').textContent; const art = localCache.artistas.find(a => a.nombre === nombreActual || a.nombreArtistico === nombreActual); if (art) mostrarVistaArtista(art._id, nombreActual, ''); } } catch (e) { showToast(`Error al editar`, 'error'); } } }); }
     async function registrarPago(proyectoId, desdeHistorial = false) {
         let proyecto;

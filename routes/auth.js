@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs'); // Necesario para la comparación manual en login
 const Usuario = require('../models/Usuario');
 const Artista = require('../models/Artista');
+const Empresa = require('../models/Empresa');
 const { google } = require('googleapis');
 
 // PASO 4: Importar middleware de validación y esquemas Joi
@@ -85,17 +86,28 @@ const enviarCorreoGmailAPI = async (emailDestino, asunto, htmlContent) => {
 // PASO 4: Validación con Joi antes de procesar
 router.post('/register', validate(registerSchema), async (req, res) => {
     try {
-        const { username, email, password, nombre, createArtist } = req.body;
+        const { username, email, password, nombre, createArtist, empresaId } = req.body;
         
         // Validar si existe
         const userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
         if (userExists) return res.status(400).json({ error: 'Usuario o correo ya existe.' });
 
+        // Empresa temporal por defecto si el registro público no envía empresaId
+        let empresaIdAsignar = empresaId;
+        if (!empresaIdAsignar) {
+            const empresaDefault = await Empresa.findOne({ isDefault: true }) || await Empresa.findOne();
+            if (!empresaDefault) {
+                return res.status(500).json({ error: 'No hay empresa configurada en el sistema. Contacta al administrador.' });
+            }
+            empresaIdAsignar = empresaDefault._id;
+        }
+
         // Crear Usuario
         const newUser = new Usuario({
             username, email, password,
             role: 'cliente',
-            permisos: ['dashboard', 'historial-proyectos', 'pagos', 'cotizaciones']
+            permisos: ['dashboard', 'historial-proyectos', 'pagos', 'cotizaciones'],
+            empresaId: empresaIdAsignar
         });
         const savedUser = await newUser.save();
 
@@ -106,7 +118,8 @@ router.post('/register', validate(registerSchema), async (req, res) => {
                 nombreArtistico: nombre || username,
                 correo: email,
                 usuarioId: savedUser._id, // Vinculamos en el Artista
-                telefono: ''
+                telefono: '',
+                empresaId: empresaIdAsignar
             });
             const savedArtista = await newArtista.save();
             

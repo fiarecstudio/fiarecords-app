@@ -126,9 +126,15 @@ router.put('/:id', async (req, res) => {
             datosActualizar.artistaId = artistaId || null;
         }
 
-        // FASE 4: Manejo de empresaId (solo Super Admin puede cambiarlo)
-        if (req.user.isSuperAdmin && empresaId !== undefined) {
-            datosActualizar.empresaId = empresaId;
+        // FASE 4: Manejo de empresaId (asignación / aprobación de empresa)
+        if (empresaId !== undefined && empresaId !== null && empresaId !== '') {
+            if (req.user.isSuperAdmin) {
+                datosActualizar.empresaId = empresaId;
+            } else if (req.user.empresaId && empresaId.toString() === req.user.empresaId.toString()) {
+                datosActualizar.empresaId = empresaId;
+            } else {
+                return res.status(403).json({ error: 'No autorizado para asignar otra empresa.' });
+            }
         }
 
         // 3. Manejo de Contraseña
