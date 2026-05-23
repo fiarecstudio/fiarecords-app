@@ -659,6 +659,18 @@
         }
     });
     
+    // Audio global de notificaciones de chat (fallback si script.js aún no cargó)
+    if (!window.reproducirSonidoChat) {
+        window.audioNotificacion = window.audioNotificacion || new Audio('/public/sounds/notificacion.mp3');
+        window.reproducirSonidoChat = function() {
+            if (window.audioNotificacion) {
+                window.audioNotificacion.currentTime = 0;
+                window.audioNotificacion.play().catch(e => console.warn('Audio bloqueado por navegador', e));
+            }
+        };
+        window.reproducirSonido = window.reproducirSonidoChat;
+    }
+
     // FASE 5: Sistema de chat completo cargado
     Logger.debug('ChatInit', '✅ FASE 5: Script cargado');
     

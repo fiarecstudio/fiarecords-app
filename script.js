@@ -24,14 +24,17 @@
 // SISTEMA DE AUDIO PARA NOTIFICACIONES (HTML5 Audio)
 // Usa archivo .mp3 real para notificaciones
 // ==================================================================
-window.audioNotificacion = new Audio('/sounds/notificacion.mp3');
+window.audioNotificacion = new Audio('/public/sounds/notificacion.mp3');
 
-window.reproducirSonido = function() {
+window.reproducirSonidoChat = function() {
     if (window.audioNotificacion) {
-        window.audioNotificacion.currentTime = 0; // Reinicia el audio por si llegan mensajes muy rápido
-        window.audioNotificacion.play().catch(e => console.warn('El navegador bloqueó el auto-play del audio:', e));
+        window.audioNotificacion.currentTime = 0;
+        window.audioNotificacion.play().catch(e => console.warn('Audio bloqueado por navegador', e));
     }
 };
+
+/** Compatibilidad con llamadas existentes */
+window.reproducirSonido = window.reproducirSonidoChat;
 
 document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================

@@ -81,18 +81,27 @@
             // Botón flotante
             const button = document.createElement('button');
             button.className = 'chat-widget-button';
+            button.id = 'chat-toggle-btn';
+            button.type = 'button';
             button.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
             `;
             
-            // Badge de notificaciones
+            // Badge numérico de no leídos
             const badge = document.createElement('span');
             badge.className = 'chat-widget-badge';
             badge.style.display = 'none';
             badge.textContent = '0';
             button.appendChild(badge);
+
+            // Puntito rojo cuando el chat está cerrado y llega un mensaje ajeno
+            const unreadDot = document.createElement('span');
+            unreadDot.className = 'badge bg-danger rounded-pill chat-unread-badge d-none';
+            unreadDot.textContent = '!';
+            unreadDot.setAttribute('aria-label', 'Mensajes nuevos');
+            button.appendChild(unreadDot);
             
             // Contenedor del chat
             const chatContainer = document.createElement('div');
@@ -130,11 +139,70 @@
                 container,
                 button,
                 badge,
+                unreadDot,
                 chatContainer,
                 header,
                 content,
                 inputArea
             };
+        }
+
+        _getCurrentUserId() {
+            if (typeof window.getCurrentUserId === 'function') {
+                return window.getCurrentUserId();
+            }
+            try {
+                const stored = JSON.parse(localStorage.getItem('user') || '{}');
+                if (stored.id) return stored.id;
+            } catch (e) { /* ignore */ }
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.id || payload._id || payload.userId || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        _isMessageFromCurrentUser(message) {
+            if (!message) return true;
+            const currentUserId = this._getCurrentUserId();
+            if (!currentUserId) return false;
+            const senderId = message.senderId || message.sender || message.sender?._id;
+            if (!senderId) return false;
+            return senderId.toString() === currentUserId.toString();
+        }
+
+        showUnreadDot() {
+            if (this.elements.unreadDot) {
+                this.elements.unreadDot.classList.remove('d-none');
+            }
+        }
+
+        hideUnreadDot() {
+            if (this.elements.unreadDot) {
+                this.elements.unreadDot.classList.add('d-none');
+            }
+        }
+
+        _notifyIncomingMessage(message) {
+            if (this._isMessageFromCurrentUser(message)) return;
+
+            const currentConvId = this.chatManager.state.currentConversationId;
+            const isActiveConversation = this.isOpen
+                && this.currentView === 'chat'
+                && currentConvId
+                && message.conversationId
+                && message.conversationId.toString() === currentConvId.toString();
+
+            if (!isActiveConversation && typeof window.reproducirSonidoChat === 'function') {
+                window.reproducirSonidoChat();
+            }
+
+            if (!this.isOpen) {
+                this.showUnreadDot();
+            }
         }
 
         /**
@@ -267,6 +335,8 @@
             this.chatManager.on('onMessageReceived', (data) => {
                 const { message } = data;
                 const currentConvId = this.chatManager.state.currentConversationId;
+
+                this._notifyIncomingMessage(message);
                 
                 // Si estamos en la conversación, renderizar el mensaje
                 if (currentConvId && message.conversationId.toString() === currentConvId.toString()) {
@@ -370,6 +440,7 @@
         open() {
             this.isOpen = true;
             this.elements.chatContainer.classList.add('active');
+            this.hideUnreadDot();
             
             // Si no hay conversación seleccionada, mostrar lista
             if (!this.chatManager.state.currentConversationId) {
@@ -980,24 +1051,56 @@
          * Confirma y elimina una conversación
          */
         async confirmDeleteConversation(conversationId, title) {
-            const confirmed = confirm(`¿Eliminar conversación "${title || 'Sin título'}"?\n\nLos mensajes no se eliminarán, pero la conversación desaparecerá de tu lista.`);
-            
-            if (!confirmed) return;
-            
-            try {
-                await this.chatManager.deleteConversation(conversationId);
-                this.renderConversationsList();
-                
-                // Si estaba en esa conversación, volver a la lista
-                if (this.chatManager.state.currentConversationId?.toString() === conversationId.toString()) {
-                    this.showConversationsList();
+            const convTitle = title || 'Sin título';
+
+            const runDelete = async () => {
+                try {
+                    await this.chatManager.deleteConversation(conversationId);
+                    this.renderConversationsList();
+
+                    if (this.chatManager.state.currentConversationId?.toString() === conversationId.toString()) {
+                        this.showConversationsList();
+                    }
+
+                    console.log('[ChatWidget] Conversación eliminada:', conversationId);
+                } catch (error) {
+                    console.error('[ChatWidget] Error eliminando conversación:', error);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Error',
+                            text: error.message || 'No se pudo eliminar la conversación',
+                            icon: 'error',
+                            background: '#111',
+                            color: '#fff'
+                        });
+                    } else {
+                        alert('Error al eliminar conversación: ' + error.message);
+                    }
                 }
-                
-                console.log('[ChatWidget] Conversación eliminada:', conversationId);
-            } catch (error) {
-                console.error('[ChatWidget] Error eliminando conversación:', error);
-                alert('Error al eliminar conversación: ' + error.message);
+            };
+
+            if (typeof Swal === 'undefined') {
+                const confirmed = confirm(`¿Eliminar conversación "${convTitle}"?`);
+                if (confirmed) await runDelete();
+                return;
             }
+
+            Swal.fire({
+                title: '¿Eliminar conversación?',
+                text: `"${convTitle}" desaparecerá de tu lista. Esta acción no se puede deshacer.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#deff9a',
+                cancelButtonColor: '#333',
+                confirmButtonText: '<span style="color: black;">Sí, eliminar</span>',
+                cancelButtonText: 'Cancelar',
+                background: '#111',
+                color: '#fff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    runDelete();
+                }
+            });
         }
 
         /**
@@ -1021,7 +1124,13 @@
         updateBadge() {
             const totalUnread = this.chatManager.state.unreadCount || 0;
             this.elements.badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-            this.elements.badge.style.display = totalUnread > 0 ? 'flex' : 'none';
+            this.elements.badge.style.display = totalUnread > 0 && !this.isOpen ? 'flex' : 'none';
+
+            if (this.isOpen) {
+                this.hideUnreadDot();
+            } else if (totalUnread > 0) {
+                this.showUnreadDot();
+            }
             
             // Animación de pulso cuando hay mensajes nuevos
             if (totalUnread > 0 && !this.isOpen) {
