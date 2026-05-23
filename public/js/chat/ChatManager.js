@@ -689,6 +689,7 @@
             
             if (this.socketClient) {
                 this.socketClient.disconnect();
+                this.socketClient = null;
             }
             
             this.state = {

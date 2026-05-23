@@ -1,4 +1,9 @@
-// ==================================================================
+if (window.hasLoadedScript) {
+    console.warn('[Security] script.js ya cargado, abortando ejecución duplicada.');
+} else {
+    window.hasLoadedScript = true;
+
+    // ==================================================================
 // FASE 5: GUARDIA DE IDENTIDAD VISUAL - SISTEMA ANTI-FLICKER
 // Este código se ejecuta INMEDIATAMENTE, antes de que el DOM esté listo,
 // para poner el logo en caché al instante y evitar el parpadeo en blanco.
@@ -38,22 +43,20 @@ window.reproducirSonidoChat = function() {
 window.reproducirSonido = window.reproducirSonido || window.reproducirSonidoChat;
 
 // Unlocker agresivo: fuerza la promesa de play dentro del primer click real
-function unlockAudio() {
-    if (window.audioNotificacion) {
-        window.audioNotificacion.volume = 0; // Silencio
+// Se auto-desregistra con { once: true } para no interferir con otros controles de UI.
+document.addEventListener('click', () => {
+    if (window.audioNotificacion && window.audioNotificacion.paused) {
+        window.audioNotificacion.volume = 0;
         window.audioNotificacion.play().then(() => {
             window.audioNotificacion.pause();
             window.audioNotificacion.currentTime = 0;
-            window.audioNotificacion.volume = 1; // Restauramos volumen
-            document.removeEventListener('click', unlockAudio);
-            console.log('[Audio] Autoplay desbloqueado con éxito.');
-        }).catch(e => {
-            console.log('[Audio] Esperando interacción válida...', e);
+            window.audioNotificacion.volume = 1;
+            console.log('[Audio] Autoplay desbloqueado de forma segura.');
+        }).catch(() => {
+            // Silenciamos el error para no ensuciar la consola si el usuario hace clic muy rápido
         });
     }
-}
-
-document.addEventListener('click', unlockAudio, { once: false }); // Lo mantenemos escuchando hasta que el catch no se dispare
+}, { once: true, capture: true }); // 'capture: true' lo ejecuta antes, 'once: true' lo destruye para siempre
 
 document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================
@@ -3299,8 +3302,15 @@ Fecha de firma: {{FECHA}}`;
             sidebar.classList.toggle('show'); 
             overlay.classList.toggle('show'); 
         }; 
-        if (hamburger) hamburger.addEventListener('click', toggleMenu); 
-        if (overlay) overlay.addEventListener('click', toggleMenu); 
+        if (hamburger && !hamburger.dataset.listener) {
+            hamburger.dataset.listener = 'true';
+            hamburger.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleMenu();
+            });
+        }
+        if (overlay) overlay.addEventListener('pointerdown', toggleMenu); 
         document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { 
             link.addEventListener('click', () => { 
                 if (window.innerWidth <= 768) { 
@@ -6291,3 +6301,4 @@ Fecha de firma: {{FECHA}}`;
     capturarEmpresaInvitacionDesdeUrl();
 
 }); // Cierre del DOMContentLoaded principal
+}

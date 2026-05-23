@@ -137,6 +137,13 @@ app.get('/health', async (req, res) => {
 const authMiddleware = limiters.authLimiter ? limiters.authLimiter : (req, res, next) => next();
 const projectMiddleware = limiters.projectCreationLimiter ? limiters.projectCreationLimiter : (req, res, next) => next();
 
+// --- 4. Servir Archivos Estáticos ---
+// El contenido público debe exponerse antes de cualquier middleware de auth
+// y antes de la ruta catch-all que devuelve el SPA/login.
+app.use('/sounds', express.static(path.join(__dirname, 'public', 'sounds')));
+app.use(express.static(__dirname)); // Para /style.css y otros archivos en la raíz del proyecto
+app.use('/public', express.static(path.join(__dirname, 'public'))); // Para /public/css/chat.css, /public/js, /public/sounds
+
 app.use('/api/auth', authMiddleware, require('./routes/auth')); 
 app.use('/api/servicios', require('./routes/servicios'));
 app.use('/api/artistas', require('./routes/artistas'));
@@ -150,9 +157,6 @@ app.use('/api/empresas', require('./routes/empresas')); // FASE 4: Gestión de E
 app.use('/api/support/public', require('./routes/supportPublic')); // FASE 5: Soporte público (sin auth)
 app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google Drive
 app.use('/api/chat', require('./routes/chat')); // FASE 2: Sistema de Chat
-
-// --- 4. Servir Archivos Estáticos ---
-app.use(express.static(path.join(__dirname)));
 
 // --- 5. Ruta Catch-All (SPA) ---
 // Usar middleware en lugar de app.get para evitar problemas con Express 5

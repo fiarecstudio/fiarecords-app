@@ -115,6 +115,12 @@
                         return;
                     }
 
+                    if (this.socket && this.socket.connected) {
+                        console.log('[SocketClient] Socket ya conectado, reutilizando...');
+                        resolve(true);
+                        return;
+                    }
+
                     console.log('[SocketClient] Conectando a', this.serverUrl, '/chat');
 
                     // Crear conexión al namespace /chat
@@ -125,11 +131,10 @@
                         transports: ['websocket', 'polling'],
                         timeout: 20000,
                         forceNew: true,
-                        // Configuración de reconexión limitada
                         reconnection: true,
-                        reconnectionAttempts: 5,
-                        reconnectionDelay: 2000,
-                        reconnectionDelayMax: 10000
+                        reconnectionAttempts: Infinity,
+                        reconnectionDelay: 1000,
+                        reconnectionDelayMax: 5000
                     });
 
                     // Evento: Conexión exitosa
@@ -359,11 +364,22 @@
          * Desconecta el socket
          */
         disconnect() {
-            if (this.socket) {
-                this.socket.disconnect();
-                this.isConnected = false;
-                console.log('[SocketClient] Desconectado manualmente');
+            if (!this.socket) return;
+
+            try {
+                this.socket.removeAllListeners();
+                if (this.socket.connected) {
+                    this.socket.disconnect();
+                } else {
+                    this.socket.close();
+                }
+            } catch (error) {
+                console.warn('[SocketClient] Error al cerrar socket:', error);
             }
+
+            this.socket = null;
+            this.isConnected = false;
+            console.log('[SocketClient] Desconectado manualmente');
         }
 
         /**

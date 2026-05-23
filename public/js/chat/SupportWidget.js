@@ -767,8 +767,12 @@
             if (!this.socket) return;
             this._unbindSocketListeners();
             try {
-                this.socket.disconnect();
                 this.socket.removeAllListeners();
+                if (this.socket.connected) {
+                    this.socket.disconnect();
+                } else {
+                    this.socket.close();
+                }
             } catch (e) {
                 console.warn('[SupportWidget] Error al cerrar socket:', e);
             }
@@ -854,8 +858,11 @@
                 this.socket = io(`${this.apiUrl}/support`, {
                     auth: authData,
                     transports: ['websocket', 'polling'],
-                    reconnectionAttempts: 5,
-                    reconnectionDelay: 2000
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 20000
                 });
 
                 this._bindSocketListeners();

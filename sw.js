@@ -49,6 +49,9 @@ self.addEventListener("fetch", event => {
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
+        if (networkResponse.status === 206) {
+          return networkResponse;
+        }
         // Si hay internet, guardamos la versión MÁS NUEVA en la caché
         return caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, networkResponse.clone());
