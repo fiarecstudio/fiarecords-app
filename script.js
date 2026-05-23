@@ -24,17 +24,36 @@
 // SISTEMA DE AUDIO PARA NOTIFICACIONES (HTML5 Audio)
 // Usa archivo .mp3 real para notificaciones
 // ==================================================================
-window.audioNotificacion = new Audio('/public/sounds/notificacion.mp3');
+window.audioNotificacion = new Audio('/sounds/notificacion.mp3');
+window.audioNotificacion.preload = 'auto';
+window.audioNotificacion.volume = 1;
+window.audioNotificacion.muted = false;
 
 window.reproducirSonidoChat = function() {
     if (window.audioNotificacion) {
         window.audioNotificacion.currentTime = 0;
-        window.audioNotificacion.play().catch(e => console.warn('Audio bloqueado por navegador', e));
+        window.audioNotificacion.play().catch(e => console.warn('[Audio] Bloqueado temporalmente:', e));
     }
 };
+window.reproducirSonido = window.reproducirSonido || window.reproducirSonidoChat;
 
-/** Compatibilidad con llamadas existentes */
-window.reproducirSonido = window.reproducirSonidoChat;
+// Unlocker agresivo: fuerza la promesa de play dentro del primer click real
+function unlockAudio() {
+    if (window.audioNotificacion) {
+        window.audioNotificacion.volume = 0; // Silencio
+        window.audioNotificacion.play().then(() => {
+            window.audioNotificacion.pause();
+            window.audioNotificacion.currentTime = 0;
+            window.audioNotificacion.volume = 1; // Restauramos volumen
+            document.removeEventListener('click', unlockAudio);
+            console.log('[Audio] Autoplay desbloqueado con éxito.');
+        }).catch(e => {
+            console.log('[Audio] Esperando interacción válida...', e);
+        });
+    }
+}
+
+document.addEventListener('click', unlockAudio, { once: false }); // Lo mantenemos escuchando hasta que el catch no se dispare
 
 document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================

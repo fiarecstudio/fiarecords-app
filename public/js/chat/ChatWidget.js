@@ -98,7 +98,13 @@
 
             // Puntito rojo cuando el chat está cerrado y llega un mensaje ajeno
             const unreadDot = document.createElement('span');
+            unreadDot.id = 'global-unread-badge';
             unreadDot.className = 'badge bg-danger rounded-pill chat-unread-badge d-none';
+            unreadDot.style.position = 'absolute';
+            unreadDot.style.top = '-5px';
+            unreadDot.style.right = '-5px';
+            unreadDot.style.padding = '5px 8px';
+            unreadDot.style.fontSize = '10px';
             unreadDot.textContent = '!';
             unreadDot.setAttribute('aria-label', 'Mensajes nuevos');
             button.appendChild(unreadDot);
@@ -169,14 +175,25 @@
             if (!message) return true;
             const currentUserId = this._getCurrentUserId();
             if (!currentUserId) return false;
-            const senderId = message.senderId || message.sender || message.sender?._id;
+            const senderId = message.senderId || message.sender?._id || message.sender;
             if (!senderId) return false;
             return senderId.toString() === currentUserId.toString();
+        }
+
+        _isPageHidden() {
+            if (typeof document === 'undefined') {
+                return false;
+            }
+            return document.hidden || document.visibilityState === 'hidden';
         }
 
         showUnreadDot() {
             if (this.elements.unreadDot) {
                 this.elements.unreadDot.classList.remove('d-none');
+            }
+            const globalBadge = document.getElementById('global-unread-badge');
+            if (globalBadge) {
+                globalBadge.classList.remove('d-none');
             }
         }
 
@@ -184,24 +201,45 @@
             if (this.elements.unreadDot) {
                 this.elements.unreadDot.classList.add('d-none');
             }
+            const globalBadge = document.getElementById('global-unread-badge');
+            if (globalBadge) {
+                globalBadge.classList.add('d-none');
+            }
         }
 
         _notifyIncomingMessage(message) {
-            if (this._isMessageFromCurrentUser(message)) return;
+            try {
+                console.log('[DEBUG NOTIFICACION] Evaluando mensaje:', message);
+                console.log('[DEBUG NOTIFICACION] Estado: isOpen =', this.isOpen, '| hidden =', typeof document !== 'undefined' ? document.hidden : 'no-document');
 
-            const currentConvId = this.chatManager.state.currentConversationId;
-            const isActiveConversation = this.isOpen
-                && this.currentView === 'chat'
-                && currentConvId
-                && message.conversationId
-                && message.conversationId.toString() === currentConvId.toString();
+                const currentUserId = this._getCurrentUserId();
+                const senderId = message?.senderId || message?.sender?._id || message?.sender;
+                const isOwnMessage = currentUserId && senderId && currentUserId.toString() === senderId.toString();
+                const isChatClosed = !this.isOpen;
+                const isPageHidden = typeof document !== 'undefined' ? document.hidden : false;
+                const shouldNotify = !isOwnMessage && (isChatClosed || isPageHidden);
 
-            if (!isActiveConversation && typeof window.reproducirSonidoChat === 'function') {
-                window.reproducirSonidoChat();
-            }
+                console.log('[DEBUG NOTIFICACION] isOwnMessage =', isOwnMessage, '| isChatClosed =', isChatClosed, '| isPageHidden =', isPageHidden, '| shouldNotify =', shouldNotify);
 
-            if (!this.isOpen) {
-                this.showUnreadDot();
+                if (shouldNotify) {
+                    console.log('[DEBUG NOTIFICACION] Activando punto rojo y sonido...');
+
+                    const badge = document?.getElementById?.('global-unread-badge');
+                    if (badge) {
+                        badge.classList.remove('d-none');
+                    } else {
+                        console.error('[DEBUG NOTIFICACION] No se encontró el elemento #global-unread-badge en el DOM.');
+                    }
+
+                    if (typeof window?.reproducirSonidoChat === 'function') {
+                        window.reproducirSonidoChat();
+                    } else {
+                        console.error('[DEBUG NOTIFICACION] Fallo crítico: window.reproducirSonidoChat no está definida.');
+                    }
+                }
+
+            } catch (error) {
+                console.error('[DEBUG NOTIFICACION] Error de ejecución en notificaciones:', error);
             }
         }
 
@@ -496,7 +534,14 @@
             );
             
             if (conversation) {
-                document.getElementById('chat-header-title').textContent = conversation.title || 'Chat';
+                const currentUserId = this.chatManager._getCurrentUserId?.() || this.chatManager.socketClient?.socket?.user?.id;
+                const contact = conversation.participants?.find(participant => {
+                    const participantId = participant.userId?.toString?.() || participant._id?.toString?.() || participant.id?.toString?.();
+                    return participantId && participantId !== currentUserId?.toString();
+                }) || conversation.participants?.[0] || null;
+
+                const contactName = contact?.nombre || contact?.username || contact?.name || conversation.title || 'Chat';
+                document.getElementById('chat-header-title').textContent = contactName;
                 
                 // Actualizar estado del otro participante
                 this._updateParticipantStatus(conversation);

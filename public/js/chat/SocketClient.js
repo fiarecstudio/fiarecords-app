@@ -8,6 +8,7 @@
 
 (function() {
     'use strict';
+    console.log('[CHAT DEBUG] SocketClient.js cargado');
 
     class SocketClient {
         constructor() {

@@ -144,14 +144,58 @@ module.exports = (socket, io) => {
             
             // EMITIR a la sala de la conversación
             // socket.to() excluye al emisor (mensaje ya aparece en UI local)
-            io.to(`conversation:${conversationId}`).emit('message:received', {
+            const conversationRoom = `conversation:${conversationId}`;
+            const participantIds = conversation.participants
+                .map(p => p.userId.toString())
+                .filter(id => id !== socket.user.id.toString());
+
+            console.log('[Messages] EMITIENDO message:received a sala de conversación:', conversationRoom);
+            console.log('[Messages] Emisor:', {
+                socketId: socket.id,
+                userId: socket.user.id,
+                username: socket.user.username
+            });
+            console.log('[Messages] Destinatarios esperados:', participantIds);
+
+            io.to(conversationRoom).emit('message:received', {
                 message: messageResponse
             });
+
+            // Fallback: si hay participantes conectados por user room y no están unidos a la sala,
+            // enviarles el mensaje directamente para evitar que se pierda si la sala no fue unida.
+            try {
+                const activeConversationSockets = await io.in(conversationRoom).allSockets();
+                console.log('[Messages] Sockets activos en', conversationRoom, ':', Array.from(activeConversationSockets));
+
+                participantIds.forEach((participantId) => {
+                    const userRoom = `user:${participantId}`;
+                    const userSockets = io.sockets.adapter.rooms.get(userRoom) || new Set();
+
+                    userSockets.forEach((socketId) => {
+                        const joinedConversationRoom = activeConversationSockets.has(socketId);
+                        console.log('[Messages] Verificando socket receptor:', {
+                            participantId,
+                            socketId,
+                            userRoom,
+                            joinedConversationRoom
+                        });
+
+                        if (!joinedConversationRoom) {
+                            io.to(socketId).emit('message:received', {
+                                message: messageResponse
+                            });
+                            console.log('[Messages] Fallback emit enviado a socket directo:', socketId, 'para usuario', participantId);
+                        }
+                    });
+                });
+            } catch (fallbackError) {
+                console.warn('[Messages] Fallback socket delivery falló:', fallbackError.message);
+            }
             
             // También emitir al namespace /support para visitantes
             try {
                 const mainIO = getIO();
-                mainIO.of('/support').to(`conversation:${conversationId}`).emit('message:received', {
+                mainIO.of('/support').to(conversationRoom).emit('message:received', {
                     message: messageResponse
                 });
             } catch (err) {

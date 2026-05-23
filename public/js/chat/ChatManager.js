@@ -8,6 +8,7 @@
 
 (function() {
     'use strict';
+    console.log('[CHAT DEBUG] ChatManager.js cargado');
 
     class ChatManager {
         constructor() {
@@ -38,12 +39,39 @@
         }
 
         /**
+         * Obtiene el ID del usuario actual para comparación en mensajes
+         * @private
+         */
+        _getCurrentUserId() {
+            try {
+                // Intentar desde localStorage (sincrónico)
+                const stored = JSON.parse(localStorage.getItem('user') || '{}');
+                if (stored && stored.id) return stored.id;
+            } catch (e) { /* ignore */ }
+            
+            try {
+                // Intentar desde JWT
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    return payload.id || payload._id || payload.userId;
+                }
+            } catch (e) { /* ignore */ }
+            
+            return null;
+        }
+
+        /**
          * Inicializa el sistema de chat
          * @returns {Promise<boolean>}
          */
         async initialize() {
             try {
                 console.log('[ChatManager] Inicializando sistema de chat...');
+                console.log('[ChatManager] Información de usuario:', {
+                    userId: this._getCurrentUserId(),
+                    timestamp: new Date().toISOString()
+                });
 
                 // Verificar que SocketClient esté disponible
                 if (typeof SocketClient === 'undefined') {
@@ -104,8 +132,19 @@
                 }
             });
 
-            // Mensaje recibido
+            // ================================================================
+            // FASE 2: Mensaje recibido con Page Visibility API
+            // ================================================================
+            // El SocketClient transforma el evento socket.io 'message:received'
+            // en 'message_received' para mantener el flujo abstraído.
+            // Escucha los mensajes entrantes e implementa:
+            // 1. Verificación de visibilidad de página (document.hidden / visibilityState)
+            // 2. Reproducción de sonido solo si no es del usuario actual
+            // 3. Mostrar badge rojo si la página está oculta o chat cerrado
+            // ================================================================
+            
             this.socketClient.on('message_received', (data) => {
+                console.log('[CHAT DEBUG] Mensaje recibido del servidor:', data);
                 console.log('[ChatManager] Mensaje recibido:', data);
                 
                 const { message } = data;
@@ -129,6 +168,30 @@
                 
                 // Actualizar conversación
                 this._updateConversationLastMessage(convId, message);
+                
+                // ================================================================
+                // AUDITORÍA DE VISIBILIDAD
+                // ================================================================
+                try {
+                    const currentUserId = this._getCurrentUserId();
+                    const senderId = message.senderId || message.sender?._id;
+                    const isOwnMessage = currentUserId && senderId && 
+                                       currentUserId.toString() === senderId.toString();
+                    
+                    const isPageHidden = typeof document !== 'undefined' ? document.hidden : false;
+                    const visibilityState = typeof document !== 'undefined' ? document.visibilityState : 'unknown';
+                    
+                    console.log('[ChatManager] Mensaje recibido - auditoría de visibilidad:', {
+                        messageId: message._id,
+                        senderId,
+                        currentUserId,
+                        isOwnMessage,
+                        pageHidden: isPageHidden,
+                        visibilityState
+                    });
+                } catch (err) {
+                    console.error('[ChatManager] Error auditando visibilidad:', err);
+                }
                 
                 // Notificar a la UI
                 this._triggerCallback('onMessageReceived', data);
@@ -278,6 +341,12 @@
                 
                 if (response.success) {
                     this.state.conversations = response.conversations || [];
+
+                    // Si la carga por socket falló, asegurarnos de unirnos a las salas de cada conversación
+                    if (this.socketClient?.isConnected) {
+                        await this._joinConversationRooms(this.state.conversations);
+                    }
+
                     return this.state.conversations;
                 }
                 
@@ -285,6 +354,26 @@
                 console.error('[ChatManager] Error cargando vía REST:', error);
                 return [];
             }
+        }
+
+        /**
+         * Une el socket actual a las salas de conversaciones cargadas
+         * @param {Array<Object>} conversations
+         */
+        async _joinConversationRooms(conversations = []) {
+            if (!Array.isArray(conversations) || conversations.length === 0) return;
+            if (!this.socketClient?.isConnected) return;
+
+            const joinPromises = conversations.map((conv) => {
+                const conversationId = conv._id || conv.id;
+                if (!conversationId) return Promise.resolve();
+
+                return this.socketClient.emit('room:join', { conversationId })
+                    .then(() => console.log('[ChatManager] Sala de conversación unida (fallback):', conversationId))
+                    .catch((err) => console.warn('[ChatManager] No se pudo unir a la sala (fallback):', conversationId, err.message));
+            });
+
+            await Promise.all(joinPromises);
         }
 
         /**
