@@ -32,7 +32,7 @@
         }
         
         // 2. Intentar desde localStorage
-        const storedEmpresaId = localStorage.getItem('empresaId') || localStorage.getItem('currentEmpresaId');
+        const storedEmpresaId = localStorage.getItem('empresaId') || localStorage.getItem('currentEmpresaId') || localStorage.getItem('empresaActiva');
         if (storedEmpresaId) return storedEmpresaId;
         
         // 3. Intentar desde variable global
@@ -53,6 +53,14 @@
     }
 
     /**
+     * Normaliza el rol extraído del token
+     */
+    function normalizeRole(rawRole) {
+        if (!rawRole) return null;
+        return rawRole.toString().trim().toLowerCase();
+    }
+
+    /**
      * Obtiene el rol del usuario desde el token JWT
      */
     function getUserRole() {
@@ -60,10 +68,119 @@
         if (!token) return null;
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.role || null;
+            return payload.role || payload.rol || payload.userRole || payload.roleName || null;
         } catch (e) {
             return null;
         }
+    }
+
+    function getUserInfo() {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return {
+                id: payload.id || payload._id || payload.userId || null,
+                role: payload.role || payload.rol || payload.userRole || payload.roleName || null,
+                empresaId: payload.empresaId || payload.empresa_id || payload.tenantId || payload.empresa || null,
+                username: payload.username || payload.name || payload.nombre || null,
+                email: payload.email || payload.correo || null,
+                raw: payload
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Persiste user en localStorage para lectura síncrona en SupportWidget (la app solo guarda JWT).
+     */
+    function syncUserToLocalStorage() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            const existing = JSON.parse(localStorage.getItem('user') || '{}');
+            if (existing.role) return;
+            const info = getUserInfo();
+            if (!info?.id) return;
+            localStorage.setItem('user', JSON.stringify({
+                id: info.id,
+                role: normalizeRole(info.role),
+                email: info.email,
+                username: info.username,
+                empresaId: info.empresaId
+            }));
+        } catch (e) {
+            Logger.debug('ChatInit', 'No se pudo sincronizar user en localStorage:', e.message);
+        }
+    }
+
+    /**
+     * Determina si el rol corresponde a un empleado/admin
+     */
+    function isStaffRole(role) {
+        const normalizedRole = normalizeRole(role);
+        if (!normalizedRole) return false;
+        const staffRoles = [
+            'admin',
+            'administrador',
+            'empleado',
+            'employee',
+            'soporte',
+            'support',
+            'superadmin',
+            'super-admin',
+            'ingeniero',
+            'diseñador'
+        ];
+        return staffRoles.includes(normalizedRole);
+    }
+
+    /**
+     * Sesión activa: token presente y no expirado.
+     */
+    function hasActiveSession() {
+        const token = localStorage.getItem('token');
+        if (!token) return false;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.exp && payload.exp * 1000 < Date.now()) {
+                return false;
+            }
+            return !!(payload.id || payload._id || payload.userId);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Destruye por completo el widget de soporte (visitantes).
+     */
+    function destroySupportWidget() {
+        if (window.supportWidgetInstance) {
+            window.supportWidgetInstance.destroy();
+        }
+        const orphan = document.getElementById('support-widget');
+        if (orphan) orphan.remove();
+        window.supportWidgetInstance = null;
+        window.supportWidget = null;
+        supportWidget = null;
+    }
+
+    /**
+     * Destruye el chat interno (usuarios autenticados).
+     */
+    function destroyInternalChat() {
+        if (window.chatWidget?.elements?.container) {
+            window.chatWidget.elements.container.remove();
+        }
+        if (window.chatManager?.socketClient) {
+            window.chatManager.socketClient.disconnect();
+        }
+        window.chatWidget = null;
+        window.chatManager = null;
+        chatWidget = null;
+        chatManager = null;
     }
 
     /**
@@ -81,16 +198,18 @@
     };
 
     /**
-     * Inicializa el chat de soporte para visitantes (no autenticados) o clientes
+     * Inicializa el widget de soporte (solo visitantes anónimos en login).
      */
     window.initSupportWidget = async function() {
-        Logger.debug('ChatInit', 'Inicializando SupportWidget...');
-        
-        // Limpiar widget anterior si existe
-        if (window.supportWidget?.elements?.container) {
-            window.supportWidget.elements.container.remove();
-            window.supportWidget = null;
+        if (hasActiveSession()) {
+            Logger.debug('ChatInit', 'Sesión activa: SupportWidget no permitido');
+            destroySupportWidget();
+            return false;
         }
+
+        Logger.debug('ChatInit', 'Inicializando SupportWidget (visitante)...');
+
+        syncUserToLocalStorage();
         
         // Para visitantes sin autenticación: limpiar datos de sesiones previas
         // para evitar que interfieran con la detección de empresa
@@ -110,7 +229,7 @@
         
         // 2. Si hay token, intentar desde localStorage general
         if (!empresaId && token) {
-            empresaId = localStorage.getItem('currentEmpresaId') || localStorage.getItem('empresaId');
+            empresaId = localStorage.getItem('currentEmpresaId') || localStorage.getItem('empresaId') || localStorage.getItem('empresaActiva');
         }
         
         // 3. Intentar desde variable global (solo si hay token)
@@ -131,16 +250,18 @@
         
         try {
             Logger.debug('ChatInit', 'Inicializando SupportWidget para empresa:', empresaId);
-            
-            supportWidget = new SupportWidget({
-                empresaId: empresaId,
-                apiUrl: window.location.hostname === 'localhost' ? 'http://localhost:5000' : ''
-            });
-            
-            await supportWidget.init();
+
+            const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:5000' : '';
+
+            if (!window.supportWidgetInstance) {
+                window.supportWidgetInstance = new SupportWidget({ apiUrl });
+            }
+
+            await window.supportWidgetInstance.init({ empresaId });
+            supportWidget = window.supportWidgetInstance;
             window.supportWidget = supportWidget;
             
-            Logger.info('ChatInit', '✅ SupportWidget inicializado');
+            Logger.info('ChatInit', '✅ SupportWidget inicializado (singleton)');
             return true;
             
         } catch (error) {
@@ -153,14 +274,15 @@
      * Inicializa el chat cuando el usuario está autenticado
      */
     window.initChat = async function() {
-        // Verificar que el usuario esté autenticado
-        const token = localStorage.getItem('token');
-        if (!token) {
-            Logger.debug('ChatInit', 'Usuario no autenticado, inicializando SupportWidget...');
-            // Inicializar widget de soporte para visitantes
+        if (!hasActiveSession()) {
+            Logger.debug('ChatInit', 'Sin sesión activa, inicializando SupportWidget para visitantes...');
+            destroyInternalChat();
             await window.initSupportWidget();
             return false;
         }
+
+        // Usuario logueado: nunca mostrar burbuja naranja
+        destroySupportWidget();
 
         // Verificar que las clases estén cargadas
         if (typeof ChatManager === 'undefined' || typeof SocketClient === 'undefined') {
@@ -435,57 +557,37 @@
      */
     async function autoInit() {
         try {
-            const token = localStorage.getItem('token');
             const role = getUserRole();
             
-            // Determinar el tipo de sesión necesaria
-            const requiredSessionType = token ? 'authenticated' : 'visitor';
+            // Determinar el tipo de sesión necesaria (token válido, no expirado)
+            const requiredSessionType = hasActiveSession() ? 'authenticated' : 'visitor';
             
-            // Si cambió el tipo de sesión, limpiar widget anterior
+            // Si cambió el tipo de sesión, limpiar el widget que ya no corresponde
             if (currentSessionType && currentSessionType !== requiredSessionType) {
-                Logger.info('ChatInit', `Cambio de sesión: ${currentSessionType} → ${requiredSessionType}, limpiando widget anterior...`);
-                
-                // Limpiar widget anterior
-                if (window.chatWidget?.elements?.container) {
-                    window.chatWidget.elements.container.remove();
-                    window.chatWidget = null;
-                    Logger.debug('ChatInit', 'ChatWidget eliminado');
-                }
-                if (window.supportWidget?.elements?.container) {
-                    window.supportWidget.elements.container.remove();
-                    window.supportWidget = null;
-                    Logger.debug('ChatInit', 'SupportWidget eliminado');
-                }
-                if (window.chatManager?.socketClient) {
-                    window.chatManager.socketClient.disconnect();
-                    window.chatManager = null;
-                    Logger.debug('ChatInit', 'Socket desconectado');
+                Logger.info('ChatInit', `Cambio de sesión: ${currentSessionType} → ${requiredSessionType}, limpiando...`);
+                if (requiredSessionType === 'authenticated') {
+                    destroySupportWidget();
+                } else {
+                    destroyInternalChat();
                 }
             }
             
             // Actualizar tipo de sesión actual
             currentSessionType = requiredSessionType;
             
-            if (token && role && ['admin', 'empleado', 'soporte', 'ingeniero', 'diseñador'].includes(role.toLowerCase())) {
-                // Es empleado/admin - usar ChatWidget interno
-                Logger.debug('ChatInit', 'Detectado empleado/admin, inicializando Chat...');
+            if (hasActiveSession()) {
+                // Todos los roles autenticados (admin, ingeniero, diseñador, cliente) → chat morado
+                Logger.debug('ChatInit', 'Sesión activa, inicializando chat interno (rol:', normalizeRole(role), ')...');
+                destroySupportWidget();
                 try {
                     await window.initChat();
                 } catch (chatError) {
-                    Logger.error('ChatInit', 'Chat falló:', chatError.message);
-                }
-            } else if (token) {
-                // Es cliente autenticado - usar ChatWidget para ver conversaciones directas
-                Logger.debug('ChatInit', 'Detectado cliente autenticado, inicializando Chat...');
-                Logger.debug('ChatInit', 'Detectado visitante, inicializando SupportWidget...');
-                try {
-                    await window.initSupportWidget();
-                } catch (error) {
-                    Logger.error('ChatInit', 'SupportWidget falló:', error.message);
+                    Logger.error('ChatInit', 'Chat interno falló:', chatError.message);
                 }
             } else {
-                // No hay token - inicializar SupportWidget para visitantes
+                // Visitante en pantalla de login → burbuja naranja exclusiva
                 Logger.debug('ChatInit', 'Sin sesión, inicializando SupportWidget para visitantes...');
+                destroyInternalChat();
                 try {
                     await window.initSupportWidget();
                 } catch (error) {
@@ -523,24 +625,8 @@
         Logger.info('ChatInit', '🔄 Reiniciando chat...');
         
         try {
-            // Limpiar todo inmediatamente para evitar widgets parpadeando
-            if (window.chatWidget?.elements?.container) {
-                window.chatWidget.elements.container.remove();
-                Logger.debug('ChatInit', 'ChatWidget eliminado');
-            }
-            if (window.supportWidget?.elements?.container) {
-                window.supportWidget.elements.container.remove();
-                Logger.debug('ChatInit', 'SupportWidget eliminado');
-            }
-            if (window.chatManager?.socketClient) {
-                window.chatManager.socketClient.disconnect();
-                Logger.debug('ChatInit', 'Socket desconectado');
-            }
-            
-            // Reiniciar variables
-            window.chatManager = null;
-            window.chatWidget = null;
-            window.supportWidget = null;
+            destroyInternalChat();
+            destroySupportWidget();
             currentSessionType = null; // Reset para forzar re-inicialización
             
             // Pequeño delay para permitir que el token se estabilice
@@ -579,7 +665,10 @@
     // Exportar API pública
     window.chatInit = {
         autoInit: autoInit,
-        restartChat: window.restartChat
+        restartChat: window.restartChat,
+        destroySupportWidget,
+        destroyInternalChat,
+        hasActiveSession
     };
 
 })();

@@ -33,13 +33,21 @@ module.exports = (socket, io) => {
                 });
             }
             
-            // REGLA DE ORO: Verificar acceso (empresaId + participación)
-            const conversation = await Conversation.findOne({
+            const isAdmin = socket.user.role === 'admin' || socket.user.isSuperAdmin;
+
+            // REGLA DE ORO: Verificar acceso para usuarios normales.
+            // Los admins/superadmins pueden unirse a cualquier conversación sin el filtro estricto de empresa.
+            const conversationQuery = {
                 _id: conversationId,
-                empresaId: socket.user.empresaId,  // 🔒 Aislamiento
-                'participants.userId': socket.user.id,  // 🔒 Verificar participación
                 isActive: true
-            });
+            };
+
+            if (!isAdmin) {
+                conversationQuery.empresaId = socket.user.empresaId;
+                conversationQuery['participants.userId'] = socket.user.id;
+            }
+
+            const conversation = await Conversation.findOne(conversationQuery);
             
             if (!conversation) {
                 console.warn(`[Rooms] Acceso denegado: ${socket.user.username} a conversación ${conversationId}`);
@@ -160,6 +168,25 @@ module.exports = (socket, io) => {
                     success: false, 
                     error: 'No puedes crear conversación contigo mismo' 
                 });
+            }
+
+            const Usuario = require('../../models/Usuario');
+            const STAFF_ROLES = ['admin', 'administrador', 'empleado', 'employee', 'ingeniero', 'diseñador', 'soporte', 'support'];
+            const requesterRole = (socket.user.role || '').toLowerCase();
+
+            if (requesterRole === 'cliente') {
+                const targetUser = await Usuario.findOne({
+                    _id: targetUserId,
+                    empresaId: socket.user.empresaId,
+                    isDeleted: { $ne: true }
+                }).select('role');
+
+                if (!targetUser || !STAFF_ROLES.includes((targetUser.role || '').toLowerCase())) {
+                    return callback?.({
+                        success: false,
+                        error: 'Solo puedes chatear con el equipo de administración de tu empresa'
+                    });
+                }
             }
             
             // Verificar si ya existe conversación directa entre estos usuarios

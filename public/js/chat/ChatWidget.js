@@ -24,6 +24,35 @@
             this.isTyping = false;
         }
 
+        _getCurrentUserRole() {
+            try {
+                const stored = JSON.parse(localStorage.getItem('user') || '{}');
+                if (stored.role) return String(stored.role).toLowerCase();
+            } catch (e) { /* ignore */ }
+
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return (payload.role || payload.rol || '').toLowerCase();
+            } catch (e) {
+                return null;
+            }
+        }
+
+        _isClienteUser() {
+            const role = this._getCurrentUserRole();
+            return role === 'cliente' || role === 'customer' || role === 'user';
+        }
+
+        _filterConversationsForCliente(conversations) {
+            if (!this._isClienteUser()) return conversations;
+            return (conversations || []).filter((conv) => {
+                if (conv.type === 'group') return false;
+                return conv.type === 'direct' || conv.type === 'support';
+            });
+        }
+
         /**
          * Inicializa el widget y crea el DOM
          */
@@ -437,7 +466,8 @@
          */
         renderConversationsList() {
             const content = this.elements.content;
-            const conversations = this.chatManager.state.conversations;
+            const isCliente = this._isClienteUser();
+            const conversations = this._filterConversationsForCliente(this.chatManager.state.conversations);
             
             // Contenedor principal con botón de nueva conversación
             const container = document.createElement('div');
@@ -450,7 +480,7 @@
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                <span>Nueva conversación</span>
+                <span>${isCliente ? 'Contactar al equipo' : 'Nueva conversación'}</span>
             `;
             newConvBtn.addEventListener('click', () => this.showNewConversationModal());
             container.appendChild(newConvBtn);
@@ -461,7 +491,7 @@
                 emptyState.innerHTML = `
                     <div class="chat-empty-icon">💬</div>
                     <h4 class="chat-empty-title">No hay conversaciones</h4>
-                    <p class="chat-empty-text">Haz clic en "Nueva conversación" para empezar</p>
+                    <p class="chat-empty-text">${isCliente ? 'Contacta al equipo de tu empresa para recibir ayuda' : 'Haz clic en "Nueva conversación" para empezar'}</p>
                 `;
                 container.appendChild(emptyState);
                 content.innerHTML = '';
@@ -485,6 +515,9 @@
                 const time = conv.lastMessage?.sentAt ? this.formatTime(conv.lastMessage.sentAt) : '';
                 const preview = conv.lastMessage?.content || 'Sin mensajes';
                 const unread = conv.unreadCount > 0 ? `<span class="chat-conversation-badge">${conv.unreadCount}</span>` : '';
+                const deleteBtnHtml = isCliente
+                    ? ''
+                    : '<button class="chat-conversation-delete" title="Eliminar conversación">🗑️</button>';
                 
                 item.innerHTML = `
                     <div class="chat-conversation-avatar ${conv.type}" title="${typeLabel}">${typeIcon}</div>
@@ -496,7 +529,7 @@
                         <div class="chat-conversation-time">${time}</div>
                         ${unread}
                     </div>
-                    <button class="chat-conversation-delete" title="Eliminar conversación">🗑️</button>
+                    ${deleteBtnHtml}
                 `;
                 
                 // Click en la conversación para seleccionarla
@@ -505,12 +538,14 @@
                     this.selectConversation(conv._id);
                 });
                 
-                // Click en botón de eliminar
+                // Click en botón de eliminar (solo staff)
                 const deleteBtn = item.querySelector('.chat-conversation-delete');
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.confirmDeleteConversation(conv._id, conv.title);
-                });
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.confirmDeleteConversation(conv._id, conv.title);
+                    });
+                }
                 
                 list.appendChild(item);
             });
@@ -526,26 +561,14 @@
         async showNewConversationModal() {
             console.log('[ChatWidget] 📋 Abriendo modal de nueva conversación...');
             try {
-                // Detectar si es cliente (no admin/empleado)
-                const token = localStorage.getItem('token');
-                let isClient = false;
-                if (token) {
-                    try {
-                        const payload = JSON.parse(atob(token.split('.')[1]));
-                        const role = payload.role?.toLowerCase();
-                        isClient = role === 'cliente' || role === 'user' || role === 'customer';
-                    } catch (e) {}
-                }
-                
-                // Si es cliente, mostrar opción de soporte
-                if (isClient) {
-                    await this.showSupportContactModal();
+                const isClient = this._isClienteUser();
+                const users = await this.loadUsersForChat();
+                console.log('[ChatWidget] Usuarios cargados:', users.length, users.map(u => u.nombre || u.username));
+
+                if (isClient && users.length === 0) {
+                    this.showError('No hay personal de soporte disponible en tu empresa');
                     return;
                 }
-                
-                // Cargar usuarios de la empresa (solo para admin/empleados)
-                const users = await this.loadUsersForChat();
-                console.log('[ChatWidget] Usuarios cargados:', users.length, users.map(u => u.nombre));
                 
                 // Crear modal
                 const modal = document.createElement('div');
@@ -553,18 +576,18 @@
                 modal.innerHTML = `
                     <div class="chat-modal">
                         <div class="chat-modal-header">
-                            <h3>Nueva conversación</h3>
+                            <h3>${isClient ? 'Contactar al equipo' : 'Nueva conversación'}</h3>
                             <button class="chat-modal-close" id="chat-modal-close">&times;</button>
                         </div>
                         <div class="chat-modal-body">
-                            <p class="chat-modal-subtitle">Selecciona un usuario para iniciar chat:</p>
+                            <p class="chat-modal-subtitle">${isClient ? 'Selecciona con quién de tu empresa quieres hablar:' : 'Selecciona un usuario para iniciar chat:'}</p>
                             <div class="chat-users-list">
                                 ${users.map(user => `
                                     <div class="chat-user-item" data-user-id="${user._id}" data-user-name="${this.escapeHtml(user.nombre)}">
-                                        <div class="chat-user-avatar">${user.nombre.charAt(0).toUpperCase()}</div>
+                                        <div class="chat-user-avatar">${(user.nombre || user.username || 'U').charAt(0).toUpperCase()}</div>
                                         <div class="chat-user-info">
-                                            <h4>${this.escapeHtml(user.nombre)}</h4>
-                                            <span class="chat-user-role">${user.role || 'Usuario'}</span>
+                                            <h4>${this.escapeHtml(user.nombre || user.username || 'Usuario')}</h4>
+                                            <span class="chat-user-role">${user.role || 'Equipo'}</span>
                                         </div>
                                         <div class="chat-user-status ${user.isOnline ? 'online' : ''}">
                                             <span class="status-dot"></span>

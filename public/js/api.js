@@ -163,6 +163,7 @@
                     if (!refreshRes.ok) {
                         console.log('[Auth] Refresh token inválido o expirado');
                         localStorage.removeItem('token');
+                        localStorage.removeItem('user');
                         localStorage.removeItem('refreshToken');
                         isRefreshing = false;
                         refreshPromise = null;
@@ -170,9 +171,12 @@
                         throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
                     }
 
-                    // Refresh exitoso, guardar nuevo token
+                    // Refresh exitoso, guardar nuevo token y usuario
                     console.log('[Auth] Token refrescado exitosamente');
                     localStorage.setItem('token', refreshData.accessToken);
+                    if (refreshData.user) {
+                        localStorage.setItem('user', JSON.stringify(refreshData.user));
+                    }
 
                     // Reintentar petición original con nuevo token
                     token = refreshData.accessToken;
@@ -189,6 +193,7 @@
                     refreshPromise = null;
                     console.error('[Auth] Error al refrescar token:', refreshError);
                     localStorage.removeItem('token');
+                    localStorage.removeItem('user');
                     localStorage.removeItem('refreshToken');
                     getShowLogin()();
                     throw new Error('Error al renovar sesión. Por favor inicia sesión nuevamente.');

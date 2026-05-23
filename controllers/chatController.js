@@ -4,6 +4,30 @@ const Message = require('../models/Message');
 const Usuario = require('../models/Usuario');
 const { hasTenantAccess, buildQueryFilter } = require('../middleware/tenantFilter');
 
+/** Roles que un cliente puede ver/contactar (sin otros clientes). */
+const STAFF_ROLES_FOR_CLIENT_CONTACT = [
+    'admin',
+    'administrador',
+    'empleado',
+    'employee',
+    'ingeniero',
+    'diseñador',
+    'soporte',
+    'support'
+];
+
+function normalizeUserRole(role) {
+    return (role || '').toString().trim().toLowerCase();
+}
+
+function isClienteRole(role) {
+    return normalizeUserRole(role) === 'cliente';
+}
+
+function isStaffRoleForClientContact(role) {
+    return STAFF_ROLES_FOR_CLIENT_CONTACT.includes(normalizeUserRole(role));
+}
+
 /**
  * Chat Controller
  * FASE 2: Endpoints REST para chat
@@ -39,11 +63,32 @@ exports.getConversations = async (req, res) => {
         
         const conversations = await Conversation.find(filter)
             .select('_id type title participants lastMessage updatedAt isSupportTicket supportStatus')
+            .populate('participants.userId', 'role username')
             .sort({ updatedAt: -1 })
             .lean();
+
+        let visibleConversations = conversations;
+
+        // Cliente: solo hilos directos/soporte con personal de la empresa (no otros clientes ni grupos)
+        if (isClienteRole(req.user.role)) {
+            visibleConversations = conversations.filter((conv) => {
+                if (conv.type === 'group') return false;
+                if (!['direct', 'support'].includes(conv.type)) return false;
+
+                const otherParticipants = (conv.participants || []).filter(
+                    (p) => p.userId && p.userId._id.toString() !== req.user.id.toString()
+                );
+
+                if (otherParticipants.length === 0) return conv.type === 'support';
+
+                return otherParticipants.every(
+                    (p) => p.userId && isStaffRoleForClientContact(p.userId.role)
+                );
+            });
+        }
         
         // Formatear respuesta
-        const formattedConversations = conversations.map(conv => {
+        const formattedConversations = visibleConversations.map(conv => {
             const myParticipant = conv.participants.find(
                 p => p.userId.toString() === req.user.id.toString()
             );
@@ -170,7 +215,7 @@ exports.createConversation = async (req, res) => {
             
             // Buscar agentes disponibles (admin, empleado, soporte)
             const agentFilter = buildQueryFilter(req, {
-                role: { $in: ['admin', 'empleado', 'soporte'] },
+                role: { $in: STAFF_ROLES_FOR_CLIENT_CONTACT },
                 isDeleted: { $ne: true }
             });
             const agents = await Usuario.find(agentFilter).select('_id').limit(5);
@@ -216,15 +261,30 @@ exports.createConversation = async (req, res) => {
                 }
             ];
             
-            participantIds.forEach(pid => {
-                if (pid !== req.user.id.toString() && mongoose.Types.ObjectId.isValid(pid)) {
-                    participants.push({
-                        userId: new mongoose.Types.ObjectId(pid),
-                        role: 'member',
-                        joinedAt: new Date()
-                    });
+            for (const pid of participantIds) {
+                if (pid === req.user.id.toString() || !mongoose.Types.ObjectId.isValid(pid)) continue;
+
+                if (isClienteRole(req.user.role)) {
+                    const targetUser = await Usuario.findOne({
+                        _id: pid,
+                        ...buildQueryFilter(req),
+                        isDeleted: { $ne: true }
+                    }).select('role');
+
+                    if (!targetUser || !isStaffRoleForClientContact(targetUser.role)) {
+                        return res.status(403).json({
+                            success: false,
+                            error: 'Solo puedes iniciar chat con el equipo de administración de tu empresa'
+                        });
+                    }
                 }
-            });
+
+                participants.push({
+                    userId: new mongoose.Types.ObjectId(pid),
+                    role: 'member',
+                    joinedAt: new Date()
+                });
+            }
         }
         
         // Determinar título según tipo
@@ -603,6 +663,10 @@ exports.getUsersForChat = async (req, res) => {
             _id: { $ne: req.user.id },
             isDeleted: { $ne: true }
         };
+
+        if (isClienteRole(req.user.role)) {
+            filter.role = { $in: STAFF_ROLES_FOR_CLIENT_CONTACT };
+        }
         
         console.log('[ChatController] GET /users - Query final:', filter);
         
@@ -617,8 +681,10 @@ exports.getUsersForChat = async (req, res) => {
             success: true,
             count: users.length,
             users: users.map(u => ({
+                id: u._id,
                 _id: u._id,
                 nombre: u.nombre || u.username,
+                username: u.username,
                 email: u.email,
                 role: u.role
             }))

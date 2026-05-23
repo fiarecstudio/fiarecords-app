@@ -21,6 +21,31 @@ const {
   resetPasswordSchema
 } = require('../validations/auth.validation');
 
+/**
+ * Objeto user serializado para el cliente (localStorage + SupportWidget).
+ */
+function buildAuthUserPayload(user, artistaVinculado = null, artistaId = null) {
+    const id = user._id?.toString?.() || String(user._id);
+    const artistaIdStr = artistaId
+        ? (artistaId.toString?.() || String(artistaId))
+        : (user.artistaId ? user.artistaId.toString() : null);
+
+    return {
+        id,
+        username: user.username,
+        email: user.email || null,
+        role: user.role,
+        estado: user.estado || 'activo',
+        empresaId: user.empresaId ? user.empresaId.toString() : null,
+        artistaId: artistaIdStr,
+        isSuperAdmin: !!user.isSuperAdmin,
+        permisos: user.permisos || [],
+        nombre: artistaVinculado
+            ? (artistaVinculado.nombreArtistico || artistaVinculado.nombre)
+            : user.username
+    };
+}
+
 // ============================================================
 // CONFIGURACIÓN GMAIL API
 // ============================================================
@@ -186,12 +211,17 @@ router.post('/register', validate(registerSchema), async (req, res) => {
             }
         }
 
+        const artistaRegistro = savedUser.artistaId
+            ? await Artista.findById(savedUser.artistaId)
+            : null;
+
         res.status(201).json({
             accessToken,
             refreshToken,
             role: savedUser.role,
             estado: savedUser.estado,
             expiresIn: 900,
+            user: buildAuthUserPayload(savedUser, artistaRegistro, savedUser.artistaId),
             message: savedUser.estado === 'pendiente'
                 ? 'Cuenta creada. Un administrador debe aprobar tu acceso.'
                 : 'Cuenta creada correctamente.'
@@ -317,7 +347,8 @@ router.post('/login', validate(loginSchema), async (req, res) => {
             accessToken,
             refreshToken,
             role: user.role,
-            expiresIn: 900 // 15 minutos en segundos
+            expiresIn: 900, // 15 minutos en segundos
+            user: buildAuthUserPayload(user, artistaVinculado, artistaId)
         });
 
     } catch (error) { 
@@ -474,7 +505,8 @@ router.post('/refresh', async (req, res) => {
 
         res.json({
             accessToken: newAccessToken,
-            expiresIn: 900 // 15 minutos en segundos
+            expiresIn: 900, // 15 minutos en segundos
+            user: buildAuthUserPayload(user, artistaVinculado, artistaId)
         });
 
     } catch (error) {

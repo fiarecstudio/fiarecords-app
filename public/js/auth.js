@@ -63,7 +63,7 @@
      * @param {string} accessToken - Token de acceso JWT
      * @param {string} refreshToken - Token de refresco
      */
-    function guardarTokens(accessToken, refreshToken) {
+    function guardarTokens(accessToken, refreshToken, user) {
         if (!accessToken) {
             console.error('[Auth] No se proporcionó accessToken');
             return false;
@@ -72,6 +72,11 @@
         // Guardar accessToken como 'token' para compatibilidad
         localStorage.setItem('token', accessToken);
         if (window.Logger) Logger.debug('Auth', 'Access Token guardado');
+
+        if (user) {
+            localStorage.setItem('user', JSON.stringify(user));
+            if (window.Logger) Logger.debug('Auth', 'Usuario guardado en localStorage');
+        }
 
         // Guardar refreshToken si existe
         if (refreshToken) {
@@ -130,6 +135,7 @@
     function limpiarSesion() {
         // FASE 5 + PASO 7: LIMPIEZA COMPLETA al cerrar sesión
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('empresaActiva');
         localStorage.removeItem('selected_empresa_id');
@@ -251,13 +257,13 @@
             }
 
             // Guardar tokens
-            const payload = guardarTokens(accessToken, refreshToken);
+            const payload = guardarTokens(accessToken, refreshToken, data.user);
 
             if (!payload) {
                 throw new Error('Error al procesar el token de acceso');
             }
 
-            if (window.Logger) Logger.info('Auth', 'Login exitoso:', payload.username);
+            if (window.Logger) Logger.info('Auth', 'Login exitoso:', data.user?.username || payload.username);
 
             // Aplicar identidad visual inmediatamente (con protección)
             if (!_aplicandoIdentidad) {
@@ -312,9 +318,9 @@
                 throw new Error('No se recibió token de acceso del servidor');
             }
 
-            const payload = guardarTokens(accessToken, refreshToken);
+            const payload = guardarTokens(accessToken, refreshToken, data.user);
 
-            if (window.Logger) Logger.info('Auth', 'Registro exitoso:', payload?.username || userData.username);
+            if (window.Logger) Logger.info('Auth', 'Registro exitoso:', data.user?.username || payload?.username || userData.username);
 
             return payload;
 

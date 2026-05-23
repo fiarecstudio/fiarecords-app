@@ -13,12 +13,16 @@
 
     class SupportWidget {
         constructor(options = {}) {
-            // Configuración
-            this.empresaId = options.empresaId || this._detectEmpresaId();
             this.apiUrl = options.apiUrl || window.API_URL || 'http://localhost:5000';
             this.socket = null;
             this.isOpen = false;
             this.isConnected = false;
+            this._domMounted = false;
+
+            // PRIORIDAD: lectura síncrona desde localStorage antes de pintar UI
+            this._readAuthFromStorage();
+
+            this.empresaId = options.empresaId || this.empresaId || this._detectEmpresaId();
             
             // Estado del chat
             this.ticketId = localStorage.getItem('support_ticket_id') || null;
@@ -26,6 +30,14 @@
             this.visitorName = localStorage.getItem('support_visitor_name') || '';
             this.visitorEmail = localStorage.getItem('support_visitor_email') || '';
             this.messages = [];
+            this.eventsBound = false;
+            this._pendingOutbound = new Set();
+            
+            if (this.isAuthenticated && this.user) {
+                this.visitorName = this.visitorName || this.user.username || this.user.name || 'Cliente';
+                this.visitorEmail = this.visitorEmail || this.user.email || '';
+                this.empresaId = this.empresaId || this.user.empresaId || this.user.companyId || this.user.tenantId;
+            }
             
             // Typing
             this.typingTimeout = null;
@@ -35,7 +47,7 @@
             this.onMessageReceived = options.onMessageReceived || (() => {});
             this.onTicketCreated = options.onTicketCreated || (() => {});
             
-            console.log('[SupportWidget] Inicializado para empresa:', this.empresaId);
+            console.log('[SupportWidget] Inicializado para empresa:', this.empresaId, 'auth:', this.isAuthenticated, 'user:', this.user);
         }
 
         /**
@@ -56,7 +68,7 @@
                 } catch (e) {}
                 
                 // 2. Intentar desde localStorage de la app
-                const storedEmpresaId = localStorage.getItem('empresaId') || localStorage.getItem('currentEmpresaId');
+                const storedEmpresaId = localStorage.getItem('empresaId') || localStorage.getItem('currentEmpresaId') || localStorage.getItem('empresaActiva');
                 if (storedEmpresaId) return storedEmpresaId;
             }
             
@@ -88,30 +100,174 @@
             return null;
         }
 
+        _getUserFromToken() {
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const role = payload.role || payload.rol || payload.userRole || payload.roleName || null;
+                return {
+                    id: payload.id || payload._id || payload.userId || null,
+                    role: role ? String(role).toLowerCase() : null,
+                    empresaId: payload.empresaId || payload.empresa_id || payload.tenantId || payload.empresa || null,
+                    username: payload.username || payload.name || payload.nombre || null,
+                    email: payload.email || payload.correo || null,
+                    raw: payload
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        /**
+         * Lectura estricta y síncrona del estado de sesión (localStorage primero).
+         */
+        _readAuthFromStorage() {
+            const token = localStorage.getItem('token');
+            let userData = {};
+
+            try {
+                userData = JSON.parse(localStorage.getItem('user') || '{}');
+            } catch (e) {
+                userData = {};
+            }
+
+            if (token && !userData.role) {
+                const fromToken = this._getUserFromToken();
+                if (fromToken) {
+                    userData = { ...userData, ...fromToken };
+                }
+            }
+
+            const role = String(userData.role || '').toLowerCase();
+            this.isAuthenticated = !!(token && (
+                role === 'cliente' ||
+                role === 'admin' ||
+                role === 'empleado'
+            ));
+
+            this.user = this.isAuthenticated ? userData : null;
+
+            if (this.isAuthenticated) {
+                this.visitorName = this.visitorName || userData.username || userData.name || 'Cliente';
+                this.visitorEmail = this.visitorEmail || userData.email || '';
+                this.empresaId = this.empresaId || userData.empresaId
+                    || localStorage.getItem('empresaActiva')
+                    || localStorage.getItem('empresaId')
+                    || localStorage.getItem('currentEmpresaId');
+            }
+        }
+
+        _syncAuthState() {
+            this._readAuthFromStorage();
+        }
+
+        /** Alias: usa el flag estricto isAuthenticated (sin formulario visitante). */
+        _isAuthenticatedCliente() {
+            this._readAuthFromStorage();
+            return this.isAuthenticated === true;
+        }
+
+        /**
+         * Vista de chat + input siempre habilitados para clientes autenticados.
+         */
+        showChatView() {
+            this.showChat();
+        }
+
+        _forceAuthenticatedChatInputEnabled() {
+            const inputArea = this.elements?.inputArea;
+            if (inputArea) inputArea.style.display = 'block';
+
+            const input = document.getElementById('support-input');
+            const sendBtn = document.getElementById('support-send-btn');
+            if (input) {
+                input.disabled = false;
+                input.placeholder = 'Escribe tu mensaje...';
+            }
+            if (sendBtn) sendBtn.disabled = false;
+
+            const closedNotice = document.getElementById('support-ticket-closed-notice');
+            if (closedNotice) closedNotice.remove();
+        }
+
         /**
          * Inicializa el widget de soporte
          */
-        async init() {
+        async init(options = {}) {
+            this._readAuthFromStorage();
+
+            if (options.empresaId) {
+                this.empresaId = options.empresaId;
+            }
+
+            const existingRoot = document.getElementById('support-widget');
+            if (existingRoot) {
+                existingRoot.remove();
+                this._domMounted = false;
+                this.eventsBound = false;
+            }
+
             this.createDOM();
             this.attachEventListeners();
             
-            console.log('[SupportWidget] DOM creado, ticketId:', this.ticketId, 'empresaId:', this.empresaId, 'visitorName:', this.visitorName);
+            console.log('[SupportWidget] DOM creado, auth:', this.isAuthenticated, 'ticketId:', this.ticketId, 'empresaId:', this.empresaId);
+
+            // Autenticado: nunca pasar por selector/formulario en init
+            if (this.isAuthenticated) {
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                if (this.ticketId) {
+                    await this.connect();
+                    await this.loadMessageHistory();
+                } else if (this.empresaId && !this.isConnected) {
+                    await this.connect();
+                }
+                console.log('[SupportWidget] Widget listo (cliente autenticado)');
+                return true;
+            }
             
             // Si ya hay ticket Y tenemos empresaId, reconectar
-            if (this.ticketId && this.visitorName && this.empresaId) {
+            if (this.ticketId && this.empresaId) {
                 console.log('[SupportWidget] Reconectando a ticket existente:', this.ticketId);
+                if (this._isAuthenticatedCliente()) {
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
+                }
                 await this.connect();
-                this.loadMessageHistory();
+                await this.loadMessageHistory();
+                if (this._isAuthenticatedCliente()) {
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
+                }
             } else if (this.ticketId && !this.empresaId) {
-                // Hay ticket guardado pero falta empresaId, mostrar selector de empresas
-                console.log('[SupportWidget] Hay ticket pero falta empresaId, mostrando selector');
-                await this.showEmpresaSelector();
+                if (this._isAuthenticatedCliente()) {
+                    this.empresaId = this.user?.empresaId
+                        || localStorage.getItem('empresaActiva')
+                        || localStorage.getItem('empresaId');
+                    console.log('[SupportWidget] Cliente con ticket sin empresaId en storage, usando empresa del token');
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
+                    await this.connect();
+                    await this.loadMessageHistory();
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
+                } else {
+                    console.log('[SupportWidget] Hay ticket pero falta empresaId, mostrando selector');
+                    await this.showEmpresaSelector();
+                }
             } else if (!this.ticketId && !this.empresaId) {
                 // No hay ticket ni empresaId, mostrar selector de empresas primero
                 console.log('[SupportWidget] Sin ticket ni empresaId, mostrando selector de empresas');
                 await this.showEmpresaSelector();
+            } else if (!this.ticketId && this._isAuthenticatedCliente() && this.empresaId) {
+                console.log('[SupportWidget] Usuario autenticado sin ticket, mostrando chat directo');
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                if (!this.isConnected) {
+                    await this.connect();
+                }
             } else if (!this.ticketId && this.empresaId) {
-                // Tenemos empresaId pero no ticket, mostrar formulario directamente
                 console.log('[SupportWidget] Tenemos empresaId, mostrando formulario');
                 this.showTicketForm();
             }
@@ -146,6 +302,19 @@
          * Muestra selector de empresas
          */
         async showEmpresaSelector() {
+            if (this._isAuthenticatedCliente()) {
+                console.log('[SupportWidget] Cliente autenticado, ignorando selector de empresa y mostrando chat');
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                if (!this.isConnected) {
+                    await this.connect();
+                }
+                if (this.ticketId) {
+                    await this.loadMessageHistory();
+                }
+                return;
+            }
+
             const content = this.elements.content;
             const inputArea = this.elements.inputArea;
             
@@ -247,6 +416,13 @@
          * Crea el DOM del widget
          */
         createDOM() {
+            this._readAuthFromStorage();
+
+            const existingRoot = document.getElementById('support-widget');
+            if (existingRoot) {
+                existingRoot.remove();
+            }
+
             // Contenedor principal
             const container = document.createElement('div');
             container.className = 'support-widget';
@@ -296,9 +472,21 @@
             const content = document.createElement('div');
             content.className = 'support-content';
             content.id = 'support-content';
+
+            // Autenticado: SOLO vista de chat (nunca inputs de visitante en el DOM)
+            if (this.isAuthenticated) {
+                content.innerHTML = `<div class="support-messages" id="support-messages"></div>`;
+            } else {
+                content.innerHTML = '';
+            }
             
             // Input
             const inputArea = this.createInputArea();
+            if (this.isAuthenticated && inputArea) {
+                inputArea.style.display = 'block';
+            } else if (inputArea) {
+                inputArea.style.display = 'none';
+            }
             
             chatContainer.appendChild(header);
             chatContainer.appendChild(content);
@@ -317,6 +505,7 @@
                 content,
                 inputArea
             };
+            this._domMounted = true;
         }
 
         /**
@@ -369,9 +558,9 @@
                         id="support-input" 
                         placeholder="Escribe tu mensaje..."
                         rows="1"
-                        ${!this.ticketId ? 'disabled' : ''}
+                        ${!this.ticketId && !this._isAuthenticatedCliente() ? 'disabled' : ''}
                     ></textarea>
-                    <button class="support-send-btn" id="support-send-btn" ${!this.ticketId ? 'disabled' : ''}>
+                    <button class="support-send-btn" id="support-send-btn" ${!this.ticketId && !this._isAuthenticatedCliente() ? 'disabled' : ''}>
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                         </svg>
@@ -385,6 +574,19 @@
          * Muestra el formulario para crear ticket (primer contacto)
          */
         showTicketForm() {
+            if (this._isAuthenticatedCliente()) {
+                console.log('[SupportWidget] Cliente autenticado, ignorando formulario de visitante');
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                if (!this.isConnected) {
+                    this.connect();
+                }
+                if (this.ticketId) {
+                    this.loadMessageHistory();
+                }
+                return;
+            }
+
             const content = this.elements.content;
             const inputArea = this.elements.inputArea;
             
@@ -462,6 +664,12 @@
          * Crea un ticket de soporte
          */
         async createTicket() {
+            if (this._isAuthenticatedCliente()) {
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                return;
+            }
+
             const name = document.getElementById('support-form-name').value.trim();
             const email = document.getElementById('support-form-email').value.trim();
             const message = document.getElementById('support-form-message').value.trim();
@@ -553,6 +761,67 @@
         }
 
         /**
+         * Desconecta socket y elimina listeners (evita eco por acumulación).
+         */
+        _teardownSocket() {
+            if (!this.socket) return;
+            this._unbindSocketListeners();
+            try {
+                this.socket.disconnect();
+                this.socket.removeAllListeners();
+            } catch (e) {
+                console.warn('[SupportWidget] Error al cerrar socket:', e);
+            }
+            this.socket = null;
+            this.isConnected = false;
+        }
+
+        _unbindSocketListeners() {
+            if (!this.socket) return;
+            this.socket.off('connect');
+            this.socket.off('disconnect');
+            this.socket.off('message:received');
+            this.socket.off('ticket_message');
+            this.socket.off('presence:typing');
+        }
+
+        _bindSocketListeners() {
+            if (!this.socket) return;
+            this._unbindSocketListeners();
+
+            this.socket.on('connect', () => {
+                console.log('[SupportWidget] Conectado al soporte');
+                this.isConnected = true;
+                this.updateStatus('Conectado', true);
+
+                if (this.ticketId) {
+                    console.log('[SupportWidget] Uniendo a sala del ticket:', this.ticketId);
+                    this.socket.emit('ticket:join', { ticketId: this.ticketId });
+                }
+            });
+
+            this.socket.on('disconnect', () => {
+                this.isConnected = false;
+                this.updateStatus('Desconectado', false);
+            });
+
+            this.socket.off('message:received');
+            this.socket.on('message:received', (data) => {
+                this.handleIncomingMessage(data);
+            });
+
+            this.socket.off('ticket_message');
+            this.socket.on('ticket_message', (data) => {
+                this.handleIncomingMessage(data);
+            });
+
+            this.socket.off('presence:typing');
+            this.socket.on('presence:typing', (data) => {
+                this.showTypingIndicator(data.isTyping);
+            });
+        }
+
+        /**
          * Conecta al servidor de soporte
          */
         async connect() {
@@ -560,44 +829,36 @@
                 console.error('[SupportWidget] Socket.io no disponible');
                 return false;
             }
+
+            if (this.socket && this.socket.connected) {
+                if (this.ticketId) {
+                    this.socket.emit('ticket:join', { ticketId: this.ticketId });
+                }
+                return true;
+            }
+
+            this._teardownSocket();
             
             try {
+                const token = localStorage.getItem('token');
+                const authData = {
+                    ticketId: this.ticketId,
+                    empresaId: this.empresaId,
+                    visitorName: this.visitorName,
+                    visitorEmail: this.visitorEmail
+                };
+                if (token) {
+                    authData.token = token;
+                }
+
                 this.socket = io(`${this.apiUrl}/support`, {
-                    auth: {
-                        ticketId: this.ticketId,
-                        empresaId: this.empresaId,
-                        visitorName: this.visitorName,
-                        visitorEmail: this.visitorEmail
-                    },
+                    auth: authData,
                     transports: ['websocket', 'polling'],
                     reconnectionAttempts: 5,
                     reconnectionDelay: 2000
                 });
-                
-                this.socket.on('connect', () => {
-                    console.log('[SupportWidget] Conectado al soporte');
-                    this.isConnected = true;
-                    this.updateStatus('Conectado', true);
-                    
-                    // Unirse a la sala del ticket si existe
-                    if (this.ticketId) {
-                        console.log('[SupportWidget] Uniendo a sala del ticket:', this.ticketId);
-                        this.socket.emit('ticket:join', { ticketId: this.ticketId });
-                    }
-                });
-                
-                this.socket.on('disconnect', () => {
-                    this.isConnected = false;
-                    this.updateStatus('Desconectado', false);
-                });
-                
-                this.socket.on('message:received', (data) => {
-                    this.handleIncomingMessage(data);
-                });
-                
-                this.socket.on('presence:typing', (data) => {
-                    this.showTypingIndicator(data.isTyping);
-                });
+
+                this._bindSocketListeners();
                 
                 return true;
             } catch (error) {
@@ -610,10 +871,21 @@
          * Muestra el área de chat
          */
         showChat() {
+            if (this._isAuthenticatedCliente()) {
+                const content = this.elements.content;
+                const inputArea = this.elements.inputArea;
+                if (inputArea) inputArea.style.display = 'block';
+                if (content && !document.getElementById('support-messages')) {
+                    content.innerHTML = `<div class="support-messages" id="support-messages"></div>`;
+                }
+                this.renderMessages();
+                this._forceAuthenticatedChatInputEnabled();
+                return;
+            }
+
             const content = this.elements.content;
             const inputArea = this.elements.inputArea;
             
-            // Mostrar área de input cuando se muestra el chat
             if (inputArea) {
                 inputArea.style.display = 'block';
             }
@@ -622,10 +894,8 @@
                 <div class="support-messages" id="support-messages"></div>
             `;
             
-            // Renderizar mensajes existentes
             this.renderMessages();
             
-            // Habilitar input
             const input = document.getElementById('support-input');
             const sendBtn = document.getElementById('support-send-btn');
             if (input) input.disabled = false;
@@ -635,10 +905,43 @@
         /**
          * Renderiza los mensajes
          */
+        _dedupeMessagesArray(messages) {
+            const seen = new Set();
+            return (messages || []).filter((m) => {
+                const key = m._id
+                    ? `id:${String(m._id)}`
+                    : `c:${m.content}|${m.senderName}|${new Date(m.createdAt).getTime()}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        _isDuplicateIncoming(incomingMsg) {
+            if (!incomingMsg) return true;
+
+            const incomingId = incomingMsg._id ? String(incomingMsg._id) : null;
+            if (incomingId && this.messages.some((m) => String(m._id) === incomingId)) {
+                return true;
+            }
+
+            const visitorName = this.visitorName || this.user?.username || '';
+            const isLikelyOwn = incomingMsg.senderName === visitorName
+                || (this._isAuthenticatedCliente() && (incomingMsg.senderRole === 'member' || incomingMsg.senderRole === 'customer'));
+
+            return this.messages.some((m) => {
+                if (m.content !== incomingMsg.content) return false;
+                const delta = Math.abs(new Date(m.createdAt) - new Date(incomingMsg.createdAt));
+                if (delta > 15000) return false;
+                return m.isOwn || isLikelyOwn || m.senderName === incomingMsg.senderName;
+            });
+        }
+
         renderMessages() {
             const container = document.getElementById('support-messages');
             if (!container) return;
-            
+
+            this.messages = this._dedupeMessagesArray(this.messages);
             container.innerHTML = '';
             
             this.messages.forEach(msg => {
@@ -674,25 +977,21 @@
          * Maneja mensaje entrante
          */
         handleIncomingMessage(data) {
-            const incomingMsg = data.message;
-            
-            // Verificar si es mensaje propio del visitante (evitar duplicado)
-            // Comparar: mismo contenido, mismo remitente, y enviado hace menos de 5 segundos
-            const isDuplicate = this.messages.some(m => 
-                m.content === incomingMsg.content &&
-                m.senderName === incomingMsg.senderName &&
-                m.isOwn === true &&
-                (new Date() - new Date(m.createdAt)) < 5000
-            );
-            
-            if (isDuplicate) {
-                console.log('[SupportWidget] Mensaje duplicado ignorado:', incomingMsg.content);
+            const incomingMsg = data?.message;
+            if (!incomingMsg) return;
+
+            if (this._isDuplicateIncoming(incomingMsg)) {
+                console.log('[SupportWidget] Eco ignorado:', incomingMsg.content);
                 return;
             }
-            
+
+            const visitorName = this.visitorName || this.user?.username || '';
+            const isOwn = incomingMsg.senderName === visitorName
+                || (this._isAuthenticatedCliente() && (incomingMsg.senderRole === 'member' || incomingMsg.senderRole === 'customer'));
+
             const message = {
                 ...incomingMsg,
-                isOwn: false
+                isOwn
             };
             
             this.messages.push(message);
@@ -719,39 +1018,111 @@
             const input = document.getElementById('support-input');
             const content = input.value.trim();
             
-            if (!content || !this.socket) return;
+            if (!content) return;
+
+            if (this._isAuthenticatedCliente()) {
+                this._forceAuthenticatedChatInputEnabled();
+                if (!this.ticketId) {
+                    await this.createAuthenticatedChat(content);
+                    return;
+                }
+                const sent = await this._sendAuthenticatedMessage(content);
+                if (sent) return;
+                console.log('[SupportWidget] Ticket anterior no aceptó mensaje; creando conversación nueva');
+                this.ticketId = null;
+                localStorage.removeItem('support_ticket_id');
+                await this.createAuthenticatedChat(content);
+                return;
+            }
+
+            if (!this.ticketId && this.isAuthenticated) {
+                await this.createAuthenticatedChat(content);
+                return;
+            }
+
+            if (!this.socket || !this.ticketId) return;
             
             try {
-                // Emitir mensaje
                 this.socket.emit('message:send', {
                     ticketId: this.ticketId,
                     content: content
                 });
-                
-                // Agregar a mensajes locales
-                const msg = {
-                    _id: Date.now().toString(),
-                    content: content,
-                    senderName: this.visitorName,
-                    senderRole: 'customer',
-                    createdAt: new Date(),
-                    isOwn: true
-                };
-                
-                this.messages.push(msg);
-                
-                const container = document.getElementById('support-messages');
-                if (container) {
-                    const el = this.createMessageElement(msg);
-                    container.appendChild(el);
-                    this.scrollToBottom();
-                }
-                
-                input.value = '';
-                input.style.height = 'auto';
-                this.stopTyping();
+                this._appendOwnMessage(content, this.visitorName, 'customer');
             } catch (error) {
                 console.error('[SupportWidget] Error enviando:', error);
+            }
+        }
+
+        async createAuthenticatedChat(message) {
+            if (!this.isAuthenticated) {
+                console.warn('[SupportWidget] createAuthenticatedChat called without authenticated user');
+                return;
+            }
+
+            const visitorName = this.visitorName || this.user?.username || 'Cliente';
+            const visitorEmail = this.visitorEmail || this.user?.email;
+            const empresaId = this.empresaId;
+
+            if (!empresaId || !visitorName || !visitorEmail) {
+                alert('No se pudo iniciar el chat. Falta información del usuario o empresa.');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                const token = localStorage.getItem('token');
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                const response = await fetch(`${this.apiUrl}/api/support/public/ticket`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        empresaId,
+                        visitorName,
+                        visitorEmail,
+                        subject: `Chat de soporte de ${visitorName}`,
+                        message,
+                        priority: 'medium'
+                    })
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    alert('Error al iniciar chat directo: ' + (data.error || 'No se pudo crear chat'));
+                    return;
+                }
+
+                this.ticketId = data.conversationId;
+                localStorage.setItem('support_ticket_id', this.ticketId);
+
+                if (!this.socket || !this.socket.connected) {
+                    await this.connect();
+                } else {
+                    this.socket.emit('ticket:join', { ticketId: this.ticketId });
+                }
+
+                this.showChat();
+                this.messages.push({
+                    _id: data.messageId || Date.now().toString(),
+                    content: message,
+                    senderName: visitorName,
+                    senderRole: 'member',
+                    createdAt: new Date(),
+                    isOwn: true
+                });
+                this.renderMessages();
+                const input = document.getElementById('support-input');
+                if (input) {
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
+                this.onTicketCreated(data);
+
+            } catch (error) {
+                console.error('[SupportWidget] Error creando chat directo:', error);
+                alert('Error de conexión. Intenta de nuevo.');
             }
         }
 
@@ -792,37 +1163,40 @@
          * Event listeners
          */
         attachEventListeners() {
-            // Toggle
-            this.elements.button.addEventListener('click', () => {
-                this.toggle();
-            });
-            
-            // Cerrar
-            document.getElementById('support-close-btn').addEventListener('click', () => {
-                this.close();
-            });
-            
-            // Enviar mensaje
-            const sendBtn = document.getElementById('support-send-btn');
-            const input = document.getElementById('support-input');
-            
-            if (sendBtn) {
-                sendBtn.addEventListener('click', () => this.sendMessage());
-            }
-            
-            if (input) {
-                input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                });
-                
-                input.addEventListener('input', () => {
-                    this.handleTyping();
+            if (this.eventsBound) return;
+            this.eventsBound = true;
+
+            this._onToggleClick = () => this.toggle();
+            this._onCloseClick = () => this.close();
+            this._onSendClick = () => this.sendMessage();
+            this._onInputKeypress = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            };
+            this._onInputInput = () => {
+                const input = document.getElementById('support-input');
+                this.handleTyping();
+                if (input) {
                     input.style.height = 'auto';
                     input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-                });
+                }
+            };
+
+            this.elements.button.onclick = this._onToggleClick;
+
+            const closeBtn = document.getElementById('support-close-btn');
+            if (closeBtn) closeBtn.onclick = this._onCloseClick;
+
+            const sendBtn = document.getElementById('support-send-btn');
+            const input = document.getElementById('support-input');
+
+            if (sendBtn) sendBtn.onclick = this._onSendClick;
+
+            if (input) {
+                input.onkeypress = this._onInputKeypress;
+                input.oninput = this._onInputInput;
             }
         }
 
@@ -839,7 +1213,19 @@
             this.elements.chatContainer.classList.add('active');
             this.elements.badge.style.display = 'none';
             
-            // Si no hay ticket, mostrar formulario
+            if (this._isAuthenticatedCliente()) {
+                console.log('[SupportWidget] Abriendo widget — cliente autenticado, forzando chat');
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+                if (!this.isConnected) {
+                    this.connect();
+                }
+                if (this.ticketId) {
+                    this.loadMessageHistory();
+                }
+                return;
+            }
+
             if (!this.ticketId) {
                 this.showTicketForm();
             } else {
@@ -893,40 +1279,158 @@
         }
 
         async loadMessageHistory() {
+            if (this.isAuthenticated) {
+                this.showChatView();
+                this._forceAuthenticatedChatInputEnabled();
+            }
+
+            this.messages = [];
+            const historyContainer = document.getElementById('support-messages');
+            if (historyContainer) {
+                historyContainer.innerHTML = '';
+            }
+
             try {
-                // Construir URL con visitorId para validación
                 let url = `${this.apiUrl}/api/support/public/ticket/${this.ticketId}/messages`;
                 if (this.visitorId) {
                     url += `?visitorId=${this.visitorId}`;
                 }
+
+                const headers = {};
+                const token = localStorage.getItem('token');
+                if (token) headers['Authorization'] = `Bearer ${token}`;
                 
-                const response = await fetch(url);
+                const response = await fetch(url, { headers });
                 const data = await response.json();
                 
                 if (data.success) {
-                    this.messages = data.messages.map(m => ({
+                    this.messages = this._dedupeMessagesArray(data.messages.map(m => ({
                         ...m,
-                        isOwn: m.senderRole === 'customer' || m.senderName === this.visitorName
-                    }));
+                        isOwn: m.senderRole === 'customer'
+                            || m.senderRole === 'member'
+                            || m.senderName === this.visitorName
+                    })));
                     this.renderMessages();
+                } else if (this._isAuthenticatedCliente()) {
+                    console.warn('[SupportWidget] Historial no disponible, manteniendo chat activo:', data.error);
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
                 }
             } catch (error) {
                 console.error('[SupportWidget] Error cargando historial:', error);
+                if (this._isAuthenticatedCliente()) {
+                    this.showChatView();
+                    this._forceAuthenticatedChatInputEnabled();
+                }
             }
         }
 
-        destroy() {
-            if (this.socket) {
-                this.socket.disconnect();
+        /**
+         * Envía mensaje como cliente autenticado (socket o REST). No bloquea por ticket cerrado.
+         */
+        async _sendAuthenticatedMessage(content) {
+            const visitorName = this.visitorName || this.user?.username || 'Cliente';
+            const visitorEmail = this.visitorEmail || this.user?.email || '';
+
+            if (this.socket && this.socket.connected && this.ticketId) {
+                try {
+                    this.socket.emit('message:send', {
+                        ticketId: this.ticketId,
+                        content
+                    });
+                    this._appendOwnMessage(content, visitorName, 'member');
+                    return true;
+                } catch (e) {
+                    console.warn('[SupportWidget] Socket send falló:', e);
+                }
             }
-            if (this.elements.container) {
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                const token = localStorage.getItem('token');
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const response = await fetch(
+                    `${this.apiUrl}/api/support/public/ticket/${this.ticketId}/message`,
+                    {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            visitorName,
+                            visitorEmail,
+                            content
+                        })
+                    }
+                );
+                const data = await response.json();
+                if (data.success) {
+                    this._appendOwnMessage(content, visitorName, 'customer');
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[SupportWidget] REST send falló:', e);
+            }
+
+            return false;
+        }
+
+        _appendOwnMessage(content, senderName, senderRole) {
+            const tempId = `local-${Date.now()}`;
+            if (this._pendingOutbound.has(content)) {
+                return;
+            }
+            this._pendingOutbound.add(content);
+            setTimeout(() => this._pendingOutbound.delete(content), 15000);
+
+            const msg = {
+                _id: tempId,
+                content,
+                senderName,
+                senderRole,
+                createdAt: new Date(),
+                isOwn: true
+            };
+
+            if (this._isDuplicateIncoming(msg)) {
+                return;
+            }
+
+            this.messages.push(msg);
+
+            const container = document.getElementById('support-messages');
+            if (!container && this.elements?.content) {
+                this.showChatView();
+            }
+            const messagesEl = document.getElementById('support-messages');
+            if (messagesEl) {
+                const el = this.createMessageElement(msg);
+                messagesEl.appendChild(el);
+                this.scrollToBottom();
+            }
+
+            const input = document.getElementById('support-input');
+            if (input) {
+                input.value = '';
+                input.style.height = 'auto';
+            }
+            this.stopTyping();
+        }
+
+        destroy() {
+            this._teardownSocket();
+            this.eventsBound = false;
+            this._domMounted = false;
+            if (this.elements?.container) {
                 this.elements.container.remove();
             }
+            const orphan = document.getElementById('support-widget');
+            if (orphan) orphan.remove();
         }
     }
 
     // Exportar
     window.SupportWidget = SupportWidget;
+    window.supportWidgetInstance = window.supportWidgetInstance || null;
     if (window.Logger) Logger.debug('SupportWidget', 'Clase cargada');
 
 })();

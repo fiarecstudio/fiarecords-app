@@ -20,6 +20,19 @@
     }
 })();
 
+// ==================================================================
+// SISTEMA DE AUDIO PARA NOTIFICACIONES (HTML5 Audio)
+// Usa archivo .mp3 real para notificaciones
+// ==================================================================
+window.audioNotificacion = new Audio('/sounds/notificacion.mp3');
+
+window.reproducirSonido = function() {
+    if (window.audioNotificacion) {
+        window.audioNotificacion.currentTime = 0; // Reinicia el audio por si llegan mensajes muy rápido
+        window.audioNotificacion.play().catch(e => console.warn('El navegador bloqueó el auto-play del audio:', e));
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // ==================================================================
     // 0. GUARDIA DE IDENTIDAD VISUAL (PRIMERO - ANTI-FLICKER)
@@ -3270,6 +3283,7 @@ Fecha de firma: {{FECHA}}`;
         document.body.classList.add('auth-visible');
         // FASE 5 + PASO 7: LIMPIEZA COMPLETA al cerrar sesión
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         localStorage.removeItem('refreshToken');  // PASO 7: Limpiar refresh token
         localStorage.removeItem('empresaActiva');
         localStorage.removeItem('selected_empresa_id');  // Crítico: limpiar selección de Super Admin
@@ -3281,6 +3295,14 @@ Fecha de firma: {{FECHA}}`;
         
         DOMElements.appWrapper.style.display = 'none';
         DOMElements.loginContainer.style.display = 'flex';
+
+        // Quitar chat morado y preparar burbuja naranja de visitante
+        if (window.chatInit?.destroyInternalChat) {
+            window.chatInit.destroyInternalChat();
+        }
+        if (window.chatInit?.destroySupportWidget) {
+            window.chatInit.destroySupportWidget();
+        }
         
         // Reiniciar chat como visitante
         if (window.chatInit && typeof window.chatInit.autoInit === 'function') {
@@ -3386,8 +3408,12 @@ Fecha de firma: {{FECHA}}`;
                 const payload = JSON.parse(atob(accessToken.split('.')[1]));
                 console.log('[Login] Access Token recibido. Payload:', payload);
 
-                // PASO 1: Guardar tokens y empresaId
+                // PASO 1: Guardar tokens, usuario y empresaId
                 localStorage.setItem('token', accessToken); // 'token' mantiene compatibilidad con el resto de la app
+                if (data.user) {
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    console.log('[Login] Usuario persistido en localStorage:', data.user.role);
+                }
                 if (refreshToken) {
                     localStorage.setItem('refreshToken', refreshToken);
                     console.log('[Login] Refresh Token guardado');

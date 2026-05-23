@@ -95,6 +95,11 @@
 
             // Alerta de usuario pendiente (onboarding)
             this.socketClient.on('alerta_nuevo_pendiente', (data) => {
+                // Reproducir sonido de notificación
+                if (typeof window.reproducirSonido === 'function') {
+                    window.reproducirSonido();
+                }
+                
                 if (typeof window.mostrarAlertaUsuarioPendiente === 'function') {
                     window.mostrarAlertaUsuarioPendiente(data);
                 }
@@ -119,6 +124,25 @@
                 if (existingMsg) {
                     console.log('[ChatManager] Mensaje duplicado ignorado:', message._id);
                     return;
+                }
+                
+                // Reproducir sonido solo si el mensaje es de otra persona
+                try {
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        const currentUserId = payload.id || payload.userId;
+                        
+                        // Verificar si el senderId es diferente al usuario actual
+                        if (message.senderId && currentUserId && 
+                            message.senderId.toString() !== currentUserId.toString()) {
+                            if (typeof window.reproducirSonido === 'function') {
+                                window.reproducirSonido();
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[ChatManager] Error verificando remitente del mensaje:', e);
                 }
                 
                 this.state.messages[convId].push(message);

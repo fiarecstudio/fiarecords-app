@@ -1,4 +1,7 @@
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const Usuario = require('../models/Usuario');
 
 /**
  * Socket.io Initialization Module
@@ -74,25 +77,72 @@ const initializeSocket = (httpServer) => {
         
         // Namespace público para soporte (visitantes sin auth)
         const supportNamespace = io.of('/support');
-        const mongoose = require('mongoose');
         
-        supportNamespace.on('connection', (socket) => {
+        supportNamespace.on('connection', async (socket) => {
             console.log(`🔌 Visitante conectado a soporte: ${socket.id}`);
-            
-            // Extraer datos de autenticación del handshake
-            const { ticketId, empresaId, visitorName, visitorEmail } = socket.handshake.auth;
-            
-            // Generar visitorId único (ObjectId válido) para este visitante
-            const visitorId = new mongoose.Types.ObjectId();
-            
-            // Guardar info en el socket para uso posterior
-            socket.visitorId = visitorId;
-            socket.ticketId = ticketId;
-            socket.empresaId = empresaId;
-            socket.visitorName = visitorName;
-            socket.visitorEmail = visitorEmail;
-            
-            console.log(`[Support] Visitante asignado ID: ${visitorId}`);
+
+            const { ticketId, empresaId, visitorName, visitorEmail, token } = socket.handshake.auth;
+            let authenticatedUser = null;
+            let resolvedEmpresaId = empresaId;
+
+            if (token) {
+                try {
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    const user = await Usuario.findOne({
+                        _id: decoded.id || decoded._id,
+                        isDeleted: { $ne: true }
+                    }).select('_id nombre username role empresaId email');
+
+                    if (user) {
+                        authenticatedUser = user;
+                        resolvedEmpresaId = resolvedEmpresaId || user.empresaId;
+                        socket.user = {
+                            id: user._id.toString(),
+                            username: user.username || user.nombre || null,
+                            role: decoded.role || decoded.rol || decoded.userRole || user.role,
+                            empresaId: user.empresaId,
+                            email: user.email || null
+                        };
+                        console.log(`[Support] Usuario autenticado en /support: ${socket.user.username} (${socket.user.id})`);
+                    } else {
+                        console.warn('[Support] Token válido pero usuario no encontrado:', decoded.id || decoded._id);
+                    }
+                } catch (error) {
+                    console.warn('[Support] Token inválido en /support:', error.message);
+                }
+            }
+
+            if (authenticatedUser) {
+                // Usuario autenticado conectado al nodo de soporte
+                socket.ticketId = ticketId;
+                socket.empresaId = resolvedEmpresaId;
+                socket.visitorName = authenticatedUser.username || authenticatedUser.nombre || visitorName || 'Cliente';
+                socket.visitorEmail = authenticatedUser.email || visitorEmail || '';
+                socket.visitorId = authenticatedUser._id;
+                console.log(`[Support] Sesión autenticada asignada a socket: ${socket.visitorId}`);
+            } else {
+                // Visitante anónimo
+                const visitorId = new mongoose.Types.ObjectId();
+                socket.visitorId = visitorId;
+                socket.ticketId = ticketId;
+                socket.empresaId = resolvedEmpresaId;
+                socket.visitorName = visitorName;
+                socket.visitorEmail = visitorEmail;
+                console.log(`[Support] Visitante asignado ID: ${visitorId}`);
+            }
+
+            // Unir a la sala de la conversación si tiene ticketId
+            if (socket.ticketId) {
+                const roomName = `conversation:${socket.ticketId}`;
+                socket.join(roomName);
+                console.log(`[Support] ${authenticatedUser ? 'Usuario' : 'Visitante'} unido a sala: ${roomName}`);
+
+                supportNamespace.to(roomName).emit('visitor:online', {
+                    ticketId: socket.ticketId,
+                    visitorName: socket.visitorName,
+                    timestamp: new Date()
+                });
+            }
             
             // Unir a la sala de la conversación si tiene ticketId
             if (ticketId) {
