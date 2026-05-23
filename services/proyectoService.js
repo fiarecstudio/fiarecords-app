@@ -11,6 +11,7 @@ const Artista = require('../models/Artista');
 const Configuracion = require('../models/Configuracion');
 const { google } = require('googleapis');
 const AppError = require('../errors/AppError');
+const { extraerDriveId, cambiarPermisoPublico } = require('../utils/googleDrive');
 
 // --- CONFIGURACIÓN GMAIL ---
 const OAuth2 = google.auth.OAuth2;
@@ -868,6 +869,29 @@ class ProyectoService {
         
         await proyecto.save();
         await proyecto.populate('artista');
+        
+        // ================================================================
+        // CAMBIO AUTOMÁTICO DE PERMISOS EN GOOGLE DRIVE
+        // ================================================================
+        // Extraer el ID del archivo/carpeta de la URL y cambiar permisos a público
+        try {
+            const driveId = extraerDriveId(enlace);
+            if (driveId) {
+                console.log(`🔓 Cambiando permisos de Drive para ID: ${driveId}`);
+                const permisoCambiado = await cambiarPermisoPublico(driveId);
+                
+                if (permisoCambiado) {
+                    console.log(`✅ Permisos de Drive cambiados exitosamente para proyecto: ${proyecto.nombreProyecto || proyectoId}`);
+                } else {
+                    console.warn(`⚠️  No se pudieron cambiar los permisos de Drive para: ${driveId}`);
+                }
+            } else {
+                console.warn(`⚠️  No se pudo extraer el ID de Drive de la URL: ${enlace}`);
+            }
+        } catch (error) {
+            // No fallar la operación si Drive API falla, solo loggear el error
+            console.error('❌ Error al cambiar permisos de Drive (no afecta el guardado):', error.message);
+        }
         
         return proyecto;
     }

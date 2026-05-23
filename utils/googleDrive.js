@@ -276,10 +276,101 @@ async function listarBackupsEnDrive() {
     }
 }
 
+/**
+ * Extrae el ID de un archivo o carpeta de Google Drive desde una URL
+ * @param {string} url - URL de Google Drive
+ * @returns {string|null} - ID del archivo/carpeta o null si no se puede extraer
+ */
+function extraerDriveId(url) {
+    if (!url || typeof url !== 'string') return null;
+
+    // Regex para archivos: /file/d/ID/view, /file/d/ID, etc.
+    const fileRegex = /\/file\/d\/([a-zA-Z0-9_-]+)/;
+    const fileMatch = url.match(fileRegex);
+    if (fileMatch) return fileMatch[1];
+
+    // Regex para carpetas: /drive/folders/ID, /folders/ID, etc.
+    const folderRegex = /(?:\/drive\/(?:u\/\d+\/)?)?folders\/([a-zA-Z0-9_-]+)/;
+    const folderMatch = url.match(folderRegex);
+    if (folderMatch) return folderMatch[1];
+
+    // Regex para formato embeddedfolderview: id=ID
+    const embeddedRegex = /id=([a-zA-Z0-9_-]+)/;
+    const embeddedMatch = url.match(embeddedRegex);
+    if (embeddedMatch) return embeddedMatch[1];
+
+    return null;
+}
+
+/**
+ * Cambia los permisos de un archivo o carpeta de Google Drive a "Cualquier persona con el enlace puede ver"
+ * @param {string} fileId - ID del archivo o carpeta en Drive
+ * @returns {Promise<boolean>} - true si se cambió correctamente, false si falló
+ */
+async function cambiarPermisoPublico(fileId) {
+    try {
+        if (!fileId) {
+            console.warn('⚠️  ID de archivo/carpeta no proporcionado para cambio de permisos');
+            return false;
+        }
+
+        const drive = await getDriveClient();
+
+        // Verificar si ya tiene permiso público para evitar duplicados
+        try {
+            const permisosExistentes = await drive.permissions.list({
+                fileId: fileId,
+                fields: 'permissions(id, role, type)'
+            });
+
+            const yaTienePermisoPublico = permisosExistentes.data.permissions.some(
+                p => p.type === 'anyone' && p.role === 'reader'
+            );
+
+            if (yaTienePermisoPublico) {
+                console.log(`🔓 El archivo/carpeta ${fileId} ya tiene permiso público`);
+                return true;
+            }
+        } catch (error) {
+            // Si falla la verificación, continuamos con el intento de cambio
+            console.warn('⚠️  No se pudo verificar permisos existentes, intentando cambiar...');
+        }
+
+        // Cambiar permiso a "Cualquier persona con el enlace puede ver"
+        await drive.permissions.create({
+            fileId: fileId,
+            requestBody: {
+                role: 'reader',
+                type: 'anyone'
+            }
+        });
+
+        console.log(`✅ Permiso público cambiado exitosamente para: ${fileId}`);
+        return true;
+
+    } catch (error) {
+        console.error('❌ Error cambiando permiso público en Drive:', error.message);
+        
+        // Detectar errores comunes
+        if (error.message && error.message.includes('insufficient authentication scopes')) {
+            console.error('⚠️  El refresh_token no tiene permisos para modificar permisos de Drive.');
+            console.error('   Necesitas regenerar el token con el scope: https://www.googleapis.com/auth/drive');
+        }
+        
+        if (error.message && error.message.includes('File not found')) {
+            console.error('⚠️  El archivo/carpeta no existe o no tienes acceso');
+        }
+        
+        return false;
+    }
+}
+
 module.exports = {
     subirBackupsADrive,
     listarBackupsEnDrive,
     buscarOCrearCarpeta,
     subirArchivoADrive,
-    generarURLAutorizacion
+    generarURLAutorizacion,
+    extraerDriveId,
+    cambiarPermisoPublico
 };

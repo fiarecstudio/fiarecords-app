@@ -1290,6 +1290,11 @@
                         <label>Enlace de Carpeta (Opcional)</label>
                         <input type="url" id="directoEnlace" class="form-control" placeholder="https://drive.google.com/...">
                     </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
     </div>
   </div>
 
@@ -1482,6 +1487,9 @@
   <script src="public/js/auth.js"></script>
   <script src="public/js/drive.js"></script>
   <script src="public/js/ui.js"></script>
+
+  <!-- CORRECCIÓN 403 DRIVE: Formateador de URLs de Google Drive para iframes -->
+  <script src="public/js/googleDriveUrlFormatter.js"></script>
 
   <!-- PDF.js para previsualización de documentos -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>

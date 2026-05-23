@@ -608,12 +608,16 @@ let proyectoIdEnEdicion = null;
                 const sizeFormatted = formatBytes(file.size);
                 const dateFormatted = file.subidoEn ? new Date(file.subidoEn).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '';
                 
-                // Para videos, SIEMPRE usar el formato /preview para evitar CSP
-                let urlToUse;
-                if (file.tipo === 'video' && file.driveId) {
+                // CORRECCIÓN 403: Usar webViewLink si está disponible, sino construir URL segura
+                let urlToUse = file.webViewLink;
+                
+                if (!urlToUse && file.driveId) {
+                    // Construir URL segura para iframe (usar /preview en lugar de /view)
                     urlToUse = `https://drive.google.com/file/d/${file.driveId}/preview`;
-                } else {
-                    urlToUse = file.urlDirecta || file.url || (file.driveId ? `https://drive.google.com/file/d/${file.driveId}/preview` : '');
+                }
+                
+                if (!urlToUse) {
+                    urlToUse = file.urlDirecta || file.url || '';
                 }
                 
                 // NUEVO: Usar webViewLink y webContentLink si están disponibles
@@ -700,8 +704,8 @@ let proyectoIdEnEdicion = null;
 
         // NUEVO: Sección de notificaciones al artista (Email/WhatsApp)
         const artista = proj.artista;
-        const tieneCorreo = artista && artista.correo;
-        const tieneTelefono = artista && artista.telefono;
+        const tieneCorreo = artista && artista.correo && artista.correo.trim() !== '';
+        const tieneTelefono = artista && artista.telefono && artista.telefono.trim() !== '';
         const nombreArtista = artista ? (artista.nombreArtistico || artista.nombre || 'Artista') : 'Sin artista';
 
         let notificacionesHtml = '';
@@ -867,6 +871,7 @@ let proyectoIdEnEdicion = null;
                     archivosDetectados.push({
                         nombre: file.name,
                         driveId: file.id,
+                        // CORRECCIÓN 403: Usar /preview en lugar de /view para evitar error en iframes
                         urlDirecta: `https://drive.google.com/file/d/${file.id}/preview`,
                         tipo: tipoArchivo
                     });
@@ -909,29 +914,16 @@ let proyectoIdEnEdicion = null;
         
         container.innerHTML = '';
 
-        let iframeUrl = url;
-        let isFolder = false;
-        let fileId = null;
+        // ================================================================
+        // CORRECCIÓN 403: Detectar si es carpeta o archivo
+        // ================================================================
+        const isFolder = window.GoogleDriveUrlFormatter && 
+                        window.GoogleDriveUrlFormatter.isFolder(url);
         
-        if (url.includes('/folders/')) {
-            isFolder = true;
-            fileId = url.split('/folders/')[1].split('?')[0].split('/')[0];
-        } else if (url.includes('id=')) {
-            fileId = url.split('id=')[1].split('&')[0];
-        } else if (url.includes('/d/')) {
-            fileId = url.split('/d/')[1].split('/')[0];
-        }
-
-        if (fileId && !isFolder) {
-            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-        }
-
-        // Si es video, asegurar que use el formato /preview
-        if (tipo === 'video' && fileId) {
-            iframeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-        }
-
         if (isFolder) {
+            // CASO: CARPETA DE DRIVE
+            // Por políticas de Google, las carpetas no se pueden embeber en iframes
+            // Se muestra un botón para abrirlas en pestaña nueva
             container.innerHTML = `
                 <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center">
                     <i class="bi bi-folder-fill text-warning mb-3" style="font-size: 4rem;"></i>
@@ -943,13 +935,31 @@ let proyectoIdEnEdicion = null;
                 </div>
             `;
         } else {
+            // CASO: ARCHIVO INDIVIDUAL
+            // Usar el formateador de URL para convertir /view a /preview (evita error 403)
+            let iframeUrl = url;
+            
+            if (window.GoogleDriveUrlFormatter && window.GoogleDriveUrlFormatter.format) {
+                const formattedUrl = window.GoogleDriveUrlFormatter.format(url);
+                if (formattedUrl) {
+                    iframeUrl = formattedUrl;
+                    console.log('[playMedia] URL formateada para iframe:', {
+                        original: url,
+                        formatted: iframeUrl,
+                        tipo: tipo
+                    });
+                } else {
+                    console.warn('[playMedia] No se pudo formatear URL de Drive:', url);
+                }
+            }
+
             container.innerHTML = `
                 <iframe 
                     src="${iframeUrl}" 
                     width="100%" 
                     height="100%" 
                     style="border: none; border-radius: 10px; min-height: 400px; background-color: #000;" 
-                    allow="autoplay; fullscreen">
+                    allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture">
                 </iframe>
             `;
         }
