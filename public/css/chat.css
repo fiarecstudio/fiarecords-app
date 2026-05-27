@@ -325,6 +325,91 @@ body.dark-mode {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
+.chat-support-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 16px 8px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+.chat-support-tab {
+  flex: 1;
+  min-width: 100px;
+  border: none;
+  border-radius: 9999px;
+  padding: 10px 14px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-support-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.chat-support-tab.active {
+  background: var(--chat-primary);
+  color: white;
+  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.18);
+}
+
+.chat-support-ticket-list {
+  margin: 0 16px 10px;
+  padding: 10px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 18px;
+}
+
+.chat-support-ticket-items {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.chat-support-ticket-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.chat-support-ticket-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.chat-support-ticket-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #f8fafc;
+}
+
+.chat-support-ticket-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.chat-support-ticket-meta span,
+.chat-support-ticket-meta small {
+  display: inline-block;
+}
+
 /* ============================================================
    MODAL DE NUEVA CONVERSACIÓN
    ============================================================ */

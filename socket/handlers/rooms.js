@@ -203,16 +203,21 @@ module.exports = (socket, io) => {
             });
             
             if (existingConversation) {
+                // Poblar la conversación existente
+                const populatedConv = await Conversation.findById(existingConversation._id)
+                    .populate('participants.userId', 'username nombre email role');
+
                 // Unir a la sala existente
                 socket.join(`conversation:${existingConversation._id}`);
-                
+
                 return callback?.({
                     success: true,
                     conversationId: existingConversation._id,
+                    conversation: populatedConv,
                     existed: true
                 });
             }
-            
+
             // Crear nueva conversación
             const newConversation = new Conversation({
                 empresaId: socket.user.empresaId,
@@ -231,17 +236,34 @@ module.exports = (socket, io) => {
                 ],
                 isActive: true
             });
-            
+
             await newConversation.save();
-            
+
+            // Poblar la conversación recién creada
+            const populatedConv = await Conversation.findById(newConversation._id)
+                .populate('participants.userId', 'username nombre email role');
+
             // Unir al creador
             socket.join(`conversation:${newConversation._id}`);
-            
+
             console.log(`[Rooms] Nueva conversación creada: ${newConversation._id}`);
-            
+
+            // Emitir evento conversation:updated a la sala de empresa para actualizar interfaces
+            const empresaRoom = `empresa:${socket.user.empresaId}`;
+            io.of('/chat').to(empresaRoom).emit('conversation:updated', {
+                conversationId: populatedConv._id,
+                title: populatedConv.title,
+                participants: populatedConv.participants,
+                type: populatedConv.type,
+                lastMessage: populatedConv.lastMessage,
+                updatedAt: populatedConv.updatedAt,
+                unreadIncrement: 1
+            });
+
             callback?.({
                 success: true,
                 conversationId: newConversation._id,
+                conversation: populatedConv,
                 existed: false
             });
             

@@ -230,9 +230,37 @@
                 if (conversation) {
                     conversation.lastMessage = data.lastMessage;
                     conversation.updatedAt = new Date();
-                    
+
+                    // Actualizar participantes si vienen en el evento
+                    if (data.participants) {
+                        conversation.participants = data.participants;
+                    }
+
+                    // NO actualizar el title desde el backend, el frontend lo calculará dinámicamente
+                    // basándose en los participantes para evitar mostrar el nombre propio
+
                     if (data.unreadIncrement) {
                         conversation.unreadCount = (conversation.unreadCount || 0) + data.unreadIncrement;
+
+                        // Emitir evento de mensaje para reproducir sonido
+                        this._triggerCallback('onMessageReceived', {
+                            message: {
+                                _id: new Date().getTime(), // ID temporal
+                                conversationId: convId,
+                                senderId: data.lastMessage?.senderId,
+                                senderName: data.lastMessage?.senderName,
+                                content: data.lastMessage?.content,
+                                type: 'text',
+                                createdAt: new Date()
+                            }
+                        });
+                    }
+
+                    // Mover al principio de la lista
+                    const index = this.state.conversations.indexOf(conversation);
+                    if (index > 0) {
+                        this.state.conversations.splice(index, 1);
+                        this.state.conversations.unshift(conversation);
                     }
                 } else {
                     // Conversación no existe (ticket nuevo), agregar a la lista
@@ -240,17 +268,30 @@
                     this.state.conversations.unshift({
                         _id: convId,
                         type: data.type || 'support',
-                        title: data.title || 'Nuevo ticket',
+                        title: '', // El frontend lo calculará dinámicamente basándose en los participantes
+                        participants: data.participants || [],
                         lastMessage: data.lastMessage,
                         updatedAt: new Date(),
-                        unreadCount: data.unreadIncrement || 1,
-                        participants: []
+                        unreadCount: data.unreadIncrement || 1
                     });
-                    
+
                     // Incrementar contador total
                     this.state.unreadCount += data.unreadIncrement || 1;
+
+                    // Emitir evento de mensaje para reproducir sonido
+                    this._triggerCallback('onMessageReceived', {
+                        message: {
+                            _id: new Date().getTime(), // ID temporal
+                            conversationId: convId,
+                            senderId: data.lastMessage?.senderId,
+                            senderName: data.lastMessage?.senderName,
+                            content: data.lastMessage?.content,
+                            type: 'text',
+                            createdAt: new Date()
+                        }
+                    });
                 }
-                
+
                 this._triggerCallback('onConversationUpdated', data);
             });
 
@@ -304,13 +345,23 @@
                 
                 if (response.success) {
                     this.state.conversations = response.conversations || [];
+                    // Limpiar el título para que el frontend lo calcule dinámicamente basándose en los participantes
+                    this.state.conversations.forEach(conv => {
+                        conv.title = ''; // El frontend lo calculará dinámicamente
+                    });
+                    // Ordenar por updatedAt descendente (más nuevas arriba)
+                    this.state.conversations.sort((a, b) => {
+                        const dateA = new Date(a.updatedAt || 0);
+                        const dateB = new Date(b.updatedAt || 0);
+                        return dateB - dateA;
+                    });
                     console.log(`[ChatManager] ${this.state.conversations.length} conversaciones cargadas via socket`);
-                    
+
                     // Calcular total de no leídos
                     this.state.unreadCount = this.state.conversations.reduce(
                         (sum, c) => sum + (c.unreadCount || 0), 0
                     );
-                    
+
                     return this.state.conversations;
                 }
                 
@@ -328,6 +379,33 @@
             }
         }
 
+        async fetchSupportTickets(mode = 'active') {
+            const params = new URLSearchParams();
+            params.set('active', mode === 'closed' ? 'false' : 'true');
+            if (mode === 'closed') {
+                params.set('status', 'closed');
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/chat/support/tickets?${params.toString()}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Error cargando tickets de soporte');
+                }
+                return Array.isArray(data.tickets) ? data.tickets : [];
+            } catch (error) {
+                console.error('[ChatManager] Error fetchSupportTickets:', error);
+                return [];
+            }
+        }
+
         /**
          * Fallback: Carga conversaciones vía REST API
          */
@@ -341,6 +419,16 @@
                 
                 if (response.success) {
                     this.state.conversations = response.conversations || [];
+                    // Limpiar el título para que el frontend lo calcule dinámicamente basándose en los participantes
+                    this.state.conversations.forEach(conv => {
+                        conv.title = ''; // El frontend lo calculará dinámicamente
+                    });
+                    // Ordenar por updatedAt descendente (más nuevas arriba)
+                    this.state.conversations.sort((a, b) => {
+                        const dateA = new Date(a.updatedAt || 0);
+                        const dateB = new Date(b.updatedAt || 0);
+                        return dateB - dateA;
+                    });
 
                     // Si la carga por socket falló, asegurarnos de unirnos a las salas de cada conversación
                     if (this.socketClient?.isConnected) {
@@ -612,6 +700,39 @@
                 
             } catch (error) {
                 console.error('[ChatManager] Error eliminando conversación:', error);
+                throw error;
+            }
+        }
+
+        async closeTicket(conversationId) {
+            try {
+                const response = await fetch(`/api/chat/support/tickets/${conversationId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: 'closed' })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Error al cerrar ticket');
+                }
+
+                const conversation = this.state.conversations.find(
+                    c => c._id.toString() === conversationId.toString()
+                );
+                if (conversation) {
+                    conversation.supportStatus = 'closed';
+                    conversation.isActive = false;
+                    conversation.updatedAt = new Date();
+                }
+
+                this._triggerCallback('onConversationUpdated', { conversationId, closed: true });
+                return data;
+            } catch (error) {
+                console.error('[ChatManager] Error cerrando ticket:', error);
                 throw error;
             }
         }

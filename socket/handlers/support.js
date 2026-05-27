@@ -190,7 +190,7 @@ module.exports = function(socket, io) {
             
             // Agregar como participante si no lo es
             const isParticipant = conversation.participants.some(
-                p => p.userId.toString() === agentId
+                p => (p.userId._id || p.userId).toString() === agentId
             );
             
             if (!isParticipant) {
@@ -289,7 +289,7 @@ module.exports = function(socket, io) {
             
             // Verificar que sea participante o admin
             const isParticipant = conversation.participants.some(
-                p => p.userId.toString() === socket.user.id
+                p => (p.userId._id || p.userId).toString() === socket.user.id
             );
             const isAdmin = socket.user.role === 'admin' || socket.user.isSuperAdmin;
             
@@ -413,7 +413,7 @@ module.exports = function(socket, io) {
                 customer: t.participants?.find(p => p.role === 'customer'),
                 lastMessage: t.lastMessage,
                 unreadCount: t.participants?.find(
-                    p => p.userId.toString() === socket.user.id
+                    p => (p.userId._id || p.userId).toString() === socket.user.id
                 )?.unreadCount || 0
             }));
             

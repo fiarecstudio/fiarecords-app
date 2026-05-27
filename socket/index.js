@@ -164,79 +164,135 @@ const initializeSocket = (httpServer) => {
                     const { ticketId, content } = data;
                     const Message = require('../models/Message');
                     const Conversation = require('../models/Conversation');
+                    const Usuario = require('../models/Usuario');
 
-                    // Verificar que el ticket existe y pertenece a la empresa
-                    const conversation = await Conversation.findOne({
+                    // Verificar si el usuario está autenticado
+                    const isAuthenticated = socket.user && socket.user.id;
+
+                    // Buscar conversación existente
+                    let conversation = await Conversation.findOne({
                         _id: ticketId,
-                        empresaId: socket.empresaId,
-                        isSupportTicket: true
+                        empresaId: socket.empresaId
                     });
-                    
-                    if (!conversation) {
+
+                    // Si no existe conversación y el usuario está autenticado, crear conversación directa
+                    if (!conversation && isAuthenticated) {
+                        console.log(`[Support] Usuario autenticado ${socket.user.username} enviando mensaje sin conversación, creando conversación directa...`);
+
+                        // Buscar agentes disponibles para la conversación
+                        const agents = await Usuario.find({
+                            empresaId: socket.empresaId,
+                            role: { $in: ['admin', 'ingeniero', 'diseñador', 'soporte'] },
+                            isDeleted: { $ne: true }
+                        }).select('_id username').limit(5);
+
+                        // Crear conversación directa
+                        conversation = new Conversation({
+                            empresaId: socket.empresaId,
+                            type: 'direct',
+                            title: socket.user.username || socket.user.nombre || 'Cliente',
+                            participants: [
+                                {
+                                    userId: socket.user.id,
+                                    role: 'member',
+                                    unreadCount: 0,
+                                    joinedAt: new Date()
+                                },
+                                ...agents.map(agent => ({
+                                    userId: agent._id,
+                                    role: 'support',
+                                    unreadCount: 1,
+                                    joinedAt: new Date()
+                                }))
+                            ],
+                            isSupportTicket: false, // No es ticket de soporte, es conversación directa
+                            lastMessage: {
+                                content,
+                                senderId: socket.user.id,
+                                senderName: socket.user.username,
+                                sentAt: new Date()
+                            }
+                        });
+
+                        await conversation.save();
+                        socket.ticketId = conversation._id;
+
+                        // Hacer populate de los participantes para tener los datos completos
+                        await conversation.populate('participants.userId', 'username nombre email role');
+
+                        // Unir al socket a la sala
+                        const roomName = `conversation:${conversation._id}`;
+                        socket.join(roomName);
+
+                        console.log(`[Support] Conversación directa creada: ${conversation._id} para usuario ${socket.user.username}`);
+                    } else if (!conversation) {
+                        // Visitante anónimo sin ticket
                         socket.emit('error', { message: 'Ticket no encontrado' });
                         return;
                     }
-                    
-                    // Crear mensaje usando visitorId como senderId
+
+                    // Crear mensaje
                     const message = new Message({
                         empresaId: socket.empresaId,
-                        conversationId: ticketId,
-                        senderId: socket.visitorId, // ObjectId válido del visitante
-                        senderName: socket.visitorName,
-                        senderRole: 'member',
+                        conversationId: conversation._id,
+                        senderId: isAuthenticated ? socket.user.id : socket.visitorId,
+                        senderName: isAuthenticated ? socket.user.username : socket.visitorName,
+                        senderRole: isAuthenticated ? socket.user.role : 'member',
                         content,
                         type: 'text',
                         isSystemMessage: false
                     });
-                    
+
                     await message.save();
-                    
+
                     // Actualizar último mensaje
                     await Conversation.updateOne(
-                        { _id: ticketId },
+                        { _id: conversation._id },
                         {
                             lastMessage: {
                                 content,
-                                senderId: socket.visitorId,
-                                senderName: socket.visitorName,
+                                senderId: isAuthenticated ? socket.user.id : socket.visitorId,
+                                senderName: isAuthenticated ? socket.user.username : socket.visitorName,
                                 sentAt: new Date()
                             },
                             updatedAt: new Date()
                         }
                     );
-                    
+
                     // Emitir a la sala
-                    const roomName = `conversation:${ticketId}`;
+                    const roomName = `conversation:${conversation._id}`;
                     const messageData = {
                         _id: message._id,
-                        conversationId: ticketId,
-                        senderId: socket.visitorId,
-                        senderName: socket.visitorName,
-                        senderRole: 'member',
+                        conversationId: conversation._id,
+                        senderId: isAuthenticated ? socket.user.id : socket.visitorId,
+                        senderName: isAuthenticated ? socket.user.username : socket.visitorName,
+                        senderRole: isAuthenticated ? socket.user.role : 'member',
                         content,
                         type: 'text',
                         createdAt: message.createdAt
                     };
-                    
+
                     // Emitir a todos en la sala (incluyendo admins en /chat)
                     io.of('/chat').to(roomName).emit('message:received', { message: messageData });
                     io.of('/support').to(roomName).emit('message:received', { message: messageData });
-                    
-                    // También emitir a la sala de empresa para que todos los agentes reciban el mensaje
+
+                    // También emitir a la sala de empresa
                     const empresaRoom = `empresa:${socket.empresaId}`;
                     io.of('/chat').to(empresaRoom).emit('conversation:updated', {
-                        conversationId: ticketId,
+                        conversationId: conversation._id,
+                        title: conversation.title,
+                        participants: conversation.participants,
                         lastMessage: {
                             content,
-                            senderName: socket.visitorName,
+                            senderName: isAuthenticated ? socket.user.username : socket.visitorName,
                             sentAt: new Date()
                         },
-                        type: 'support',
+                        type: conversation.isSupportTicket ? 'support' : 'direct',
                         unreadIncrement: 1
                     });
-                    
-                    console.log(`[Support] Mensaje enviado por visitante ${socket.visitorName} al ticket ${ticketId}`);
-                    
+
+                    console.log(`[Support] Mensaje enviado por ${isAuthenticated ? socket.user.username : socket.visitorName} a conversación ${conversation._id}`);
+
                 } catch (error) {
                     console.error('[Support] Error enviando mensaje:', error);
                     socket.emit('error', { message: 'Error enviando mensaje' });

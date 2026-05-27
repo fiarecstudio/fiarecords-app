@@ -157,6 +157,17 @@
     /**
      * Destruye por completo el widget de soporte (visitantes).
      */
+    function clearSupportSessionStorage() {
+        [
+            'support_ticket_id',
+            'support_visitor_id',
+            'support_visitor_name',
+            'support_visitor_email',
+            'support_empresa_id',
+            'support_empresa_nombre'
+        ].forEach((key) => sessionStorage.removeItem(key));
+    }
+
     function destroySupportWidget() {
         if (window.supportWidgetInstance) {
             window.supportWidgetInstance.destroy();
@@ -166,6 +177,7 @@
         window.supportWidgetInstance = null;
         window.supportWidget = null;
         supportWidget = null;
+        clearSupportSessionStorage();
     }
 
     /**
@@ -219,14 +231,14 @@
             Logger.debug('ChatInit', 'Visitante detectado, limpiando datos de sesiones previas');
             localStorage.removeItem('empresaId');
             localStorage.removeItem('currentEmpresaId');
-            // NOTA: No limpiamos support_empresa_id para permitir recordar selección previa
+            // NOTA: No limpiamos support_empresa_id para mantener la sesión de ticket público dentro de la pestaña
         }
         
         // Detectar empresaId desde múltiples fuentes
         let empresaId = null;
         
-        // 1. Intentar desde localStorage específico de soporte
-        empresaId = localStorage.getItem('support_empresa_id');
+        // 1. Intentar desde sessionStorage específico de soporte
+        empresaId = sessionStorage.getItem('support_empresa_id');
         
         // 2. Si hay token, intentar desde localStorage general
         if (!empresaId && token) {

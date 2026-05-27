@@ -63,7 +63,7 @@ exports.getConversations = async (req, res) => {
         
         const conversations = await Conversation.find(filter)
             .select('_id type title participants lastMessage updatedAt isSupportTicket supportStatus')
-            .populate('participants.userId', 'role username')
+            .populate('participants.userId', 'role username nombre')
             .sort({ updatedAt: -1 })
             .lean();
 
@@ -90,13 +90,26 @@ exports.getConversations = async (req, res) => {
         // Formatear respuesta
         const formattedConversations = visibleConversations.map(conv => {
             const myParticipant = conv.participants.find(
-                p => p.userId.toString() === req.user.id.toString()
+                p => (p.userId._id || p.userId).toString() === req.user.id.toString()
             );
-            
+
+            // Calcular título basado en el tipo y participantes
+            let displayTitle = conv.title;
+            if ((conv.type === 'direct' || conv.isSupportTicket) && conv.participants) {
+                // Para conversaciones directas y tickets de soporte, mostrar el nombre del otro participante
+                const otherParticipant = conv.participants.find(
+                    p => p.userId && (p.userId._id || p.userId).toString() !== req.user.id.toString()
+                );
+                if (otherParticipant && otherParticipant.userId) {
+                    displayTitle = otherParticipant.userId.username || otherParticipant.userId.nombre || 'Usuario';
+                }
+            }
+
             return {
                 id: conv._id,
                 type: conv.type,
-                title: conv.title,
+                title: displayTitle,
+                participants: conv.participants,
                 lastMessage: conv.lastMessage,
                 updatedAt: conv.updatedAt,
                 unreadCount: myParticipant?.unreadCount || 0,
@@ -137,19 +150,39 @@ exports.getConversationById = async (req, res) => {
         
         // REGLA DE ORO: Usar buildQueryFilter + verificar participación
         const tenantFilter = buildQueryFilter(req);
+        const includeInactive = req.query.includeInactive === 'true' || String(req.query.active || '').toLowerCase() === 'false';
+
         const conversation = await Conversation.findOne({
             _id: id,
-            ...tenantFilter,
-            'participants.userId': req.user.id,
-            isActive: true
+            ...tenantFilter
         })
-        .populate('participants.userId', 'username role')  // Populate datos básicos
+        .populate('participants.userId', 'username nombre role')
         .lean();
         
         if (!conversation) {
             return res.status(404).json({ 
                 success: false, 
                 error: 'Conversación no encontrada' 
+            });
+        }
+
+        const currentUserId = req.user?.id || req.user?._id;
+        const participantMatch = Array.isArray(conversation.participants) && conversation.participants.some((p) => {
+            const participantId = p.userId?._id?.toString?.() || p.userId?.toString?.();
+            return participantId === currentUserId?.toString?.();
+        });
+
+        if (!participantMatch) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Conversación no encontrada' 
+            });
+        }
+
+        if (!includeInactive && conversation.isActive !== true) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversación no encontrada'
             });
         }
         
@@ -166,13 +199,16 @@ exports.getConversationById = async (req, res) => {
                 id: conversation._id,
                 type: conversation.type,
                 title: conversation.title,
-                participants: conversation.participants.map(p => ({
-                    userId: p.userId._id,
-                    username: p.userId.username,
-                    role: p.userId.role,
-                    roleInChat: p.role,
-                    joinedAt: p.joinedAt
-                })),
+                participants: conversation.participants.map(p => {
+                    const user = p.userId || {};
+                    return {
+                        userId: user._id || user,
+                        username: user.username || 'Usuario',
+                        role: user.role || 'member',
+                        roleInChat: p.role,
+                        joinedAt: p.joinedAt
+                    };
+                }),
                 lastMessage: conversation.lastMessage,
                 messageCount,
                 isSupportTicket: conversation.isSupportTicket,
@@ -384,12 +420,18 @@ exports.getMessages = async (req, res) => {
         
         // REGLA DE ORO: Verificar acceso a la conversación usando tenantFilter
         const tenantFilter = buildQueryFilter(req);
-        const hasAccess = await Conversation.exists({
+        const includeInactive = req.query.includeInactive === 'true' || String(req.query.active || '').toLowerCase() === 'false';
+        const accessQuery = {
             _id: conversationId,
             ...tenantFilter,
-            'participants.userId': req.user.id,
-            isActive: true
-        });
+            'participants.userId': req.user.id
+        };
+
+        if (!includeInactive) {
+            accessQuery.isActive = true;
+        }
+        
+        const hasAccess = await Conversation.exists(accessQuery);
         
         if (!hasAccess) {
             return res.status(403).json({ 
@@ -428,9 +470,9 @@ exports.getMessages = async (req, res) => {
         
         // Marcar mensajes como leídos automáticamente al obtener historial
         const unreadMessageIds = messages
-            .filter(m => 
+            .filter(m =>
                 m.senderId.toString() !== req.user.id.toString() &&
-                !m.readBy.some(r => r.userId.toString() === req.user.id.toString())
+                !m.readBy.some(r => (r.userId._id || r.userId).toString() === req.user.id.toString())
             )
             .map(m => m._id);
         
@@ -500,7 +542,7 @@ exports.getUnreadCount = async (req, res) => {
         
         const totalUnread = conversations.reduce((sum, conv) => {
             const myParticipant = conv.participants.find(
-                p => p.userId.toString() === req.user.id.toString()
+                p => (p.userId._id || p.userId).toString() === req.user.id.toString()
             );
             return sum + (myParticipant?.unreadCount || 0);
         }, 0);
@@ -530,49 +572,92 @@ exports.getUnreadCount = async (req, res) => {
 exports.getSupportTickets = async (req, res) => {
     try {
         const { status } = req.query;  // 'open', 'in_progress', 'resolved', 'closed'
-        
+
         // Solo empleados pueden ver tickets
         const employeeRoles = ['admin', 'ingeniero', 'diseñador'];
         if (!employeeRoles.includes(req.user.role) && !req.user.isSuperAdmin) {
-            return res.status(403).json({ 
-                success: false, 
-                error: 'No tienes permiso para ver tickets' 
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para ver tickets'
             });
         }
-        
+
         const tenantFilter = buildQueryFilter(req);
+        const activeParam = String(req.query.active ?? 'true').toLowerCase();
+        const isAdmin = ['admin', 'soporte'].includes(req.user.role) || req.user.isSuperAdmin;
+
+        // Para cerrados, buscar TODAS las conversaciones inactivas (no solo tickets de soporte)
         const filter = {
             ...tenantFilter,
-            isSupportTicket: true,
-            isActive: true
+            isActive: activeParam === 'false' ? false : true
         };
-        
+
+        // Solo filtrar por isSupportTicket si estamos buscando activos
+        if (activeParam !== 'false') {
+            filter.isSupportTicket = true;
+        }
+
+        // Si no es admin, filtrar por participación del usuario
+        if (!isAdmin && activeParam === 'false') {
+            filter['participants.userId'] = req.user.id;
+        }
+
         if (status && ['open', 'in_progress', 'resolved', 'closed'].includes(status)) {
             filter.supportStatus = status;
+            if (status === 'closed') {
+                filter.isActive = false;
+            }
         }
-        
+
         const tickets = await Conversation.find(filter)
-            .select('_id title participants lastMessage supportStatus updatedAt')
+            .select('_id title participants lastMessage supportStatus updatedAt type metadata')
+            .populate('participants.userId', 'username nombre')
             .sort({ updatedAt: -1 })
             .lean();
-        
+
         res.json({
             success: true,
-            tickets: tickets.map(t => ({
-                id: t._id,
-                title: t.title,
-                clientName: t.participants.find(p => p.role === 'member')?.userId || 'Cliente',
-                lastMessage: t.lastMessage,
-                status: t.supportStatus,
-                updatedAt: t.updatedAt
-            }))
+            tickets: tickets.map(t => {
+                // Obtenemos el ID del usuario solicitante de forma segura
+                const myId = (req.user.id || req.user._id).toString();
+                
+                // Nombre por defecto
+                let finalClientName = 'Usuario';
+
+                // Lógica: ¿Es un ticket de visitante o un chat de usuario?
+                if (t.type === 'support' && t.metadata && t.metadata.visitorName) {
+                    // Visitante de soporte temporal
+                    finalClientName = t.metadata.visitorName;
+                } else {
+                    // Chat directo, buscamos al otro participante
+                    const otherParticipant = Array.isArray(t.participants) ?
+                        t.participants.find(p => p.userId && p.userId._id.toString() !== myId) : null;
+                    
+                    if (otherParticipant && otherParticipant.userId) {
+                        finalClientName = otherParticipant.userId.username || otherParticipant.userId.nombre || 'Usuario';
+                    } else if (t.title) {
+                        // Fallback si el usuario fue eliminado
+                        finalClientName = t.title;
+                    }
+                }
+
+                return {
+                    id: t._id,
+                    title: finalClientName,
+                    clientName: finalClientName,
+                    lastMessage: t.lastMessage,
+                    status: t.supportStatus || (t.isActive === false ? 'closed' : 'open'),
+                    type: t.type,
+                    updatedAt: t.updatedAt
+                };
+            })
         });
-        
+
     } catch (error) {
         console.error('[ChatController] Error getSupportTickets:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Error al obtener tickets' 
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener tickets'
         });
     }
 };
@@ -612,7 +697,8 @@ exports.updateTicketStatus = async (req, res) => {
             {
                 $set: {
                     supportStatus: status,
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
+                    ...(status === 'closed' ? { isActive: false } : {})
                 }
             },
             { new: true }
@@ -782,22 +868,156 @@ exports.deleteConversation = async (req, res) => {
 // ============================================================
 
 /**
+ * PUT /api/chat/conversations/:id/close
+ * Cierra una conversación (soft delete - marca como inactiva)
+ */
+exports.closeConversation = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verificar participación del usuario (o si es admin)
+        const tenantFilter = buildQueryFilter(req);
+        const isAdmin = ['admin', 'soporte'].includes(req.user.role) || req.user.isSuperAdmin;
+
+        let conversation;
+        if (isAdmin) {
+            // Admins pueden cerrar cualquier conversación de su empresa
+            conversation = await Conversation.findOne({
+                _id: id,
+                ...tenantFilter
+            });
+        } else {
+            // Otros usuarios solo pueden cerrar conversaciones donde participan
+            conversation = await Conversation.findOne({
+                _id: id,
+                ...tenantFilter,
+                'participants.userId': req.user.id
+            });
+        }
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversación no encontrada'
+            });
+        }
+
+        // Soft delete: marcar como inactiva
+        const updateData = {
+            isActive: false,
+            updatedAt: new Date()
+        };
+
+        // Solo marcar supportStatus si es un ticket de soporte
+        if (conversation.isSupportTicket) {
+            updateData.supportStatus = 'closed';
+        }
+
+        await Conversation.findOneAndUpdate(
+            { _id: id },
+            {
+                $set: updateData
+            }
+        );
+
+        res.json({
+            success: true,
+            message: 'Conversación cerrada exitosamente'
+        });
+
+    } catch (error) {
+        console.error('[ChatController] Error closeConversation:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al cerrar conversación'
+        });
+    }
+};
+
+/**
+ * PUT /api/chat/conversations/:id/reopen
+ * Reabre una conversación (marca como activa)
+ */
+exports.reopenConversation = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verificar participación del usuario (o si es admin)
+        const tenantFilter = buildQueryFilter(req);
+        const isAdmin = ['admin', 'soporte'].includes(req.user.role) || req.user.isSuperAdmin;
+
+        let conversation;
+        if (isAdmin) {
+            // Admins pueden reabrir cualquier conversación de su empresa
+            conversation = await Conversation.findOne({
+                _id: id,
+                ...tenantFilter
+            });
+        } else {
+            // Otros usuarios solo pueden reabrir conversaciones donde participan
+            conversation = await Conversation.findOne({
+                _id: id,
+                ...tenantFilter,
+                'participants.userId': req.user.id
+            });
+        }
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversación no encontrada'
+            });
+        }
+
+        // Reabrir: marcar como activa
+        const updateData = {
+            isActive: true,
+            updatedAt: new Date()
+        };
+
+        // Solo marcar supportStatus si es un ticket de soporte
+        if (conversation.isSupportTicket) {
+            updateData.supportStatus = 'open';
+        }
+
+        await Conversation.findOneAndUpdate(
+            { _id: id },
+            {
+                $set: updateData
+            }
+        );
+
+        res.json({
+            success: true,
+            message: 'Conversación reabierta exitosamente'
+        });
+
+    } catch (error) {
+        console.error('[ChatController] Error reopenConversation:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al reabrir conversación'
+        });
+    }
+};
+
+/**
  * DELETE /api/chat/support/tickets/:id
  * Cierra un ticket de soporte (marca como inactivo)
  */
 exports.closeTicket = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Solo empleados pueden cerrar tickets
         const employeeRoles = ['admin', 'ingeniero', 'diseñador', 'soporte', 'empleado'];
         if (!employeeRoles.includes(req.user.role) && !req.user.isSuperAdmin) {
-            return res.status(403).json({ 
-                success: false, 
-                error: 'No tienes permiso para cerrar tickets' 
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para cerrar tickets'
             });
         }
-        
+
         const tenantFilter = buildQueryFilter(req);
         const ticket = await Conversation.findOneAndUpdate(
             {
@@ -814,24 +1034,24 @@ exports.closeTicket = async (req, res) => {
             },
             { new: true }
         );
-        
+
         if (!ticket) {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'Ticket no encontrado' 
+            return res.status(404).json({
+                success: false,
+                error: 'Ticket no encontrado'
             });
         }
-        
+
         res.json({
             success: true,
             message: 'Ticket cerrado exitosamente'
         });
-        
+
     } catch (error) {
         console.error('[ChatController] Error closeTicket:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Error al cerrar ticket' 
+        res.status(500).json({
+            success: false,
+            error: 'Error al cerrar ticket'
         });
     }
 };

@@ -15,6 +15,13 @@
             this.isOpen = false;
             this.currentView = 'conversations'; // 'conversations' | 'chat'
             this.unreadBadge = 0;
+            this.supportTicketMode = 'active'; // 'active' | 'closed'
+            this.currentSupportTab = 'active';
+            this.supportTickets = [];
+            this.activeSupportTickets = [];
+            this.closedSupportTickets = [];
+            this.isLoadingSupportTickets = false;
+            this.supportTicketFetchError = null;
             
             // Elementos DOM
             this.elements = {};
@@ -46,11 +53,295 @@
         }
 
         _filterConversationsForCliente(conversations) {
-            if (!this._isClienteUser()) return conversations;
+            if (!this._isClienteUser()) {
+                // Para staff, filtrar solo conversaciones activas
+                return (conversations || []).filter((conv) => {
+                    return conv.isActive !== false && conv.supportStatus !== 'closed';
+                });
+            }
             return (conversations || []).filter((conv) => {
                 if (conv.type === 'group') return false;
                 return conv.type === 'direct' || conv.type === 'support';
             });
+        }
+
+        _isStaffUser() {
+            return !this._isClienteUser();
+        }
+
+        async refreshSupportTickets(mode = 'active', switchTab = true) {
+            if (switchTab) {
+                this.supportTicketMode = mode;
+                this.currentSupportTab = mode;
+            }
+            this.supportTicketFetchError = null;
+            this.isLoadingSupportTickets = true;
+
+            // Guardar datos según el modo
+            if (mode === 'active') {
+                this.activeSupportTickets = [];
+            } else {
+                this.closedSupportTickets = [];
+            }
+            this.renderConversationsList();
+
+            try {
+                const tickets = await this.loadSupportTickets(mode);
+                if (mode === 'active') {
+                    this.activeSupportTickets = tickets;
+                } else {
+                    this.closedSupportTickets = tickets;
+                }
+            } catch (error) {
+                this.supportTicketFetchError = error.message || 'Error cargando tickets';
+                if (mode === 'active') {
+                    this.activeSupportTickets = [];
+                } else {
+                    this.closedSupportTickets = [];
+                }
+            } finally {
+                this.isLoadingSupportTickets = false;
+                this.renderConversationsList();
+            }
+        }
+
+        async loadSupportTickets(mode = 'active') {
+            if (this.chatManager && typeof this.chatManager.fetchSupportTickets === 'function') {
+                return await this.chatManager.fetchSupportTickets(mode);
+            }
+
+            const params = new URLSearchParams();
+            params.set('active', mode === 'closed' ? 'false' : 'true');
+            if (mode === 'closed') {
+                params.set('status', 'closed');
+            }
+
+            const url = `/api/chat/support/tickets?${params.toString()}`;
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'No se pudieron cargar los tickets');
+            }
+
+            return Array.isArray(data.tickets) ? data.tickets : [];
+        }
+
+        createSupportTicketTabs() {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'chat-support-tabs';
+            wrapper.setAttribute('role', 'tablist');
+
+            // Crear botón Activos
+            const btnActive = document.createElement('button');
+            btnActive.type = 'button';
+            btnActive.className = 'chat-support-tab' + (this.currentSupportTab === 'active' ? ' active' : '');
+            btnActive.setAttribute('data-mode', 'active');
+            btnActive.setAttribute('role', 'tab');
+            btnActive.setAttribute('aria-selected', this.currentSupportTab === 'active');
+            btnActive.textContent = 'Activos';
+
+            // Crear botón Cerrados
+            const btnClosed = document.createElement('button');
+            btnClosed.type = 'button';
+            btnClosed.className = 'chat-support-tab' + (this.currentSupportTab === 'closed' ? ' active' : '');
+            btnClosed.setAttribute('data-mode', 'closed');
+            btnClosed.setAttribute('role', 'tab');
+            btnClosed.setAttribute('aria-selected', this.currentSupportTab === 'closed');
+            btnClosed.textContent = 'Cerrados';
+
+            btnActive.addEventListener('click', async () => {
+                if (this.supportTicketMode === 'active') return;
+                await this.refreshSupportTickets('active');
+            });
+            btnClosed.addEventListener('click', async () => {
+                if (this.supportTicketMode === 'closed') return;
+                await this.refreshSupportTickets('closed');
+            });
+
+            wrapper.appendChild(btnActive);
+            wrapper.appendChild(btnClosed);
+
+            return wrapper;
+        }
+
+        createSupportTicketsList() {
+            const section = document.createElement('div');
+            section.className = 'chat-support-ticket-list';
+            section.style.maxHeight = '500px';
+            section.style.overflowY = 'auto';
+            section.style.overflowX = 'hidden';
+            section.innerHTML = '';
+
+            const emptyState = document.createElement('div');
+            emptyState.className = 'chat-empty chat-support-empty';
+            emptyState.id = 'chat-support-empty-state';
+            emptyState.style.display = 'none';
+            const emptyIcon = document.createElement('div');
+            emptyIcon.className = 'chat-empty-icon';
+            emptyIcon.textContent = '📭';
+            const emptyText = document.createElement('p');
+            emptyText.className = 'chat-empty-text';
+            emptyText.textContent = `No hay tickets ${this.currentSupportTab === 'closed' ? 'cerrados' : 'activos'}.`;
+            emptyState.appendChild(emptyIcon);
+            emptyState.appendChild(emptyText);
+            section.appendChild(emptyState);
+
+            if (this.isLoadingSupportTickets) {
+                // Mostrar loading sin eliminar el empty state
+                const loadingState = document.createElement('div');
+                loadingState.className = 'chat-empty chat-loading';
+                loadingState.innerHTML = `
+                    <div class="chat-empty-icon">⏳</div>
+                    <p class="chat-empty-text">Cargando tickets ${this.currentSupportTab}...</p>
+                `;
+                section.appendChild(loadingState);
+                return section;
+            }
+
+            if (this.supportTicketFetchError) {
+                // Mostrar error sin eliminar el empty state
+                const errorState = document.createElement('div');
+                errorState.className = 'chat-empty chat-error';
+                errorState.innerHTML = `
+                    <div class="chat-empty-icon">⚠️</div>
+                    <p class="chat-empty-text">${this.escapeHtml(this.supportTicketFetchError)}</p>
+                `;
+                section.appendChild(errorState);
+                return section;
+            }
+
+            // Usar la variable correcta según el tab actual
+            const tickets = this.currentSupportTab === 'closed' ? this.closedSupportTickets : this.activeSupportTickets;
+
+            if (!tickets || !tickets.length) {
+                emptyState.style.display = 'flex';
+                return section;
+            }
+
+            // Ordenar tickets por updatedAt descendente (más nuevas arriba)
+            const sortedTickets = [...tickets].sort((a, b) => {
+                const dateA = new Date(a.updatedAt || 0);
+                const dateB = new Date(b.updatedAt || 0);
+                return dateB - dateA;
+            });
+
+            const list = document.createElement('div');
+            list.className = 'chat-support-ticket-items';
+            list.style.maxHeight = '500px';
+            list.style.overflowY = 'auto';
+            list.style.overflowX = 'hidden';
+
+            sortedTickets.forEach((ticket) => {
+                const item = document.createElement('div');
+                item.className = 'chat-support-ticket-item';
+
+                // 1. Obtenemos el ID del usuario actual usando la lógica del widget
+                const currentUserId = this._getCurrentUserId() || this.chatManager?._getCurrentUserId?.() || this.chatManager?.socketClient?.socket?.user?.id;
+
+                // 2. Extraemos el nombre robusto usando nuestra función centralizada
+                let finalName = this.getChatPartnerName(ticket, currentUserId);
+
+                // 3. Si por alguna razón devuelve "Desconocido" o "Cliente", intentamos usar los campos de ticket que vienen mapeados
+                if (finalName === 'Desconocido' || finalName === 'Cliente' || finalName === 'Usuario') {
+                    finalName = ticket.clientName || ticket.title || finalName;
+                }
+
+                item.innerHTML = `
+                    <div class="chat-support-ticket-title">${this.escapeHtml(finalName || 'Sin título')}</div>
+                    <div class="chat-support-ticket-meta">
+                        <span>${ticket.status ? ticket.status.replace('_', ' ') : ''}</span>
+                        <small>${ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</small>
+                    </div>
+                `;
+
+                item.addEventListener('click', async () => {
+                    if (this.currentSupportTab === 'closed') {
+                        await this.openClosedSupportConversation(ticket.id || ticket._id);
+                    } else {
+                        await this.openActiveSupportConversation(ticket.id || ticket._id);
+                    }
+                });
+                list.appendChild(item);
+            });
+
+            // Asegurarse de ocultar el empty state cuando hay elementos
+            if (tickets.length > 0) {
+                emptyState.style.setProperty('display', 'none', 'important');
+            }
+            section.appendChild(list);
+            return section;
+        }
+
+        async openActiveSupportConversation(conversationId) {
+            try {
+                await this.selectConversation(conversationId);
+            } catch (error) {
+                console.warn('[ChatWidget] Error abriendo ticket activo, intentando REST:', error.message);
+                await this.openClosedSupportConversation(conversationId, true);
+            }
+        }
+
+        async openClosedSupportConversation(conversationId, forceReadOnly = false) {
+            try {
+                const token = localStorage.getItem('token');
+                const headers = {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                };
+
+                const convResponse = await fetch(`/api/chat/conversations/${conversationId}?includeInactive=true`, {
+                    headers
+                });
+                const convData = await convResponse.json();
+                if (!convResponse.ok || !convData.success) {
+                    throw new Error(convData.error || 'No se pudo cargar el ticket');
+                }
+
+                const conversation = {
+                    _id: convData.conversation.id || convData.conversation._id,
+                    id: convData.conversation.id || convData.conversation._id,
+                    type: convData.conversation.type,
+                    title: convData.conversation.title || '',
+                    participants: convData.conversation.participants || [],
+                    lastMessage: convData.conversation.lastMessage,
+                    isSupportTicket: convData.conversation.isSupportTicket,
+                    supportStatus: convData.conversation.supportStatus,
+                    isActive: false
+                };
+
+                const messagesResponse = await fetch(`/api/chat/conversations/${conversationId}/messages?limit=100&includeInactive=true`, {
+                    headers
+                });
+                const messagesData = await messagesResponse.json();
+                if (!messagesResponse.ok || !messagesData.success) {
+                    throw new Error(messagesData.error || 'No se pudieron cargar los mensajes');
+                }
+
+                // Agregar al array de conversaciones activas para permitir enviar mensajes
+                // Se mantiene con isActive: false hasta que se envíe un mensaje
+                const existingIndex = this.chatManager.state.conversations.findIndex(
+                    (c) => (c._id || c.id)?.toString() === conversationId.toString()
+                );
+                if (existingIndex >= 0) {
+                    this.chatManager.state.conversations[existingIndex] = conversation;
+                } else {
+                    this.chatManager.state.conversations.unshift(conversation);
+                }
+
+                this.chatManager.state.currentConversationId = conversationId.toString();
+                this.chatManager.state.messages[conversationId.toString()] = messagesData.messages || [];
+
+                this.showChatView();
+            } catch (error) {
+                console.error('[ChatWidget] Error cargando ticket cerrado:', error);
+                this.showError(error.message || 'No se pudo abrir el ticket cerrado');
+            }
         }
 
         /**
@@ -171,6 +462,65 @@
             }
         }
 
+        /**
+         * Función robusta para obtener el nombre del chat partner
+         * Maneja todos los casos: tickets de soporte, participantes poblados, participantes sin poblar
+         */
+        getChatPartnerName(conversation, currentUserId) {
+            if (!conversation) return 'Desconocido';
+
+            const myId = currentUserId ? currentUserId.toString() : '';
+            const isSupportTicket = conversation.type === 'support' || conversation.isSupportTicket === true;
+            const participants = Array.isArray(conversation.participants) ? conversation.participants : [];
+
+            // 1. Caso: Ticket de Soporte (Visitante no registrado)
+            if (conversation.metadata && conversation.metadata.visitorName) {
+                return conversation.metadata.visitorName;
+            }
+
+            const normalizedParticipants = participants.map((p) => {
+                const user = p.userId || p;
+                const id = user?._id?.toString?.() || (typeof user === 'string' ? user : '');
+                const username = user?.username || user?.nombre || p.username || p.nombre;
+                const role = (p.role || user?.role || '').toString().toLowerCase();
+                return {
+                    id,
+                    username,
+                    nombre: user?.nombre || p.nombre,
+                    role,
+                    isSupportRole: ['support', 'soporte', 'admin'].includes(role)
+                };
+            });
+
+            let partner = null;
+
+            if (myId) {
+                partner = normalizedParticipants.find((p) => p.id && p.id !== myId && (!isSupportTicket || !p.isSupportRole));
+                if (!partner) {
+                    partner = normalizedParticipants.find((p) => p.id && p.id !== myId);
+                }
+            } else if (isSupportTicket) {
+                partner = normalizedParticipants.find((p) => p.id && !p.isSupportRole) || normalizedParticipants[0];
+            } else {
+                partner = normalizedParticipants[0];
+            }
+
+            if (partner) {
+                return partner.username || partner.nombre || 'Cliente';
+            }
+
+            // 2. Caso: Participantes sin poblar, pero tenemos el remitente del último mensaje
+            if (conversation.lastMessage && conversation.lastMessage.senderName) {
+                const senderId = conversation.lastMessage.senderId ? conversation.lastMessage.senderId.toString() : '';
+                if (senderId !== myId) {
+                    return conversation.lastMessage.senderName;
+                }
+            }
+
+            // 3. Caso: Título precomputado en el backend o fallback genérico
+            return conversation.title || conversation.name || 'Cliente';
+        }
+
         _isMessageFromCurrentUser(message) {
             if (!message) return true;
             const currentUserId = this._getCurrentUserId();
@@ -217,24 +567,31 @@
                 const isOwnMessage = currentUserId && senderId && currentUserId.toString() === senderId.toString();
                 const isChatClosed = !this.isOpen;
                 const isPageHidden = typeof document !== 'undefined' ? document.hidden : false;
-                const shouldNotify = !isOwnMessage && (isChatClosed || isPageHidden);
 
-                console.log('[DEBUG NOTIFICACION] isOwnMessage =', isOwnMessage, '| isChatClosed =', isChatClosed, '| isPageHidden =', isPageHidden, '| shouldNotify =', shouldNotify);
+                // Siempre reproducir sonido si no es mensaje propio, independientemente de si el widget está abierto
+                const shouldNotify = !isOwnMessage;
+                const shouldShowBadge = !isOwnMessage && (isChatClosed || isPageHidden);
+
+                console.log('[DEBUG NOTIFICACION] isOwnMessage =', isOwnMessage, '| isChatClosed =', isChatClosed, '| isPageHidden =', isPageHidden, '| shouldNotify =', shouldNotify, '| shouldShowBadge =', shouldShowBadge);
 
                 if (shouldNotify) {
-                    console.log('[DEBUG NOTIFICACION] Activando punto rojo y sonido...');
+                    console.log('[DEBUG NOTIFICACION] Reproduciendo sonido...');
+
+                    if (typeof window?.reproducirSonidoChat === 'function') {
+                        window.reproducirSonidoChat();
+                    } else {
+                        console.error('[DEBUG NOTIFICACION] Fallo crítico: window.reproducirSonidoChat no está definida.');
+                    }
+                }
+
+                if (shouldShowBadge) {
+                    console.log('[DEBUG NOTIFICACION] Activando punto rojo...');
 
                     const badge = document?.getElementById?.('global-unread-badge');
                     if (badge) {
                         badge.classList.remove('d-none');
                     } else {
                         console.error('[DEBUG NOTIFICACION] No se encontró el elemento #global-unread-badge en el DOM.');
-                    }
-
-                    if (typeof window?.reproducirSonidoChat === 'function') {
-                        window.reproducirSonidoChat();
-                    } else {
-                        console.error('[DEBUG NOTIFICACION] Fallo crítico: window.reproducirSonidoChat no está definida.');
                     }
                 }
 
@@ -258,6 +615,11 @@
                     </div>
                 </div>
                 <div class="chat-header-actions">
+                    <button class="chat-header-btn chat-close-ticket-btn" id="chat-close-ticket-btn" style="display:none" title="Cerrar ticket">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </button>
                     <button class="chat-header-btn" id="chat-back-btn" style="display:none" title="Volver">
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -326,6 +688,14 @@
                 this.showConversationsList();
             });
 
+            // Botón cerrar conversación (para tickets de soporte y chats directos)
+            const closeTicketBtn = document.getElementById('chat-close-ticket-btn');
+            if (closeTicketBtn) {
+                closeTicketBtn.addEventListener('click', () => {
+                    this.closeConversation();
+                });
+            }
+
             // Input de mensaje
             const input = document.getElementById('chat-input');
             const sendBtn = document.getElementById('chat-send-btn');
@@ -362,7 +732,8 @@
          * Configura callbacks del ChatManager
          */
         setupChatManagerCallbacks() {
-            this.chatManager.on('onConnected', () => {
+            this.chatManager.on('onConnected', async () => {
+                await this.refreshSupportTickets(this.supportTicketMode);
                 this.renderConversationsList();
                 // Actualizar badge al conectar
                 this.updateBadge();
@@ -397,6 +768,12 @@
             });
 
             this.chatManager.on('onConversationUpdated', () => {
+                // Si la pestaña de tickets cerrados está activa, ignorar actualizaciones de socket que reemplacen la vista.
+                if (this.currentView !== 'chat' && this.currentSupportTab === 'closed') {
+                    console.log('[ChatWidget] Ignorando actualización de sockets mientras la pestaña Cerrados está activa.');
+                    return;
+                }
+
                 // Solo renderizar lista si NO estamos en una conversación activa
                 if (this.currentView !== 'chat') {
                     this.renderConversationsList();
@@ -516,6 +893,10 @@
             this.chatManager.leaveConversation();
             
             document.getElementById('chat-header-title').textContent = 'Conversaciones';
+            const closeTicketBtn = document.getElementById('chat-close-ticket-btn');
+            if (closeTicketBtn) {
+                closeTicketBtn.style.display = 'none';
+            }
             document.getElementById('chat-back-btn').style.display = 'none';
             document.getElementById('chat-input-area').style.display = 'none';
             document.querySelector('.chat-header-status').style.display = 'flex';
@@ -528,29 +909,44 @@
          */
         showChatView() {
             this.currentView = 'chat';
-            
+
             const conversation = this.chatManager.state.conversations.find(
                 c => c._id.toString() === this.chatManager.state.currentConversationId?.toString()
             );
-            
-            if (conversation) {
-                const currentUserId = this.chatManager._getCurrentUserId?.() || this.chatManager.socketClient?.socket?.user?.id;
-                const contact = conversation.participants?.find(participant => {
-                    const participantId = participant.userId?.toString?.() || participant._id?.toString?.() || participant.id?.toString?.();
-                    return participantId && participantId !== currentUserId?.toString();
-                }) || conversation.participants?.[0] || null;
 
-                const contactName = contact?.nombre || contact?.username || contact?.name || conversation.title || 'Chat';
+            if (conversation) {
+                const currentUserId = this._getCurrentUserId() || this.chatManager?._getCurrentUserId?.() || this.chatManager?.socketClient?.socket?.user?.id;
+
+                // Calcular el nombre del otro participante usando la función robusta
+                const contactName = this.getChatPartnerName(conversation, currentUserId);
+
                 document.getElementById('chat-header-title').textContent = contactName;
-                
+
                 // Actualizar estado del otro participante
                 this._updateParticipantStatus(conversation);
             }
-            
+
+            const closeTicketBtn = document.getElementById('chat-close-ticket-btn');
+            const isClosedTicket = conversation?.supportStatus === 'closed' || conversation?.isActive === false;
+            const isActiveSupportTicket = conversation?.type === 'support' && !isClosedTicket;
+            const isActiveDirectChat = conversation?.type === 'direct' && !isClosedTicket;
+            // Mostrar botón de cerrar si es ticket de soporte o conversación directa activa y el usuario es staff
+            if (closeTicketBtn) {
+                closeTicketBtn.style.display = ((isActiveSupportTicket || isActiveDirectChat) && !this._isClienteUser()) ? 'flex' : 'none';
+            }
+
             document.getElementById('chat-back-btn').style.display = 'flex';
+            // Siempre mostrar el input para permitir reabrir conversaciones cerradas enviando un mensaje
             document.getElementById('chat-input-area').style.display = 'block';
-            document.querySelector('.chat-header-status').style.display = 'flex';
-            
+            const headerStatus = document.querySelector('.chat-header-status');
+            if (headerStatus) {
+                headerStatus.style.display = 'flex';
+                if (isClosedTicket) {
+                    headerStatus.textContent = 'Cerrado - Envía un mensaje para reabrir';
+                    headerStatus.className = 'chat-header-status closed';
+                }
+            }
+
             this.renderMessages();
         }
 
@@ -584,12 +980,12 @@
             const content = this.elements.content;
             const isCliente = this._isClienteUser();
             const conversations = this._filterConversationsForCliente(this.chatManager.state.conversations);
-            
+
             // Contenedor principal con botón de nueva conversación
             const container = document.createElement('div');
             container.className = 'chat-conversations-container';
-            
-            // Botón nueva conversación
+
+            // Botón nueva conversación (SIEMPRE visible)
             const newConvBtn = document.createElement('button');
             newConvBtn.className = 'chat-new-conversation-btn';
             newConvBtn.innerHTML = `
@@ -600,7 +996,33 @@
             `;
             newConvBtn.addEventListener('click', () => this.showNewConversationModal());
             container.appendChild(newConvBtn);
-            
+
+            const isStaff = this._isStaffUser();
+
+            // Tabs de soporte (SIEMPRE visibles para staff, independientemente de si hay conversaciones)
+            if (isStaff) {
+                container.appendChild(this.createSupportTicketTabs());
+                container.appendChild(this.createSupportTicketsList());
+            }
+
+            // Contenedor para la lista de conversaciones (o empty state)
+            const listContainer = document.createElement('div');
+            listContainer.className = 'chat-conversations-list-container';
+            listContainer.style.maxHeight = '500px';
+            listContainer.style.overflowY = 'auto';
+            listContainer.style.overflowX = 'hidden';
+
+            const shouldShowConversationList = !isStaff || this.currentSupportTab === 'active';
+
+            if (!shouldShowConversationList) {
+                // Si estamos en tab "Cerrados", no mostrar lista de conversaciones activas
+                container.appendChild(listContainer);
+                content.innerHTML = '';
+                content.appendChild(container);
+                return;
+            }
+
+            // Si no hay conversaciones activas, mostrar empty state en el contenedor de lista
             if (conversations.length === 0) {
                 const emptyState = document.createElement('div');
                 emptyState.className = 'chat-empty';
@@ -609,66 +1031,96 @@
                     <h4 class="chat-empty-title">No hay conversaciones</h4>
                     <p class="chat-empty-text">${isCliente ? 'Contacta al equipo de tu empresa para recibir ayuda' : 'Haz clic en "Nueva conversación" para empezar'}</p>
                 `;
-                container.appendChild(emptyState);
-                content.innerHTML = '';
-                content.appendChild(container);
-                return;
-            }
-            
-            const list = document.createElement('div');
-            list.className = 'chat-conversations';
-            
-            conversations.forEach(conv => {
-                const item = document.createElement('div');
-                item.className = 'chat-conversation-item';
-                item.dataset.id = conv._id;
-                
-                const isActive = this.chatManager.state.currentConversationId?.toString() === conv._id.toString();
-                if (isActive) item.classList.add('active');
-                
-                const typeIcon = conv.type === 'support' ? '🎫' : conv.type === 'group' ? '👥' : '👤';
-                const typeLabel = conv.type === 'support' ? 'Ticket' : conv.type === 'group' ? 'Grupo' : 'Chat';
-                const time = conv.lastMessage?.sentAt ? this.formatTime(conv.lastMessage.sentAt) : '';
-                const preview = conv.lastMessage?.content || 'Sin mensajes';
-                const unread = conv.unreadCount > 0 ? `<span class="chat-conversation-badge">${conv.unreadCount}</span>` : '';
-                const deleteBtnHtml = isCliente
-                    ? ''
-                    : '<button class="chat-conversation-delete" title="Eliminar conversación">🗑️</button>';
-                
-                item.innerHTML = `
-                    <div class="chat-conversation-avatar ${conv.type}" title="${typeLabel}">${typeIcon}</div>
-                    <div class="chat-conversation-info">
-                        <h4 class="chat-conversation-name">${conv.title || 'Sin título'} <small style="font-weight:normal;color:#9ca3af;font-size:11px;">${typeLabel}</small></h4>
-                        <p class="chat-conversation-preview">${this.escapeHtml(preview)}</p>
-                    </div>
-                    <div class="chat-conversation-meta">
-                        <div class="chat-conversation-time">${time}</div>
-                        ${unread}
-                    </div>
-                    ${deleteBtnHtml}
-                `;
-                
-                // Click en la conversación para seleccionarla
-                item.addEventListener('click', (e) => {
-                    if (e.target.closest('.chat-conversation-delete')) return;
-                    this.selectConversation(conv._id);
+                listContainer.appendChild(emptyState);
+            } else {
+                // Renderizar lista de conversaciones
+                const list = document.createElement('div');
+                list.className = 'chat-conversations';
+                list.style.maxHeight = '500px';
+                list.style.overflowY = 'auto';
+                list.style.overflowX = 'hidden';
+
+                // Ordenar conversaciones por updatedAt descendente (más nuevas arriba)
+                const sortedConversations = [...conversations].sort((a, b) => {
+                    const dateA = new Date(a.updatedAt || 0);
+                    const dateB = new Date(b.updatedAt || 0);
+                    return dateB - dateA;
                 });
-                
-                // Click en botón de eliminar (solo staff)
-                const deleteBtn = item.querySelector('.chat-conversation-delete');
-                if (deleteBtn) {
-                    deleteBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.confirmDeleteConversation(conv._id, conv.title);
+
+                sortedConversations.forEach(conv => {
+                    const item = document.createElement('div');
+                    item.className = 'chat-conversation-item';
+                    item.dataset.id = conv._id;
+
+                    const isActive = this.chatManager.state.currentConversationId?.toString() === conv._id.toString();
+                    if (isActive) item.classList.add('active');
+
+                    const typeIcon = conv.type === 'support' ? '🎫' : conv.type === 'group' ? '👥' : '👤';
+                    const typeLabel = conv.type === 'support' ? 'Ticket' : conv.type === 'group' ? 'Grupo' : 'Chat';
+                    const time = conv.lastMessage?.sentAt ? this.formatTime(conv.lastMessage.sentAt) : '';
+                    const preview = conv.lastMessage?.content || 'Sin mensajes';
+                    const unread = conv.unreadCount > 0 ? `<span class="chat-conversation-badge">${conv.unreadCount}</span>` : '';
+                    // Mostrar botón de cerrar si es ticket de soporte o conversación directa y el usuario es staff
+                    const deleteBtnHtml = (isCliente || (conv.type !== 'support' && conv.type !== 'direct'))
+                        ? ''
+                        : '<button class="chat-conversation-delete" title="Cerrar conversación">[Cerrar]</button>';
+
+                    // Calcular el nombre del otro participante usando la función robusta
+                    const currentUserId = this._getCurrentUserId() || this.chatManager?._getCurrentUserId?.() || this.chatManager?.socketClient?.socket?.user?.id;
+                    const displayName = this.getChatPartnerName(conv, currentUserId);
+
+                    item.innerHTML = `
+                        <div class="chat-conversation-avatar ${conv.type}" title="${typeLabel}">${typeIcon}</div>
+                        <div class="chat-conversation-info">
+                            <h4 class="chat-conversation-name">${displayName} <small style="font-weight:normal;color:#9ca3af;font-size:11px;">${typeLabel}</small></h4>
+                            <p class="chat-conversation-preview">${this.escapeHtml(preview)}</p>
+                        </div>
+                        <div class="chat-conversation-meta">
+                            <div class="chat-conversation-time">${time}</div>
+                            ${unread}
+                        </div>
+                        ${deleteBtnHtml}
+                    `;
+
+                    // Click en la conversación para seleccionarla
+                    item.addEventListener('click', (e) => {
+                        if (e.target.closest('.chat-conversation-delete')) return;
+                        this.selectConversation(conv._id);
                     });
-                }
-                
-                list.appendChild(item);
-            });
-            
-            container.appendChild(list);
+
+                    // Click en botón de cerrar ticket (solo staff)
+                    const deleteBtn = item.querySelector('.chat-conversation-delete');
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            // Siempre hacer soft delete (PUT) para cerrar conversaciones
+                            await this.closeSupportTicketById(conv._id);
+                        });
+                    }
+
+                    list.appendChild(item);
+                });
+
+                listContainer.appendChild(list);
+            }
+
+            container.appendChild(listContainer);
             content.innerHTML = '';
             content.appendChild(container);
+
+            // Forzar ocultamiento del empty state de soporte después de renderizar
+            setTimeout(() => {
+                const emptyState = document.getElementById('chat-support-empty-state');
+                if (emptyState) {
+                    const currentTickets = this.currentSupportTab === 'closed' ? this.closedSupportTickets : this.activeSupportTickets;
+                    if (conversations.length > 0 || (currentTickets && currentTickets.length > 0)) {
+                        emptyState.style.setProperty('display', 'none', 'important');
+                    } else {
+                        emptyState.style.setProperty('display', 'flex', 'important');
+                    }
+                }
+            }, 0);
         }
 
         /**
@@ -756,7 +1208,7 @@
                 <div class="chat-modal">
                     <div class="chat-modal-header">
                         <h3>🎫 Contactar a Soporte</h3>
-                        <button class="chat-modal-close" id="chat-modal-close">&times;</button>
+                        <button class="chat-modal-close" id="chat-modal-close">&times;?</button>
                     </div>
                     <div class="chat-modal-body">
                         <p class="chat-modal-subtitle">¿En qué podemos ayudarte?</p>
@@ -923,11 +1375,13 @@
                     
                     // Unirse a la conversación y mostrarla
                     await this.chatManager.joinConversation(data.conversation._id);
-                    this.showChatView();
                     
                     // Recargar lista
                     await this.chatManager.loadConversations();
                     this.renderConversationsList();
+                    
+                    // Abrir la conversación automáticamente para mostrar los mensajes
+                    await this.selectConversation(data.conversation._id);
                 } else {
                     this.showError(data.error || 'Error al crear conversación');
                 }
@@ -1036,19 +1490,78 @@
         async sendMessage() {
             const input = document.getElementById('chat-input');
             const content = input.value.trim();
-            
+
             if (!content) return;
-            
+
             try {
+                const currentConversationId = this.chatManager.state.currentConversationId?.toString();
+
+                // Verificar si la conversación está cerrada y reabrirla
+                let conversation = this.chatManager.state.conversations.find(
+                    c => c._id.toString() === currentConversationId
+                );
+
+                // Si no está en activos, buscar en cerrados
+                if (!conversation && this.closedSupportTickets) {
+                    conversation = this.closedSupportTickets.find(
+                        t => (t.id || t._id)?.toString() === currentConversationId
+                    );
+                }
+
+                if (conversation && (conversation.isActive === false || conversation.supportStatus === 'closed')) {
+                    console.log('[ChatWidget] Reabriendo conversación cerrada:', conversation._id || conversation.id);
+                    try {
+                        const token = localStorage.getItem('token');
+                        const conversationId = conversation._id || conversation.id;
+                        const resp = await fetch(`/api/chat/conversations/${conversationId}/reopen`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const data = await resp.json();
+                        if (resp.ok && data.success) {
+                            console.log('[ChatWidget] Conversación reabierta exitosamente');
+
+                            // Actualizar estado local si existe en activos
+                            const activeConv = this.chatManager.state.conversations.find(
+                                c => c._id.toString() === currentConversationId
+                            );
+                            if (activeConv) {
+                                activeConv.isActive = true;
+                                activeConv.supportStatus = 'open';
+                                activeConv.updatedAt = new Date();
+                            }
+
+                            // Actualizar UI
+                            const closeTicketBtn = document.getElementById('chat-close-ticket-btn');
+                            if (closeTicketBtn) {
+                                closeTicketBtn.style.display = 'flex';
+                            }
+
+                            // Recargar tickets
+                            await this.refreshSupportTickets('active', false);
+                            await this.refreshSupportTickets('closed', false);
+                        } else {
+                            console.error('[ChatWidget] Error reabriendo conversación:', data.error);
+                        }
+                    } catch (error) {
+                        console.error('[ChatWidget] Error reabriendo conversación:', error);
+                    }
+                }
+
                 input.value = '';
                 input.style.height = 'auto';
-                
+
                 await this.chatManager.sendMessage(content);
-                
+
                 // Dejar de mostrar "escribiendo"
                 this.stopTyping();
-                
+
             } catch (error) {
+                console.error('[ChatWidget] Error en sendMessage:', error);
                 this.showError('Error al enviar mensaje');
             }
         }
@@ -1144,6 +1657,213 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     runDelete();
+                }
+            });
+        }
+
+        /**
+         * Cierra una conversación (soporte o chat directo) desde la UI
+         */
+        async closeConversation() {
+            const conversation = this.chatManager.state.conversations.find(
+                c => c._id.toString() === this.chatManager.state.currentConversationId?.toString()
+            );
+
+            if (!conversation) {
+                return;
+            }
+
+            const confirmClose = async () => {
+                try {
+                    // Elegir endpoint según el tipo de conversación
+                    const token = localStorage.getItem('token');
+                    let resp;
+                    let body = {};
+                    
+                    if (conversation.type === 'support') {
+                        // Para tickets de soporte, usar endpoint específico
+                        resp = await fetch(`/api/chat/support/tickets/${conversation._id}/status`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ isActive: false, supportStatus: 'closed' })
+                        });
+                    } else if (conversation.type === 'direct') {
+                        // Para chats directos, usar endpoint genérico de conversaciones
+                        resp = await fetch(`/api/chat/conversations/${conversation._id}/close`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                    } else {
+                        throw new Error('Tipo de conversación no soportado');
+                    }
+
+                    const data = await resp.json();
+                    if (!resp.ok || !data.success) {
+                        throw new Error(data.error || 'Error al cerrar conversación');
+                    }
+
+                    // Actualizar en estado local
+                    const activeConv = this.chatManager.state.conversations.find(
+                        c => c._id.toString() === conversation._id.toString()
+                    );
+                    if (activeConv) {
+                        activeConv.supportStatus = 'closed';
+                        activeConv.isActive = false;
+                        activeConv.updatedAt = new Date();
+                    }
+
+                    // Solo recargar tabs de soporte si es un ticket de soporte
+                    if (conversation.type === 'support') {
+                        const currentTab = this.currentSupportTab;
+                        await this.refreshSupportTickets('active', false);
+                        await this.refreshSupportTickets('closed', false);
+                        this.currentSupportTab = currentTab;
+                        this.supportTicketMode = currentTab;
+                    }
+
+                    if (this.chatManager.state.currentConversationId?.toString() === conversation._id.toString()) {
+                        this.chatManager.state.currentConversationId = null;
+                        delete this.chatManager.state.messages[conversation._id?.toString()];
+                    }
+
+                    this.renderConversationsList();
+                    this.showConversationsList();
+                    this.updateBadge();
+
+                    const conversationType = conversation.type === 'support' ? 'Ticket' : 'Conversación';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: conversationType + ' cerrado',
+                            text: data.message || conversationType + ' ha sido cerrado exitosamente',
+                            icon: 'success',
+                            background: '#111',
+                            color: '#fff'
+                        });
+                    } else {
+                        alert(data.message || conversationType + ' cerrado exitosamente');
+                    }
+                } catch (error) {
+                    console.error('[ChatWidget] Error cerrando conversación:', error);
+                    this.showError(error.message || 'No se pudo cerrar la conversación');
+                }
+            };
+
+            const conversationType = conversation.type === 'support' ? 'ticket' : 'conversación';
+            if (typeof Swal === 'undefined') {
+                const confirmed = confirm('¿Estás seguro de que deseas cerrar este ' + conversationType + '?');
+                if (!confirmed) return;
+                await confirmClose();
+                return;
+            }
+
+            Swal.fire({
+                title: 'Cerrar ' + conversationType,
+                text: '¿Estás seguro de que deseas cerrar este ' + conversationType + '? Esta acción lo marcará como inactivo.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#deff9a',
+                cancelButtonColor: '#333',
+                confirmButtonText: '<span style="color: black;">Sí, cerrar ' + conversationType + '</span>',
+                cancelButtonText: 'Cancelar',
+                background: '#111',
+                color: '#fff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    confirmClose();
+                }
+            });
+        }
+
+        /**
+         * Alias retrógrado para mantener compatibilidad
+         * @deprecated Usar closeConversation() en su lugar
+         */
+        async closeSupportTicket() {
+            return this.closeConversation();
+        }
+
+        /**
+         * Cierra un ticket de soporte directamente desde la lista (sin abrir la conversación)
+         */
+        async closeSupportTicketById(conversationId) {
+            const confirmClose = async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const resp = await fetch(`/api/chat/conversations/${conversationId}/close`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const data = await resp.json();
+                    if (!resp.ok || !data.success) {
+                        throw new Error(data.error || 'Error al cerrar ticket');
+                    }
+
+                    // Remover del estado local de conversaciones activas
+                    this.chatManager.state.conversations = this.chatManager.state.conversations.filter(
+                        c => c._id.toString() !== conversationId.toString()
+                    );
+
+                    // Guardar el tab actual
+                    const currentTab = this.currentSupportTab;
+
+                    // Recargar ambos tabs (activos y cerrados) para mantener sincronización
+                    await this.refreshSupportTickets('active', false);
+                    await this.refreshSupportTickets('closed', false);
+
+                    // Restaurar el tab actual
+                    this.currentSupportTab = currentTab;
+                    this.supportTicketMode = currentTab;
+
+                    this.renderConversationsList();
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Ticket cerrado',
+                            text: 'El ticket ha sido cerrado exitosamente',
+                            icon: 'success',
+                            background: '#111',
+                            color: '#fff'
+                        });
+                    } else {
+                        alert('Ticket cerrado exitosamente');
+                    }
+                } catch (error) {
+                    console.error('[ChatWidget] Error cerrando ticket:', error);
+                    this.showError(error.message || 'No se pudo cerrar el ticket');
+                }
+            };
+
+            if (typeof Swal === 'undefined') {
+                const confirmed = confirm('¿Estás seguro de que deseas cerrar este ticket?');
+                if (!confirmed) return;
+                await confirmClose();
+                return;
+            }
+
+            Swal.fire({
+                title: 'Cerrar ticket',
+                text: '¿Estás seguro de que deseas cerrar este ticket? Esta acción lo marcará como inactivo.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#deff9a',
+                cancelButtonColor: '#333',
+                confirmButtonText: '<span style="color: black;">Sí, cerrar ticket</span>',
+                cancelButtonText: 'Cancelar',
+                background: '#111',
+                color: '#fff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    confirmClose();
                 }
             });
         }
@@ -1366,3 +2086,6 @@
     if (window.Logger) Logger.debug('ChatWidget', 'Clase cargada');
 
 })();
+
+
+

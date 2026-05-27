@@ -25,10 +25,10 @@
             this.empresaId = options.empresaId || this.empresaId || this._detectEmpresaId();
             
             // Estado del chat
-            this.ticketId = localStorage.getItem('support_ticket_id') || null;
-            this.visitorId = localStorage.getItem('support_visitor_id') || null;
-            this.visitorName = localStorage.getItem('support_visitor_name') || '';
-            this.visitorEmail = localStorage.getItem('support_visitor_email') || '';
+            this.ticketId = sessionStorage.getItem('support_ticket_id') || null;
+            this.visitorId = sessionStorage.getItem('support_visitor_id') || null;
+            this.visitorName = sessionStorage.getItem('support_visitor_name') || '';
+            this.visitorEmail = sessionStorage.getItem('support_visitor_email') || '';
             this.messages = [];
             this.eventsBound = false;
             this._pendingOutbound = new Set();
@@ -74,7 +74,7 @@
             
             // Para visitantes SIN token: SOLO usar support_empresa_id específico
             // No usar empresaId de sesiones previas de otros usuarios
-            const supportEmpresaId = localStorage.getItem('support_empresa_id');
+const supportEmpresaId = sessionStorage.getItem('support_empresa_id');
             if (supportEmpresaId) return supportEmpresaId;
             
             // 3. Intentar desde meta tag (solo si no hay token)
@@ -403,8 +403,8 @@
                     
                     // Guardar empresa seleccionada
                     this.empresaId = empresaId;
-                    localStorage.setItem('support_empresa_id', empresaId);
-                    localStorage.setItem('support_empresa_nombre', empresaNombre);
+                    sessionStorage.setItem('support_empresa_id', empresaId);
+                    sessionStorage.setItem('support_empresa_nombre', empresaNombre);
                     
                     // Mostrar formulario de ticket
                     this.showTicketForm();
@@ -596,8 +596,8 @@
             }
             
             // Mostrar empresa seleccionada
-            const empresaNombre = localStorage.getItem('support_empresa_nombre') || 'No seleccionada';
-            const empresaId = localStorage.getItem('support_empresa_id');
+            const empresaNombre = sessionStorage.getItem('support_empresa_nombre') || 'No seleccionada';
+            const empresaId = sessionStorage.getItem('support_empresa_id');
             console.log('[SupportWidget] Mostrando formulario. Empresa:', empresaNombre, 'ID:', empresaId);
             
             const empresaInfo = `
@@ -651,8 +651,8 @@
                     e.preventDefault();
                     console.log('[SupportWidget] Click en Cambiar empresa');
                     this.empresaId = null;
-                    localStorage.removeItem('support_empresa_id');
-                    localStorage.removeItem('support_empresa_nombre');
+                    sessionStorage.removeItem('support_empresa_id');
+                    sessionStorage.removeItem('support_empresa_nombre');
                     this.showEmpresaSelector();
                 });
             } else {
@@ -675,7 +675,7 @@
             const message = document.getElementById('support-form-message').value.trim();
             
             // Usar empresaId de la propiedad o localStorage
-            let empresaId = this.empresaId || localStorage.getItem('support_empresa_id');
+            let empresaId = this.empresaId || sessionStorage.getItem('support_empresa_id');
             
             if (!name || !email || !message || !empresaId) {
                 alert('Por favor completa todos los campos y selecciona una empresa');
@@ -688,8 +688,8 @@
             // Guardar datos del visitante
             this.visitorName = name;
             this.visitorEmail = email;
-            localStorage.setItem('support_visitor_name', name);
-            localStorage.setItem('support_visitor_email', email);
+            sessionStorage.setItem('support_visitor_name', name);
+            sessionStorage.setItem('support_visitor_email', email);
             
             try {
                 // Preparar headers
@@ -720,12 +720,12 @@
                 
                 if (data.success) {
                     this.ticketId = data.conversationId;
-                    localStorage.setItem('support_ticket_id', this.ticketId);
+                    sessionStorage.setItem('support_ticket_id', this.ticketId);
                     
                     // Guardar visitorId si existe (para tickets de visitantes)
                     if (data.visitorId) {
                         this.visitorId = data.visitorId;
-                        localStorage.setItem('support_visitor_id', this.visitorId);
+                        sessionStorage.setItem('support_visitor_id', this.visitorId);
                     }
                     
                     // Guardar si es chat directo o ticket
@@ -996,6 +996,14 @@
             const isOwn = incomingMsg.senderName === visitorName
                 || (this._isAuthenticatedCliente() && (incomingMsg.senderRole === 'member' || incomingMsg.senderRole === 'customer'));
 
+            if (!isOwn && typeof window.reproducirSonidoChat === 'function') {
+                try {
+                    window.reproducirSonidoChat();
+                } catch (error) {
+                    console.warn('[SupportWidget] Error reproduciendo sonido:', error);
+                }
+            }
+
             const message = {
                 ...incomingMsg,
                 isOwn
@@ -1037,7 +1045,7 @@
                 if (sent) return;
                 console.log('[SupportWidget] Ticket anterior no aceptó mensaje; creando conversación nueva');
                 this.ticketId = null;
-                localStorage.removeItem('support_ticket_id');
+                sessionStorage.removeItem('support_ticket_id');
                 await this.createAuthenticatedChat(content);
                 return;
             }
@@ -1102,7 +1110,7 @@
                 }
 
                 this.ticketId = data.conversationId;
-                localStorage.setItem('support_ticket_id', this.ticketId);
+                sessionStorage.setItem('support_ticket_id', this.ticketId);
 
                 if (!this.socket || !this.socket.connected) {
                     await this.connect();

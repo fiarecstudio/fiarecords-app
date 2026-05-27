@@ -57,32 +57,37 @@ module.exports = (socket, io) => {
                 'participants.userId': socket.user.id,
                 isActive: true
             })
-            .select('_id type title participants lastMessage updatedAt')
+            .select('_id type title participants lastMessage updatedAt isSupportTicket supportStatus')
+            .populate('participants.userId', 'username nombre email role')
             .sort({ updatedAt: -1 })
             .limit(50);
-            
+
             // Unir automáticamente a las salas de cada conversación
             conversations.forEach(conv => {
                 socket.join(`conversation:${conv._id}`);
             });
-            
+
             console.log(`[Connection] ${socket.user.username} unido a ${conversations.length} conversaciones`);
-            
+
             const response = {
                 success: true,
                 conversations: conversations.map(c => ({
                     _id: c._id,
                     type: c.type,
                     title: c.title,
+                    participants: c.participants,
                     lastMessage: c.lastMessage,
                     updatedAt: c.updatedAt,
+                    isSupportTicket: c.isSupportTicket,
+                    supportStatus: c.supportStatus,
                     unreadCount: c.participants.find(
-                        p => p.userId.toString() === socket.user.id
+                        p => (p.userId._id || p.userId).toString() === socket.user.id
                     )?.unreadCount || 0
                 }))
             };
-            
+
             console.log('[Connection] Enviando respuesta con', response.conversations.length, 'conversaciones');
+            console.log('[Connection] DEBUG - Primera conversación:', JSON.stringify(response.conversations[0], null, 2));
             
             // SIEMPRE ejecutar el callback si es función
             if (typeof callback === 'function') {

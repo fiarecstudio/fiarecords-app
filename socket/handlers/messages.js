@@ -57,13 +57,13 @@ module.exports = (socket, io) => {
                 empresaId: socket.user.empresaId,  // 🔒 Aislamiento crítico
                 'participants.userId': socket.user.id,  // 🔒 Verificar participación
                 isActive: true
-            });
-            
+            }).populate('participants.userId', 'username nombre email role');
+
             if (!conversation) {
                 console.warn(`[Messages] Acceso denegado: ${socket.user.username} a conversación ${conversationId}`);
-                return callback?.({ 
-                    success: false, 
-                    error: 'Acceso denegado a la conversación' 
+                return callback?.({
+                    success: false,
+                    error: 'Acceso denegado a la conversación'
                 });
             }
             
@@ -146,7 +146,7 @@ module.exports = (socket, io) => {
             // socket.to() excluye al emisor (mensaje ya aparece en UI local)
             const conversationRoom = `conversation:${conversationId}`;
             const participantIds = conversation.participants
-                .map(p => p.userId.toString())
+                .map(p => (p.userId._id || p.userId).toString())
                 .filter(id => id !== socket.user.id.toString());
 
             console.log('[Messages] EMITIENDO message:received a sala de conversación:', conversationRoom);
@@ -167,26 +167,30 @@ module.exports = (socket, io) => {
                 const activeConversationSockets = await io.in(conversationRoom).allSockets();
                 console.log('[Messages] Sockets activos en', conversationRoom, ':', Array.from(activeConversationSockets));
 
-                participantIds.forEach((participantId) => {
+                participantIds.forEach(async (participantId) => {
                     const userRoom = `user:${participantId}`;
-                    const userSockets = io.sockets.adapter.rooms.get(userRoom) || new Set();
+                    try {
+                        const userSockets = await io.in(userRoom).allSockets();
 
-                    userSockets.forEach((socketId) => {
-                        const joinedConversationRoom = activeConversationSockets.has(socketId);
-                        console.log('[Messages] Verificando socket receptor:', {
-                            participantId,
-                            socketId,
-                            userRoom,
-                            joinedConversationRoom
-                        });
-
-                        if (!joinedConversationRoom) {
-                            io.to(socketId).emit('message:received', {
-                                message: messageResponse
+                        userSockets.forEach((socketId) => {
+                            const joinedConversationRoom = activeConversationSockets.has(socketId);
+                            console.log('[Messages] Verificando socket receptor:', {
+                                participantId,
+                                socketId,
+                                userRoom,
+                                joinedConversationRoom
                             });
-                            console.log('[Messages] Fallback emit enviado a socket directo:', socketId, 'para usuario', participantId);
-                        }
-                    });
+
+                            if (!joinedConversationRoom) {
+                                io.to(socketId).emit('message:received', {
+                                    message: messageResponse
+                                });
+                                console.log('[Messages] Fallback emit enviado a socket directo:', socketId, 'para usuario', participantId);
+                            }
+                        });
+                    } catch (err) {
+                        console.warn('[Messages] Error obteniendo sockets para user room:', userRoom, err.message);
+                    }
                 });
             } catch (fallbackError) {
                 console.warn('[Messages] Fallback socket delivery falló:', fallbackError.message);
@@ -204,11 +208,14 @@ module.exports = (socket, io) => {
             
             // Notificar a cada participante para actualizar su lista de conversaciones
             const participants = conversation.participants
-                .filter(p => p.userId.toString() !== socket.user.id.toString());
-            
+                .filter(p => (p.userId._id || p.userId).toString() !== socket.user.id.toString());
+
             participants.forEach(participant => {
-                io.to(`user:${participant.userId}`).emit('conversation:updated', {
+                io.to(`user:${participant.userId._id || participant.userId}`).emit('conversation:updated', {
                     conversationId,
+                    title: conversation.title,
+                    participants: conversation.participants,
+                    type: conversation.type,
                     lastMessage: {
                         content: messageResponse.content,
                         senderName: messageResponse.senderName,

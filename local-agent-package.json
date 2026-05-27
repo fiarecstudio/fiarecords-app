@@ -1,0 +1,23 @@
+{
+  "name": "fia-local-agent",
+  "version": "1.0.0",
+  "description": "Agente Local para captura de cámaras IP y transmisión vía WebSockets",
+  "main": "local-agent.js",
+  "scripts": {
+    "start": "node local-agent.js",
+    "dev": "node local-agent.js"
+  },
+  "keywords": [
+    "rtsp",
+    "ffmpeg",
+    "websocket",
+    "video",
+    "surveillance"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fluent-ffmpeg": "^2.1.2",
+    "ws": "^8.18.0"
+  }
+}

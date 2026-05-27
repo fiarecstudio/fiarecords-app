@@ -31,6 +31,12 @@ router.get('/conversations/:id', chatController.getConversationById);
 // POST /api/chat/conversations - Crear nueva conversación (grupo/soporte)
 router.post('/conversations', chatController.createConversation);
 
+// PUT /api/chat/conversations/:id/close - Cerrar conversación (soft delete)
+router.put('/conversations/:id/close', chatController.closeConversation);
+
+// PUT /api/chat/conversations/:id/reopen - Reabrir conversación
+router.put('/conversations/:id/reopen', chatController.reopenConversation);
+
 // DELETE /api/chat/conversations/:id - Eliminar conversación
 router.delete('/conversations/:id', chatController.deleteConversation);
 
@@ -56,6 +62,8 @@ router.patch('/support/tickets/:id/status', chatController.updateTicketStatus);
 
 // DELETE /api/chat/support/tickets/:id - Cerrar ticket (marcar como inactivo)
 router.delete('/support/tickets/:id', chatController.closeTicket);
+// PATCH /api/chat/support/tickets/:id/status - Cerrar ticket o actualizar estado
+router.patch('/support/tickets/:id/status', chatController.updateTicketStatus);
 
 // ============================================================
 // USUARIOS (para crear conversaciones)
