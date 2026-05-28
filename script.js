@@ -42,6 +42,46 @@ window.reproducirSonidoChat = function() {
 };
 window.reproducirSonido = window.reproducirSonido || window.reproducirSonidoChat;
 
+const DEFAULT_FIA_LOGO = 'https://placehold.co/180x80?text=FiaRecords';
+window.FIA_LOGO_DEFAULT = window.FIA_LOGO_DEFAULT || DEFAULT_FIA_LOGO;
+
+// Estado global reactivo para el logo actual
+window.AppState = window.AppState || {
+    logoBase64: localStorage.getItem('fia_logo_cache') || window.FIA_LOGO_DEFAULT,
+    setLogo(logoBase64) {
+        this.logoBase64 = logoBase64 || window.FIA_LOGO_DEFAULT;
+        window.dispatchEvent(new CustomEvent('app-logo-changed', { detail: { logoBase64: this.logoBase64 } }));
+        if (this.logoBase64) {
+            localStorage.setItem('fia_logo_cache', this.logoBase64);
+        } else {
+            localStorage.removeItem('fia_logo_cache');
+        }
+    },
+    resetLogo() {
+        this.setLogo(window.FIA_LOGO_DEFAULT);
+    }
+};
+
+window.addEventListener('app-logo-changed', (event) => {
+    const logoData = event.detail?.logoBase64 || window.FIA_LOGO_DEFAULT;
+    const appLogo = document.getElementById('app-logo');
+    const loginLogo = document.getElementById('login-logo');
+
+    if (appLogo) {
+        const newAppLogo = appLogo.cloneNode(true);
+        newAppLogo.src = logoData;
+        newAppLogo.dataset.logoUpdatedAt = Date.now();
+        appLogo.replaceWith(newAppLogo);
+    }
+
+    if (loginLogo) {
+        const newLoginLogo = loginLogo.cloneNode(true);
+        newLoginLogo.src = logoData;
+        newLoginLogo.dataset.logoUpdatedAt = Date.now();
+        loginLogo.replaceWith(newLoginLogo);
+    }
+});
+
 // Unlocker agresivo: fuerza la promesa de play dentro del primer click real
 // Se auto-desregistra con { once: true } para no interferir con otros controles de UI.
 document.addEventListener('click', () => {
@@ -147,11 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
             appLogo.style.opacity = '1'; // Quitar transparencia de placeholder
         }
         
-        // 2. Aplicar Logo al Login (si estamos en login)
-        const loginLogo = document.getElementById('login-logo');
-        if (logoData && loginLogo && esPaginaLogin()) {
-            loginLogo.src = logoData;
-            loginLogo.style.opacity = '1';
+        // 2. Actualizar estado global reactivo del logo
+        if (window.AppState && typeof window.AppState.setLogo === 'function') {
+            window.AppState.setLogo(logoData);
         }
         
         // 3. Aplicar Favicon (dinámico, al head)
@@ -1069,6 +1107,34 @@ let proyectoIdEnEdicion = null;
         return [];
     }
 
+    async function obtenerProyectosDashboard() {
+        try {
+            const proyectos = await fetchAPI(`/api/proyectos?_=${Date.now()}`, { cache: 'no-store' });
+            if (Array.isArray(proyectos)) {
+                if (!window.localCache) {
+                    window.localCache = {
+                        artistas: [],
+                        servicios: [],
+                        proyectos: [],
+                        pagos: [],
+                        usuarios: [],
+                        cotizaciones: [],
+                        historial: [],
+                        trash: { proyectos: [], artistas: [], servicios: [], usuarios: [] }
+                    };
+                }
+                window.localCache.proyectos = proyectos;
+                if (window.localforage && typeof window.localforage.setItem === 'function') {
+                    window.localforage.setItem('cache_proyectos', proyectos).catch(() => { });
+                }
+                return proyectos;
+            }
+        } catch (e) {
+            console.warn('[Dashboard] No se pudo cargar proyectos desde servidor:', e);
+        }
+        return obtenerProyectosDesdeCache();
+    }
+
     function fechaProyectoOrden(p) {
         const raw = p.fecha || p.createdAt || p.updatedAt;
         const t = raw ? new Date(raw).getTime() : 0;
@@ -1113,7 +1179,7 @@ let proyectoIdEnEdicion = null;
         const listaPagos = document.getElementById('dashboard-pagos-pendientes');
         if (!listaProyectos || !listaPagos) return;
 
-        const proyectos = await obtenerProyectosDesdeCache();
+        const proyectos = await obtenerProyectosDashboard();
 
         const recientes = [...proyectos]
             .filter((p) => p && !p.isDeleted && !p.deleted)
@@ -1121,7 +1187,7 @@ let proyectoIdEnEdicion = null;
             .slice(0, 5);
 
         if (recientes.length === 0) {
-            listaProyectos.innerHTML = renderDashboardListaVacia('No hay proyectos en caché. Abre Flujo o Historial para sincronizar.');
+            listaProyectos.innerHTML = renderDashboardListaVacia('No hay proyectos recientes.');
         } else {
             listaProyectos.innerHTML = recientes.map((p) => {
                 const titulo = nombreProyectoDisplay(p);
@@ -1140,7 +1206,7 @@ let proyectoIdEnEdicion = null;
             .slice(0, 5);
 
         if (pendientes.length === 0) {
-            listaPagos.innerHTML = renderDashboardListaVacia('No hay pagos pendientes en caché.');
+            listaPagos.innerHTML = renderDashboardListaVacia('No hay pagos pendientes.');
         } else {
             listaPagos.innerHTML = pendientes.map((p) => {
                 const titulo = nombreProyectoDisplay(p);
@@ -3332,6 +3398,37 @@ Fecha de firma: {{FECHA}}`;
         localStorage.removeItem('fia_identity_cache');   // Limpiar caché de identidad
         localStorage.removeItem('fia_identity_timestamp');
         localStorage.removeItem('fia_logo_cache');         // Limpiar caché de logo
+
+        configCache = null;
+        logoBase64 = null;
+
+        if (window.localCache) {
+            window.localCache.artistas = [];
+            window.localCache.servicios = [];
+            window.localCache.proyectos = [];
+            window.localCache.pagos = [];
+            window.localCache.usuarios = [];
+            window.localCache.cotizaciones = [];
+            window.localCache.historial = [];
+            window.localCache.trash = {
+                proyectos: [],
+                artistas: [],
+                servicios: [],
+                usuarios: []
+            };
+        }
+
+        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados'].forEach((key) => {
+            if (window[key]) {
+                window[key] = [];
+            }
+        });
+
+        if (window.localforage && typeof window.localforage.removeItem === 'function') {
+            ['cache_artistas', 'cache_servicios', 'cache_proyectos', 'cache_pagos', 'cache_deudas'].forEach((key) => {
+                window.localforage.removeItem(key).catch(() => { });
+            });
+        }
         
         history.pushState("", document.title, window.location.pathname);
         
@@ -3368,17 +3465,19 @@ Fecha de firma: {{FECHA}}`;
         // FASE 5: Carga centralizada de configuración con empresaId correcto
         // Para usuarios normales: usa empresaId de su payload
         // Para Super Admin: usa empresaActiva del localStorage o su empresaId
-        if (!configCache) {
-            const empresaId = localStorage.getItem('empresaActiva') || 
-                              localStorage.getItem('selected_empresa_id') || 
-                              payload.empresaId || 
-                              'all';
-            console.log('[showApp] Cargando configuración para empresaId:', empresaId);
+        const empresaId = localStorage.getItem('empresaActiva') || 
+                          localStorage.getItem('selected_empresa_id') || 
+                          payload.empresaId || 
+                          'all';
+
+        const empresaCambio = configCache && configCache.empresaId && payload.empresaId && configCache.empresaId !== payload.empresaId;
+        if (!configCache || empresaCambio) {
+            console.log('[showApp] Cargando configuración para empresaId:', empresaId, 'empresaCambio:', empresaCambio);
             await loadInitialConfig(empresaId);
         }
         
         // FASE 5: Aplicar identidad visual desde la configuración cargada
-        // Esto asegura que logo y favicon se sincronicen después de un refresh
+        // Esto asegura que logo y favicon se sincronicen inmediatamente
         if (configCache && (configCache.logoBase64 || configCache.faviconBase64)) {
             aplicarIdentidadVisualAlDOM(configCache, true);
             console.log('[showApp] Identidad visual aplicada desde configCache');

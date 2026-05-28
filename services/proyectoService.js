@@ -108,6 +108,12 @@ class ProyectoService {
         
         return { ...baseFilter, ...defaultFilters, ...additionalFilters };
     }
+
+    _applyEmpresaIdFallback(filtro, tenantFilter, user) {
+        if (!filtro.empresaId && user && !user.isSuperAdmin && user.empresaId) {
+            filtro.empresaId = new mongoose.Types.ObjectId(user.empresaId);
+        }
+    }
     
     _determinarEmpresaId(user, headerEmpresaId, bodyEmpresaId = null) {
         // Prioridad: body > header > usuario
@@ -203,6 +209,7 @@ class ProyectoService {
     async listarProyectos(user, tenantFilter) {
         const filtroUsuario = this._getFiltroUsuario(user);
         const filtro = this._buildQueryFilter(tenantFilter, filtroUsuario);
+        this._applyEmpresaIdFallback(filtro, tenantFilter, user);
         
         console.log("\n=== DEBUG /api/proyectos ===");
         console.log("Query enviada a MongoDB:", JSON.stringify(filtro, null, 2));
@@ -303,7 +310,7 @@ class ProyectoService {
      * @param {Object} tenantFilter - Filtro de tenant (empresaId)
      * @param {string} [artistaId] - Opcional: filtrar pagos de un artista específico (para clientes)
      */
-    async listarTodosPagos(tenantFilter, artistaId = null) {
+    async listarTodosPagos(user, tenantFilter, artistaId = null) {
         const baseFiltro = {
             "pagos.0": { $exists: true }
         };
@@ -314,6 +321,7 @@ class ProyectoService {
         }
 
         const filtro = this._buildQueryFilter(tenantFilter, baseFiltro);
+        this._applyEmpresaIdFallback(filtro, tenantFilter, user);
         const proyectos = await Proyecto.find(filtro).populate('artista');
 
         let todosPagos = [];

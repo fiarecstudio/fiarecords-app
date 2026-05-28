@@ -81,7 +81,7 @@ class ProyectoController {
     async listarTodosPagos(req, res, next) {
         try {
             const { artistaId } = req.query;
-            const pagos = await proyectoService.listarTodosPagos(req.tenantFilter, artistaId);
+            const pagos = await proyectoService.listarTodosPagos(req.user, req.tenantFilter, artistaId);
             res.json(pagos);
         } catch (error) {
             next(error);

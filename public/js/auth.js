@@ -142,6 +142,35 @@
         localStorage.removeItem('fia_identity_cache');
         localStorage.removeItem('fia_identity_timestamp');
         localStorage.removeItem('fia_logo_cache');
+
+        if (window.localCache) {
+            window.localCache.artistas = [];
+            window.localCache.servicios = [];
+            window.localCache.proyectos = [];
+            window.localCache.pagos = [];
+            window.localCache.usuarios = [];
+            window.localCache.cotizaciones = [];
+            window.localCache.historial = [];
+            window.localCache.trash = {
+                proyectos: [],
+                artistas: [],
+                servicios: [],
+                usuarios: []
+            };
+        }
+
+        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados'].forEach((key) => {
+            if (window[key]) {
+                window[key] = [];
+            }
+        });
+
+        if (window.localforage && typeof window.localforage.removeItem === 'function') {
+            ['cache_artistas', 'cache_servicios', 'cache_proyectos', 'cache_pagos', 'cache_deudas'].forEach((key) => {
+                window.localforage.removeItem(key).catch(() => { });
+            });
+        }
+
         if (window.Logger) Logger.debug('Auth', 'Sesión limpiada');
     }
 
@@ -192,6 +221,9 @@
         // Limpiar sesión
         limpiarSesion();
 
+        // No resetear el logo aquí: el login debe mostrar la identidad visual de la empresa principal
+        // si está disponible, no un placeholder en blanco.
+
         // Limpiar URL
         history.pushState("", document.title, window.location.pathname);
 
@@ -211,12 +243,17 @@
         document.body.style.opacity = '1';
         document.body.style.visibility = 'visible';
 
-        // Aplicar identidad visual (mostrar FIA RECORDS por defecto) - con protección de doble ejecución
+        const loginLogo = document.getElementById('login-logo');
+        const logoData = window.AppState?.logoBase64 || window.FIA_LOGO_DEFAULT || 'https://placehold.co/180x80?text=FiaRecords';
+        if (loginLogo) {
+            loginLogo.src = logoData;
+        }
+
+        // Recargar identidad visual en el login para obtener el logo de la empresa principal.
         if (!_aplicandoIdentidad) {
             _aplicandoIdentidad = true;
-            getAplicarIdentidadVisual()(true).finally(() => {
-                _aplicandoIdentidad = false;
-            });
+            getAplicarIdentidadVisual()(true).catch(() => {})
+                .finally(() => { _aplicandoIdentidad = false; });
         }
 
         if (window.Logger) Logger.debug('Auth', 'Mostrando pantalla de login');
@@ -264,6 +301,11 @@
             }
 
             if (window.Logger) Logger.info('Auth', 'Login exitoso:', data.user?.username || payload.username);
+
+            // Resetear el estado visual y forzar recarga del logo de la empresa actual
+            if (window.AppState && typeof window.AppState.resetLogo === 'function') {
+                window.AppState.resetLogo();
+            }
 
             // Aplicar identidad visual inmediatamente (con protección)
             if (!_aplicandoIdentidad) {
@@ -355,7 +397,7 @@
 
         limpiarSesion();
 
-        // Mostrar login
+        // Mostrar login sin resetear el logo, para que el login pueda reutilizar la identidad principal.
         showLogin();
 
         // Reiniciar chat como visitante
