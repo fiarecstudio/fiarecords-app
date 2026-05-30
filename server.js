@@ -157,6 +157,7 @@ app.use('/api/empresas', require('./routes/empresas')); // FASE 4: Gestión de E
 app.use('/api/support/public', require('./routes/supportPublic')); // FASE 5: Soporte público (sin auth)
 app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google Drive
 app.use('/api/chat', require('./routes/chat')); // FASE 2: Sistema de Chat
+app.use('/api/polizas', require('./routes/polizas')); // Módulo de Seguros
 
 // --- 5. Ruta Catch-All (SPA) ---
 // Usar middleware en lugar de app.get para evitar problemas con Express 5
