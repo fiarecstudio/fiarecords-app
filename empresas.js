@@ -312,13 +312,21 @@ async function guardarEmpresa(e) {
             ? 'http://localhost:5000'
             : 'https://fiarecords-app.onrender.com';
         
+        const checkboxModuloSeguros = document.getElementById('checkModuloSeguros');
+        const moduloSegurosValue = checkboxModuloSeguros ? checkboxModuloSeguros.checked : false;
+        
+        console.log('[guardarEmpresa] Valor de moduloSeguros:', moduloSegurosValue);
+        
         const data = {
             nombre: document.getElementById('emp-nombre').value,
             rfc: document.getElementById('emp-rfc').value,
             email: document.getElementById('emp-email').value,
             direccion: document.getElementById('emp-direccion').value,
-            telefono: document.getElementById('emp-telefono').value
+            telefono: document.getElementById('emp-telefono').value,
+            moduloSeguros: moduloSegurosValue
         };
+        
+        console.log('[guardarEmpresa] Payload a enviar:', data);
         
         const token = localStorage.getItem('token');
         const res = await fetch(`${API_URL}/api/empresas`, {
@@ -334,6 +342,9 @@ async function guardarEmpresa(e) {
             const err = await res.json();
             throw new Error(err.error || 'Error al crear empresa');
         }
+        
+        const response = await res.json();
+        console.log('[guardarEmpresa] Respuesta del servidor:', response);
         
         if (window.app && window.app.showToast) {
             window.app.showToast('Empresa creada exitosamente', 'success');
@@ -391,7 +402,13 @@ async function editarEmpresa(id) {
                     <label class="form-label small">Dirección</label>
                     <input id="swal-direccion" class="form-control mb-2" value="${escapeHTML(empresa.direccion || '')}">
                     <label class="form-label small">Teléfono</label>
-                    <input id="swal-telefono" class="form-control" value="${escapeHTML(empresa.telefono || '')}">
+                    <input id="swal-telefono" class="form-control mb-2" value="${escapeHTML(empresa.telefono || '')}">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="swal-modulo-seguros" ${empresa.moduloSeguros ? 'checked' : ''}>
+                        <label class="form-check-label small" for="swal-modulo-seguros">
+                            Activar Módulo de Seguros
+                        </label>
+                    </div>
                 </div>
             `,
             focusConfirm: false,
@@ -404,12 +421,15 @@ async function editarEmpresa(id) {
                     rfc: document.getElementById('swal-rfc').value,
                     email: document.getElementById('swal-email').value,
                     direccion: document.getElementById('swal-direccion').value,
-                    telefono: document.getElementById('swal-telefono').value
+                    telefono: document.getElementById('swal-telefono').value,
+                    moduloSeguros: document.getElementById('swal-modulo-seguros').checked
                 };
             }
         });
         
         if (formValues) {
+            console.log('[editarEmpresa] Payload a enviar al PUT:', formValues);
+            
             const updateRes = await fetch(`${API_URL}/api/empresas/${id}`, {
                 method: 'PUT',
                 headers: { 
@@ -419,7 +439,16 @@ async function editarEmpresa(id) {
                 body: JSON.stringify(formValues)
             });
             
-            if (!updateRes.ok) throw new Error('Error al actualizar');
+            console.log('[editarEmpresa] Status de respuesta:', updateRes.status);
+            
+            if (!updateRes.ok) {
+                const errorData = await updateRes.json();
+                console.error('[editarEmpresa] Error del servidor:', errorData);
+                throw new Error(errorData.error || errorData.details || 'Error al actualizar');
+            }
+            
+            const responseData = await updateRes.json();
+            console.log('[editarEmpresa] Respuesta exitosa:', responseData);
             
             if (window.app && window.app.showToast) {
                 window.app.showToast('Empresa actualizada', 'success');

@@ -31,6 +31,15 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'La aseguradora es obligatoria'],
         trim: true
     },
+    inciso: {
+        type: String,
+        default: '1',
+        trim: true
+    },
+    paquete: {
+        type: String,
+        trim: true
+    },
     fechas: {
         inicio: {
             type: Date,

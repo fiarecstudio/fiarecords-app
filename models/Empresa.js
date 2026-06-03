@@ -9,7 +9,9 @@ const EmpresaSchema = new mongoose.Schema({
     rfc: { 
         type: String, 
         trim: true,
-        default: ''
+        default: '',
+        sparse: true,
+        unique: true
     },
     direccion: { 
         type: String, 
@@ -25,7 +27,9 @@ const EmpresaSchema = new mongoose.Schema({
         type: String, 
         trim: true,
         lowercase: true,
-        default: ''
+        default: '',
+        sparse: true,
+        unique: true
     },
     isActive: { 
         type: Boolean, 
@@ -33,6 +37,11 @@ const EmpresaSchema = new mongoose.Schema({
     },
     // Campo para identificar la empresa principal durante migración
     isDefault: {
+        type: Boolean,
+        default: false
+    },
+    // Campo para activar módulo de Seguros por empresa
+    moduloSeguros: {
         type: Boolean,
         default: false
     }

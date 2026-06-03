@@ -872,6 +872,78 @@
 
             </div>
             </section>
+
+            <!-- SECCIÓN: PÓLIZAS (MÓDULO DE SEGUROS) -->
+            <section id="polizas" class="section-view d-none">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                <div class="card">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2">
+                        <h2 class="mb-0"><i class="bi bi-shield-check me-2"></i>Gestión de Pólizas</h2>
+                        <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
+                            <i class="bi bi-plus-circle"></i> Nueva Póliza
+                        </button>
+                    </div>
+                    <div class="card-body pt-3">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Cliente</th>
+                                        <th>Aseguradora</th>
+                                        <th>Vencimiento</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaPolizasBody">
+                                    <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN: CONFIGURACIÓN DE CORREOS (MÓDULO DE SEGUROS) -->
+            <section id="config-correos" class="section-view d-none">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                <div class="card">
+                    <div class="card-header pt-3 pb-0 border-0">
+                        <h2 class="mb-0"><i class="bi bi-envelope me-2"></i>Configuración de Correos SMTP</h2>
+                    </div>
+                    <div class="card-body pt-3">
+                        <form id="form-smtp-config">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Host SMTP</label>
+                                    <input type="text" id="smtp-host" class="form-control" placeholder="smtp.gmail.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Puerto</label>
+                                    <input type="number" id="smtp-port" class="form-control" placeholder="587">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Usuario/Correo</label>
+                                    <input type="email" id="smtp-user" class="form-control" placeholder="tu@correo.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Contraseña</label>
+                                    <input type="password" id="smtp-password" class="form-control" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex gap-2">
+                                <button type="button" class="btn btn-primary" onclick="app.guardarYProbarSMTP()">
+                                    <i class="bi bi-save"></i> Guardar y Probar
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="app.enviarCorreoPrueba()">
+                                    <i class="bi bi-send"></i> Enviar Correo de Prueba
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
         </main>
         
         <!-- FOOTER EN PANEL PRINCIPAL -->
@@ -1245,6 +1317,14 @@
                   </div>
                   <div class="col-md-6">
                     <input type="text" id="emp-telefono" class="form-control" placeholder="Teléfono">
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="checkModuloSeguros">
+                    <label class="form-check-label" for="checkModuloSeguros">
+                      Activar Módulo de Seguros
+                    </label>
                   </div>
                 </div>
               </form>

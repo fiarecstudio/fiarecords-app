@@ -49,7 +49,22 @@ router.get('/:id', async (req, res) => {
 // ==========================================
 router.post('/', async (req, res) => {
     try {
-        const { nombre, rfc, direccion, telefono, email } = req.body;
+        let { nombre, rfc, direccion, telefono, email, moduloSeguros } = req.body;
+        
+        console.log('[POST /api/empresas] req.body original:', req.body);
+        
+        // Limpiar campos vacíos para evitar conflictos con unique: true
+        if (rfc === '' || rfc === null || rfc === undefined) {
+            delete req.body.rfc;
+            rfc = undefined;
+        }
+        if (email === '' || email === null || email === undefined) {
+            delete req.body.email;
+            email = undefined;
+        }
+        
+        console.log('[POST /api/empresas] moduloSeguros recibido:', moduloSeguros);
+        console.log('[POST /api/empresas] req.body limpio:', req.body);
 
         // Validar campos requeridos
         if (!nombre || nombre.trim() === '') {
@@ -80,10 +95,15 @@ router.post('/', async (req, res) => {
             telefono: telefono || '',
             email: email || '',
             isActive: true,
-            isDefault: false // Solo la empresa principal migrada debe ser default
+            isDefault: false, // Solo la empresa principal migrada debe ser default
+            moduloSeguros: moduloSeguros || false
         });
+        
+        console.log('[POST /api/empresas] Empresa a guardar:', nuevaEmpresa);
 
         await nuevaEmpresa.save();
+        
+        console.log('[POST /api/empresas] Empresa guardada con éxito:', nuevaEmpresa);
 
         res.status(201).json({
             message: 'Empresa creada exitosamente',
@@ -100,8 +120,23 @@ router.post('/', async (req, res) => {
 // ==========================================
 router.put('/:id', async (req, res) => {
     try {
-        const { nombre, rfc, direccion, telefono, email, isActive } = req.body;
+        let { nombre, rfc, direccion, telefono, email, isActive, moduloSeguros } = req.body;
         const empresaId = req.params.id;
+        
+        console.log('[PUT /api/empresas/:id] req.body original:', req.body);
+        
+        // Limpiar campos vacíos para evitar conflictos con unique: true
+        if (rfc === '' || rfc === null || rfc === undefined) {
+            delete req.body.rfc;
+            rfc = undefined;
+        }
+        if (email === '' || email === null || email === undefined) {
+            delete req.body.email;
+            email = undefined;
+        }
+        
+        console.log('[PUT /api/empresas/:id] moduloSeguros recibido:', moduloSeguros);
+        console.log('[PUT /api/empresas/:id] req.body limpio:', req.body);
 
         // Buscar empresa existente
         const empresa = await Empresa.findById(empresaId);
@@ -141,6 +176,9 @@ router.put('/:id', async (req, res) => {
         if (telefono !== undefined) datosActualizar.telefono = telefono;
         if (email !== undefined) datosActualizar.email = email;
         if (isActive !== undefined) datosActualizar.isActive = isActive;
+        if (moduloSeguros !== undefined) datosActualizar.moduloSeguros = moduloSeguros;
+        
+        console.log('[PUT /api/empresas/:id] datosActualizar:', datosActualizar);
 
         // Actualizar empresa
         const empresaActualizada = await Empresa.findByIdAndUpdate(
@@ -148,14 +186,18 @@ router.put('/:id', async (req, res) => {
             { $set: datosActualizar },
             { new: true }
         );
+        
+        console.log('[PUT /api/empresas/:id] Empresa actualizada:', empresaActualizada);
 
         res.json({
             message: 'Empresa actualizada exitosamente',
             empresa: empresaActualizada
         });
     } catch (err) {
-        console.error('Error al actualizar empresa:', err);
-        res.status(500).json({ error: 'Error al actualizar empresa' });
+        console.error('[PUT /api/empresas/:id] Error al actualizar empresa:', err);
+        console.error('[PUT /api/empresas/:id] Detalle del error:', err.message);
+        console.error('[PUT /api/empresas/:id] Stack:', err.stack);
+        res.status(500).json({ error: 'Error al actualizar empresa', details: err.message });
     }
 });
 

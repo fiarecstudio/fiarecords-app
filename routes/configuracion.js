@@ -185,6 +185,32 @@ router.get('/', async (req, res) => {
             config = { empresaId: finalEmpresaId };
         }
 
+        // AGREGAR DATOS DE LA EMPRESA (incluyendo moduloSeguros)
+        try {
+            const empresa = await Empresa.findById(finalEmpresaId);
+            if (empresa) {
+                console.log('[Config] Empresa encontrada, agregando moduloSeguros:', empresa.moduloSeguros);
+                if (config.toObject) {
+                    config = config.toObject();
+                }
+                config.moduloSeguros = empresa.moduloSeguros || false;
+                config.nombreEmpresa = empresa.nombre;
+            } else {
+                console.warn('[Config] Empresa no encontrada para ID:', finalEmpresaId);
+                if (config.toObject) {
+                    config = config.toObject();
+                }
+                config.moduloSeguros = false;
+            }
+        } catch (empresaError) {
+            console.error('[Config] Error al obtener empresa:', empresaError);
+            if (config.toObject) {
+                config = config.toObject();
+            }
+            config.moduloSeguros = false;
+        }
+
+        console.log('[Config] Respuesta final con moduloSeguros:', config.moduloSeguros);
         res.json(config);
     } catch (err) {
         console.error('[Config] Error completo:', err);
@@ -202,9 +228,9 @@ router.get('/', async (req, res) => {
                 encabezado1: "FiaRecords Studio",
                 encabezado2: "Juárez N.L.",
                 terminosCotizacion: "Este presupuesto tiene una vigencia de 15 días.",
-                terminosRecibo: "¡Gracias por confiar en FiaRecords!",
-                plantillaContrato: "CONTRATO DE PRESTACIÓN DE SERVICIOS"
-            }
+                terminosContrato: "Este contrato es vinculante entre ambas partes."
+            },
+            moduloSeguros: false
         });
     }
 });
