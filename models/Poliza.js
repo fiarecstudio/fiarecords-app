@@ -105,6 +105,11 @@ const polizaSchema = new mongoose.Schema({
         default: 0,
         min: [0, 'El monto de abono debe ser mayor o igual a 0']
     },
+    primerPago: {
+        type: Number,
+        default: 0,
+        min: [0, 'El primer pago debe ser mayor o igual a 0']
+    },
     saldoRestante: {
         type: Number,
         default: 0,

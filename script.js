@@ -91,8 +91,7 @@ document.addEventListener('click', () => {
             window.audioNotificacion.pause();
             window.audioNotificacion.currentTime = 0;
             window.audioNotificacion.volume = 1;
-            console.log('[Audio] Autoplay desbloqueado de forma segura.');
-        }).catch(() => {
+            }).catch(() => {
             // Silenciamos el error para no ensuciar la consola si el usuario hace clic muy rápido
         });
     }
@@ -213,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function aplicarIdentidadVisual(forzarCambio = false) {
         // LOCK: Si ya está ejecutándose, no iniciar otra vez
         if (isApplyingIdentity) {
-            console.log('[GuardiaIdentidad] Ya está ejecutándose, ignorando llamada...');
             return;
         }
         
@@ -221,8 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
             isApplyingIdentity = true; // Activar LOCK
             
             const empresaId = obtenerIdEmpresaPrioridad();
-            console.log('[GuardiaIdentidad] Aplicando identidad visual para empresa:', empresaId);
-            
             // FASE 1: PLACEHOLDER INMEDIATO (Anti-Flicker)
             // Si tenemos caché válido y NO es forzado, ponemos el logo al instante
             if (!forzarCambio) {
@@ -237,11 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Si el caché es válido, corresponde a la misma empresa Y no ha expirado
                     if (edadCache < CACHE_DURATION_MS && cache.empresaId === empresaId) {
                         aplicarIdentidadVisualAlDOM(cache, false);
-                        console.log('[GuardiaIdentidad] Logo aplicado desde caché (placeholder)');
                         // Continuar para validar en segundo plano
                     } else if (cache.empresaId !== empresaId) {
                         // CAMBIO DE EMPRESA: Limpiar caché y forzar recarga
-                        console.log(`[GuardiaIdentidad] Cambio de empresa detectada: ${cache.empresaId} → ${empresaId}. Limpiando caché.`);
                         localStorage.removeItem(IDENTITY_CACHE_KEY);
                         localStorage.removeItem(IDENTITY_TIMESTAMP_KEY);
                         localStorage.removeItem('fia_logo_cache');
@@ -280,8 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
             localStorage.setItem('fia_logo_cache', data.logoBase64); // Legacy para guardia inmediato
             
-            console.log('[GuardiaIdentidad] Identidad visual actualizada desde servidor');
-            
             return data;
         } catch (err) {
             console.error('[GuardiaIdentidad] Error:', err);
@@ -295,7 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // REACTIVIDAD: Escuchar cambios de contexto de empresa (Super Admin)
     // ==================================================================
     window.addEventListener('empresa-context-changed', (e) => {
-        console.log('[GuardiaIdentidad] Evento empresa-context-changed detectado:', e.detail);
         const nuevaEmpresaId = e.detail?.empresaId;
         
         if (nuevaEmpresaId !== undefined) {
@@ -430,8 +421,7 @@ let proyectoIdEnEdicion = null;
             if(pagos) localCache.pagos = pagos;
             if(deudas) localCache.deudas = deudas;
 
-            console.log("📦 Caché local cargado desde IndexedDB");
-        } catch (e) {
+            } catch (e) {
             console.error("Error leyendo IndexedDB:", e);
         }
     }
@@ -481,8 +471,7 @@ let proyectoIdEnEdicion = null;
                 document.title = `${response.nombre} - Panel de Administración`;
             }
         } catch (e) {
-            console.log('[Titulo] No se pudo actualizar el título de la empresa');
-        }
+            }
     }
 
     function showToast(message, type = 'success') {
@@ -545,8 +534,6 @@ let proyectoIdEnEdicion = null;
                 finalEmpresaId = 'all';
             }
 
-            console.log('[loadInitialConfig] Solicitando config con empresaId:', finalEmpresaId);
-            
             const config = await fetchAPI('/api/configuracion', {
                 headers: { 'X-Empresa-Id': finalEmpresaId }
             });
@@ -554,8 +541,7 @@ let proyectoIdEnEdicion = null;
             if (config) { 
                 configCache = config; 
                 if(config.logoBase64) logoBase64 = config.logoBase64;
-                console.log('[loadInitialConfig] Config cargada para empresa:', config.empresaId || 'N/A');
-            }
+                }
         } catch (e) { 
             console.error('[loadInitialConfig] Error cargando config:', e);
             configCache = null; 
@@ -824,8 +810,6 @@ let proyectoIdEnEdicion = null;
 
     // TASK 3: Nueva función para sincronizar carpeta con backend
     async function sincronizarCarpeta(projectId) {
-        console.log(`[SYNC] Sincronizando carpeta para proyecto: ${projectId}`);
-        
         showToast('Sincronizando archivos con Google Drive...', 'info');
         
         try {
@@ -1003,12 +987,7 @@ let proyectoIdEnEdicion = null;
                 const formattedUrl = window.GoogleDriveUrlFormatter.format(url);
                 if (formattedUrl) {
                     iframeUrl = formattedUrl;
-                    console.log('[playMedia] URL formateada para iframe:', {
-                        original: url,
-                        formatted: iframeUrl,
-                        tipo: tipo
-                    });
-                } else {
+                    } else {
                     console.warn('[playMedia] No se pudo formatear URL de Drive:', url);
                 }
             }
@@ -1060,29 +1039,15 @@ let proyectoIdEnEdicion = null;
     // 6. DASHBOARD SEGURO
     // ==================================================================
     async function cargarDashboard() { 
-        // DEPURACIÓN RADICAL - Primera línea
-        console.log('CONFIG ACTUAL CARGADA:', configCache);
-        console.log('[RADICAL DEBUG] configCache completo:', JSON.stringify(configCache, null, 2));
-        
         try {
             const tipoDashboard = configCache?.tipoDashboard || 'estandar';
-            
-            console.log('[cargarDashboard] tipoDashboard (sin comillas adicionales):', tipoDashboard);
-            console.log('[cargarDashboard] Tipo de tipoDashboard:', typeof tipoDashboard);
-            console.log('[cargarDashboard] ¿Comparación tipoDashboard === "seguros"?', tipoDashboard === 'seguros');
-            console.log('[cargarDashboard] configCache:', configCache);
             
             // FASE 6: Si es dashboard de seguros, cargar métricas de seguros
             // BLOQUEO RADICAL: comparar sin espacios, en minúsculas
             const dashboardTrimmed = (tipoDashboard || '').trim().toLowerCase();
-            console.log('[cargarDashboard] Dashboard después de trim/lowercase:', dashboardTrimmed);
-            
             if (dashboardTrimmed === 'seguros') {
-                console.log('[cargarDashboard] ✅ CONDICIÓN CUMPLIDA: Cargando dashboard de seguros...');
                 await cargarDashboardSeguros();
                 return;
-            } else {
-                console.log('[cargarDashboard] ❌ CONDICIÓN NO CUMPLIDA: Cargando dashboard estándar (tipoDashboard no es "seguros")');
             }
             
             // Dashboard estándar original
@@ -1119,7 +1084,6 @@ let proyectoIdEnEdicion = null;
     // FASE 6: DASHBOARD DE SEGUROS
     async function cargarDashboardSeguros() {
         try {
-            console.log('[cargarDashboardSeguros] Iniciando carga de dashboard de seguros...');
             const dashboardContainer = document.getElementById('dashboard');
             if (!dashboardContainer) {
                 console.error('[cargarDashboardSeguros] No se encontró el contenedor dashboard');
@@ -1129,8 +1093,6 @@ let proyectoIdEnEdicion = null;
             // LIMPIEZA VISUAL: Asegurar que el contenedor esté visible y activo
             dashboardContainer.style.display = 'block';
             dashboardContainer.classList.add('active');
-            console.log('[cargarDashboardSeguros] Contenedor dashboard activado visualmente');
-
             // Renderizar estructura del Dashboard de Seguros
             dashboardContainer.innerHTML = `
                 <div class="container-fluid p-4">
@@ -1172,18 +1134,14 @@ let proyectoIdEnEdicion = null;
                 </div>
             `;
             
-            console.log('[cargarDashboardSeguros] Estructura renderizada, cargando métricas...');
             // Cargar los datos desde el endpoint de métricas
             const res = await fetchAPI('/api/polizas/dashboard/metricas');
-            console.log('[cargarDashboardSeguros] Respuesta de métricas:', res);
-            
             if (res && res.metricas) {
                 document.getElementById('dashActivas').innerText = res.metricas.activas;
                 document.getElementById('dashPorVencer').innerText = res.metricas.porVencer;
                 document.getElementById('dashPagosPendientes').innerText = res.metricas.pagosPendientes;
                 document.getElementById('dashTotalRecaudado').innerText = parseFloat(res.metricas.totalRecaudado).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                console.log('[cargarDashboardSeguros] Métricas actualizadas');
-            } else {
+                } else {
                 console.warn('[cargarDashboardSeguros] No se recibieron métricas válidas');
             }
         } catch (error) {
@@ -1861,8 +1819,6 @@ let proyectoIdEnEdicion = null;
      * @param {string} empresaId - ID de la empresa a cargar (opcional, usa empresaActiva por default)
      */
     async function recargarKanbanReactivo(empresaId = null) {
-        console.log('[KanbanReactivo] Recarga reactiva iniciada para empresa:', empresaId || 'actual');
-        
         // Si se proporcionó empresaId, actualizar contexto
         if (empresaId) {
             localStorage.setItem('empresaActiva', empresaId);
@@ -1980,8 +1936,7 @@ let proyectoIdEnEdicion = null;
         // FASE 5: Limpiar localCache si es forzado (cambio de empresa)
         if (forzarRecarga) {
             localCache.proyectos = [];
-            console.log('[FlujoTrabajo] Caché limpiado por cambio de empresa');
-        }
+            }
         
         try { 
             // FASE 5: Inicializar filtros si es necesario (esto no causa flicker)
@@ -1990,19 +1945,11 @@ let proyectoIdEnEdicion = null;
                 filtros.innerHTML = botonesFiltro.map(p => `<button class="btn btn-sm btn-outline-secondary" onclick="app.filtrarFlujo('${p}')">${p}</button>`).join(''); 
             }
             
-            console.log('[FlujoTrabajo] Cargando con empresaId:', empresaId, '- Forzar recarga:', forzarRecarga);
-            
             // FASE 5: Petición al servidor con header X-Empresa-Id
             const data = await fetchAPI('/api/proyectos', { 
                 headers: { 'X-Empresa-Id': empresaId },
                 cache: forzarRecarga ? 'no-store' : 'default'
             }); 
-            
-            // DEBUG FASE 5: Ver datos recibidos del servidor
-            console.log('[DEBUG] Datos recibidos del servidor:', data);
-            console.log('[DEBUG] Tipo de datos:', typeof data);
-            console.log('[DEBUG] Es array?', Array.isArray(data));
-            console.log('[DEBUG] Cantidad de proyectos:', data ? data.length : 'N/A');
             
             // FASE 5: Verificar que tenemos datos válidos
             if (!data || !Array.isArray(data)) {
@@ -2017,19 +1964,17 @@ let proyectoIdEnEdicion = null;
             }
             
             // DEBUG FASE 5: Analizar proyectos recibidos
-            console.log('[DEBUG] Primeros 3 proyectos:', data.slice(0, 3).map(p => ({ 
+            data.map(p => ({ 
                 id: p._id, 
                 nombre: p.nombreProyecto || 'Sin nombre', 
                 empresaId: p.empresaId,
                 proceso: p.proceso,
                 estatus: p.estatus
-            })));
+            }));
             
             // FASE 5: CRÍTICO - Asegurar que localCache.proyectos tenga los datos ANTES de filtrar
             // fetchAPI debería haberlo hecho, pero por seguridad lo hacemos síncrono aquí
             localCache.proyectos = data;
-            console.log('[FlujoTrabajo] localCache.proyectos actualizado con', localCache.proyectos.length, 'proyectos');
-            
             // FASE 5: AHORA SÍ renderizar - los datos ya están listos, transición suave
             // Solo reemplazamos el contenido cuando tenemos los nuevos datos confirmados
             board.innerHTML = procesos.filter(p => p !== 'Completo' && p !== 'Solicitud')
@@ -2039,8 +1984,7 @@ let proyectoIdEnEdicion = null;
             // Aplicar filtro y renderizar tarjetas
             filtrarFlujo(filtroActivo); 
             
-            console.log('[FlujoTrabajo] Kanban cargado exitosamente con', data.length, 'proyectos');
-        } catch (e) { 
+            } catch (e) { 
             console.error('[FlujoTrabajo] Error cargando flujo:', e);
             board.innerHTML = `
                 <div class="alert alert-danger m-4" role="alert">
@@ -2055,8 +1999,6 @@ let proyectoIdEnEdicion = null;
     }
     function filtrarFlujo(filtro) {
         // DEBUG FASE 5: Verificar proyectos disponibles para dibujar
-        console.log('[DEBUG Frontend] Proyectos recibidos para dibujar:', localCache.proyectos ? localCache.proyectos.length : 0);
-        
         if (!localCache.proyectos || localCache.proyectos.length === 0) {
             console.warn('[DEBUG Frontend] No hay proyectos en localCache');
             return;
@@ -2075,10 +2017,6 @@ let proyectoIdEnEdicion = null;
             else if (p.deleted === false) porEstado.deleted["false"]++;
             else porEstado.deleted["undefined"]++;
         });
-        console.log('[DEBUG Frontend] Distribución por proceso:', porEstado.proceso);
-        console.log('[DEBUG Frontend] Distribución por estatus:', porEstado.estatus);
-        console.log('[DEBUG Frontend] Distribución por deleted:', porEstado.deleted);
-        
         document.querySelectorAll('#filtrosFlujo button').forEach(b => b.classList.remove('active', 'btn-primary')); 
         const activeBtn = Array.from(document.querySelectorAll('#filtrosFlujo button')).find(b => b.textContent === filtro); 
         if (activeBtn) { activeBtn.classList.add('active', 'btn-primary'); } 
@@ -2090,8 +2028,6 @@ let proyectoIdEnEdicion = null;
             const pasaFiltro = p.proceso !== 'Completo' && p.proceso !== 'Solicitud' && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
             return pasaFiltro;
         });
-        console.log('[DEBUG Frontend] Proyectos que pasan el filtro de renderizado:', proyectosFiltrados.length);
-        
         if (proyectosFiltrados.length === 0) {
             console.warn('[DEBUG Frontend] Ningún proyecto pasó el filtro. Verificar estados arriba.');
         }
@@ -2209,12 +2145,6 @@ let proyectoIdEnEdicion = null;
         const seccionesSeguros = ['polizas', 'config-correos', 'mis-deudas', 'configuracion', 'pagos'];
         // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
         const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'];
-        
-        console.log('[mostrarSeccion] configCache:', configCache);
-        console.log('[mostrarSeccion] tipoDashboard:', tipoDashboard);
-        console.log('[mostrarSeccion] esEmpresaSeguros:', esEmpresaSeguros);
-        console.log('[mostrarSeccion] esDashboardSeguros:', esDashboardSeguros);
-        console.log('[mostrarSeccion] Sección solicitada:', id);
         
         // VALIDACIÓN: Si es dashboard de seguros, NO permitir secciones estándar BLOQUEADAS (EXCEPTO dashboard y pagos)
         // EXPLÍCITAMENTE permitimos 'dashboard' y 'pagos' para ambos tipos
@@ -2802,10 +2732,8 @@ let proyectoIdEnEdicion = null;
     let pdfRenderTask = null; // Para cancelar renderizados previos
 
     async function previewPDF(proyectoId) {
-        console.log('[previewPDF] Iniciando con proyectoId:', proyectoId);
         try {
             showLoader();
-            console.log('[previewPDF] Loader mostrado, fetching proyecto...');
             const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`, {
                 headers: { 'X-Empresa-Id': localStorage.getItem('empresaActiva') || 'all' }
             });
@@ -2984,10 +2912,8 @@ let proyectoIdEnEdicion = null;
     }
 
     async function previewContratoPDF(proyectoId) {
-        console.log('[previewContratoPDF] Iniciando con proyectoId:', proyectoId);
         try {
             showLoader();
-            console.log('[previewContratoPDF] Loader mostrado, fetching proyecto...');
             const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`, {
                 headers: { 'X-Empresa-Id': localStorage.getItem('empresaActiva') || 'all' }
             });
@@ -3137,14 +3063,11 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function mostrarPDFEnModal(pdfBase64) {
-        console.log('[mostrarPDFEnModal] Iniciando...');
         const overlay = document.getElementById('modalPreviewDocumento');
         const loadingDiv = document.getElementById('pdf-loading');
         const containerDiv = document.getElementById('pdf-container');
         const errorDiv = document.getElementById('pdf-error');
         const canvas = document.getElementById('pdf-canvas');
-
-        console.log('[mostrarPDFEnModal] Elementos:', { overlay: !!overlay, loadingDiv: !!loadingDiv, containerDiv: !!containerDiv, errorDiv: !!errorDiv, canvas: !!canvas });
 
         // Cancelar renderizado previo si existe
         if (pdfRenderTask) {
@@ -3167,40 +3090,24 @@ Fecha de firma: {{FECHA}}`;
 
         // Mover modal al final del body (como el modal de firma) para asegurar que esté encima
         document.body.appendChild(overlay);
-        console.log('[mostrarPDFEnModal] Modal movido al final del body');
-
         // Mostrar modal con alto z-index
         overlay.style.display = 'flex';
         overlay.style.zIndex = '2147483647';
 
         try {
-            console.log('[mostrarPDFEnModal] Iniciando conversión base64...');
             // Convertir base64 a Uint8Array
             const base64Data = pdfBase64.split(',')[1];
-            console.log('[mostrarPDFEnModal] Base64 extraído, longitud:', base64Data.length);
             const raw = window.atob(base64Data);
-            console.log('[mostrarPDFEnModal] Decodificado, longitud:', raw.length);
             const uint8Array = new Uint8Array(raw.length);
             for (let i = 0; i < raw.length; i++) {
                 uint8Array[i] = raw.charCodeAt(i);
             }
-            console.log('[mostrarPDFEnModal] Uint8Array creado');
-
-            console.log('[mostrarPDFEnModal] Cargando PDF con PDF.js...');
             // Cargar PDF con PDF.js
             const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-            console.log('[mostrarPDFEnModal] PDF cargado, páginas:', pdf.numPages);
-            
             const page = await pdf.getPage(1);
-            console.log('[mostrarPDFEnModal] Página 1 obtenida');
-
             const viewport = page.getViewport({ scale: 1.5 });
-            console.log('[mostrarPDFEnModal] Viewport:', viewport.width, 'x', viewport.height);
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            console.log('[mostrarPDFEnModal] Canvas dimensionado:', canvas.width, 'x', canvas.height);
-
-            console.log('[mostrarPDFEnModal] Iniciando renderizado...');
             // Iniciar renderizado y guardar la referencia para poder cancelarla
             pdfRenderTask = page.render({
                 canvasContext: ctx,
@@ -3208,12 +3115,9 @@ Fecha de firma: {{FECHA}}`;
             });
 
             await pdfRenderTask.promise;
-            console.log('[mostrarPDFEnModal] Renderizado completado');
-
             loadingDiv.style.display = 'none';
             containerDiv.style.display = 'block';
-            console.log('[mostrarPDFEnModal] Modal mostrado exitosamente');
-        } catch (error) {
+            } catch (error) {
             console.error('[mostrarPDFEnModal] Error:', error);
             loadingDiv.style.display = 'none';
             errorDiv.style.display = 'block';
@@ -3278,8 +3182,7 @@ Fecha de firma: {{FECHA}}`;
         const percentage = Math.round(pdfZoomScale * 100);
         if (zoomDisplay) zoomDisplay.textContent = percentage + '%';
         
-        console.log('[zoomPDF] Zoom aplicado:', pdfZoomScale, '=', percentage + '%');
-    }
+        }
 
     function resetZoomPDF() {
         pdfZoomScale = 1.0;
@@ -3291,8 +3194,7 @@ Fecha de firma: {{FECHA}}`;
         }
         
         if (zoomDisplay) zoomDisplay.textContent = '100%';
-        console.log('[resetZoomPDF] Zoom reiniciado a 100%');
-    }
+        }
 
     // Variable para guardar la URL del PDF en la vista de impresión
     let printPreviewUrl = null;
@@ -3357,15 +3259,10 @@ Fecha de firma: {{FECHA}}`;
      * Imprime el PDF real usando iframe con blob URL (evita CSP object-src)
      */
     function imprimirDocumentoPDF() {
-        console.log('[Print] Iniciando impresión de alta calidad...');
-
         if (!pdfActualBase64) {
             showToast('No hay PDF para imprimir', 'warning');
-            console.log('[Print] ERROR: No hay PDF cargado en pdfActualBase64');
             return;
         }
-
-        console.log('[Print] Preparando PDF para impresión...');
 
         try {
             // Convertir base64 a blob URL
@@ -3377,8 +3274,6 @@ Fecha de firma: {{FECHA}}`;
             }
             const blob = new Blob([uint8Array], { type: 'application/pdf' });
             const blobUrl = URL.createObjectURL(blob);
-            console.log('[Print] Blob URL creado:', blobUrl);
-
             // Crear iframe con blob URL directamente
             const iframe = document.createElement('iframe');
             iframe.style.position = 'fixed';
@@ -3393,8 +3288,6 @@ Fecha de firma: {{FECHA}}`;
             iframe.src = blobUrl;
 
             document.body.appendChild(iframe);
-            console.log('[Print] Iframe de impresión creado con blob URL');
-
             // Crear overlay con botones
             const overlay = document.createElement('div');
             overlay.id = 'print-controls-overlay';
@@ -3439,8 +3332,7 @@ Fecha de firma: {{FECHA}}`;
                     document.body.removeChild(iframe);
                 }
                 if (overlay) document.body.removeChild(overlay);
-                console.log('[Print] Iframe cerrado');
-            });
+                });
 
             document.getElementById('btn-imprimir-print').addEventListener('click', function() {
                 const iframe = document.getElementById('print-pdf-iframe');
@@ -3448,15 +3340,13 @@ Fecha de firma: {{FECHA}}`;
                     try {
                         iframe.contentWindow.focus();
                         iframe.contentWindow.print();
-                        console.log('[Print] Comando print() enviado');
+                        showToast('Documento enviado a impresión', 'success');
                     } catch (e) {
                         console.error('[Print] Error al imprimir:', e);
                         showToast('Error al imprimir. Intenta descargar el PDF.', 'error');
                     }
                 }
             });
-
-            console.log('[Print] Controles agregados');
 
             // Auto-limpiar después de 5 minutos
             setTimeout(function() {
@@ -3467,8 +3357,7 @@ Fecha de firma: {{FECHA}}`;
                     document.body.removeChild(iframe);
                 }
                 if (overlay) document.body.removeChild(overlay);
-                console.log('[Print] Limpieza automática después de 5 min');
-            }, 300000);
+                }, 300000);
 
         } catch (e) {
             console.error('[Print] Error general:', e);
@@ -3483,8 +3372,7 @@ Fecha de firma: {{FECHA}}`;
         const iframe = document.getElementById('print-pdf-iframe');
         if (iframe) {
             document.body.removeChild(iframe);
-            console.log('[Print] Iframe de impresión cerrado');
-        }
+            }
     }
 
     function ejecutarImpresion() {
@@ -3602,7 +3490,6 @@ Fecha de firma: {{FECHA}}`;
 
         const empresaCambio = configCache && configCache.empresaId && payload.empresaId && configCache.empresaId !== payload.empresaId;
         if (!configCache || empresaCambio) {
-            console.log('[showApp] Cargando configuración para empresaId:', empresaId, 'empresaCambio:', empresaCambio);
             await loadInitialConfig(empresaId);
         }
         
@@ -3610,14 +3497,11 @@ Fecha de firma: {{FECHA}}`;
         // Esto asegura que logo y favicon se sincronicen inmediatamente
         if (configCache && (configCache.logoBase64 || configCache.faviconBase64)) {
             aplicarIdentidadVisualAlDOM(configCache, true);
-            console.log('[showApp] Identidad visual aplicada desde configCache');
-        }
+            }
         
         // FASE 6: Renderizar sidebar DESPUÉS de cargar configuración
         // Esto asegura que configCache tenga moduloSeguros disponible
         renderSidebar(payload);
-        console.log('[showApp] Sidebar renderizado después de cargar configuración');
-        
         if(DOMElements.welcomeUser) DOMElements.welcomeUser.textContent = `Hola, ${escapeHTML(payload.username)}`;
         
         const datosBancariosBtn = document.querySelector('[data-bs-target="#modalDatosBancarios"]');
@@ -3682,22 +3566,17 @@ Fecha de firma: {{FECHA}}`;
 
                 // FASE 5: Extraer datos del token ANTES de cualquier operación
                 const payload = JSON.parse(atob(accessToken.split('.')[1]));
-                console.log('[Login] Access Token recibido. Payload:', payload);
-
                 // PASO 1: Guardar tokens, usuario y empresaId
                 localStorage.setItem('token', accessToken); // 'token' mantiene compatibilidad con el resto de la app
                 if (data.user) {
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    console.log('[Login] Usuario persistido en localStorage:', data.user.role);
-                }
+                    }
                 if (refreshToken) {
                     localStorage.setItem('refreshToken', refreshToken);
-                    console.log('[Login] Refresh Token guardado');
-                }
+                    }
                 if (payload.empresaId) {
                     localStorage.setItem('empresaActiva', payload.empresaId);
-                    console.log('[Login] empresaActiva guardada:', payload.empresaId);
-                }
+                    }
                 
                 // PASO 2: REACTIVIDAD - Aplicar identidad visual INMEDIATAMENTE (sin esperar nada)
                 // Esto asegura que el logo cambie al instante sin F5
@@ -4446,8 +4325,6 @@ Fecha de firma: {{FECHA}}`;
     }
     
     function changePage(endpoint, delta) {
-        console.log('[Paginación] Ejecutando changePage:', endpoint, 'Delta:', delta);
-
         // Claves de tabla → delegar a changeTablePage
         const tableKeys = ['historial', 'cotizaciones', 'pagos', 'pagosPendientes', 'pagosHistorial'];
         if (tableKeys.includes(endpoint)) {
@@ -4458,7 +4335,6 @@ Fecha de firma: {{FECHA}}`;
         const listKeys = ['artistas', 'servicios', 'usuarios', 'papeleraProyectos', 'papeleraArtistas', 'papeleraServicios', 'papeleraUsuarios'];
         if (listKeys.includes(endpoint) && paginationState[endpoint]) {
             paginationState[endpoint].page += delta;
-            console.log('[Paginación] Lista', endpoint, '→ página:', paginationState[endpoint].page);
             renderPaginatedList(endpoint, null);
             return;
         }
@@ -4467,8 +4343,6 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function changeTablePage(listKey, delta) {
-        console.log('[Paginación] Ejecutando changeTablePage:', listKey, 'Delta:', delta);
-
         if (!tablePagination[listKey]) {
             console.warn('[Paginación] Clave de tabla desconocida:', listKey);
             return;
@@ -4479,14 +4353,11 @@ Fecha de firma: {{FECHA}}`;
 
         // Validar límites
         if (newPage < 1) {
-            console.log('[Paginación] Ya estás en la primera página');
             return;
         }
 
         // Actualizar página
         pagination.page = newPage;
-        console.log('[Paginación] Tabla', listKey, '→ página:', newPage);
-
         // Renderizar según la clave
         const renderers = {
             'historial': () => window.UIManager?.renderHistorialTable(historialCacheados, pagination),
@@ -5041,12 +4912,8 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
         tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
-        console.log('[cargarPagosSeguros] Iniciando carga de pagos de seguros...');
-        
         try {
             const polizas = await fetchAPI('/api/polizas');
-            console.log('[cargarPagosSeguros] Pólizas obtenidas:', polizas);
-            
             if (polizas && polizas.length > 0) {
                 tabla.innerHTML = polizas.map(p => {
                     const fechaProximoPago = p.proximoPago 
@@ -5398,8 +5265,7 @@ Fecha de firma: {{FECHA}}`;
             }
         });
 
-        console.log(`[Permisos] Rol ${rol} seleccionado. Permisos asignados:`, permisos);
-    }
+        }
 
     function actualizarPermisosPorRolEdicion(rol) {
         // Mapeo de permisos por rol (mismo que crear usuario)
@@ -5425,8 +5291,7 @@ Fecha de firma: {{FECHA}}`;
             }
         });
 
-        console.log(`[Permisos Edicion] Rol ${rol} seleccionado. Permisos asignados:`, permisos);
-    }
+        }
     
     function setupCustomization(payload) { 
         if (payload.role === 'admin') { 
@@ -5530,10 +5395,6 @@ Fecha de firma: {{FECHA}}`;
     }
     
     function renderSidebar(user) { 
-        // DEPURACIÓN RADICAL - Primera línea
-        console.log('CONFIG ACTUAL CARGADA:', configCache);
-        console.log('[RADICAL DEBUG] renderSidebar - configCache completo:', JSON.stringify(configCache, null, 2));
-        
         const navContainer = document.getElementById('sidebar-nav-container'); 
         let p = user.permisos ||[]; 
         const role = user.role ? user.role.toLowerCase() : 'cliente'; 
@@ -5546,13 +5407,6 @@ Fecha de firma: {{FECHA}}`;
         const tipoDashboard = (tipoDashboardRaw || '').trim().toLowerCase();
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        console.log('[renderSidebar] RAW tipoDashboard:', tipoDashboardRaw);
-        console.log('[renderSidebar] PROCESADO tipoDashboard:', tipoDashboard);
-        console.log('[renderSidebar] configCache:', configCache);
-        console.log('[renderSidebar] configCache.moduloSeguros:', configCache?.moduloSeguros);
-        console.log('[renderSidebar] esEmpresaSeguros:', esEmpresaSeguros);
-        console.log('[renderSidebar] esDashboardSeguros:', esDashboardSeguros);
-        
         let html = ''; 
         if (role === 'cliente') { 
             html = `<div class="nav-group mb-3"><div class="text-uppercase text-muted small fw-bold px-3 mb-2">Mi Espacio</div><a class="nav-link-sidebar active" data-seccion="vista-artista" onclick="app.irAVistaArtista()"><i class="bi music-note-beamed"></i> Mis Proyectos</a><a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Mis Pagos</a></div>`; 
@@ -5562,7 +5416,6 @@ Fecha de firma: {{FECHA}}`;
             
             // FASE 6: Si es dashboard de seguros, ocultar secciones estándar
             if (esDashboardSeguros) {
-                console.log('[renderSidebar] ✅ RENDERIZANDO SIDEBAR PARA DASHBOARD DE SEGUROS');
                 html = `<div class="nav-group mb-3">
                             <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
                             ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
@@ -5580,7 +5433,6 @@ Fecha de firma: {{FECHA}}`;
                 }
             } else {
                 // Dashboard estándar para empresas sin seguros
-                console.log('[renderSidebar] ❌ RENDERIZANDO SIDEBAR ESTÁNDAR (NO es dashboard de seguros)');
                 html = `<div class="nav-group mb-3">
                             <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
                             ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
@@ -5620,10 +5472,8 @@ Fecha de firma: {{FECHA}}`;
         
         // FASE 6: BLOQUEO RADICAL - Ocultar elementos estándar del sidebar si es dashboard de seguros
         if (esDashboardSeguros) {
-            console.log('[renderSidebar] APLICANDO BLOQUEO RADICAL: Ocultando elementos estándar');
             const btnNuevoProyecto = document.getElementById('btn-nuevo-proyecto-sidebar');
             if (btnNuevoProyecto) {
-                console.log('[renderSidebar] Ocultando btn-nuevo-proyecto-sidebar');
                 btnNuevoProyecto.style.display = 'none';
             }
             // NOTA: El botón de pagos se genera dinámicamente en el HTML del sidebar de seguros
@@ -5743,13 +5593,9 @@ Fecha de firma: {{FECHA}}`;
             }
         });
 
-        console.log('[mapearDatosAFormulario] Datos mapeados:', mapeo);
-    }
+        }
 
     async function mostrarFormularioPoliza(datosPrellenados = {}) {
-        console.log('[mostrarFormularioPoliza] Datos prellenados:', datosPrellenados);
-        console.log('[mostrarFormularioPoliza] tipoPago en datos:', datosPrellenados.tipoPago);
-        
         const { value: formValues } = await Swal.fire({
             title: 'Registrar Nueva Póliza',
             html: `
@@ -5822,6 +5668,12 @@ Fecha de firma: {{FECHA}}`;
                             <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono || ''}" placeholder="0.00">
                         </div>
                         <div class="col-6 mb-3">
+                            <label class="form-label">Primer Pago (si aplica)</label>
+                            <input id="poliza-primer-pago" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primerPago || ''}" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
                             <label class="form-label">Días Anticipación Aviso</label>
                             <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso || 3}" placeholder="3">
                         </div>
@@ -5852,6 +5704,7 @@ Fecha de firma: {{FECHA}}`;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                 const primaTotal = document.getElementById('poliza-prima').value;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
+                const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
@@ -5875,6 +5728,7 @@ Fecha de firma: {{FECHA}}`;
                     },
                     primaTotal: parseFloat(primaTotal),
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
+                    primerPago: primerPago ? parseFloat(primerPago) : null,
                     diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
                 };
             }
@@ -5928,13 +5782,9 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
         tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
-        console.log('[cargarPolizas] Iniciando carga de pólizas...');
         try {
             const polizas = await fetchAPI('/api/polizas');
-            console.log('[cargarPolizas] Respuesta del servidor:', polizas);
-            
             if (polizas && polizas.length > 0) {
-                console.log('[cargarPolizas] Pólizas encontradas:', polizas.length);
                 tabla.innerHTML = polizas.map(p => {
                     const fechaVencimiento = p.fechas?.vencimiento 
                         ? new Date(p.fechas.vencimiento).toLocaleDateString() 
@@ -5962,7 +5812,6 @@ Fecha de firma: {{FECHA}}`;
                     `;
                 }).join('');
             } else {
-                console.log('[cargarPolizas] No hay pólizas registradas');
                 tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas registradas</td></tr>';
             }
         } catch (error) {
@@ -5973,7 +5822,6 @@ Fecha de firma: {{FECHA}}`;
 
     // Función para eliminar póliza
     async function eliminarPoliza(id) {
-        console.log('[eliminarPoliza] ID de póliza:', id);
         const { value: confirmar } = await Swal.fire({
             title: '¿Eliminar póliza?',
             text: 'Esta acción no se puede deshacer',
@@ -6000,8 +5848,6 @@ Fecha de firma: {{FECHA}}`;
 
     // Función para registrar pago rápido (renovar fechaProximoPago)
     async function registrarPagoRapido(id) {
-        console.log('[registrarPagoRapido] ID de póliza:', id);
-        
         const { value: confirmar } = await Swal.fire({
             title: '¿Registrar pago?',
             text: 'Esto actualizará la fecha del próximo pago al siguiente ciclo según el tipo de pago de la póliza',
@@ -6017,8 +5863,6 @@ Fecha de firma: {{FECHA}}`;
                 const resultado = await fetchAPI(`/api/polizas/${id}/renovar-pago`, {
                     method: 'PUT'
                 });
-                console.log('[registrarPagoRapido] Respuesta:', resultado);
-                
                 await Swal.fire('Éxito', 'Pago registrado correctamente. Próximo pago: ' + new Date(resultado.nuevoProximoPago).toLocaleDateString(), 'success');
                 cargarPolizas();
             } catch (error) {
@@ -6030,8 +5874,6 @@ Fecha de firma: {{FECHA}}`;
 
     // Función para editar póliza
     async function editarPoliza(id) {
-        console.log('[editarPoliza] ID de póliza:', id);
-        
         try {
             // Obtener datos de la póliza
             const poliza = await fetchAPI(`/api/polizas/${id}`);
@@ -6051,6 +5893,7 @@ Fecha de firma: {{FECHA}}`;
                 fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toISOString().split('T')[0] : '',
                 primaTotal: poliza.primaTotal || 0,
                 montoAbono: poliza.montoAbono || 0,
+                primerPago: poliza.primerPago || 0,
                 diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3
             };
             
@@ -6126,6 +5969,12 @@ Fecha de firma: {{FECHA}}`;
                                 <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono}" placeholder="0.00">
                             </div>
                             <div class="col-6 mb-3">
+                                <label class="form-label">Primer Pago (si aplica)</label>
+                                <input id="poliza-primer-pago" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primerPago}" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
                                 <label class="form-label">Días Anticipación Aviso</label>
                                 <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso}" placeholder="3">
                             </div>
@@ -6150,6 +5999,7 @@ Fecha de firma: {{FECHA}}`;
                     const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                     const primaTotal = document.getElementById('poliza-prima').value;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
+                    const primerPago = document.getElementById('poliza-primer-pago').value;
                     const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
 
                     if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
@@ -6173,6 +6023,7 @@ Fecha de firma: {{FECHA}}`;
                         },
                         primaTotal: parseFloat(primaTotal),
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
+                        primerPago: primerPago ? parseFloat(primerPago) : null,
                         diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
                     };
                 }
@@ -6212,17 +6063,19 @@ Fecha de firma: {{FECHA}}`;
         
         // Si es dashboard de seguros, ocultar pestañas irrelevantes y mostrar solo pólizas
         if (esDashboardSeguros) {
+            // Ocultar vista de pagos de seguros
+            const vistaPagosSeguros = document.getElementById('vista-pagos-seguros');
+            if (vistaPagosSeguros) vistaPagosSeguros.style.display = 'none';
+            
+            // Mostrar vista de papelera de pólizas
+            const vistaPapeleraPolizas = document.getElementById('vista-papelera-polizas');
+            if (vistaPapeleraPolizas) vistaPapeleraPolizas.style.display = 'block';
+            
             // Ocultar pestañas de proyectos, artistas, servicios y usuarios
             if (tabProyectos) tabProyectos.style.display = 'none';
             if (tabArtistas) tabArtistas.style.display = 'none';
             if (tabServicios) tabServicios.style.display = 'none';
             if (tabUsuarios) tabUsuarios.style.display = 'none';
-            
-            // Mostrar tabla de pólizas directamente (sin pestañas)
-            const tablaPolizas = document.getElementById('tablaPapeleraBody');
-            if (tablaPolizas) {
-                tablaPolizas.parentElement.parentElement.style.display = 'block';
-            }
             
             // Ocultar el contenedor de pestañas
             const papeleraTabs = document.getElementById('papeleraTabs');
@@ -6242,13 +6095,9 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPapeleraBody');
         if (tabla) {
             tabla.innerHTML = '<tr><td colspan="6" class="text-center">Cargando papelera...</td></tr>';
-            console.log('[cargarPapelera] Iniciando carga de papelera de pólizas...');
             try {
                 const polizas = await fetchAPI('/api/polizas/papelera/recuperar');
-                console.log('[cargarPapelera] Respuesta del servidor:', polizas);
-                
                 if (polizas && polizas.length > 0) {
-                    console.log('[cargarPapelera] Pólizas en papelera:', polizas.length);
                     tabla.innerHTML = polizas.map(p => {
                         const fechaEliminacion = p.deletedAt 
                             ? new Date(p.deletedAt).toLocaleDateString() 
@@ -6272,7 +6121,6 @@ Fecha de firma: {{FECHA}}`;
                         `;
                     }).join('');
                 } else {
-                    console.log('[cargarPapelera] Papelera vacía');
                     tabla.innerHTML = '<tr><td colspan="6" class="text-center text-muted">La papelera está vacía</td></tr>';
                 }
             } catch (error) {
@@ -6300,7 +6148,6 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function restaurarPoliza(id) {
-        console.log('[restaurarPoliza] ID de póliza:', id);
         const { value: confirmar } = await Swal.fire({
             title: '¿Restaurar póliza?',
             text: 'La póliza volverá a aparecer en la lista principal',
@@ -6327,7 +6174,6 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function borrarPermanente(id) {
-        console.log('[borrarPermanente] ID de póliza:', id);
         const { value: confirmar } = await Swal.fire({
             title: '¿Eliminar definitivamente?',
             text: 'Esta acción NO se puede deshacer. La póliza se borrará permanentemente de la base de datos.',
@@ -6716,7 +6562,7 @@ Fecha de firma: {{FECHA}}`;
                 fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
                     method: 'POST',
                     body: JSON.stringify({ canal: 'whatsapp', tipo: tipoSeleccionado })
-                }).catch(e => console.log('Error al registrar log:', e));
+                }).catch(e => console.error('Error al registrar notificación:', e));
 
             } catch (error) {
                 console.error('Error al intentar abrir WhatsApp:', error);
@@ -6879,16 +6725,12 @@ Fecha de firma: {{FECHA}}`;
         // Filtrar deudas cacheadas (usa localCache.deudas)
         const deudasReales = localCache.deudas || [];
 
-        console.log('[Deudas] Filtrando:', tipo, 'Total:', deudasReales.length);
-
         const filtradas = deudasReales.filter(deuda => {
             const restante = deuda.total - (deuda.montoPagado || 0);
             if (tipo === 'pendientes') return deuda.estatus !== 'Liquidada' || restante > 0;
             if (tipo === 'historial') return deuda.estatus === 'Liquidada' || restante <= 0;
             return true;
         });
-
-        console.log('[Deudas] Filtradas:', filtradas.length);
 
         // Renderizar tabla
         renderDeudas(filtradas);
@@ -7058,16 +6900,13 @@ Fecha de firma: {{FECHA}}`;
                     if (selectedEmpresa && selectedEmpresa !== '' && selectedEmpresa !== 'all') {
                         // Super Admin tiene empresa específica seleccionada - mantenerla
                         localStorage.setItem('empresaActiva', selectedEmpresa);
-                        console.log('[Init] Super Admin - empresaActiva preservada desde selected_empresa_id:', selectedEmpresa);
                     } else {
                         // Super Admin en vista global
                         localStorage.setItem('empresaActiva', 'all');
-                        console.log('[Init] Super Admin - vista global (all)');
                     }
                 } else if (payload.empresaId) {
                     // Usuario normal - sincronizar desde token
                     localStorage.setItem('empresaActiva', payload.empresaId);
-                    console.log('[Init] Usuario normal - empresaActiva sincronizada desde token:', payload.empresaId);
                 }
                 // PASO 3: Aplicar identidad visual ANTI-FLICKER (placeholder inmediato + validación)
                 // El parámetro false permite usar el caché como placeholder mientras se valida
@@ -7145,14 +6984,12 @@ Fecha de firma: {{FECHA}}`;
     let proyectoActualFirma = null;
 
     function inicializarCanvasFirma() {
-        console.log('[inicializarCanvasFirma] Inicializando canvas...');
         canvasFirma = document.getElementById('canvas-firma');
         if (!canvasFirma) {
             console.error('[inicializarCanvasFirma] ERROR: No se encontró el canvas');
             return;
         }
         
-        console.log('[inicializarCanvasFirma] Canvas encontrado, configurando...');
         ctxFirma = canvasFirma.getContext('2d');
         const rect = canvasFirma.getBoundingClientRect();
         
@@ -7171,13 +7008,11 @@ Fecha de firma: {{FECHA}}`;
             if (canvasWidth === 0) {
                 canvasWidth = 750;
             }
-            console.log('[inicializarCanvasFirma] Ancho calculado desde contenedor:', canvasWidth);
-        }
+            }
         
         // Límite de seguridad: mínimo 300px para evitar valores negativos o inválidos
         canvasWidth = Math.max(300, canvasWidth);
         
-        console.log('[inicializarCanvasFirma] Dimensiones del canvas:', canvasWidth, 'x', 200);
         canvasFirma.width = canvasWidth;
         canvasFirma.height = 200;
         
@@ -7207,8 +7042,7 @@ Fecha de firma: {{FECHA}}`;
         
         // Limpiar canvas
         ctxFirma.clearRect(0, 0, canvasFirma.width, canvasFirma.height);
-        console.log('[inicializarCanvasFirma] Canvas inicializado correctamente');
-    }
+        }
 
     function startDrawing(e) {
         isDrawing = true;
@@ -7217,8 +7051,7 @@ Fecha de firma: {{FECHA}}`;
         const y = (e.clientY || e.touches[0].clientY) - rect.top;
         ctxFirma.beginPath();
         ctxFirma.moveTo(x, y);
-        console.log('[startDrawing] Iniciando firma en:', x, y);
-    }
+        }
 
     function draw(e) {
         if (!isDrawing) return;
@@ -7227,8 +7060,6 @@ Fecha de firma: {{FECHA}}`;
         const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
         ctxFirma.lineTo(x, y);
         ctxFirma.stroke();
-        // Log cada 10 puntos para no saturar
-        if (Math.random() < 0.05) console.log('[draw] Dibujando en:', x, y);
     }
 
     function stopDrawing() { isDrawing = false; }
@@ -7245,7 +7076,6 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function abrirModalFirma(proyectoId) {
-        console.log('[abrirModalFirma] Iniciando para proyecto:', proyectoId);
         proyectoActualFirma = proyectoId;
 
         const esModoOscuro = isDarkMode();
@@ -7289,8 +7119,6 @@ Fecha de firma: {{FECHA}}`;
         `;
 
         document.body.appendChild(overlay);
-        console.log('[abrirModalFirma] Overlay creado y agregado al body');
-
         // Inicializar canvas
         inicializarCanvasFirma();
     }
@@ -7299,8 +7127,7 @@ Fecha de firma: {{FECHA}}`;
         const overlay = document.getElementById('modalFirma');
         if (overlay) {
             overlay.remove();
-            console.log('[cerrarModalFirma] Overlay eliminado');
-        }
+            }
     }
 
     async function guardarFirmaCliente() {
@@ -7865,10 +7692,8 @@ Fecha de firma: {{FECHA}}`;
     if ('serviceWorker' in navigator) { 
         window.addEventListener('load', function () { 
             navigator.serviceWorker.register('sw.js').then(function (registration) { 
-                console.log('ServiceWorker OK: ', registration.scope); 
-            }).catch(function (err) { 
-                console.log('ServiceWorker Falló: ', err); 
-            }); 
+                }).catch(function (err) { 
+                }); 
         }); 
     }
 

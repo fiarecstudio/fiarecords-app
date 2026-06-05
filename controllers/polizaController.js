@@ -2,7 +2,7 @@ const Poliza = require('../models/Poliza');
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, diasAnticipacionAviso } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso } = req.body;
         
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
@@ -22,6 +22,7 @@ const crearPoliza = async (req, res) => {
             inciso,
             paquete,
             montoAbono: montoAbono || null,
+            primerPago: primerPago || null,
             diasAnticipacionAviso: diasAnticipacionAviso || 3,
             saldoRestante: primaTotal // Inicializar saldoRestante con la prima total
         });
@@ -184,23 +185,12 @@ const registrarPago = async (req, res) => {
         const { monto, metodoPago, fechaPago } = req.body;
         const empresaId = req.user.empresaId;
         
-        console.log('[registrarPago] ID póliza:', id);
-        console.log('[registrarPago] Monto:', monto);
-        console.log('[registrarPago] Método pago:', metodoPago);
-        console.log('[registrarPago] Fecha pago:', fechaPago);
-        console.log('[registrarPago] Empresa ID:', empresaId);
-        
         // Buscar póliza
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
-        
-        console.log('[registrarPago] Póliza encontrada:', poliza ? 'Sí' : 'No');
         
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
         }
-        
-        console.log('[registrarPago] Tipo pago de póliza:', poliza.tipoPago);
-        console.log('[registrarPago] Próximo pago actual:', poliza.proximoPago);
         
         // Crear nuevo pago con fecha manual o actual
         const nuevoPago = {
@@ -251,10 +241,7 @@ const registrarPago = async (req, res) => {
         
         poliza.proximoPago = proximoPago;
         
-        console.log('[registrarPago] Guardando póliza...');
         await poliza.save();
-        console.log('[registrarPago] Póliza guardada exitosamente');
-        
         res.json({ message: 'Pago registrado correctamente', poliza });
     } catch (error) {
         console.error('[registrarPago] Error detallado:', error);
@@ -448,9 +435,6 @@ const eliminarPago = async (req, res) => {
         const { id, pagoIndex } = req.params;
         const empresaId = req.user.empresaId;
         
-        console.log('[eliminarPago] ID póliza:', id);
-        console.log('[eliminarPago] Índice pago:', pagoIndex);
-        
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
         
         if (!poliza) {
@@ -479,9 +463,6 @@ const actualizarProximoPago = async (req, res) => {
         const { proximoPago } = req.body;
         const empresaId = req.user.empresaId;
         
-        console.log('[actualizarProximoPago] ID póliza:', id);
-        console.log('[actualizarProximoPago] Nueva fecha:', proximoPago);
-        
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
         
         if (!poliza) {
@@ -503,9 +484,6 @@ const enviarRecordatorioCorreo = async (req, res) => {
     try {
         const { polizaId, destinatario, asunto, mensaje } = req.body;
         const empresaId = req.user.empresaId;
-        
-        console.log('[enviarRecordatorioCorreo] ID póliza:', polizaId);
-        console.log('[enviarRecordatorioCorreo] Destinatario:', destinatario);
         
         const poliza = await Poliza.findOne({ _id: polizaId, empresaId, deletedAt: null });
         
