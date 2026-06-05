@@ -117,13 +117,18 @@ const obtenerPolizaPorId = async (req, res) => {
 // FASE 2: PAPELERA DE RECICLAJE
 const obtenerPapelera = async (req, res) => {
     try {
-        const empresaId = req.user.empresaId;
+        // Usar req.tenantFilter proporcionado por el middleware applyTenantFilter
+        // Esto permite que el Super Admin use el header X-Empresa-Id para cambiar de empresa
+        const filtroEmpresa = req.tenantFilter || {};
         
-        // Devolver solo pólizas eliminadas (deletedAt != null)
-        const polizasEliminadas = await Poliza.find({ 
-            empresaId, 
-            deletedAt: { $ne: null } 
-        }).sort({ deletedAt: -1 });
+        // Combinar filtro de empresa con condición de soft delete (usando isDeleted según logs)
+        const filtroPapelera = {
+            ...filtroEmpresa,
+            isDeleted: true
+        };
+        
+        // Devolver solo pólizas eliminadas (isDeleted: true) respetando el filtro de empresa
+        const polizasEliminadas = await Poliza.find(filtroPapelera).sort({ createdAt: -1 });
         
         res.json(polizasEliminadas);
     } catch (error) {

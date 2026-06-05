@@ -2142,7 +2142,7 @@ let proyectoIdEnEdicion = null;
         const tipoDashboard = configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        const seccionesSeguros = ['polizas', 'config-correos', 'mis-deudas', 'configuracion', 'pagos'];
+        const seccionesSeguros = ['polizas', 'config-correos', 'pagos'];
         // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
         const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'];
         

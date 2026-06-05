@@ -7,6 +7,7 @@ if (typeof PDFParse !== 'function') {
     console.error('[pdf-parse] export inválida:', typeof PDFParse, pdfParseModule && Object.keys(pdfParseModule));
 }
 const auth = require('../middleware/auth');
+const { applyTenantFilter } = require('../middleware/tenantFilter');
 const polizaController = require('../controllers/polizaController');
 
 /**
@@ -38,9 +39,9 @@ router.put('/:id', auth, polizaController.actualizarPoliza);
 router.delete('/:id', auth, polizaController.eliminarPoliza);
 
 // FASE 2: PAPELERA DE RECICLAJE
-router.get('/papelera/recuperar', auth, polizaController.obtenerPapelera);
-router.put('/papelera/restaurar/:id', auth, polizaController.restaurarPoliza);
-router.delete('/papelera/definitivo/:id', auth, polizaController.eliminarDefinitivamente);
+router.get('/papelera/recuperar', auth, applyTenantFilter, polizaController.obtenerPapelera);
+router.put('/papelera/restaurar/:id', auth, applyTenantFilter, polizaController.restaurarPoliza);
+router.delete('/papelera/definitivo/:id', auth, applyTenantFilter, polizaController.eliminarDefinitivamente);
 
 // FASE 3: GESTIÓN DE PAGOS
 router.post('/:id/pagos', auth, polizaController.registrarPago);

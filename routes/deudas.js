@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Deuda = require('../models/Deuda');
 const auth = require('../middleware/auth');
-const { applyTenantFilter, buildQueryFilter, hasTenantAccess } = require('../middleware/tenantFilter');
+const { applyTenantFilter, buildQueryFilter, hasTenantAccess, getEmpresaPrincipalId } = require('../middleware/tenantFilter');
 
 // ==========================================
 // MIDDLEWARE DE SEGURIDAD ESTRICTO PARA ADMIN
@@ -30,6 +30,62 @@ router.get('/', async (req, res) => {
         res.json(deudas);
     } catch (e) { 
         res.status(500).json({ error: 'Error al cargar las deudas' }); 
+    }
+});
+
+// ==========================================
+// ENDPOINT TEMPORAL DE MIGRACIÓN - ASIGNAR EMPRESA A DEUDAS HISTÓRICAS
+// ==========================================
+router.get('/migrar-historico', async (req, res) => {
+    try {
+        // Obtener el empresaId de la empresa principal
+        const empresaPrincipalId = await getEmpresaPrincipalId();
+        
+        if (!empresaPrincipalId) {
+            return res.status(400).json({ error: 'No se encontró empresa principal para migración' });
+        }
+        
+        console.log('[Migración Deudas] Iniciando migración histórica...');
+        console.log('[Migración Deudas] Empresa principal ID:', empresaPrincipalId);
+        
+        // Buscar deudas sin empresaId (null o no existe) - SE ELIMINÓ EL STRING VACÍO QUE CAUSABA EL ERROR
+        const deudasSinEmpresa = await Deuda.find({
+            $or: [
+                { empresaId: { $exists: false } },
+                { empresaId: null }
+            ]
+        });
+        
+        console.log(`[Migración Deudas] Encontradas ${deudasSinEmpresa.length} deudas sin empresaId`);
+        
+        if (deudasSinEmpresa.length === 0) {
+            return res.json({ 
+                message: 'No hay deudas para migrar. Todas ya tienen empresaId asignado.',
+                migradas: 0
+            });
+        }
+        
+        // Actualizar masivamente asignando el empresaId de la empresa principal
+        const resultado = await Deuda.updateMany(
+            {
+                $or: [
+                    { empresaId: { $exists: false } },
+                    { empresaId: null }
+                ]
+            },
+            { $set: { empresaId: empresaPrincipalId } }
+        );
+        
+        console.log(`[Migración Deudas] Migración completada: ${resultado.modifiedCount} deudas actualizadas`);
+        
+        res.json({ 
+            message: 'Migración completada exitosamente',
+            migradas: resultado.modifiedCount,
+            empresaPrincipalId: empresaPrincipalId
+        });
+    } catch (e) { 
+        console.error('[Migración Deudas] Error:', e);
+        res.status(500).json({ error: 'Error al migrar deudas históricas' }); 
     }
 });
 

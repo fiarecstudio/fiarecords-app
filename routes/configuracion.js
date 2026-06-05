@@ -225,11 +225,7 @@ router.get('/', async (req, res) => {
             console.log('[Config] POR ERROR: Asignados defaults: tipoDashboard=estandar, moduloSeguros=false');
         }
 
-        console.log('[Config] ========== RESPUESTA FINAL QUE ENVIARÁ AL CLIENTE ==========');
-        console.log('[Config] config.moduloSeguros:', config.moduloSeguros);
-        console.log('[Config] config.tipoDashboard:', config.tipoDashboard);
-        console.log('[Config] JSON completo:', JSON.stringify(config, null, 2));
-        console.log('[Config] ==============================================================');
+        // Logs eliminados para evitar spam en terminal del servidor
         res.json(config);
     } catch (err) {
         console.error('[Config] Error completo:', err);
