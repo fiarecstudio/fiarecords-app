@@ -716,7 +716,28 @@
                     <div class="card-header pt-3 pb-0 border-0">
                         <h2>Papelera de Reciclaje</h2>
                     </div>
-                    <div class="card-body">
+                                        <div class="card-body">
+                    <!-- VISTA: PAPELERA DE PÓLIZAS (SEGUROS) -->
+                    <div id="vista-papelera-polizas" style="display:none;">
+                        <h4 class="text-danger"><i class="bi bi-trash"></i> Pólizas Eliminadas</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Número de Póliza</th>
+                                        <th>Cliente</th>
+                                        <th>Aseguradora</th>
+                                        <th>Vencimiento</th>
+                                        <th>Fecha de Eliminación</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaPapeleraBody">
+                                    <tr><td colspan="6" class="text-center text-muted">Cargando papelera...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                     <!-- VISTA: PAGOS DE SEGUROS -->
                     <div id="vista-pagos-seguros" style="display:none;">
                         <h4 class="text-success"><i class="bi bi-shield-check"></i> Pagos de Pólizas</h4>
