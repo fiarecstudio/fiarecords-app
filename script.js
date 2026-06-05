@@ -6412,24 +6412,33 @@ Fecha de firma: {{FECHA}}`;
             const cliente = poliza.cliente || 'Cliente';
             const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
 
-            // Usar montoAbono del modelo si existe, si no calcular según tipo de pago
-            let montoAbono = poliza.montoAbono || 0;
-            if (!montoAbono || montoAbono === 0) {
-                const primaTotal = poliza.primaTotal || 0;
-                switch (poliza.tipoPago) {
-                    case 'mensual':
-                        montoAbono = primaTotal / 12;
-                        break;
-                    case 'trimestral':
-                        montoAbono = primaTotal / 4;
-                        break;
-                    case 'semestral':
-                        montoAbono = primaTotal / 2;
-                        break;
-                    case 'anual':
-                    default:
-                        montoAbono = primaTotal;
-                        break;
+            // Verificar si ya hay pagos registrados
+            const tienePagos = poliza.pagos && poliza.pagos.length > 0;
+            
+            // Si no hay pagos y existe primerPago, usar primerPago
+            // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
+            let montoAbono;
+            if (!tienePagos && poliza.primerPago && poliza.primerPago > 0) {
+                montoAbono = poliza.primerPago;
+            } else {
+                montoAbono = poliza.montoAbono || 0;
+                if (!montoAbono || montoAbono === 0) {
+                    const primaTotal = poliza.primaTotal || 0;
+                    switch (poliza.tipoPago) {
+                        case 'mensual':
+                            montoAbono = primaTotal / 12;
+                            break;
+                        case 'trimestral':
+                            montoAbono = primaTotal / 4;
+                            break;
+                        case 'semestral':
+                            montoAbono = primaTotal / 2;
+                            break;
+                        case 'anual':
+                        default:
+                            montoAbono = primaTotal;
+                            break;
+                    }
                 }
             }
 
@@ -6456,24 +6465,33 @@ Fecha de firma: {{FECHA}}`;
             const cliente = poliza.cliente || 'Cliente';
             const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
 
-            // Usar montoAbono del modelo si existe, si no calcular según tipo de pago
-            let montoAbono = poliza.montoAbono || 0;
-            if (!montoAbono || montoAbono === 0) {
-                const primaTotal = poliza.primaTotal || 0;
-                switch (poliza.tipoPago) {
-                    case 'mensual':
-                        montoAbono = primaTotal / 12;
-                        break;
-                    case 'trimestral':
-                        montoAbono = primaTotal / 4;
-                        break;
-                    case 'semestral':
-                        montoAbono = primaTotal / 2;
-                        break;
-                    case 'anual':
-                    default:
-                        montoAbono = primaTotal;
-                        break;
+            // Verificar si ya hay pagos registrados
+            const tienePagos = poliza.pagos && poliza.pagos.length > 0;
+            
+            // Si no hay pagos y existe primerPago, usar primerPago
+            // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
+            let montoAbono;
+            if (!tienePagos && poliza.primerPago && poliza.primerPago > 0) {
+                montoAbono = poliza.primerPago;
+            } else {
+                montoAbono = poliza.montoAbono || 0;
+                if (!montoAbono || montoAbono === 0) {
+                    const primaTotal = poliza.primaTotal || 0;
+                    switch (poliza.tipoPago) {
+                        case 'mensual':
+                            montoAbono = primaTotal / 12;
+                            break;
+                        case 'trimestral':
+                            montoAbono = primaTotal / 4;
+                            break;
+                        case 'semestral':
+                            montoAbono = primaTotal / 2;
+                            break;
+                        case 'anual':
+                        default:
+                            montoAbono = primaTotal;
+                            break;
+                    }
                 }
             }
 
