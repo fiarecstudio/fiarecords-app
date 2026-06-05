@@ -33,8 +33,29 @@ const upload = multer({
 // Rutas normales protegidas
 router.post('/', auth, polizaController.crearPoliza);
 router.get('/', auth, polizaController.obtenerPolizas);
+router.get('/:id', auth, polizaController.obtenerPolizaPorId);
 router.put('/:id', auth, polizaController.actualizarPoliza);
 router.delete('/:id', auth, polizaController.eliminarPoliza);
+
+// FASE 2: PAPELERA DE RECICLAJE
+router.get('/papelera/recuperar', auth, polizaController.obtenerPapelera);
+router.put('/papelera/restaurar/:id', auth, polizaController.restaurarPoliza);
+router.delete('/papelera/definitivo/:id', auth, polizaController.eliminarDefinitivamente);
+
+// FASE 3: GESTIÓN DE PAGOS
+router.post('/:id/pagos', auth, polizaController.registrarPago);
+router.delete('/:id/pagos/:pagoIndex', auth, polizaController.eliminarPago);
+router.put('/:id/proximo-pago', auth, polizaController.actualizarProximoPago);
+
+// FASE 7: RENOVACIÓN DE PAGO (Actualizar fechaProximoPago al siguiente ciclo)
+router.put('/:id/renovar-pago', auth, polizaController.renovarPago);
+
+// FASE 5: NOTIFICACIONES MANUALES
+router.post('/:id/notificar-manual', auth, polizaController.enviarRecordatorioManual);
+router.post('/enviar-recordatorio', auth, polizaController.enviarRecordatorioCorreo);
+
+// FASE 6: MÉTRICAS DEL DASHBOARD DE SEGUROS
+router.get('/dashboard/metricas', auth, polizaController.obtenerMetricasSeguros);
 
 /**
  * ENDPOINT DE EXTRACCIÓN (Optimizado con Lógica Posicional para CHUBB)

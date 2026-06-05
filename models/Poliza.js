@@ -18,6 +18,19 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'El cliente es obligatorio'],
         trim: true
     },
+    clienteEmail: {
+        type: String,
+        trim: true
+    },
+    clienteTelefono: {
+        type: String,
+        trim: true
+    },
+    tipoPago: {
+        type: String,
+        enum: ['anual', 'trimestral', 'mensual'],
+        default: 'anual'
+    },
     tipoSeguro: {
         type: String,
         required: [true, 'El tipo de seguro es obligatorio'],
@@ -66,14 +79,55 @@ const polizaSchema = new mongoose.Schema({
     documentoDriveId: {
         type: String,
         trim: true
+    },
+    // FASE 1: SOFT DELETE Y GESTIÓN DE PAGOS
+    deletedAt: {
+        type: Date,
+        default: null
+    },
+    pagos: [{
+        fechaPago: { type: Date },
+        monto: { type: Number, required: true },
+        estado: {
+            type: String,
+            enum: ['pagado', 'pendiente', 'atrasado'],
+            default: 'pendiente'
+        },
+        metodoPago: { type: String },
+        reciboUrl: { type: String }
+    }],
+    proximoPago: {
+        type: Date
+    },
+    // FASE 4: CAMPOS FINANCIEROS
+    montoAbono: {
+        type: Number,
+        default: 0,
+        min: [0, 'El monto de abono debe ser mayor o igual a 0']
+    },
+    saldoRestante: {
+        type: Number,
+        default: 0,
+        min: [0, 'El saldo restante debe ser mayor o igual a 0']
+    },
+    diasAnticipacionAviso: {
+        type: Number,
+        default: 3,
+        min: [0, 'Los días de anticipación deben ser mayor o igual a 0']
+    },
+    estadoPago: {
+        type: String,
+        enum: ['pendiente', 'al_corriente', 'pagado_completo'],
+        default: 'pendiente'
     }
 }, {
     timestamps: true
 });
 
 // Índice compuesto para búsquedas multi-tenant
-polizaSchema.index({ empresaId: 1, numeroPoliza: 1 });
+polizaSchema.index({ empresaId: 1, numeroPoliza: 1 }, { partialFilterExpression: { deletedAt: null } });
 polizaSchema.index({ empresaId: 1, estado: 1 });
 polizaSchema.index({ empresaId: 1, fechas: 1 });
+polizaSchema.index({ empresaId: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('Poliza', polizaSchema);

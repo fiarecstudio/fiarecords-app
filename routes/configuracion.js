@@ -185,32 +185,51 @@ router.get('/', async (req, res) => {
             config = { empresaId: finalEmpresaId };
         }
 
-        // AGREGAR DATOS DE LA EMPRESA (incluyendo moduloSeguros)
+        // AGREGAR DATOS DE LA EMPRESA (incluyendo moduloSeguros y tipoDashboard)
         try {
             const empresa = await Empresa.findById(finalEmpresaId);
             if (empresa) {
-                console.log('[Config] Empresa encontrada, agregando moduloSeguros:', empresa.moduloSeguros);
+                console.log('[Config] ✅ Empresa encontrada por ID:', finalEmpresaId);
+                console.log('[Config] empresa.moduloSeguros:', empresa.moduloSeguros);
+                console.log('[Config] empresa.tipoDashboard (RAW):', empresa.tipoDashboard);
+                console.log('[Config] Tipo de empresa.tipoDashboard:', typeof empresa.tipoDashboard);
+                
                 if (config.toObject) {
                     config = config.toObject();
                 }
+                
+                // ASIGNACIÓN DIRECTA Y EXPLÍCITA
                 config.moduloSeguros = empresa.moduloSeguros || false;
+                config.tipoDashboard = empresa.tipoDashboard || 'estandar';
                 config.nombreEmpresa = empresa.nombre;
+                
+                // LOG DE CONFIRMACIÓN
+                console.log('[Config] Después de asignación, config.tipoDashboard:', config.tipoDashboard);
+                console.log('[Config] Después de asignación, config.moduloSeguros:', config.moduloSeguros);
             } else {
-                console.warn('[Config] Empresa no encontrada para ID:', finalEmpresaId);
+                console.warn('[Config] ❌ Empresa NO encontrada para ID:', finalEmpresaId);
                 if (config.toObject) {
                     config = config.toObject();
                 }
                 config.moduloSeguros = false;
+                config.tipoDashboard = 'estandar';
+                console.log('[Config] Asignados defaults: tipoDashboard=estandar, moduloSeguros=false');
             }
         } catch (empresaError) {
-            console.error('[Config] Error al obtener empresa:', empresaError);
+            console.error('[Config] 🔥 ERROR al obtener empresa:', empresaError);
             if (config.toObject) {
                 config = config.toObject();
             }
             config.moduloSeguros = false;
+            config.tipoDashboard = 'estandar';
+            console.log('[Config] POR ERROR: Asignados defaults: tipoDashboard=estandar, moduloSeguros=false');
         }
 
-        console.log('[Config] Respuesta final con moduloSeguros:', config.moduloSeguros);
+        console.log('[Config] ========== RESPUESTA FINAL QUE ENVIARÁ AL CLIENTE ==========');
+        console.log('[Config] config.moduloSeguros:', config.moduloSeguros);
+        console.log('[Config] config.tipoDashboard:', config.tipoDashboard);
+        console.log('[Config] JSON completo:', JSON.stringify(config, null, 2));
+        console.log('[Config] ==============================================================');
         res.json(config);
     } catch (err) {
         console.error('[Config] Error completo:', err);

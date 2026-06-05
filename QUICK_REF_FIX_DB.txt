@@ -1,0 +1,28 @@
+================================================================================
+                    REFERENCIA RÁPIDA - FIX DB
+================================================================================
+
+PROBLEMA:
+  Frontend recibe: tipoDashboard = 'estandar'
+  Debe recibir:   tipoDashboard = 'seguros'
+  Causa:          Empresa en BD tiene tipoDashboard incorrecto
+
+SOLUCIÓN:
+  Ejecutar: node fix-db.js
+
+RESULTADO:
+  BD actualizada con: tipoDashboard = 'seguros', moduloSeguros = true
+  
+PASOS DESPUÉS:
+  1. npm start (reiniciar servidor)
+  2. Ctrl+Shift+R (hard refresh navegador)
+  3. F12 (abrir DevTools)
+  4. Buscar en Console: [Config] tipoDashboard: seguros ✅
+
+ARCHIVOS IMPLICADOS:
+  Backend:    routes/configuracion.js (línea 190, 203) ✅ CORRECTO
+  Modelo:     models/Empresa.js (línea 49-53) ✅ CORRECTO
+  BD:         empresas.tipoDashboard = 'estandar' ❌ INCORRECTO → FIX-DB.JS
+  Frontend:   script.js (cargarDashboard, renderSidebar) ✅ CORRECTO
+
+================================================================================

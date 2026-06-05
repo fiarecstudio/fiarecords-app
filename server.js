@@ -216,6 +216,10 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
     // --- ACTIVAR BACKUP AUTOMÁTICO ---
     const { iniciarCronJob } = require('./utils/backupDatabase');
     iniciarCronJob();
+    
+    // --- NUEVO: ACTIVAR CRON DE NOTIFICACIONES ---
+    const { iniciarCronNotificaciones } = require('./cron/cronNotificaciones');
+    iniciarCronNotificaciones();
     // ---------------------------------
     
     const PORT = process.env.PORT || 5000;

@@ -1,0 +1,68 @@
+================================================================================
+                      CORRECCIÓN DE fix-db.js
+                      Usando Variables de Entorno
+================================================================================
+
+PROBLEMA:
+  Error: MongooseServerSelectionError: connect ECONNREFUSED 127.0.0.1:27017
+  Causa: URI hardcodeada no coincidía con tu configuración real
+
+RAÍZ DEL PROBLEMA:
+  • Línea original (INCORRECTA):
+    const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fiarecords';
+  
+  • Tu aplicación usa (en server.js):
+    mongoose.connect(process.env.MONGO_URI, mongooseOptions)
+  
+  • Mismatch: 'MONGODB_URI' vs 'MONGO_URI'
+  • Fallback: A localhost que no existe
+
+SOLUCIÓN APLICADA:
+  
+  1. Cargar dotenv PRIMERO (línea 15):
+     require('dotenv').config();
+  
+  2. Cambiar a la MISMA variable que server.js (línea 24):
+     const MONGO_URI = process.env.MONGO_URI;
+  
+  3. Agregar validación clara (líneas 34-41):
+     if (!MONGO_URI) {
+       throw new Error('❌ Variable de entorno MONGO_URI no está definida...');
+     }
+
+ARCHIVOS MODIFICADOS:
+  • fix-db.js (líneas 1-45)
+    ✅ Carga dotenv primero
+    ✅ Usa process.env.MONGO_URI (sin fallback)
+    ✅ Validación clara si no existe
+
+ARCHIVOS RELACIONADOS (NO MODIFICADOS):
+  • server.js: Already uses process.env.MONGO_URI ✅
+  • models/Empresa.js: Already defined correctly ✅
+  • routes/configuracion.js: Already correct ✅
+
+REQUISITOS PARA EJECUTAR:
+  ✓ Archivo .env en la carpeta raíz
+  ✓ Variable MONGO_URI definida en .env
+  ✓ Ejemplo: MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/fiarecords
+
+PARA EJECUTAR AHORA:
+  $ node fix-db.js
+
+VERIFICACIÓN:
+  Si ves: ✅ ¡ÉXITO! Los datos están correctamente actualizados en la BD
+  Entonces: Procede a npm start y luego verifica en el navegador
+
+SI FALLA:
+  Error: "MONGO_URI no está definido"
+  Solución: Agrega MONGO_URI=... a tu .env y vuelve a ejecutar
+
+FLUJO COMPLETO:
+  1. node fix-db.js (actualiza BD)
+  2. npm start (reinicia servidor)
+  3. Ctrl+Shift+R (recarga navegador)
+  4. F12 → Console → Busca: [Config] tipoDashboard: seguros ✅
+
+STATUS: ✅ LISTO PARA EJECUTAR
+
+================================================================================

@@ -1060,7 +1060,32 @@ let proyectoIdEnEdicion = null;
     // 6. DASHBOARD SEGURO
     // ==================================================================
     async function cargarDashboard() { 
-        try { 
+        // DEPURACIÓN RADICAL - Primera línea
+        console.log('CONFIG ACTUAL CARGADA:', configCache);
+        console.log('[RADICAL DEBUG] configCache completo:', JSON.stringify(configCache, null, 2));
+        
+        try {
+            const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+            
+            console.log('[cargarDashboard] tipoDashboard (sin comillas adicionales):', tipoDashboard);
+            console.log('[cargarDashboard] Tipo de tipoDashboard:', typeof tipoDashboard);
+            console.log('[cargarDashboard] ¿Comparación tipoDashboard === "seguros"?', tipoDashboard === 'seguros');
+            console.log('[cargarDashboard] configCache:', configCache);
+            
+            // FASE 6: Si es dashboard de seguros, cargar métricas de seguros
+            // BLOQUEO RADICAL: comparar sin espacios, en minúsculas
+            const dashboardTrimmed = (tipoDashboard || '').trim().toLowerCase();
+            console.log('[cargarDashboard] Dashboard después de trim/lowercase:', dashboardTrimmed);
+            
+            if (dashboardTrimmed === 'seguros') {
+                console.log('[cargarDashboard] ✅ CONDICIÓN CUMPLIDA: Cargando dashboard de seguros...');
+                await cargarDashboardSeguros();
+                return;
+            } else {
+                console.log('[cargarDashboard] ❌ CONDICIÓN NO CUMPLIDA: Cargando dashboard estándar (tipoDashboard no es "seguros")');
+            }
+            
+            // Dashboard estándar original
             const stats = await fetchAPI('/api/dashboard/stats'); 
             const kpiIngresos = document.getElementById('kpi-ingresos-mes');
             const cardIngresos = kpiIngresos ? kpiIngresos.closest('.card') : null;
@@ -1089,6 +1114,81 @@ let proyectoIdEnEdicion = null;
             document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
             await renderDashboardCommandCenter();
         } catch (e) { console.error("Error cargando dashboard:", e); } 
+    }
+
+    // FASE 6: DASHBOARD DE SEGUROS
+    async function cargarDashboardSeguros() {
+        try {
+            console.log('[cargarDashboardSeguros] Iniciando carga de dashboard de seguros...');
+            const dashboardContainer = document.getElementById('dashboard');
+            if (!dashboardContainer) {
+                console.error('[cargarDashboardSeguros] No se encontró el contenedor dashboard');
+                return;
+            }
+
+            // LIMPIEZA VISUAL: Asegurar que el contenedor esté visible y activo
+            dashboardContainer.style.display = 'block';
+            dashboardContainer.classList.add('active');
+            console.log('[cargarDashboardSeguros] Contenedor dashboard activado visualmente');
+
+            // Renderizar estructura del Dashboard de Seguros
+            dashboardContainer.innerHTML = `
+                <div class="container-fluid p-4">
+                    <h2 class="mb-4 text-success fw-bold"><i class="bi bi-shield-check"></i> Dashboard de Seguros</h2>
+                    <div class="row">
+                        <!-- Tarjeta 1: Pólizas Activas -->
+                        <div class="col-md-3 mb-4">
+                            <div class="card border-0 bg-success text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
+                                <small class="text-white-50">PÓLIZAS ACTIVAS</small>
+                                <h3 id="dashActivas" class="fw-bold mt-2">0</h3>
+                                <i class="bi bi-file-earmark-text position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
+                            </div>
+                        </div>
+                        <!-- Tarjeta 2: Por Vencer -->
+                        <div class="col-md-3 mb-4">
+                            <div class="card border-0 bg-warning text-dark shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
+                                <small class="text-dark-50">PRÓXIMAS A VENCER (30D)</small>
+                                <h3 id="dashPorVencer" class="fw-bold mt-2">0</h3>
+                                <i class="bi bi-exclamation-triangle position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-dark-50"></i>
+                            </div>
+                        </div>
+                        <!-- Tarjeta 3: Pagos Pendientes -->
+                        <div class="col-md-3 mb-4">
+                            <div class="card border-0 bg-danger text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('pagos')" style="cursor: pointer; transition: transform 0.2s;">
+                                <small class="text-white-50">PAGOS REQUERIDOS/ATRASADOS</small>
+                                <h3 id="dashPagosPendientes" class="fw-bold mt-2">0</h3>
+                                <i class="bi bi-cash-coin position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
+                            </div>
+                        </div>
+                        <!-- Tarjeta 4: Primas Recaudadas -->
+                        <div class="col-md-3 mb-4">
+                            <div class="card border-0 bg-info text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
+                                <small class="text-white-50">PRIMAS RECAUDADAS</small>
+                                <h3 id="dashTotalRecaudado" class="fw-bold mt-2">$0.00</h3>
+                                <i class="bi bi-wallet2 position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            console.log('[cargarDashboardSeguros] Estructura renderizada, cargando métricas...');
+            // Cargar los datos desde el endpoint de métricas
+            const res = await fetchAPI('/api/polizas/dashboard/metricas');
+            console.log('[cargarDashboardSeguros] Respuesta de métricas:', res);
+            
+            if (res && res.metricas) {
+                document.getElementById('dashActivas').innerText = res.metricas.activas;
+                document.getElementById('dashPorVencer').innerText = res.metricas.porVencer;
+                document.getElementById('dashPagosPendientes').innerText = res.metricas.pagosPendientes;
+                document.getElementById('dashTotalRecaudado').innerText = parseFloat(res.metricas.totalRecaudado).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                console.log('[cargarDashboardSeguros] Métricas actualizadas');
+            } else {
+                console.warn('[cargarDashboardSeguros] No se recibieron métricas válidas');
+            }
+        } catch (error) {
+            console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
+        }
     }
 
     async function obtenerProyectosDesdeCache() {
@@ -2103,13 +2203,27 @@ let proyectoIdEnEdicion = null;
         // CANDADO DE EMPRESA PARA MÓDULO DE SEGUROS (DINÁMICO)
         // Verificar si la empresa actual tiene el módulo de Seguros activado
         const esEmpresaSeguros = configCache && configCache.moduloSeguros === true;
-        const seccionesSeguros = ['polizas', 'config-correos'];
+        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+        const esDashboardSeguros = tipoDashboard === 'seguros';
+        
+        const seccionesSeguros = ['polizas', 'config-correos', 'mis-deudas', 'configuracion', 'pagos'];
+        // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
+        const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'];
         
         console.log('[mostrarSeccion] configCache:', configCache);
-        console.log('[mostrarSeccion] configCache.moduloSeguros:', configCache?.moduloSeguros);
+        console.log('[mostrarSeccion] tipoDashboard:', tipoDashboard);
         console.log('[mostrarSeccion] esEmpresaSeguros:', esEmpresaSeguros);
+        console.log('[mostrarSeccion] esDashboardSeguros:', esDashboardSeguros);
         console.log('[mostrarSeccion] Sección solicitada:', id);
         
+        // VALIDACIÓN: Si es dashboard de seguros, NO permitir secciones estándar BLOQUEADAS (EXCEPTO dashboard y pagos)
+        // EXPLÍCITAMENTE permitimos 'dashboard' y 'pagos' para ambos tipos
+        if (esDashboardSeguros && id !== 'dashboard' && id !== 'pagos' && seccionesEstandarBloqueadas.includes(id)) {
+            showToast('⚠️ Esta sección no está disponible en el módulo de Seguros', 'warning');
+            return;
+        }
+        
+        // VALIDACIÓN: Si es sección de seguros, verificar que el módulo esté activado
         if (seccionesSeguros.includes(id) && !esEmpresaSeguros) {
             showToast('⚠️ Esta sección solo está disponible para empresas con el módulo de Seguros activado', 'warning');
             return;
@@ -4878,8 +4992,117 @@ Fecha de firma: {{FECHA}}`;
         });
     }
 
-    async function cargarPagos() { document.querySelector('#pagos .btn-group button.active')?.classList.remove('active'); const btnPendientes = document.querySelector('#pagos .btn-group button'); if (btnPendientes) btnPendientes.classList.add('active'); mostrarSeccionPagos('pendientes', btnPendientes); }
-    function mostrarSeccionPagos(vista, btn) { document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active')); if (btn) btn.classList.add('active'); if (vista === 'pendientes') { document.getElementById('vista-pagos-pendientes').style.display = 'block'; document.getElementById('vista-pagos-historial').style.display = 'none'; cargarPagosPendientes(); } else { document.getElementById('vista-pagos-pendientes').style.display = 'none'; document.getElementById('vista-pagos-historial').style.display = 'block'; cargarHistorialPagos(); } }
+    async function cargarPagos() {
+        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+        document.querySelector('#pagos .btn-group button.active')?.classList.remove('active');
+        const btnPendientes = document.querySelector('#pagos .btn-group button');
+        if (btnPendientes) btnPendientes.classList.add('active');
+        
+        if (tipoDashboard === 'seguros') {
+            // Para seguros, mostrar vista de seguros y cargar datos
+            document.getElementById('vista-pagos-seguros').style.display = 'block';
+            document.getElementById('vista-pagos-pendientes').style.display = 'none';
+            document.getElementById('vista-pagos-historial').style.display = 'none';
+            cargarPagosSeguros();
+        } else {
+            mostrarSeccionPagos('pendientes', btnPendientes);
+        }
+    }
+    
+    function mostrarSeccionPagos(vista, btn) {
+        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+        document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        
+        if (tipoDashboard === 'seguros') {
+            // Para seguros, siempre mostrar la vista de seguros
+            document.getElementById('vista-pagos-seguros').style.display = 'block';
+            document.getElementById('vista-pagos-pendientes').style.display = 'none';
+            document.getElementById('vista-pagos-historial').style.display = 'none';
+            cargarPagosSeguros();
+        } else {
+            // Para estudio, mostrar la vista estándar
+            if (vista === 'pendientes') {
+                document.getElementById('vista-pagos-pendientes').style.display = 'block';
+                document.getElementById('vista-pagos-historial').style.display = 'none';
+                cargarPagosPendientes();
+            } else {
+                document.getElementById('vista-pagos-pendientes').style.display = 'none';
+                document.getElementById('vista-pagos-historial').style.display = 'block';
+                cargarHistorialPagos();
+            }
+        }
+    }
+    
+    async function cargarPagosSeguros() {
+        const tabla = document.getElementById('tablaPagosSegurosBody');
+        if (!tabla) {
+            console.error('[cargarPagosSeguros] No se encontró tablaPagosSegurosBody');
+            return;
+        }
+        tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
+        console.log('[cargarPagosSeguros] Iniciando carga de pagos de seguros...');
+        
+        try {
+            const polizas = await fetchAPI('/api/polizas');
+            console.log('[cargarPagosSeguros] Pólizas obtenidas:', polizas);
+            
+            if (polizas && polizas.length > 0) {
+                tabla.innerHTML = polizas.map(p => {
+                    const fechaProximoPago = p.proximoPago 
+                        ? new Date(p.proximoPago).toLocaleDateString() 
+                        : 'N/A';
+                    const estado = calcularEstadoPago(p.proximoPago);
+                    
+                    // Calcular monto total pagado sumando el historial
+                    const montoPagado = p.pagos && p.pagos.length > 0 
+                        ? p.pagos.reduce((sum, pago) => sum + (pago.monto || 0), 0)
+                        : 0;
+                    
+                    const primaTotal = p.primaTotal || 0;
+                    const saldoRestante = p.saldoRestante !== undefined ? p.saldoRestante : (primaTotal - montoPagado);
+                    
+                    return `
+                        <tr>
+                            <td>${escapeHTML(p.cliente || 'N/A')}</td>
+                            <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
+                            <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
+                            <td>$${primaTotal.toFixed(2)}</td>
+                            <td>$${montoPagado.toFixed(2)}</td>
+                            <td>$${saldoRestante.toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="app.registrarPagoRapido('${p._id}')" title="Registrar Pago"><i class="bi bi-cash"></i> Pagar</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Ver Historial"><i class="bi bi-clock-history"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } else {
+                tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+            }
+        } catch (error) {
+            console.error('[cargarPagosSeguros] Error al cargar pagos:', error);
+            tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar pagos</td></tr>';
+        }
+    }
+    
+    function calcularEstadoPago(fechaProximoPago) {
+        if (!fechaProximoPago) {
+            return { texto: 'Sin fecha', clase: 'secondary' };
+        }
+        
+        const hoy = new Date();
+        const proximo = new Date(fechaProximoPago);
+        const diasDiferencia = Math.floor((proximo - hoy) / (1000 * 60 * 60 * 24));
+        
+        if (diasDiferencia < 0) {
+            return { texto: 'Atrasado', clase: 'danger' };
+        } else if (diasDiferencia <= 7) {
+            return { texto: 'Próximo', clase: 'warning' };
+        } else {
+            return { texto: 'Al día', clase: 'success' };
+        }
+    }
     
     async function cargarPagosPendientes() {
         const tabla = document.getElementById('tablaPendientesBody');
@@ -5307,17 +5530,28 @@ Fecha de firma: {{FECHA}}`;
     }
     
     function renderSidebar(user) { 
+        // DEPURACIÓN RADICAL - Primera línea
+        console.log('CONFIG ACTUAL CARGADA:', configCache);
+        console.log('[RADICAL DEBUG] renderSidebar - configCache completo:', JSON.stringify(configCache, null, 2));
+        
         const navContainer = document.getElementById('sidebar-nav-container'); 
         let p = user.permisos ||[]; 
         const role = user.role ? user.role.toLowerCase() : 'cliente'; 
         
         // CANDADO DE EMPRESA PARA MÓDULO DE SEGUROS (DINÁMICO)
-        // Verificar si la empresa actual tiene el módulo de Seguros activado
+        // Verificar si la empresa actual tiene el módulo de Seguros activado y tipo de dashboard
         const esEmpresaSeguros = configCache && configCache.moduloSeguros === true;
+        const tipoDashboardRaw = configCache?.tipoDashboard || 'estandar';
+        // BLOQUEO RADICAL: Trim y lowercase
+        const tipoDashboard = (tipoDashboardRaw || '').trim().toLowerCase();
+        const esDashboardSeguros = tipoDashboard === 'seguros';
         
+        console.log('[renderSidebar] RAW tipoDashboard:', tipoDashboardRaw);
+        console.log('[renderSidebar] PROCESADO tipoDashboard:', tipoDashboard);
         console.log('[renderSidebar] configCache:', configCache);
         console.log('[renderSidebar] configCache.moduloSeguros:', configCache?.moduloSeguros);
         console.log('[renderSidebar] esEmpresaSeguros:', esEmpresaSeguros);
+        console.log('[renderSidebar] esDashboardSeguros:', esDashboardSeguros);
         
         let html = ''; 
         if (role === 'cliente') { 
@@ -5326,41 +5560,76 @@ Fecha de firma: {{FECHA}}`;
             const isSuperAdmin = role === 'admin'; 
             const canAccess = (permKey) => isSuperAdmin || p.includes(permKey); 
             
-            html = `<div class="nav-group mb-3">
-                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
-                        ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
-                        ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>' : ''}
-                        ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi kanban"></i> Flujo de Trabajo</a>' : ''}
-                        ${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi file-earmark-text"></i> Cotizaciones</a>' : ''}
-                        ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi clock-history"></i> Historial</a>' : ''}
-                        ${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>' : ''}
-                    </div>
-                    <div class="nav-group mb-3">
-                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
-                        ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi people"></i> Artistas</a>' : ''}
-                        ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi tags"></i> Servicios</a>' : ''}
-                        ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>' : ''}
-                    </div>`;
-
-            // CANDADO DE EMPRESA: Solo mostrar módulo de Seguros si está activado en la configuración
-            if (esEmpresaSeguros) {
-                html += `<div class="nav-group mb-3">
+            // FASE 6: Si es dashboard de seguros, ocultar secciones estándar
+            if (esDashboardSeguros) {
+                console.log('[renderSidebar] ✅ RENDERIZANDO SIDEBAR PARA DASHBOARD DE SEGUROS');
+                html = `<div class="nav-group mb-3">
                             <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
+                            ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
                             <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                            <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
                             <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>
                          </div>`;
-            }
+                
+                if (isSuperAdmin) {
+                    html += `<div class="nav-group">
+                                <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                                <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
+                                <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
+                             </div>`;
+                }
+            } else {
+                // Dashboard estándar para empresas sin seguros
+                console.log('[renderSidebar] ❌ RENDERIZANDO SIDEBAR ESTÁNDAR (NO es dashboard de seguros)');
+                html = `<div class="nav-group mb-3">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Proyectos</div>
+                            ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
+                            ${canAccess('agenda') ? '<a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>' : ''}
+                            ${canAccess('flujo-trabajo') ? '<a class="nav-link-sidebar" data-seccion="flujo-trabajo"><i class="bi kanban"></i> Flujo de Trabajo</a>' : ''}
+                            ${canAccess('cotizaciones') ? '<a class="nav-link-sidebar" data-seccion="cotizaciones"><i class="bi file-earmark-text"></i> Cotizaciones</a>' : ''}
+                            ${canAccess('historial-proyectos') ? '<a class="nav-link-sidebar" data-seccion="historial-proyectos"><i class="bi clock-history"></i> Historial</a>' : ''}
+                            ${canAccess('pagos') ? '<a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>' : ''}
+                        </div>
+                        <div class="nav-group mb-3">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Gestión</div>
+                            ${canAccess('gestion-artistas') ? '<a class="nav-link-sidebar" data-seccion="gestion-artistas"><i class="bi people"></i> Artistas</a>' : ''}
+                            ${canAccess('gestion-servicios') ? '<a class="nav-link-sidebar" data-seccion="gestion-servicios"><i class="bi tags"></i> Servicios</a>' : ''}
+                            ${canAccess('gestion-usuarios') ? '<a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>' : ''}
+                        </div>`;
 
-            if (isSuperAdmin) {
-                html += `<div class="nav-group">
-                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
-                            <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi wallet2"></i> Mis Deudas</a>
-                            <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
-                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
-                         </div>`;
+                // CANDADO DE EMPRESA: Solo mostrar módulo de Seguros si está activado en la configuración
+                if (esEmpresaSeguros) {
+                    html += `<div class="nav-group mb-3">
+                                <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
+                                <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                                <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>
+                             </div>`;
+                }
+
+                if (isSuperAdmin) {
+                    html += `<div class="nav-group">
+                                <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                                <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi wallet2"></i> Mis Deudas</a>
+                                <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
+                                <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
+                             </div>`;
+                }
             }
         }
         navContainer.innerHTML = html;
+        
+        // FASE 6: BLOQUEO RADICAL - Ocultar elementos estándar del sidebar si es dashboard de seguros
+        if (esDashboardSeguros) {
+            console.log('[renderSidebar] APLICANDO BLOQUEO RADICAL: Ocultando elementos estándar');
+            const btnNuevoProyecto = document.getElementById('btn-nuevo-proyecto-sidebar');
+            if (btnNuevoProyecto) {
+                console.log('[renderSidebar] Ocultando btn-nuevo-proyecto-sidebar');
+                btnNuevoProyecto.style.display = 'none';
+            }
+            // NOTA: El botón de pagos se genera dinámicamente en el HTML del sidebar de seguros
+            // por lo que no es afectado por este bloqueo radical que solo oculta elementos estáticos
+        }
+        
         document.querySelectorAll('.nav-link-sidebar').forEach(link => {
             link.addEventListener('click', (e) => {
                 if (!e.currentTarget.onclick) {
@@ -5478,6 +5747,9 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function mostrarFormularioPoliza(datosPrellenados = {}) {
+        console.log('[mostrarFormularioPoliza] Datos prellenados:', datosPrellenados);
+        console.log('[mostrarFormularioPoliza] tipoPago en datos:', datosPrellenados.tipoPago);
+        
         const { value: formValues } = await Swal.fire({
             title: 'Registrar Nueva Póliza',
             html: `
@@ -5489,6 +5761,24 @@ Fecha de firma: {{FECHA}}`;
                     <div class="mb-3">
                         <label class="form-label">Cliente *</label>
                         <input id="poliza-cliente" class="swal2-input" value="${datosPrellenados.cliente || ''}" placeholder="Nombre del cliente">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Correo Electrónico</label>
+                            <input id="poliza-email" type="email" class="swal2-input" value="${datosPrellenados.clienteEmail || ''}" placeholder="cliente@ejemplo.com">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Teléfono</label>
+                            <input id="poliza-telefono" type="tel" class="swal2-input" value="${datosPrellenados.clienteTelefono || ''}" placeholder="5512345678">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Frecuencia de Pago</label>
+                        <select id="poliza-tipo-pago" class="swal2-input">
+                            <option value="anual" ${datosPrellenados.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
+                            <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
+                            <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Aseguradora *</label>
@@ -5526,6 +5816,16 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label">Prima Total *</label>
                         <input id="poliza-prima" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaTotal || ''}" placeholder="0.00">
                     </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Monto de Abono</label>
+                            <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono || ''}" placeholder="0.00">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Días Anticipación Aviso</label>
+                            <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso || 3}" placeholder="3">
+                        </div>
+                    </div>
                 </div>
             `,
             focusConfirm: false,
@@ -5541,6 +5841,9 @@ Fecha de firma: {{FECHA}}`;
             preConfirm: () => {
                 const numero = document.getElementById('poliza-numero').value.trim();
                 const cliente = document.getElementById('poliza-cliente').value.trim();
+                const clienteEmail = document.getElementById('poliza-email').value.trim();
+                const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
+                const tipoPago = document.getElementById('poliza-tipo-pago').value;
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
                 const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
                 const paquete = document.getElementById('poliza-paquete').value.trim();
@@ -5548,6 +5851,8 @@ Fecha de firma: {{FECHA}}`;
                 const fechaInicio = document.getElementById('poliza-inicio').value;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                 const primaTotal = document.getElementById('poliza-prima').value;
+                const montoAbono = document.getElementById('poliza-monto-abono').value;
+                const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                     Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
@@ -5557,6 +5862,9 @@ Fecha de firma: {{FECHA}}`;
                 return {
                     numeroPoliza: numero,
                     cliente,
+                    clienteEmail,
+                    clienteTelefono,
+                    tipoPago,
                     aseguradora,
                     inciso,
                     paquete,
@@ -5565,7 +5873,9 @@ Fecha de firma: {{FECHA}}`;
                         inicio: new Date(fechaInicio),
                         vencimiento: new Date(fechaVencimiento)
                     },
-                    primaTotal: parseFloat(primaTotal)
+                    primaTotal: parseFloat(primaTotal),
+                    montoAbono: montoAbono ? parseFloat(montoAbono) : null,
+                    diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
                 };
             }
         });
@@ -5588,13 +5898,36 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
+    // Función para calcular estado de la póliza basado en fecha de vencimiento
+    function calcularEstado(fechaVencimiento) {
+        if (!fechaVencimiento) {
+            return { texto: 'Desconocido', clase: 'secondary' };
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        const vencimiento = new Date(fechaVencimiento);
+        vencimiento.setHours(0, 0, 0, 0);
+        
+        const diferenciaDias = Math.floor((vencimiento - hoy) / (1000 * 60 * 60 * 24));
+        
+        if (diferenciaDias < 0) {
+            return { texto: 'Vencida', clase: 'danger' };
+        } else if (diferenciaDias <= 30) {
+            return { texto: 'Próxima a vencer', clase: 'warning' };
+        } else {
+            return { texto: 'Activa', clase: 'success' };
+        }
+    }
+
     async function cargarPolizas() {
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) {
             console.error('[cargarPolizas] No se encontró tablaPolizasBody');
             return;
         }
-        tabla.innerHTML = '<tr><td colspan="6" class="text-center">Cargando...</td></tr>';
+        tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
         console.log('[cargarPolizas] Iniciando carga de pólizas...');
         try {
             const polizas = await fetchAPI('/api/polizas');
@@ -5606,8 +5939,10 @@ Fecha de firma: {{FECHA}}`;
                     const fechaVencimiento = p.fechas?.vencimiento 
                         ? new Date(p.fechas.vencimiento).toLocaleDateString() 
                         : 'N/A';
-                    const estado = p.estado || 'Desconocido';
-                    const badgeClass = estado === 'Activa' ? 'success' : 'secondary';
+                    const fechaProximoPago = p.proximoPago 
+                        ? new Date(p.proximoPago).toLocaleDateString() 
+                        : 'N/A';
+                    const estado = calcularEstado(p.fechas?.vencimiento);
                     
                     return `
                         <tr>
@@ -5615,31 +5950,28 @@ Fecha de firma: {{FECHA}}`;
                             <td>${escapeHTML(p.cliente || 'N/A')}</td>
                             <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
                             <td>${fechaVencimiento}</td>
-                            <td><span class="badge bg-${badgeClass}">${estado}</span></td>
+                            <td>${fechaProximoPago}</td>
+                            <td><span class="badge bg-${estado.clase}">${estado.texto}</span></td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('${p._id}')"><i class="bi bi-pencil"></i></button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPoliza('${p._id}')"><i class="bi bi-trash"></i></button>
+                                <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos"><i class="bi bi-cash-coin"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar"><i class="bi bi-bell"></i></button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('${p._id}')" title="Editar"><i class="bi bi-pencil"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPoliza('${p._id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>
                     `;
                 }).join('');
             } else {
                 console.log('[cargarPolizas] No hay pólizas registradas');
-                tabla.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas registradas</td></tr>';
             }
         } catch (error) {
             console.error('[cargarPolizas] Error al cargar pólizas:', error);
-            tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar pólizas</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar pólizas</td></tr>';
         }
     }
 
-    // Placeholder para editar póliza (funcionalidad pendiente de implementar)
-    async function editarPoliza(id) {
-        console.log('[editarPoliza] ID de póliza:', id);
-        showToast('Funcionalidad de edición de póliza en desarrollo', 'info');
-    }
-
-    // Placeholder para eliminar póliza (funcionalidad pendiente de implementar)
+    // Función para eliminar póliza
     async function eliminarPoliza(id) {
         console.log('[eliminarPoliza] ID de póliza:', id);
         const { value: confirmar } = await Swal.fire({
@@ -5648,10 +5980,771 @@ Fecha de firma: {{FECHA}}`;
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        });
+        
+        if (confirmar) {
+            try {
+                await fetchAPI(`/api/polizas/${id}`, {
+                    method: 'DELETE'
+                });
+                await Swal.fire('Éxito', 'Póliza eliminada correctamente', 'success');
+                cargarPolizas();
+            } catch (error) {
+                console.error('[eliminarPoliza] Error al eliminar póliza:', error);
+                Swal.fire('Error', error.message || 'No se pudo eliminar la póliza', 'error');
+            }
+        }
+    }
+
+    // Función para registrar pago rápido (renovar fechaProximoPago)
+    async function registrarPagoRapido(id) {
+        console.log('[registrarPagoRapido] ID de póliza:', id);
+        
+        const { value: confirmar } = await Swal.fire({
+            title: '¿Registrar pago?',
+            text: 'Esto actualizará la fecha del próximo pago al siguiente ciclo según el tipo de pago de la póliza',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, registrar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745'
+        });
+        
+        if (confirmar) {
+            try {
+                const resultado = await fetchAPI(`/api/polizas/${id}/renovar-pago`, {
+                    method: 'PUT'
+                });
+                console.log('[registrarPagoRapido] Respuesta:', resultado);
+                
+                await Swal.fire('Éxito', 'Pago registrado correctamente. Próximo pago: ' + new Date(resultado.nuevoProximoPago).toLocaleDateString(), 'success');
+                cargarPolizas();
+            } catch (error) {
+                console.error('[registrarPagoRapido] Error al registrar pago:', error);
+                Swal.fire('Error', error.message || 'No se pudo registrar el pago', 'error');
+            }
+        }
+    }
+
+    // Función para editar póliza
+    async function editarPoliza(id) {
+        console.log('[editarPoliza] ID de póliza:', id);
+        
+        try {
+            // Obtener datos de la póliza
+            const poliza = await fetchAPI(`/api/polizas/${id}`);
+            
+            // Preparar datos para el formulario - INCLUIR TODOS LOS CAMPOS
+            const datosPrellenados = {
+                numeroPoliza: poliza.numeroPoliza || '',
+                cliente: poliza.cliente || '',
+                clienteEmail: poliza.clienteEmail || '',
+                clienteTelefono: poliza.clienteTelefono || '',
+                tipoPago: poliza.tipoPago || 'anual',
+                aseguradora: poliza.aseguradora || '',
+                inciso: poliza.inciso || '1',
+                paquete: poliza.paquete || poliza.tipoSeguro || '',
+                tipoSeguro: poliza.tipoSeguro || 'Vehicular',
+                fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toISOString().split('T')[0] : '',
+                fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toISOString().split('T')[0] : '',
+                primaTotal: poliza.primaTotal || 0,
+                montoAbono: poliza.montoAbono || 0,
+                diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3
+            };
+            
+            const { value: formValues } = await Swal.fire({
+                title: 'Editar Póliza',
+                html: `
+                    <div class="text-start">
+                        <div class="mb-3">
+                            <label class="form-label">Número de Póliza *</label>
+                            <input id="poliza-numero" class="swal2-input" value="${datosPrellenados.numeroPoliza}" placeholder="Ej: POL-2024-001">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cliente *</label>
+                            <input id="poliza-cliente" class="swal2-input" value="${datosPrellenados.cliente}" placeholder="Nombre del cliente">
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Correo Electrónico</label>
+                                <input id="poliza-email" type="email" class="swal2-input" value="${datosPrellenados.clienteEmail}" placeholder="cliente@ejemplo.com">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Teléfono</label>
+                                <input id="poliza-telefono" type="tel" class="swal2-input" value="${datosPrellenados.clienteTelefono}" placeholder="5512345678">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Frecuencia de Pago</label>
+                            <select id="poliza-tipo-pago" class="swal2-input">
+                                <option value="anual" ${datosPrellenados.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
+                                <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
+                                <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Aseguradora *</label>
+                            <input id="poliza-aseguradora" class="swal2-input" value="${datosPrellenados.aseguradora}" placeholder="Ej: GNP, AXA, Qualitas">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Inciso</label>
+                            <input id="poliza-inciso" class="swal2-input" value="${datosPrellenados.inciso}" placeholder="1">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Paquete / Cobertura</label>
+                            <input id="poliza-paquete" class="swal2-input" value="${datosPrellenados.paquete}" placeholder="Ej: AMPLIA">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Seguro *</label>
+                            <select id="poliza-tipo" class="swal2-input">
+                                <option value="">Seleccionar...</option>
+                                <option value="Vehicular" ${datosPrellenados.tipoSeguro === 'Vehicular' ? 'selected' : ''}>Vehicular</option>
+                                <option value="Vida" ${datosPrellenados.tipoSeguro === 'Vida' ? 'selected' : ''}>Vida</option>
+                                <option value="Gastos Médicos" ${datosPrellenados.tipoSeguro === 'Gastos Médicos' ? 'selected' : ''}>Gastos Médicos</option>
+                                <option value="Daños" ${datosPrellenados.tipoSeguro === 'Daños' ? 'selected' : ''}>Daños</option>
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Fecha Inicio *</label>
+                                <input id="poliza-inicio" type="date" class="swal2-input" value="${datosPrellenados.fechaInicio}">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Fecha Vencimiento *</label>
+                                <input id="poliza-vencimiento" type="date" class="swal2-input" value="${datosPrellenados.fechaVencimiento}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Prima Total *</label>
+                            <input id="poliza-prima" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaTotal}" placeholder="0.00">
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Monto de Abono</label>
+                                <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono}" placeholder="0.00">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Días Anticipación Aviso</label>
+                                <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso}" placeholder="3">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Actualizar',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const numero = document.getElementById('poliza-numero').value.trim();
+                    const cliente = document.getElementById('poliza-cliente').value.trim();
+                    const clienteEmail = document.getElementById('poliza-email').value.trim();
+                    const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
+                    const tipoPago = document.getElementById('poliza-tipo-pago').value;
+                    const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
+                    const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
+                    const paquete = document.getElementById('poliza-paquete').value.trim();
+                    const tipoSeguro = document.getElementById('poliza-tipo').value;
+                    const fechaInicio = document.getElementById('poliza-inicio').value;
+                    const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
+                    const primaTotal = document.getElementById('poliza-prima').value;
+                    const montoAbono = document.getElementById('poliza-monto-abono').value;
+                    const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
+
+                    if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
+                        Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
+                        return;
+                    }
+
+                    return {
+                        numeroPoliza: numero,
+                        cliente,
+                        clienteEmail,
+                        clienteTelefono,
+                        tipoPago,
+                        aseguradora,
+                        inciso,
+                        paquete,
+                        tipoSeguro,
+                        fechas: {
+                            inicio: new Date(fechaInicio),
+                            vencimiento: new Date(fechaVencimiento)
+                        },
+                        primaTotal: parseFloat(primaTotal),
+                        montoAbono: montoAbono ? parseFloat(montoAbono) : null,
+                        diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
+                    };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    await fetchAPI(`/api/polizas/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(formValues)
+                    });
+                    await Swal.fire('Éxito', 'Póliza actualizada correctamente', 'success');
+                    cargarPolizas();
+                } catch (error) {
+                    console.error('[editarPoliza] Error al actualizar póliza:', error);
+                    Swal.fire('Error', error.message || 'No se pudo actualizar la póliza', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('[editarPoliza] Error al obtener póliza:', error);
+            Swal.fire('Error', error.message || 'No se pudo cargar la póliza', 'error');
+        }
+    }
+
+    // ==================================================================
+    // FASE 2: PAPELERA DE RECICLAJE
+    // ==================================================================
+    async function cargarPapelera() {
+        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+        const esDashboardSeguros = tipoDashboard === 'seguros';
+        
+        const tabProyectos = document.getElementById('papelera-proyectos-tab');
+        const tabPolizas = document.getElementById('papelera-polizas-tab');
+        const tabArtistas = document.getElementById('papelera-artistas-tab');
+        const tabServicios = document.getElementById('papelera-servicios-tab');
+        const tabUsuarios = document.getElementById('papelera-usuarios-tab');
+        
+        // Si es dashboard de seguros, ocultar pestañas irrelevantes y mostrar solo pólizas
+        if (esDashboardSeguros) {
+            // Ocultar pestañas de proyectos, artistas, servicios y usuarios
+            if (tabProyectos) tabProyectos.style.display = 'none';
+            if (tabArtistas) tabArtistas.style.display = 'none';
+            if (tabServicios) tabServicios.style.display = 'none';
+            if (tabUsuarios) tabUsuarios.style.display = 'none';
+            
+            // Mostrar tabla de pólizas directamente (sin pestañas)
+            const tablaPolizas = document.getElementById('tablaPapeleraBody');
+            if (tablaPolizas) {
+                tablaPolizas.parentElement.parentElement.style.display = 'block';
+            }
+            
+            // Ocultar el contenedor de pestañas
+            const papeleraTabs = document.getElementById('papeleraTabs');
+            if (papeleraTabs) papeleraTabs.style.display = 'none';
+            
+            // Ocultar el contenido de las otras pestañas
+            const papeleraTabContent = document.getElementById('papeleraTabsContent');
+            if (papeleraTabContent) papeleraTabContent.style.display = 'none';
+        } else {
+            // Dashboard estándar: mostrar pestaña de proyectos
+            if (tabProyectos && typeof bootstrap !== 'undefined') {
+                bootstrap.Tab.getOrCreateInstance(tabProyectos).show();
+            }
+        }
+        
+        // Cargar pólizas en papelera
+        const tabla = document.getElementById('tablaPapeleraBody');
+        if (tabla) {
+            tabla.innerHTML = '<tr><td colspan="6" class="text-center">Cargando papelera...</td></tr>';
+            console.log('[cargarPapelera] Iniciando carga de papelera de pólizas...');
+            try {
+                const polizas = await fetchAPI('/api/polizas/papelera/recuperar');
+                console.log('[cargarPapelera] Respuesta del servidor:', polizas);
+                
+                if (polizas && polizas.length > 0) {
+                    console.log('[cargarPapelera] Pólizas en papelera:', polizas.length);
+                    tabla.innerHTML = polizas.map(p => {
+                        const fechaEliminacion = p.deletedAt 
+                            ? new Date(p.deletedAt).toLocaleDateString() 
+                            : 'N/A';
+                        const fechaVencimiento = p.fechas?.vencimiento 
+                            ? new Date(p.fechas.vencimiento).toLocaleDateString() 
+                            : 'N/A';
+                        
+                        return `
+                            <tr>
+                                <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
+                                <td>${escapeHTML(p.cliente || 'N/A')}</td>
+                                <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
+                                <td>${fechaVencimiento}</td>
+                                <td>${fechaEliminacion}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success" onclick="app.restaurarPoliza('${p._id}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="app.borrarPermanente('${p._id}')" title="Eliminar definitivamente"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    console.log('[cargarPapelera] Papelera vacía');
+                    tabla.innerHTML = '<tr><td colspan="6" class="text-center text-muted">La papelera está vacía</td></tr>';
+                }
+            } catch (error) {
+                console.error('[cargarPapelera] Error al cargar papelera:', error);
+                tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar papelera</td></tr>';
+            }
+        }
+        
+        // Cargar papelera estándar (proyectos, artistas, servicios, usuarios) solo si NO es dashboard de seguros
+        if (!esDashboardSeguros) {
+            const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
+            for (const endpoint of endpoints) {
+                try {
+                    const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
+                    localCache.trash[endpoint] = data; 
+                trashPagination[endpoint].page = 1; 
+                renderTrashList(endpoint); 
+                } catch (e) {
+                console.error(`Error loading trash for ${endpoint}:`, e);
+                const listEl = document.getElementById(`papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
+                if(listEl) listEl.innerHTML = `<li class="list-group-item text-danger small">Error cargando.</li>`;
+                }
+            }
+        }
+    }
+
+    async function restaurarPoliza(id) {
+        console.log('[restaurarPoliza] ID de póliza:', id);
+        const { value: confirmar } = await Swal.fire({
+            title: '¿Restaurar póliza?',
+            text: 'La póliza volverá a aparecer en la lista principal',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, restaurar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745'
+        });
+        
+        if (confirmar) {
+            try {
+                await fetchAPI(`/api/polizas/papelera/restaurar/${id}`, {
+                    method: 'PUT'
+                });
+                await Swal.fire('Éxito', 'Póliza restaurada correctamente', 'success');
+                cargarPapelera();
+                cargarPolizas(); // Actualizar tabla principal también
+            } catch (error) {
+                console.error('[restaurarPoliza] Error al restaurar póliza:', error);
+                Swal.fire('Error', error.message || 'No se pudo restaurar la póliza', 'error');
+            }
+        }
+    }
+
+    async function borrarPermanente(id) {
+        console.log('[borrarPermanente] ID de póliza:', id);
+        const { value: confirmar } = await Swal.fire({
+            title: '¿Eliminar definitivamente?',
+            text: 'Esta acción NO se puede deshacer. La póliza se borrará permanentemente de la base de datos.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar definitivamente',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        });
+        
+        if (confirmar) {
+            try {
+                await fetchAPI(`/api/polizas/papelera/definitivo/${id}`, {
+                    method: 'DELETE'
+                });
+                await Swal.fire('Éxito', 'Póliza eliminada definitivamente', 'success');
+                cargarPapelera();
+            } catch (error) {
+                console.error('[borrarPermanente] Error al eliminar definitivamente:', error);
+                Swal.fire('Error', error.message || 'No se pudo eliminar la póliza', 'error');
+            }
+        }
+    }
+
+    // ==================================================================
+    // FASE 3: GESTIÓN DE PAGOS
+    // ==================================================================
+    let polizaActualPagos = null; // Variable global para guardar la póliza actual
+
+    async function abrirModalPagos(poliza) {
+        polizaActualPagos = poliza;
+        
+        const pagosHTML = poliza.pagos && poliza.pagos.length > 0 
+            ? poliza.pagos.map((p, index) => `
+                <tr>
+                    <td>${p.fechaPago ? new Date(p.fechaPago).toLocaleDateString() : 'N/A'}</td>
+                    <td>$${p.monto?.toFixed(2) || '0.00'}</td>
+                    <td>${escapeHTML(p.metodoPago || 'N/A')}</td>
+                    <td><span class="badge bg-${p.estado === 'pagado' ? 'success' : 'warning'}">${p.estado || 'N/A'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPago('${poliza._id}', ${index})" title="Eliminar Pago"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="5" class="text-center text-muted">No hay pagos registrados</td></tr>';
+
+        const proximoPagoHTML = poliza.proximoPago 
+            ? `<div class="alert alert-info mb-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Próximo pago:</strong> <span id="proximo-pago-fecha">${new Date(poliza.proximoPago).toLocaleDateString()}</span>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="app.editarProximoPago('${poliza._id}')" title="Editar Próximo Pago"><i class="bi bi-pencil"></i></button>
+               </div>`
+            : '';
+
+        const { value: formValues } = await Swal.fire({
+            title: `Pagos - Póliza ${poliza.numeroPoliza}`,
+            html: `
+                <div class="text-start">
+                    ${proximoPagoHTML}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Historial de Pagos</label>
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Monto</th>
+                                    <th>Método</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaPagosHistorial">
+                                ${pagosHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Registrar Nuevo Pago</label>
+                        <input id="pago-fecha" type="date" class="swal2-input" value="${new Date().toISOString().split('T')[0]}">
+                        <input id="pago-monto" type="number" step="0.01" class="swal2-input" placeholder="Monto del pago">
+                        <select id="pago-metodo" class="swal2-input mt-2">
+                            <option value="efectivo">Efectivo</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="tarjeta">Tarjeta</option>
+                            <option value="cheque">Cheque</option>
+                        </select>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Recordatorios</label>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-success" onclick="app.enviarRecordatorioWhatsApp('${poliza._id}')"><i class="bi bi-whatsapp"></i> WhatsApp</button>
+                            <button class="btn btn-sm btn-primary" onclick="app.enviarRecordatorioCorreo('${poliza._id}')"><i class="bi bi-envelope"></i> Correo</button>
+                        </div>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Registrar Pago',
+            cancelButtonText: 'Cerrar',
+            preConfirm: () => {
+                const fechaPago = document.getElementById('pago-fecha').value;
+                const monto = document.getElementById('pago-monto').value;
+                const metodoPago = document.getElementById('pago-metodo').value;
+
+                if (!monto || parseFloat(monto) <= 0) {
+                    Swal.showValidationMessage('Por favor ingresa un monto válido');
+                    return;
+                }
+
+                if (!fechaPago) {
+                    Swal.showValidationMessage('Por favor selecciona una fecha');
+                    return;
+                }
+
+                // Corregir zona horaria añadiendo T12:00:00 para evitar desfase UTC vs CST
+                const fechaCorregida = fechaPago + 'T12:00:00';
+
+                return { fechaPago: fechaCorregida, monto, metodoPago };
+            }
+        });
+
+        if (formValues) {
+            await guardarPago(formValues);
+        }
+    }
+
+    async function guardarPago(pagoData) {
+        if (!polizaActualPagos) {
+            Swal.fire('Error', 'No hay póliza seleccionada', 'error');
+            return;
+        }
+
+        try {
+            Swal.fire({
+                title: 'Registrando pago...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            await fetchAPI(`/api/polizas/${polizaActualPagos._id}/pagos`, {
+                method: 'POST',
+                body: JSON.stringify(pagoData)
+            });
+
+            await Swal.fire('Éxito', 'Pago registrado correctamente', 'success');
+            
+            // Actualizar la vista activa
+            const seccionActiva = document.querySelector('main > section.active');
+            if (seccionActiva && seccionActiva.id === 'pagos') {
+                cargarPagos(); // Recargar tabla de pagos
+            } else {
+                cargarPolizas(); // Recargar tabla de pólizas
+            }
+        } catch (error) {
+            console.error('[guardarPago] Error al registrar pago:', error);
+            Swal.fire('Error', error.message || 'No se pudo registrar el pago', 'error');
+        }
+    }
+
+    async function eliminarPago(polizaId, pagoIndex) {
+        const result = await Swal.fire({
+            title: '¿Eliminar pago?',
+            text: 'Esta acción no se puede deshacer',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         });
-        if (confirmar) {
-            showToast('Funcionalidad de eliminación de póliza en desarrollo', 'info');
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await fetchAPI(`/api/polizas/${polizaId}/pagos/${pagoIndex}`, {
+                method: 'DELETE'
+            });
+
+            await Swal.fire('Éxito', 'Pago eliminado correctamente', 'success');
+            
+            // Actualizar la vista activa
+            const seccionActiva = document.querySelector('main > section.active');
+            if (seccionActiva && seccionActiva.id === 'pagos') {
+                cargarPagos(); // Recargar tabla de pagos
+            } else {
+                cargarPolizas(); // Recargar tabla de pólizas
+            }
+        } catch (error) {
+            console.error('[eliminarPago] Error al eliminar pago:', error);
+            Swal.fire('Error', error.message || 'No se pudo eliminar el pago', 'error');
+        }
+    }
+
+    async function editarProximoPago(polizaId) {
+        const { value: fecha } = await Swal.fire({
+            title: 'Editar Próximo Pago',
+            input: 'date',
+            inputLabel: 'Nueva fecha del próximo pago',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!fecha) return;
+
+        // Corregir zona horaria añadiendo T12:00:00 para evitar desfase UTC vs CST
+        const fechaCorregida = fecha + 'T12:00:00';
+
+        try {
+            await fetchAPI(`/api/polizas/${polizaId}/proximo-pago`, {
+                method: 'PUT',
+                body: JSON.stringify({ proximoPago: fechaCorregida })
+            });
+
+            await Swal.fire('Éxito', 'Próximo pago actualizado correctamente', 'success');
+            
+            // Actualizar la vista activa
+            const seccionActiva = document.querySelector('main > section.active');
+            if (seccionActiva && seccionActiva.id === 'pagos') {
+                cargarPagos(); // Recargar tabla de pagos
+            } else {
+                cargarPolizas(); // Recargar tabla de pólizas
+            }
+        } catch (error) {
+            console.error('[editarProximoPago] Error al actualizar próximo pago:', error);
+            Swal.fire('Error', error.message || 'No se pudo actualizar el próximo pago', 'error');
+        }
+    }
+
+    async function enviarRecordatorioWhatsApp(polizaId) {
+        try {
+            const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
+            const telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
+            const cliente = poliza.cliente || 'Cliente';
+            const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
+
+            // Usar montoAbono del modelo si existe, si no calcular según tipo de pago
+            let montoAbono = poliza.montoAbono || 0;
+            if (!montoAbono || montoAbono === 0) {
+                const primaTotal = poliza.primaTotal || 0;
+                switch (poliza.tipoPago) {
+                    case 'mensual':
+                        montoAbono = primaTotal / 12;
+                        break;
+                    case 'trimestral':
+                        montoAbono = primaTotal / 4;
+                        break;
+                    case 'semestral':
+                        montoAbono = primaTotal / 2;
+                        break;
+                    case 'anual':
+                    default:
+                        montoAbono = primaTotal;
+                        break;
+                }
+            }
+
+            if (!telefono) {
+                Swal.fire('Error', 'La póliza no tiene número de teléfono registrado', 'error');
+                return;
+            }
+
+            const mensaje = `Hola ${cliente}, te recordamos que tu próximo pago de la póliza es el ${proximoPago} por un monto de $${montoAbono.toFixed(2)}.`;
+            const mensajeCodificado = encodeURIComponent(mensaje);
+            const whatsappUrl = `https://wa.me/52${telefono}?text=${mensajeCodificado}`;
+
+            window.open(whatsappUrl, '_blank');
+        } catch (error) {
+            console.error('[enviarRecordatorioWhatsApp] Error:', error);
+            Swal.fire('Error', 'No se pudo enviar el recordatorio', 'error');
+        }
+    }
+
+    async function enviarRecordatorioCorreo(polizaId) {
+        try {
+            const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
+            const email = poliza.clienteEmail || '';
+            const cliente = poliza.cliente || 'Cliente';
+            const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
+
+            // Usar montoAbono del modelo si existe, si no calcular según tipo de pago
+            let montoAbono = poliza.montoAbono || 0;
+            if (!montoAbono || montoAbono === 0) {
+                const primaTotal = poliza.primaTotal || 0;
+                switch (poliza.tipoPago) {
+                    case 'mensual':
+                        montoAbono = primaTotal / 12;
+                        break;
+                    case 'trimestral':
+                        montoAbono = primaTotal / 4;
+                        break;
+                    case 'semestral':
+                        montoAbono = primaTotal / 2;
+                        break;
+                    case 'anual':
+                    default:
+                        montoAbono = primaTotal;
+                        break;
+                }
+            }
+
+            if (!email) {
+                Swal.fire('Error', 'La póliza no tiene correo electrónico registrado', 'error');
+                return;
+            }
+
+            await fetchAPI('/api/polizas/enviar-recordatorio', {
+                method: 'POST',
+                body: JSON.stringify({
+                    polizaId,
+                    destinatario: email,
+                    asunto: 'Recordatorio de Pago - Póliza',
+                    mensaje: `Hola ${cliente}, te recordamos que tu próximo pago de la póliza es el ${proximoPago} por un monto de $${montoAbono.toFixed(2)}.`
+                })
+            });
+
+            await Swal.fire('Éxito', 'Recordatorio enviado por correo', 'success');
+        } catch (error) {
+            console.error('[enviarRecordatorioCorreo] Error:', error);
+            Swal.fire('Error', 'No se pudo enviar el recordatorio', 'error');
+        }
+    }
+
+    // ==================================================================
+    // FASE 5: NOTIFICACIONES MANUALES
+    // ==================================================================
+    async function enviarNotificacionManual(polizaId) {
+        const { isConfirmed: esEmail } = await Swal.fire({
+            title: 'Enviar Recordatorio',
+            text: 'Selecciona el canal de envío',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Correo Electrónico',
+            cancelButtonText: 'WhatsApp',
+            reverseButtons: true
+        });
+        
+        if (esEmail === undefined) return; // Usuario cerró el modal
+        
+        const canalSeleccionado = esEmail ? 'email' : 'whatsapp';
+        
+        const { isConfirmed: esVencimiento } = await Swal.fire({
+            title: 'Tipo de Recordatorio',
+            text: 'Selecciona el tipo de notificación',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Vencimiento de Póliza',
+            cancelButtonText: 'Pago Pendiente',
+            reverseButtons: true
+        });
+        
+        if (esVencimiento === undefined) return; // Usuario cerró el modal
+        
+        const tipoSeleccionado = esVencimiento ? 'vencimiento_poliza' : 'pago_pendiente';
+        
+        // Si es WhatsApp, abrir directamente en el frontend
+        if (canalSeleccionado === 'whatsapp') {
+            try {
+                // Obtenemos los datos frescos de la póliza
+                const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
+                if (!poliza) return Swal.fire('Error', 'No se pudo obtener la póliza.', 'error');
+
+                const clienteNombre = poliza.cliente || 'Asegurado';
+                const numeroPolizaClean = poliza.numeroPoliza || 'N/A';
+                const montoFormateado = poliza.primaTotal ? parseFloat(poliza.primaTotal).toFixed(2) : '0.00';
+                const fechaVenc = poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-MX') : 'N/A';
+                const fechaPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString('es-MX') : 'N/A';
+
+                let texto = '';
+                if (tipoSeleccionado === 'vencimiento_poliza') {
+                    texto = `Hola ${clienteNombre}, te recordamos que tu póliza No. ${numeroPolizaClean} con la aseguradora ${poliza.aseguradora || 'N/A'} está próxima a vencer el ${fechaVenc}.`;
+                } else {
+                    texto = `Hola ${clienteNombre}, tienes un pago pendiente en tu póliza No. ${numeroPolizaClean} por un monto de $${montoFormateado}. Próxima fecha de pago: ${fechaPago}.`;
+                }
+
+                // Limpiamos el número de teléfono (remueve espacios y guiones)
+                const telefonoClean = (poliza.clienteTelefono || '5512345678').replace(/[^0-9]/g, '');
+                const whatsappUrl = `https://wa.me/${telefonoClean}?text=${encodeURIComponent(texto)}`;
+                
+                // ABRIR DIRECTAMENTE WHATSAPP WEB REAL EN OTRA PESTAÑA
+                window.open(whatsappUrl, '_blank');
+
+                // Registrar el log en la base de datos de manera silenciosa de fondo
+                fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
+                    method: 'POST',
+                    body: JSON.stringify({ canal: 'whatsapp', tipo: tipoSeleccionado })
+                }).catch(e => console.log('Error al registrar log:', e));
+
+            } catch (error) {
+                console.error('Error al intentar abrir WhatsApp:', error);
+                Swal.fire('Error', 'Error al intentar abrir WhatsApp.', 'error');
+            }
+        } else {
+            // Si es correo, usar el backend
+            try {
+                Swal.fire({
+                    title: 'Enviando notificación...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+                
+                const response = await fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
+                    method: 'POST',
+                    body: JSON.stringify({ canal: canalSeleccionado, tipo: tipoSeleccionado })
+                });
+                
+                if (response && response.success) {
+                    await Swal.fire('Éxito', `¡Notificación enviada con éxito por ${canalSeleccionado}!`, 'success');
+                } else {
+                    await Swal.fire('Error', 'Error al enviar la notificación.', 'error');
+                }
+            } catch (error) {
+                console.error('Error al notificar manualmente:', error);
+                await Swal.fire('Error', 'Ocurrió un error en la comunicación.', 'error');
+            }
         }
     }
 
@@ -6568,8 +7661,9 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        abrirModalNuevaPoliza, cargarPolizas, editarPoliza, eliminarPoliza,
+        abrirModalNuevaPoliza, cargarPolizas, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         guardarYProbarSMTP, enviarCorreoPrueba,
+        enviarNotificacionManual,
 // ... (rest of the code remains the same)
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
