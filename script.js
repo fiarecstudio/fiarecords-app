@@ -2142,7 +2142,7 @@ let proyectoIdEnEdicion = null;
         const tipoDashboard = configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        const seccionesSeguros = ['polizas', 'config-correos', 'pagos'];
+        const seccionesSeguros = ['polizas', 'config-correos'];
         // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
         const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'];
         
@@ -6106,12 +6106,27 @@ Fecha de firma: {{FECHA}}`;
                             ? new Date(p.fechas.vencimiento).toLocaleDateString() 
                             : 'N/A';
                         
+                        // Calcular resumen de pagos
+                        const pagosArray = p.pagos || [];
+                        const cantidadPagos = pagosArray.length;
+                        const totalPagado = pagosArray.reduce((sum, pago) => sum + (pago.estado === 'pagado' ? parseFloat(pago.monto || 0) : 0), 0);
+                        
+                        // Formatear resumen de pagos para mostrar
+                        let pagosHTML = '<span class="text-muted small">Sin pagos</span>';
+                        if (cantidadPagos > 0) {
+                            pagosHTML = `
+                                <span class="badge bg-primary">${cantidadPagos} pago${cantidadPagos > 1 ? 's' : ''}</span>
+                                <span class="small text-success fw-bold">$${totalPagado.toFixed(2)}</span>
+                            `;
+                        }
+                        
                         return `
                             <tr>
                                 <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                                 <td>${escapeHTML(p.cliente || 'N/A')}</td>
                                 <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
                                 <td>${fechaVencimiento}</td>
+                                <td>${pagosHTML}</td>
                                 <td>${fechaEliminacion}</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-success" onclick="app.restaurarPoliza('${p._id}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
@@ -6121,11 +6136,11 @@ Fecha de firma: {{FECHA}}`;
                         `;
                     }).join('');
                 } else {
-                    tabla.innerHTML = '<tr><td colspan="6" class="text-center text-muted">La papelera está vacía</td></tr>';
+                    tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">La papelera está vacía</td></tr>';
                 }
             } catch (error) {
                 console.error('[cargarPapelera] Error al cargar papelera:', error);
-                tabla.innerHTML = '<tr><td colspan="6" class="text-danger">Error al cargar papelera</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar papelera</td></tr>';
             }
         }
         
