@@ -11,6 +11,7 @@ if (typeof PDFParse !== 'function') {
 const auth = require('../middleware/auth');
 const { applyTenantFilter } = require('../middleware/tenantFilter');
 const polizaController = require('../controllers/polizaController');
+const Poliza = require('../models/Poliza');
 
 /**
  * Normaliza el texto del PDF respetando saltos de línea vitales
@@ -38,6 +39,58 @@ const upload = multer({
 // ==========================================
 router.post('/', auth, applyTenantFilter, polizaController.crearPoliza);
 router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
+router.get('/migrar-asesor-historico', auth, async (req, res) => {
+    try {
+        console.log('[Migración asesorId] Iniciando migración...');
+        console.log('[Migración asesorId] Usuario:', req.user);
+        
+        // Verificar que el usuario sea admin
+        if (req.user.role !== 'admin') {
+            console.log('[Migración asesorId] Acceso denegado: usuario no es admin');
+            return res.status(403).json({ 
+                error: 'Acceso denegado. Solo administradores pueden ejecutar esta migración.' 
+            });
+        }
+
+        const empresaId = req.user.empresaId;
+        const adminId = req.user._id || req.user.id;
+        
+        console.log('[Migración asesorId] empresaId:', empresaId);
+        console.log('[Migración asesorId] adminId:', adminId);
+
+        // Buscar pólizas sin asesorId (campo no existe o null)
+        const filtro = {
+            empresaId,
+            $or: [
+                { asesorId: { $exists: false } },
+                { asesorId: null }
+            ]
+        };
+
+        console.log('[Migración asesorId] Filtro de búsqueda:', JSON.stringify(filtro));
+
+        const resultado = await Poliza.updateMany(
+            filtro,
+            { asesorId: adminId }
+        );
+
+        console.log('[Migración asesorId] Resultado:', resultado);
+
+        res.json({
+            success: true,
+            mensaje: 'Migración completada exitosamente',
+            polizasActualizadas: resultado.modifiedCount
+        });
+    } catch (error) {
+        console.error('[Migración asesorId] Error detallado:', error);
+        console.error('[Migración asesorId] Stack trace:', error.stack);
+        res.status(500).json({ 
+            error: 'Error al ejecutar migración', 
+            details: error.message,
+            stack: error.stack
+        });
+    }
+});
 router.get('/:id', auth, applyTenantFilter, polizaController.obtenerPolizaPorId);
 router.put('/:id', auth, applyTenantFilter, polizaController.actualizarPoliza);
 router.delete('/:id', auth, applyTenantFilter, polizaController.eliminarPoliza);

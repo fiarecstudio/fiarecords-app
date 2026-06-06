@@ -1141,11 +1141,24 @@
             <section id="polizas" class="section-view d-none">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
-                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <h2 class="mb-0"><i class="bi bi-shield-check me-2"></i>Gestión de Pólizas</h2>
-                        <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
-                            <i class="bi bi-plus-circle"></i> Nueva Póliza
-                        </button>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <!-- Filtro por Asesor (Solo visible para admins) -->
+                            <div id="filtro-asesor-container" class="d-none align-items-center gap-2">
+                                <label class="form-label mb-0 small"><i class="bi bi-person"></i> Asesor:</label>
+                                <select id="filtro-asesor" class="form-select form-select-sm" style="width: 200px;" onchange="app.filtrarPolizasPorAsesor(this.value)">
+                                    <option value="">Todos los asesores</option>
+                                </select>
+                            </div>
+                            <!-- Botón de migración temporal (Solo visible para admins) -->
+                            <button id="btn-migrar-asesor" class="btn btn-warning d-none" onclick="app.ejecutarMigracionAsesor()">
+                                <i class="bi bi-database-gear"></i> Migrar Asesor
+                            </button>
+                            <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
+                                <i class="bi bi-plus-circle"></i> Nueva Póliza
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body pt-3">
                         <div class="table-responsive">
@@ -1342,7 +1355,7 @@
                             <div class="mb-3"><label class="form-label">Contraseña</label><input type="password" id="passwordUsuario" class="form-control" placeholder="Contraseña"></div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3"><label class="form-label">Rol</label><select id="roleUsuario" class="form-select"><option value="admin">Admin</option><option value="ingeniero">Ingeniero</option><option value="diseñador">Diseñador</option><option value="cliente">Cliente</option></select></div>
+                            <div class="mb-3"><label class="form-label">Rol</label><select id="roleUsuario" class="form-select"><option value="admin">Administrador (admin)</option><option value="asesor">Asesor de Ventas (asesor)</option><option value="cobranza">Cobranza (cobranza)</option><option value="ingeniero">Ingeniero</option><option value="diseñador">Diseñador</option><option value="cliente">Cliente</option></select></div>
                             <div class="mb-3 p-2 border rounded permisos-container">
                                 <label class="fw-bold mb-2 d-block">Permisos:</label>
                                 <div class="d-flex flex-wrap gap-2">

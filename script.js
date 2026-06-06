@@ -2144,7 +2144,7 @@ let proyectoIdEnEdicion = null;
         
         const seccionesSeguros = ['polizas', 'config-correos'];
         // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
-        const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'];
+        const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
         
         // VALIDACIÓN: Si es dashboard de seguros, NO permitir secciones estándar BLOQUEADAS (EXCEPTO dashboard y pagos)
         // EXPLÍCITAMENTE permitimos 'dashboard' y 'pagos' para ambos tipos
@@ -2166,8 +2166,17 @@ let proyectoIdEnEdicion = null;
             'polizas', 'config-correos'
         ];
 
+        // Secciones que solo los administradores pueden acceder
+        const seccionesSoloAdmin = ['config-correos', 'configuracion', 'papelera-reciclaje', 'mis-deudas', 'gestion-usuarios'];
+
         if (esCliente && seccionesProhibidasParaCliente.includes(id)) {
             id = 'vista-artista'; 
+        }
+
+        // Validación: Solo admins pueden acceder a configuración de correos
+        if (userInfo.role !== 'admin' && seccionesSoloAdmin.includes(id)) {
+            showToast('⚠️ Esta sección solo está disponible para administradores', 'warning');
+            return;
         }
 
         document.querySelectorAll('main > section').forEach(sec => sec.classList.remove('active')); 
@@ -5245,6 +5254,8 @@ Fecha de firma: {{FECHA}}`;
         // Mapeo de permisos por rol
         const permisosPorRol = {
             'admin': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'],
+            'asesor': ['dashboard', 'polizas'],
+            'cobranza': ['dashboard', 'pagos'],
             'ingeniero': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos'],
             'diseñador': ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos'],
             'cliente': []
@@ -5271,6 +5282,8 @@ Fecha de firma: {{FECHA}}`;
         // Mapeo de permisos por rol (mismo que crear usuario)
         const permisosPorRol = {
             'admin': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos', 'gestion-artistas', 'gestion-servicios', 'gestion-usuarios'],
+            'asesor': ['dashboard', 'polizas'],
+            'cobranza': ['dashboard', 'pagos'],
             'ingeniero': ['dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'pagos'],
             'diseñador': ['dashboard', 'agenda', 'flujo-trabajo', 'historial-proyectos'],
             'cliente': []
@@ -5421,12 +5434,13 @@ Fecha de firma: {{FECHA}}`;
                             ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
                             <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
                             <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
-                            <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>
+                            ${isSuperAdmin ? '<a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>' : ''}
                          </div>`;
                 
                 if (isSuperAdmin) {
                     html += `<div class="nav-group">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                                <a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>
                                 <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
                              </div>`;
@@ -5782,8 +5796,41 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
         tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
+        
+        // Mostrar/ocultar filtro de asesor según el rol del usuario
+        const user = getUserRoleAndId();
+        const filtroAsesorContainer = document.getElementById('filtro-asesor-container');
+        const btnMigrarAsesor = document.getElementById('btn-migrar-asesor');
+        
+        if (filtroAsesorContainer) {
+            if (user.role === 'admin') {
+                filtroAsesorContainer.classList.remove('d-none');
+                filtroAsesorContainer.classList.add('d-flex');
+                // Cargar lista de asesores si aún no está cargada
+                await cargarListaAsesores();
+                // Mostrar botón de migración
+                if (btnMigrarAsesor) {
+                    btnMigrarAsesor.classList.remove('d-none');
+                }
+            } else {
+                filtroAsesorContainer.classList.add('d-none');
+                filtroAsesorContainer.classList.remove('d-flex');
+                // Ocultar botón de migración
+                if (btnMigrarAsesor) {
+                    btnMigrarAsesor.classList.add('d-none');
+                }
+            }
+        }
+        
         try {
-            const polizas = await fetchAPI('/api/polizas');
+            // Construir URL con parámetro de asesor si está seleccionado
+            let url = '/api/polizas';
+            const asesorSeleccionado = document.getElementById('filtro-asesor')?.value;
+            if (user.role === 'admin' && asesorSeleccionado) {
+                url += `?asesorId=${asesorSeleccionado}`;
+            }
+            
+            const polizas = await fetchAPI(url);
             if (polizas && polizas.length > 0) {
                 tabla.innerHTML = polizas.map(p => {
                     const fechaVencimiento = p.fechas?.vencimiento 
@@ -5817,6 +5864,76 @@ Fecha de firma: {{FECHA}}`;
         } catch (error) {
             console.error('[cargarPolizas] Error al cargar pólizas:', error);
             tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar pólizas</td></tr>';
+        }
+    }
+
+    // Función para cargar la lista de asesores (usuarios de la empresa)
+    async function cargarListaAsesores() {
+        const filtroAsesor = document.getElementById('filtro-asesor');
+        if (!filtroAsesor) return;
+        
+        // Solo cargar si el select está vacío (solo tiene la opción "Todos los asesores")
+        if (filtroAsesor.options.length > 1) return;
+        
+        try {
+            const usuarios = await fetchAPI('/api/usuarios');
+            if (usuarios && usuarios.length > 0) {
+                usuarios.forEach(usuario => {
+                    const option = document.createElement('option');
+                    option.value = usuario._id || usuario.id;
+                    option.textContent = usuario.username || usuario.email || 'Usuario';
+                    filtroAsesor.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('[cargarListaAsesores] Error al cargar asesores:', error);
+        }
+    }
+
+    // Función para filtrar pólizas por asesor
+    async function filtrarPolizasPorAsesor(asesorId) {
+        await cargarPolizas();
+    }
+
+    // Función para ejecutar la migración de asesorId
+    async function ejecutarMigracionAsesor() {
+        const { value: confirmar } = await Swal.fire({
+            title: '¿Ejecutar migración de asesor?',
+            text: 'Esto asignará tu ID de usuario como asesor a todas las pólizas históricas que no tengan este campo.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, ejecutar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#ffc107'
+        });
+
+        if (!confirmar) return;
+
+        try {
+            const resultado = await fetchAPI('/api/polizas/migrar-asesor-historico');
+            
+            if (resultado.success) {
+                await Swal.fire({
+                    title: '¡Migración completada!',
+                    text: `Se actualizaron ${resultado.polizasActualizadas} pólizas exitosamente.`,
+                    icon: 'success'
+                });
+                // Recargar pólizas para reflejar los cambios
+                await cargarPolizas();
+            } else {
+                await Swal.fire({
+                    title: 'Error',
+                    text: resultado.error || 'Error al ejecutar migración',
+                    icon: 'error'
+                });
+            }
+        } catch (error) {
+            console.error('[ejecutarMigracionAsesor] Error:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: error.message || 'Error al ejecutar migración',
+                icon: 'error'
+            });
         }
     }
 
@@ -7521,7 +7638,7 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        abrirModalNuevaPoliza, cargarPolizas, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, ejecutarMigracionAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         guardarYProbarSMTP, enviarCorreoPrueba,
         enviarNotificacionManual,
 // ... (rest of the code remains the same)

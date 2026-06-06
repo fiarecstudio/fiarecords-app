@@ -7,8 +7,12 @@ const crearPoliza = async (req, res) => {
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
         
+        // Asignar automáticamente el asesorId del usuario que crea la póliza
+        const asesorId = req.user._id || req.user.id;
+        
         const nuevaPoliza = new Poliza({
             empresaId,
+            asesorId,
             numeroPoliza,
             cliente,
             clienteEmail,
@@ -38,9 +42,24 @@ const crearPoliza = async (req, res) => {
 const obtenerPolizas = async (req, res) => {
     try {
         const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+        const userId = req.user._id || req.user.id;
         
-        // Filtrar estrictamente por empresaId y solo pólizas no eliminadas (deletedAt: null)
-        const polizas = await Poliza.find({ empresaId, deletedAt: null });
+        // Construir filtro base
+        let filtro = { empresaId, deletedAt: null };
+        
+        // RBAC: Si el usuario es admin, puede ver todas las pólizas de la empresa
+        // Si viene un query param asesorId, filtra por ese asesor específico
+        if (userRole === 'admin') {
+            if (req.query.asesorId) {
+                filtro.asesorId = req.query.asesorId;
+            }
+        } else {
+            // Si no es admin, SOLO puede ver sus propias pólizas
+            filtro.asesorId = userId;
+        }
+        
+        const polizas = await Poliza.find(filtro);
         
         res.json(polizas);
     } catch (error) {
@@ -298,30 +317,38 @@ const enviarRecordatorioManual = async (req, res) => {
 const obtenerMetricasSeguros = async (req, res) => {
     try {
         const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+        const userId = req.user._id || req.user.id;
         const hoy = new Date();
         hoy.setHours(0,0,0,0);
 
+        // Construir filtro base con RBAC
+        let filtroBase = { empresaId, deletedAt: null };
+        
+        // RBAC: Si el usuario no es admin, filtrar por asesorId
+        if (userRole !== 'admin') {
+            filtroBase.asesorId = userId;
+        }
+
         // 1. Pólizas Activas
-        const activas = await Poliza.countDocuments({ empresaId, deletedAt: null });
+        const activas = await Poliza.countDocuments(filtroBase);
 
         // 2. Pólizas Próximas a Vencer (dentro de los próximos 30 días)
         const unMesDespues = new Date(hoy);
         unMesDespues.setDate(unMesDespues.getDate() + 30);
         const porVencer = await Poliza.countDocuments({
-            empresaId,
-            deletedAt: null,
+            ...filtroBase,
             "fechas.vencimiento": { $gte: hoy, $lte: unMesDespues }
         });
 
         // 3. Pagos Pendientes / Atrasados
         const pagosPendientes = await Poliza.countDocuments({
-            empresaId,
-            deletedAt: null,
+            ...filtroBase,
             proximoPago: { $lt: hoy }
         });
 
         // 4. Monto Total Recaudado (Suma de todos los pagos registrados)
-        const polizasConPagos = await Poliza.find({ empresaId, deletedAt: null });
+        const polizasConPagos = await Poliza.find(filtroBase);
         let totalRecaudado = 0;
         polizasConPagos.forEach(p => {
             if (p.pagos) {

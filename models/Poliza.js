@@ -7,6 +7,12 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'El ID de empresa es obligatorio'],
         index: true
     },
+    asesorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Usuario',
+        required: [true, 'El ID de asesor es obligatorio'],
+        index: true
+    },
     numeroPoliza: {
         type: String,
         required: [true, 'El número de póliza es obligatorio'],
