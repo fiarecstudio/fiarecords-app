@@ -395,6 +395,161 @@ const calcularProximoPago = (fechaBase, tipoPago) => {
     return proximoPago;
 };
 
+// ENDPOINT: Migración de fechas para el calendario (Temporal)
+const migrarFechasAgenda = async (req, res) => {
+    try {
+        const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+
+        // Verificar que el usuario sea admin
+        if (userRole !== 'admin') {
+            return res.status(403).json({ 
+                error: 'Acceso denegado. Solo administradores pueden ejecutar esta migración.' 
+            });
+        }
+
+        // Buscar todas las pólizas de la empresa
+        const polizas = await Poliza.find({ empresaId, deletedAt: null });
+        
+        let polizasActualizadas = 0;
+
+        for (const poliza of polizas) {
+            let actualizada = false;
+
+            // Convertir fechas.vencimiento si es string
+            if (poliza.fechas && poliza.fechas.vencimiento) {
+                if (typeof poliza.fechas.vencimiento === 'string') {
+                    const fechaVencimiento = new Date(poliza.fechas.vencimiento);
+                    if (!isNaN(fechaVencimiento.getTime())) {
+                        poliza.fechas.vencimiento = fechaVencimiento;
+                        actualizada = true;
+                    }
+                }
+            }
+
+            // Convertir proximoPago si es string
+            if (poliza.proximoPago) {
+                if (typeof poliza.proximoPago === 'string') {
+                    const proximoPago = new Date(poliza.proximoPago);
+                    if (!isNaN(proximoPago.getTime())) {
+                        poliza.proximoPago = proximoPago;
+                        actualizada = true;
+                    }
+                }
+            }
+
+            // Si proximoPago no existe pero hay tipoPago, establecer fecha por defecto
+            if (!poliza.proximoPago && poliza.tipoPago) {
+                const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : new Date();
+                if (!isNaN(fechaInicio.getTime())) {
+                    const proximoPago = new Date(fechaInicio);
+                    
+                    // Calcular próximo pago según tipoPago
+                    switch (poliza.tipoPago) {
+                        case 'mensual':
+                            proximoPago.setMonth(proximoPago.getMonth() + 1);
+                            break;
+                        case 'trimestral':
+                            proximoPago.setMonth(proximoPago.getMonth() + 3);
+                            break;
+                        case 'anual':
+                        default:
+                            proximoPago.setFullYear(proximoPago.getFullYear() + 1);
+                            break;
+                    }
+                    
+                    poliza.proximoPago = proximoPago;
+                    actualizada = true;
+                }
+            }
+
+            // Guardar si hubo cambios
+            if (actualizada) {
+                await poliza.save();
+                polizasActualizadas++;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Migración completada. ${polizasActualizadas} pólizas actualizadas de ${polizas.length} totales.`,
+            polizasActualizadas,
+            polizasTotales: polizas.length
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al ejecutar migración de fechas', details: error.message });
+    }
+};
+
+// ENDPOINT: Obtener eventos de pólizas para el calendario (Módulo de Seguros)
+const obtenerEventosAgenda = async (req, res) => {
+    try {
+        const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+        const userId = req.user._id || req.user.id;
+
+        // Construir filtro base con RBAC
+        let filtroBase = { empresaId, deletedAt: null };
+        
+        // RBAC: Si el usuario no es admin, filtrar por asesorId
+        if (userRole !== 'admin') {
+            filtroBase.asesorId = userId;
+        }
+
+        // Buscar todas las pólizas activas
+        const polizas = await Poliza.find(filtroBase);
+
+        const eventos = [];
+
+        polizas.forEach(poliza => {
+            // Evento de Vencimiento
+            if (poliza.fechas && poliza.fechas.vencimiento) {
+                const fechaVencimiento = new Date(poliza.fechas.vencimiento);
+                eventos.push({
+                    id: `vencimiento-${poliza._id}`,
+                    title: `Vence: ${poliza.cliente || 'N/A'} - ${poliza.aseguradora || 'N/A'}`,
+                    start: fechaVencimiento.toISOString().split('T')[0],
+                    backgroundColor: '#dc3545',
+                    borderColor: '#dc3545',
+                    allDay: true,
+                    extendedProps: {
+                        tipo: 'vencimiento',
+                        polizaId: poliza._id,
+                        cliente: poliza.cliente,
+                        aseguradora: poliza.aseguradora
+                    }
+                });
+            }
+
+            // Evento de Próximo Pago
+            if (poliza.proximoPago) {
+                const proximoPago = new Date(poliza.proximoPago);
+                eventos.push({
+                    id: `pago-${poliza._id}`,
+                    title: `Cobro: ${poliza.cliente || 'N/A'} - $${poliza.primaTotal || 0}`,
+                    start: proximoPago.toISOString().split('T')[0],
+                    backgroundColor: '#ffc107',
+                    borderColor: '#ffc107',
+                    allDay: true,
+                    extendedProps: {
+                        tipo: 'pago',
+                        polizaId: poliza._id,
+                        cliente: poliza.cliente,
+                        monto: poliza.primaTotal
+                    }
+                });
+            }
+        });
+
+        res.json({
+            success: true,
+            eventos
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener eventos de agenda', details: error.message });
+    }
+};
+
 // ENDPOINT: Renovar pago (actualizar fechaProximoPago al siguiente ciclo)
 const renovarPago = async (req, res) => {
     try {
@@ -565,6 +720,8 @@ module.exports = {
     registrarPago,
     enviarRecordatorioManual,
     obtenerMetricasSeguros,
+    obtenerEventosAgenda,
+    migrarFechasAgenda,
     renovarPago,
     eliminarPago,
     actualizarProximoPago,

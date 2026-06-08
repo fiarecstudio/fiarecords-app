@@ -217,23 +217,47 @@
             <section id="dashboard" class="active section-view">
                 <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
-                    <div class="card kpi-card border-start border-4 border-success p-3" onclick="app.mostrarSeccion('historial-proyectos')">
-                      <div class="d-flex justify-content-between">
-                        <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
-                        <i class="bi bi-currency-dollar fs-1 text-success"></i>
-                      </div>
+                    <!-- Tarjetas para Módulo de Seguros -->
+                    <div id="dashboard-seuros" class="d-none">
+                        <div class="card kpi-card border-start border-4 border-danger p-3" onclick="app.mostrarSeccion('agenda')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-renovaciones-30-dias">0</h3><small class="text-muted">Renovaciones (30 días)</small></div>
+                            <i class="bi bi-alarm fs-1 text-danger"></i>
+                          </div>
+                        </div>
+                        <div class="card kpi-card border-start border-4 border-warning p-3" onclick="app.mostrarSeccion('pagos')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-pagos-pendientes">0</h3><small class="text-muted">Pagos Pendientes</small></div>
+                            <i class="bi bi-cash-coin fs-1 text-warning"></i>
+                          </div>
+                        </div>
+                        <div class="card kpi-card border-start border-4 border-primary p-3" onclick="app.mostrarSeccion('polizas')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-polizas-activas">0</h3><small class="text-muted">Pólizas Activas</small></div>
+                            <i class="bi bi-shield-check fs-1 text-primary"></i>
+                          </div>
+                        </div>
                     </div>
-                    <div class="card kpi-card border-start border-4 border-primary p-3" onclick="app.mostrarSeccion('flujo-trabajo')">
-                      <div class="d-flex justify-content-between">
-                        <div><h3 class="mb-0" id="kpi-proyectos-activos">0</h3><small class="text-muted">Proyectos Activos</small></div>
-                        <i class="bi bi-sliders fs-1 text-primary"></i>
-                      </div>
-                    </div>
-                    <div class="card kpi-card border-start border-4 border-warning p-3" onclick="app.mostrarSeccion('pagos')">
-                      <div class="d-flex justify-content-between">
-                        <div><h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3><small class="text-muted">Por Cobrar</small></div>
-                        <i class="bi bi-hourglass-split fs-1 text-warning"></i>
-                      </div>
+                    <!-- Tarjetas para Fia Records (Estándar) -->
+                    <div id="dashboard-estandar" class="grid-container">
+                        <div class="card kpi-card border-start border-4 border-success p-3" onclick="app.mostrarSeccion('historial-proyectos')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-ingresos-mes">$0.00</h3><small class="text-muted">Ingresos del Mes</small></div>
+                            <i class="bi bi-currency-dollar fs-1 text-success"></i>
+                          </div>
+                        </div>
+                        <div class="card kpi-card border-start border-4 border-primary p-3" onclick="app.mostrarSeccion('flujo-trabajo')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-proyectos-activos">0</h3><small class="text-muted">Proyectos Activos</small></div>
+                            <i class="bi bi-sliders fs-1 text-primary"></i>
+                          </div>
+                        </div>
+                        <div class="card kpi-card border-start border-4 border-warning p-3" onclick="app.mostrarSeccion('pagos')">
+                          <div class="d-flex justify-content-between">
+                            <div><h3 class="mb-0" id="kpi-proyectos-por-cobrar">0</h3><small class="text-muted">Por Cobrar</small></div>
+                            <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+                          </div>
+                        </div>
                     </div>
                 </div>
                 <div class="card mt-4 p-3 shadow-sm">
@@ -1154,6 +1178,9 @@
                             <!-- Botón de migración temporal (Solo visible para admins) -->
                             <button id="btn-migrar-asesor" class="btn btn-warning d-none" onclick="app.ejecutarMigracionAsesor()">
                                 <i class="bi bi-database-gear"></i> Migrar Asesor
+                            </button>
+                            <button id="btn-migrar-fechas" class="btn btn-info d-none" onclick="app.ejecutarMigracionFechas()">
+                                <i class="bi bi-calendar-check"></i> Migrar Fechas
                             </button>
                             <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
                                 <i class="bi bi-plus-circle"></i> Nueva Póliza

@@ -39,6 +39,8 @@ const upload = multer({
 // ==========================================
 router.post('/', auth, applyTenantFilter, polizaController.crearPoliza);
 router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
+router.get('/agenda/eventos', auth, polizaController.obtenerEventosAgenda);
+router.get('/migrar-fechas-agenda', auth, polizaController.migrarFechasAgenda);
 router.get('/migrar-asesor-historico', auth, async (req, res) => {
     try {
         console.log('[Migración asesorId] Iniciando migración...');

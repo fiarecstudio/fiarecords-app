@@ -203,6 +203,17 @@ router.get('/', async (req, res) => {
                 config.tipoDashboard = empresa.tipoDashboard || 'estandar';
                 config.nombreEmpresa = empresa.nombre;
                 
+                // AGREGAR CONFIGURACIÓN SMTP (sin contraseña por seguridad)
+                if (empresa.notificaciones && empresa.notificaciones.email) {
+                    config.notificacionesEmail = {
+                        enabled: empresa.notificaciones.email.enabled,
+                        smtpHost: empresa.notificaciones.email.smtpHost,
+                        smtpPort: empresa.notificaciones.email.smtpPort,
+                        smtpUser: empresa.notificaciones.email.smtpUser
+                        // smtpPass NO se envía al frontend por seguridad
+                    };
+                }
+                
                 // LOG DE CONFIRMACIÓN
                 console.log('[Config] Después de asignación, config.tipoDashboard:', config.tipoDashboard);
                 console.log('[Config] Después de asignación, config.moduloSeguros:', config.moduloSeguros);
@@ -430,6 +441,120 @@ router.post('/upload-favicon', [isAdmin, upload.single('faviconFile')], async (r
     } catch (err) { 
         console.error('[Upload Favicon] Error:', err);
         res.status(500).json({ error: 'Error al subir el favicon', details: err.message }); 
+    }
+});
+
+// ==========================================================
+// --- NUEVO: GUARDAR CONFIGURACIÓN SMTP (NOTIFICACIONES EMAIL) ---
+// ==========================================================
+router.put('/notificaciones-email', isAdmin, async (req, res) => {
+    try {
+        const { enabled, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
+        
+        // FASE 5: Prioridad ABSOLUTA: header X-Empresa-Id, fallback a empresa del usuario
+        const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+        const userEmpresaId = req.user && req.user.empresaId ? req.user.empresaId.toString() : null;
+        
+        // Limpiar y validar: header tiene prioridad, luego el usuario
+        let targetId = limpiarEmpresaId(headerId) || userEmpresaId;
+        
+        if (!targetId) {
+            return res.status(400).json({ 
+                error: "No se pudo determinar la empresa. Selecciona una empresa específica o verifica tu sesión." 
+            });
+        }
+        
+        console.log(`[Config SMTP] Guardando configuración SMTP para empresa: ${targetId}`);
+        
+        // Validar que sea un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(targetId)) {
+            console.error('[Config SMTP] empresaId inválido:', targetId);
+            return res.status(400).json({ error: 'ID de empresa inválido' });
+        }
+        
+        // Buscar empresa y actualizar configuración SMTP
+        const empresa = await Empresa.findById(targetId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+        
+        // Actualizar campo notificaciones.email
+        empresa.notificaciones = empresa.notificaciones || {};
+        empresa.notificaciones.email = {
+            enabled: enabled !== undefined ? enabled : true,
+            smtpHost: smtpHost || '',
+            smtpPort: smtpPort || 587,
+            smtpUser: smtpUser || '',
+            smtpPass: smtpPass || ''
+        };
+        
+        await empresa.save();
+        
+        console.log(`[Config SMTP] Configuración guardada exitosamente para empresa: ${targetId}`);
+        
+        // Devolver configuración sin contraseña por seguridad
+        res.json({
+            message: 'Configuración SMTP guardada exitosamente',
+            notificacionesEmail: {
+                enabled: empresa.notificaciones.email.enabled,
+                smtpHost: empresa.notificaciones.email.smtpHost,
+                smtpPort: empresa.notificaciones.email.smtpPort,
+                smtpUser: empresa.notificaciones.email.smtpUser
+            }
+        });
+    } catch (err) {
+        console.error('[Config SMTP] Error:', err);
+        res.status(500).json({ error: 'Error al guardar configuración SMTP', details: err.message });
+    }
+});
+
+// ==========================================================
+// --- NUEVO: PROBAR ENVÍO DE CORREO SMTP ---
+// ==========================================================
+router.post('/test-smtp', isAdmin, async (req, res) => {
+    try {
+        const { destinatario } = req.body;
+        
+        if (!destinatario) {
+            return res.status(400).json({ error: 'El destinatario es requerido' });
+        }
+        
+        // FASE 5: Prioridad ABSOLUTA: header X-Empresa-Id, fallback a empresa del usuario
+        const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+        const userEmpresaId = req.user && req.user.empresaId ? req.user.empresaId.toString() : null;
+        
+        // Limpiar y validar: header tiene prioridad, luego el usuario
+        let targetId = limpiarEmpresaId(headerId) || userEmpresaId;
+        
+        if (!targetId) {
+            return res.status(400).json({ 
+                error: "No se pudo determinar la empresa. Selecciona una empresa específica o verifica tu sesión." 
+            });
+        }
+        
+        console.log(`[Test SMTP] Enviando correo de prueba para empresa: ${targetId} a: ${destinatario}`);
+        
+        // Usar notificationService para enviar el correo
+        const { enviarEmail } = require('../services/notificationService');
+        
+        await enviarEmail({
+            empresaId: targetId,
+            destinatario: destinatario,
+            asunto: 'Prueba de configuración SMTP - FiaRecords',
+            cuerpo: `
+                <h2>Prueba de configuración SMTP</h2>
+                <p>Este es un correo de prueba para verificar que la configuración SMTP de tu empresa está funcionando correctamente.</p>
+                <p><strong>Empresa ID:</strong> ${targetId}</p>
+                <p><strong>Fecha:</strong> ${new Date().toLocaleString()}</p>
+                <p>Si recibes este correo, tu configuración SMTP es correcta.</p>
+            `
+        });
+        
+        console.log(`[Test SMTP] Correo de prueba enviado exitosamente`);
+        res.json({ message: 'Correo de prueba enviado exitosamente' });
+    } catch (err) {
+        console.error('[Test SMTP] Error:', err);
+        res.status(500).json({ error: 'Error al enviar correo de prueba', details: err.message });
     }
 });
 

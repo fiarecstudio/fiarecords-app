@@ -541,6 +541,24 @@ let proyectoIdEnEdicion = null;
             if (config) { 
                 configCache = config; 
                 if(config.logoBase64) logoBase64 = config.logoBase64;
+                
+                // Rellenar inputs SMTP con la configuración del backend
+                if (config.notificacionesEmail) {
+                    const smtpHost = document.getElementById('smtp-host');
+                    const smtpPort = document.getElementById('smtp-port');
+                    const smtpUser = document.getElementById('smtp-user');
+                    
+                    if (smtpHost && config.notificacionesEmail.smtpHost) {
+                        smtpHost.value = config.notificacionesEmail.smtpHost;
+                    }
+                    if (smtpPort && config.notificacionesEmail.smtpPort) {
+                        smtpPort.value = config.notificacionesEmail.smtpPort;
+                    }
+                    if (smtpUser && config.notificacionesEmail.smtpUser) {
+                        smtpUser.value = config.notificacionesEmail.smtpUser;
+                    }
+                    // Nota: smtpPass NO se rellena por seguridad
+                }
                 }
         } catch (e) { 
             console.error('[loadInitialConfig] Error cargando config:', e);
@@ -1084,63 +1102,19 @@ let proyectoIdEnEdicion = null;
     // FASE 6: DASHBOARD DE SEGUROS
     async function cargarDashboardSeguros() {
         try {
-            const dashboardContainer = document.getElementById('dashboard');
-            if (!dashboardContainer) {
-                console.error('[cargarDashboardSeguros] No se encontró el contenedor dashboard');
-                return;
-            }
-
-            // LIMPIEZA VISUAL: Asegurar que el contenedor esté visible y activo
-            dashboardContainer.style.display = 'block';
-            dashboardContainer.classList.add('active');
-            // Renderizar estructura del Dashboard de Seguros
-            dashboardContainer.innerHTML = `
-                <div class="container-fluid p-4">
-                    <h2 class="mb-4 text-success fw-bold"><i class="bi bi-shield-check"></i> Dashboard de Seguros</h2>
-                    <div class="row">
-                        <!-- Tarjeta 1: Pólizas Activas -->
-                        <div class="col-md-3 mb-4">
-                            <div class="card border-0 bg-success text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
-                                <small class="text-white-50">PÓLIZAS ACTIVAS</small>
-                                <h3 id="dashActivas" class="fw-bold mt-2">0</h3>
-                                <i class="bi bi-file-earmark-text position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
-                            </div>
-                        </div>
-                        <!-- Tarjeta 2: Por Vencer -->
-                        <div class="col-md-3 mb-4">
-                            <div class="card border-0 bg-warning text-dark shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
-                                <small class="text-dark-50">PRÓXIMAS A VENCER (30D)</small>
-                                <h3 id="dashPorVencer" class="fw-bold mt-2">0</h3>
-                                <i class="bi bi-exclamation-triangle position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-dark-50"></i>
-                            </div>
-                        </div>
-                        <!-- Tarjeta 3: Pagos Pendientes -->
-                        <div class="col-md-3 mb-4">
-                            <div class="card border-0 bg-danger text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('pagos')" style="cursor: pointer; transition: transform 0.2s;">
-                                <small class="text-white-50">PAGOS REQUERIDOS/ATRASADOS</small>
-                                <h3 id="dashPagosPendientes" class="fw-bold mt-2">0</h3>
-                                <i class="bi bi-cash-coin position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
-                            </div>
-                        </div>
-                        <!-- Tarjeta 4: Primas Recaudadas -->
-                        <div class="col-md-3 mb-4">
-                            <div class="card border-0 bg-info text-white shadow-sm p-3 position-relative cursor-pointer" onclick="app.mostrarSeccion('polizas')" style="cursor: pointer; transition: transform 0.2s;">
-                                <small class="text-white-50">PRIMAS RECAUDADAS</small>
-                                <h3 id="dashTotalRecaudado" class="fw-bold mt-2">$0.00</h3>
-                                <i class="bi bi-wallet2 position-absolute end-0 bottom-0 me-3 mb-2 fs-1 text-white-50"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
+            // Mostrar tarjetas de seguros y ocultar tarjetas estándar
+            const dashboardSeguros = document.getElementById('dashboard-seuros');
+            const dashboardEstandar = document.getElementById('dashboard-estandar');
+            
+            if (dashboardSeguros) dashboardSeguros.classList.remove('d-none');
+            if (dashboardEstandar) dashboardEstandar.classList.add('d-none');
             
             // Cargar los datos desde el endpoint de métricas
             const res = await fetchAPI('/api/polizas/dashboard/metricas');
             if (res && res.metricas) {
-                document.getElementById('dashActivas').innerText = res.metricas.activas;
-                document.getElementById('dashPorVencer').innerText = res.metricas.porVencer;
-                document.getElementById('dashPagosPendientes').innerText = res.metricas.pagosPendientes;
-                document.getElementById('dashTotalRecaudado').innerText = parseFloat(res.metricas.totalRecaudado).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                document.getElementById('kpi-renovaciones-30-dias').innerText = res.metricas.porVencer;
+                document.getElementById('kpi-pagos-pendientes').innerText = res.metricas.pagosPendientes;
+                document.getElementById('kpi-polizas-activas').innerText = res.metricas.activas;
                 } else {
                 console.warn('[cargarDashboardSeguros] No se recibieron métricas válidas');
             }
@@ -1710,7 +1684,113 @@ let proyectoIdEnEdicion = null;
     function openEventModal(info) { const props = info.event.extendedProps; document.getElementById('modal-event-id').value = info.event.id; document.getElementById('modal-event-title').textContent = info.event.title; document.getElementById('modal-event-date').textContent = info.event.start.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); document.getElementById('modal-event-total').textContent = `$${safeMoney(props.total)}`; document.getElementById('modal-event-status').textContent = props.estatus; document.getElementById('modal-event-services').innerHTML = (props.servicios || '').split('\n').map(s => `<li>${escapeHTML(s)}</li>`).join(''); flatpickr("#edit-event-date", { defaultDate: info.event.start, locale: "es" }); const hours = String(info.event.start.getHours()).padStart(2, '0'); const minutes = String(info.event.start.getMinutes()).padStart(2, '0'); document.getElementById('edit-event-time').value = `${hours}:${minutes}`; new bootstrap.Modal(document.getElementById('event-modal')).show(); }
     async function cancelarCita(id) { Swal.fire({ title: '¿Cancelar esta cita?', text: "La fecha se liberará.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, cancelar', cancelButtonText: 'No', confirmButtonColor: '#d33' }).then(async (result) => { if(result.isConfirmed) { try { await fetchAPI(`/api/proyectos/${id}/estatus`, { method: 'PUT', body: JSON.stringify({ estatus: 'Cancelado' }) }); showToast('Cita cancelada.', 'info'); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); if(document.getElementById('agenda').classList.contains('active')) cargarAgenda(); if (document.getElementById('flujo-trabajo').classList.contains('active')) cargarFlujoDeTrabajo(); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } } }); }
     async function actualizarHorarioProyecto() { const id = document.getElementById('modal-event-id').value; const newDateInput = document.getElementById('edit-event-date')._flatpickr.selectedDates[0]; const newTimeInput = document.getElementById('edit-event-time').value; if (!newDateInput) return showToast("Selecciona una nueva fecha", "error"); let finalDate = new Date(newDateInput); if (newTimeInput) { const [h, m] = newTimeInput.split(':'); finalDate.setHours(h); finalDate.setMinutes(m); } try { await cambiarAtributo(id, 'fecha', finalDate.toISOString()); showToast("Horario actualizado", "success"); const el = document.getElementById('event-modal'); const m = bootstrap.Modal.getInstance(el); if(m) m.hide(); cargarAgenda(); } catch (e) { showToast("Error al actualizar", "error"); } }
-    async function cargarAgenda() { const calendarEl = document.getElementById('calendario'); if (currentCalendar) { currentCalendar.destroy(); } try { const eventos = await fetchAPI('/api/proyectos/agenda'); const isMobile = window.innerWidth < 768; currentCalendar = new FullCalendar.Calendar(calendarEl, { locale: 'es', initialView: isMobile ? 'listWeek' : 'dayGridMonth', headerToolbar: { left: 'prev,next today', center: 'title', right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' }, height: 'auto', dayMaxEvents: isMobile ? 1 : true, buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' }, navLinks: true, editable: true, events: eventos, dateClick: (info) => { if (info.view.type.includes('Grid')) { mostrarSeccion('registrar-proyecto'); document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); verificarDisponibilidad(); showToast(`Fecha preseleccionada`, 'info'); } }, eventClick: openEventModal, eventDrop: async (info) => { Swal.fire({ title: '¿Reagendar?', text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'Cancelar' }).then(async (result) => { if (result.isConfirmed) { try { await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); showToast('Reagendado.', 'success'); cargarFlujoDeTrabajo(); } catch (error) { info.revert(); showToast('Error al reagendar', 'error'); } } else { info.revert(); } }); }, eventContent: (arg) => { return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; }, eventDidMount: function(info) { let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; info.el.style.backgroundColor = colorVar; info.el.style.borderColor = colorVar; } }); currentCalendar.render(); } catch (error) { calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; } }
+    async function cargarAgenda() { 
+        const calendarEl = document.getElementById('calendario'); 
+        if (currentCalendar) { currentCalendar.destroy(); } 
+        
+        try { 
+            // Verificar si es módulo de seguros
+            const esEmpresaSeguros = configCache && configCache.moduloSeguros === true;
+            const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+            const esDashboardSeguros = tipoDashboard === 'seguros';
+            
+            // Determinar endpoint según el módulo
+            const endpoint = esDashboardSeguros ? '/api/polizas/agenda/eventos' : '/api/proyectos/agenda';
+            const response = await fetchAPI(endpoint);
+            const eventos = esDashboardSeguros ? (response.eventos || []) : response;
+            
+            const isMobile = window.innerWidth < 768;
+            
+            // Configuración base del calendario
+            const calendarConfig = {
+                locale: 'es',
+                initialView: isMobile ? 'listWeek' : 'dayGridMonth',
+                headerToolbar: { 
+                    left: 'prev,next today', 
+                    center: 'title', 
+                    right: isMobile ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek' 
+                },
+                height: 'auto',
+                dayMaxEvents: isMobile ? 1 : true,
+                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
+                navLinks: true,
+                editable: !esDashboardSeguros,
+                events: eventos,
+                eventContent: (arg) => { 
+                    return { html: `<div class="fc-event-main-frame"><div class="fc-event-title">${escapeHTML(arg.event.title)}</div></div>` }; 
+                }
+            };
+            
+            // Comportamiento específico para módulo de seguros
+            if (esDashboardSeguros) {
+                calendarConfig.eventClick = (info) => {
+                    const props = info.event.extendedProps;
+                    if (props.tipo === 'vencimiento') {
+                        Swal.fire({
+                            title: 'Vencimiento de Póliza',
+                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Aseguradora:</strong> ${escapeHTML(props.aseguradora || 'N/A')}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p>`,
+                            icon: 'warning'
+                        });
+                    } else if (props.tipo === 'pago') {
+                        Swal.fire({
+                            title: 'Próximo Pago',
+                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Monto:</strong> $${safeMoney(props.monto || 0)}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p>`,
+                            icon: 'info'
+                        });
+                    }
+                };
+                calendarConfig.eventDidMount = function(info) {
+                    info.el.style.backgroundColor = info.event.backgroundColor;
+                    info.el.style.borderColor = info.event.borderColor;
+                };
+            } else {
+                // Comportamiento original para Fia Records
+                calendarConfig.dateClick = (info) => { 
+                    if (info.view.type.includes('Grid')) { 
+                        mostrarSeccion('registrar-proyecto'); 
+                        document.getElementById('fechaProyecto')._flatpickr.setDate(info.date); 
+                        verificarDisponibilidad(); 
+                        showToast(`Fecha preseleccionada`, 'info'); 
+                    } 
+                };
+                calendarConfig.eventClick = openEventModal;
+                calendarConfig.eventDrop = async (info) => { 
+                    Swal.fire({ 
+                        title: '¿Reagendar?', 
+                        text: `Se moverá a: ${info.event.start.toLocaleDateString()}`, 
+                        icon: 'question', 
+                        showCancelButton: true, 
+                        confirmButtonText: 'Sí', 
+                        cancelButtonText: 'Cancelar' 
+                    }).then(async (result) => { 
+                        if (result.isConfirmed) { 
+                            try { 
+                                await cambiarAtributo(info.event.id, 'fecha', info.event.start.toISOString()); 
+                                showToast('Reagendado.', 'success'); 
+                                cargarFlujoDeTrabajo(); 
+                            } catch (error) { 
+                                info.revert(); 
+                                showToast('Error al reagendar', 'error'); 
+                            } 
+                        } else { 
+                            info.revert(); 
+                        } 
+                    }); 
+                };
+                calendarConfig.eventDidMount = function(info) { 
+                    let colorVar = `var(--proceso-${info.event.extendedProps.proceso.replace(/\s+/g, '')}, var(--primary-color))`; 
+                    info.el.style.backgroundColor = colorVar; 
+                    info.el.style.borderColor = colorVar; 
+                };
+            }
+            
+            currentCalendar = new FullCalendar.Calendar(calendarEl, calendarConfig);
+            currentCalendar.render(); 
+        } catch (error) { 
+            calendarEl.innerHTML = '<p class="text-center text-danger">Error al cargar la agenda.</p>'; 
+            console.error('[cargarAgenda] Error:', error);
+        } 
+    }
     async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto[campo] = valor; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
 
     async function aprobarCotizacion(id) { 
@@ -2143,12 +2223,12 @@ let proyectoIdEnEdicion = null;
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
         const seccionesSeguros = ['polizas', 'config-correos'];
-        // NOTA: 'dashboard' está permitido para AMBOS tipos (se decide internamente en cargarDashboard())
-        const seccionesEstandarBloqueadas = ['agenda', 'flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
+        // NOTA: 'dashboard' y 'agenda' están permitidos para AMBOS tipos
+        const seccionesEstandarBloqueadas = ['flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
         
-        // VALIDACIÓN: Si es dashboard de seguros, NO permitir secciones estándar BLOQUEADAS (EXCEPTO dashboard y pagos)
-        // EXPLÍCITAMENTE permitimos 'dashboard' y 'pagos' para ambos tipos
-        if (esDashboardSeguros && id !== 'dashboard' && id !== 'pagos' && seccionesEstandarBloqueadas.includes(id)) {
+        // VALIDACIÓN: Si es dashboard de seguros, NO permitir secciones estándar BLOQUEADAS (EXCEPTO dashboard, agenda y pagos)
+        // EXPLÍCITAMENTE permitimos 'dashboard', 'agenda' y 'pagos' para ambos tipos
+        if (esDashboardSeguros && id !== 'dashboard' && id !== 'agenda' && id !== 'pagos' && seccionesEstandarBloqueadas.includes(id)) {
             showToast('⚠️ Esta sección no está disponible en el módulo de Seguros', 'warning');
             return;
         }
@@ -5433,6 +5513,7 @@ Fecha de firma: {{FECHA}}`;
                             <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
                             ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
                             <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                            <a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>
                             <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
                             ${isSuperAdmin ? '<a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>' : ''}
                          </div>`;
@@ -5801,6 +5882,7 @@ Fecha de firma: {{FECHA}}`;
         const user = getUserRoleAndId();
         const filtroAsesorContainer = document.getElementById('filtro-asesor-container');
         const btnMigrarAsesor = document.getElementById('btn-migrar-asesor');
+        const btnMigrarFechas = document.getElementById('btn-migrar-fechas');
         
         if (filtroAsesorContainer) {
             if (user.role === 'admin') {
@@ -5808,16 +5890,22 @@ Fecha de firma: {{FECHA}}`;
                 filtroAsesorContainer.classList.add('d-flex');
                 // Cargar lista de asesores si aún no está cargada
                 await cargarListaAsesores();
-                // Mostrar botón de migración
+                // Mostrar botones de migración
                 if (btnMigrarAsesor) {
                     btnMigrarAsesor.classList.remove('d-none');
+                }
+                if (btnMigrarFechas) {
+                    btnMigrarFechas.classList.remove('d-none');
                 }
             } else {
                 filtroAsesorContainer.classList.add('d-none');
                 filtroAsesorContainer.classList.remove('d-flex');
-                // Ocultar botón de migración
+                // Ocultar botones de migración
                 if (btnMigrarAsesor) {
                     btnMigrarAsesor.classList.add('d-none');
+                }
+                if (btnMigrarFechas) {
+                    btnMigrarFechas.classList.add('d-none');
                 }
             }
         }
@@ -5929,6 +6017,48 @@ Fecha de firma: {{FECHA}}`;
             }
         } catch (error) {
             console.error('[ejecutarMigracionAsesor] Error:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: error.message || 'Error al ejecutar migración',
+                icon: 'error'
+            });
+        }
+    }
+
+    // Función para ejecutar la migración de fechas
+    async function ejecutarMigracionFechas() {
+        const { value: confirmar } = await Swal.fire({
+            title: '¿Ejecutar migración de fechas?',
+            text: 'Esto corregirá las fechas de vencimiento y próximo pago de las pólizas para que se muestren correctamente en el calendario.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, ejecutar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0dcaf0'
+        });
+
+        if (!confirmar) return;
+
+        try {
+            const resultado = await fetchAPI('/api/polizas/migrar-fechas-agenda');
+            
+            if (resultado.success) {
+                await Swal.fire({
+                    title: '¡Migración completada!',
+                    text: resultado.message || `Se actualizaron ${resultado.polizasActualizadas} pólizas exitosamente.`,
+                    icon: 'success'
+                });
+                // Recargar pólizas para reflejar los cambios
+                await cargarPolizas();
+            } else {
+                await Swal.fire({
+                    title: 'Error',
+                    text: resultado.error || 'Error al ejecutar migración',
+                    icon: 'error'
+                });
+            }
+        } catch (error) {
+            console.error('[ejecutarMigracionFechas] Error:', error);
             await Swal.fire({
                 title: 'Error',
                 text: error.message || 'Error al ejecutar migración',
@@ -6760,18 +6890,30 @@ Fecha de firma: {{FECHA}}`;
 
         try {
             Swal.fire({
-                title: 'Probando conexión SMTP...',
+                title: 'Guardando configuración SMTP...',
                 allowOutsideClick: false,
                 didOpen: () => Swal.showLoading()
             });
 
-            // Aquí iría la llamada al backend para probar la conexión
-            // Por ahora simulamos éxito
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
 
-            Swal.fire('Éxito', 'Configuración SMTP guardada y probada correctamente', 'success');
+            const response = await fetchAPI('/api/configuracion/notificaciones-email', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    enabled: true,
+                    smtpHost: host,
+                    smtpPort: parseInt(port),
+                    smtpUser: user,
+                    smtpPass: password
+                }),
+                headers: { 'X-Empresa-Id': empresaId }
+            });
+
+            Swal.fire('Éxito', 'Configuración SMTP guardada correctamente', 'success');
         } catch (error) {
-            Swal.fire('Error', 'No se pudo conectar al servidor SMTP', 'error');
+            console.error('[guardarYProbarSMTP] Error:', error);
+            Swal.fire('Error', 'No se pudo guardar la configuración SMTP', 'error');
         }
     }
 
@@ -6790,12 +6932,20 @@ Fecha de firma: {{FECHA}}`;
                 didOpen: () => Swal.showLoading()
             });
 
-            // Aquí iría la llamada al backend para enviar el correo
-            // Por ahora simulamos éxito
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // FASE 4: Inyectar header X-Empresa-Id
+            const empresaId = localStorage.getItem('empresaActiva') || localStorage.getItem('selected_empresa_id') || 'all';
+
+            const response = await fetchAPI('/api/configuracion/test-smtp', {
+                method: 'POST',
+                body: JSON.stringify({
+                    destinatario: user
+                }),
+                headers: { 'X-Empresa-Id': empresaId }
+            });
 
             Swal.fire('Éxito', `Correo de prueba enviado a ${user}`, 'success');
         } catch (error) {
+            console.error('[enviarCorreoPrueba] Error:', error);
             Swal.fire('Error', 'No se pudo enviar el correo de prueba', 'error');
         }
     }
@@ -7638,7 +7788,7 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, ejecutarMigracionAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, ejecutarMigracionAsesor, ejecutarMigracionFechas, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         guardarYProbarSMTP, enviarCorreoPrueba,
         enviarNotificacionManual,
 // ... (rest of the code remains the same)
