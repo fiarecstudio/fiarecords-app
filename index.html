@@ -1248,6 +1248,37 @@
                     </div>
                 </div>
             </section>
+
+            <!-- SECCIÓN: DIRECTORIO DE CLIENTES (CRM - MÓDULO DE SEGUROS) -->
+            <section id="clientes-crm" class="section-view d-none">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                <div class="card">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <h2 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Directorio de Clientes</h2>
+                        <button class="btn btn-primary" onclick="app.abrirModalNuevoCliente()">
+                            <i class="bi bi-plus-circle"></i> Nuevo Cliente
+                        </button>
+                    </div>
+                    <div class="card-body pt-3">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Teléfono</th>
+                                        <th>Correo</th>
+                                        <th>Pólizas Activas</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaClientesBody">
+                                    <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
         
         <!-- FOOTER EN PANEL PRINCIPAL -->
@@ -1307,6 +1338,166 @@
                 <button type="button" class="btn btn-outline-success" onclick="app.compartirDatosBancariosWhatsApp()">💬 Whats</button>
             </div>
             <button type="button" class="btn btn-primary" onclick="app.guardarDatosBancarios()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PERFIL DE CLIENTE (CRM - MÓDULO DE SEGUROS) -->
+  <div class="modal fade" id="modalPerfilCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-person-lines-fill me-2"></i>Expediente del Cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-4">
+            <h6 class="fw-bold">Información de Contacto</h6>
+            <p><strong>Nombre:</strong> <span id="perfil-cliente-nombre"></span></p>
+            <p><strong>Teléfono:</strong> <span id="perfil-cliente-telefono"></span></p>
+            <p><strong>Correo:</strong> <span id="perfil-cliente-email"></span></p>
+            <p><strong>RFC:</strong> <span id="perfil-cliente-rfc"></span></p>
+            <p><strong>Dirección:</strong> <span id="perfil-cliente-direccion"></span></p>
+          </div>
+          <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold mb-0">Historial de Pólizas</h6>
+              <button class="btn btn-sm btn-primary" onclick="app.prepararNuevaPolizaDesdeCliente()">
+                <i class="bi bi-plus-circle"></i> Nueva Póliza
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover">
+                <thead>
+                  <tr>
+                    <th>Aseguradora</th>
+                    <th>Tipo</th>
+                    <th>Vencimiento</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaPolicasClienteBody">
+                  <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NUEVO CLIENTE (CRM - MÓDULO DE SEGUROS) -->
+  <div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Nuevo Cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formNuevoCliente" onsubmit="app.guardarNuevoCliente(event)">
+            <div class="mb-3">
+              <label for="nuevoClienteNombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="nuevoClienteNombre" required>
+            </div>
+            <div class="mb-3">
+              <label for="nuevoClienteRfc" class="form-label">RFC</label>
+              <input type="text" class="form-control" id="nuevoClienteRfc">
+            </div>
+            <div class="mb-3">
+              <label for="nuevoClienteTelefono" class="form-label">Teléfono</label>
+              <input type="tel" class="form-control" id="nuevoClienteTelefono">
+            </div>
+            <div class="mb-3">
+              <label for="nuevoClienteEmail" class="form-label">Correo Electrónico</label>
+              <input type="email" class="form-control" id="nuevoClienteEmail">
+            </div>
+            <div class="mb-3">
+              <label for="nuevoClienteDireccion" class="form-label">Dirección</label>
+              <textarea class="form-control" id="nuevoClienteDireccion" rows="2"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" form="formNuevoCliente" class="btn btn-primary">Guardar Cliente</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- MODAL: EDITAR CLIENTE (CRM - MÓDULO DE SEGUROS) -->
+  <div class="modal fade" id="modalEditarCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formEditarCliente" onsubmit="app.guardarEdicionCliente(event)">
+            <input type="hidden" id="editarClienteId">
+            <div class="mb-3">
+              <label for="editarClienteNombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="editarClienteNombre" required>
+            </div>
+            <div class="mb-3">
+              <label for="editarClienteRfc" class="form-label">RFC</label>
+              <input type="text" class="form-control" id="editarClienteRfc">
+            </div>
+            <div class="mb-3">
+              <label for="editarClienteTelefono" class="form-label">Teléfono</label>
+              <input type="tel" class="form-control" id="editarClienteTelefono">
+            </div>
+            <div class="mb-3">
+              <label for="editarClienteEmail" class="form-label">Correo Electrónico</label>
+              <input type="email" class="form-control" id="editarClienteEmail">
+            </div>
+            <div class="mb-3">
+              <label for="editarClienteDireccion" class="form-label">Dirección</label>
+              <textarea class="form-control" id="editarClienteDireccion" rows="2"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" form="formEditarCliente" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RENOVAR PÓLIZA (CRM - MÓDULO DE SEGUROS) -->
+  <div class="modal fade" id="modalRenovarPoliza" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Renovar Póliza</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formRenovarPoliza" onsubmit="app.procesarRenovacion(event)">
+            <input type="hidden" id="renovarPolizaId">
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              Sube el PDF de la nueva póliza. El sistema actualizará las fechas y guardará la póliza anterior en el historial.
+            </div>
+            <div class="mb-3">
+              <label for="pdfRenovacion" class="form-label">PDF de la Nueva Póliza <span class="text-danger">*</span></label>
+              <input type="file" id="pdfRenovacion" accept=".pdf" class="form-control" required>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" form="formRenovarPoliza" class="btn btn-primary">Subir y Renovar</button>
         </div>
       </div>
     </div>

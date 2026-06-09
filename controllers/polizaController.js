@@ -1,15 +1,33 @@
 const Poliza = require('../models/Poliza');
+const pdfParseModule = require('pdf-parse');
+const PDFParse = pdfParseModule.PDFParse || (pdfParseModule.default && pdfParseModule.default.PDFParse) || pdfParseModule.default || pdfParseModule;
+
+/**
+ * Normaliza el texto del PDF respetando saltos de línea vitales
+ */
+function normalizeText(text) {
+    return text
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/\t+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[\u200B-\u200F\uFEFF]/g, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso } = req.body;
-        
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId } = req.body;
+
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
-        
+
         // Asignar automáticamente el asesorId del usuario que crea la póliza
         const asesorId = req.user._id || req.user.id;
-        
+
         const nuevaPoliza = new Poliza({
             empresaId,
             asesorId,
@@ -28,9 +46,10 @@ const crearPoliza = async (req, res) => {
             montoAbono: montoAbono || null,
             primerPago: primerPago || null,
             diasAnticipacionAviso: diasAnticipacionAviso || 3,
-            saldoRestante: primaTotal // Inicializar saldoRestante con la prima total
+            saldoRestante: primaTotal, // Inicializar saldoRestante con la prima total
+            clienteId: clienteId || null // Guardar clienteId si viene del CRM
         });
-        
+
         const polizaGuardada = await nuevaPoliza.save();
         res.status(201).json(polizaGuardada);
     } catch (error) {
@@ -507,7 +526,7 @@ const obtenerEventosAgenda = async (req, res) => {
                 const fechaVencimiento = new Date(poliza.fechas.vencimiento);
                 eventos.push({
                     id: `vencimiento-${poliza._id}`,
-                    title: `Vence: ${poliza.cliente || 'N/A'} - ${poliza.aseguradora || 'N/A'}`,
+                    title: `VENCE: ${poliza.cliente || 'N/A'}`,
                     start: fechaVencimiento.toISOString().split('T')[0],
                     backgroundColor: '#dc3545',
                     borderColor: '#dc3545',
@@ -521,23 +540,74 @@ const obtenerEventosAgenda = async (req, res) => {
                 });
             }
 
-            // Evento de Próximo Pago
-            if (poliza.proximoPago) {
-                const proximoPago = new Date(poliza.proximoPago);
-                eventos.push({
-                    id: `pago-${poliza._id}`,
-                    title: `Cobro: ${poliza.cliente || 'N/A'} - $${poliza.primaTotal || 0}`,
-                    start: proximoPago.toISOString().split('T')[0],
-                    backgroundColor: '#ffc107',
-                    borderColor: '#ffc107',
-                    allDay: true,
-                    extendedProps: {
-                        tipo: 'pago',
-                        polizaId: poliza._id,
-                        cliente: poliza.cliente,
-                        monto: poliza.primaTotal
+            // Eventos de Pagos Recurrentes
+            if (poliza.proximoPago && poliza.tipoPago) {
+                const fechaVencimiento = poliza.fechas && poliza.fechas.vencimiento ? new Date(poliza.fechas.vencimiento) : null;
+                const fechaLimite = fechaVencimiento ? new Date(fechaVencimiento) : new Date();
+                
+                // Si no hay vencimiento, proyectar máximo 12 meses al futuro
+                if (!fechaVencimiento) {
+                    fechaLimite.setMonth(fechaLimite.getMonth() + 12);
+                }
+
+                let fechaIterada = new Date(poliza.proximoPago);
+                let index = 0;
+
+                // Determinar incremento según tipo de pago
+                let mesesIncremento = 12; // anual por defecto
+                if (poliza.tipoPago === 'mensual') {
+                    mesesIncremento = 1;
+                } else if (poliza.tipoPago === 'trimestral') {
+                    mesesIncremento = 3;
+                }
+
+                // Calcular monto fraccionado como fallback
+                let montoFraccionado = poliza.primaTotal || 0;
+                if (poliza.tipoPago === 'mensual') {
+                    montoFraccionado = montoFraccionado / 12;
+                } else if (poliza.tipoPago === 'trimestral') {
+                    montoFraccionado = montoFraccionado / 4;
+                }
+
+                // Bucle para generar pagos recurrentes
+                // Condición ESTRICTAMENTE MENOR (<) para no generar pago en fecha de vencimiento
+                while (fechaIterada < fechaLimite && index < 100) { // Límite de seguridad: 100 iteraciones
+                    // Determinar monto del pago según si es el primer pago o subsecuente
+                    let montoPago = montoFraccionado; // fallback por defecto
+                    
+                    if (index === 0) {
+                        // Primer pago: usar campo primerPago si existe y es mayor a 0
+                        if (poliza.primerPago && poliza.primerPago > 0) {
+                            montoPago = poliza.primerPago;
+                        }
+                    } else {
+                        // Pagos subsecuentes: usar campo montoAbono si existe y es mayor a 0
+                        if (poliza.montoAbono && poliza.montoAbono > 0) {
+                            montoPago = poliza.montoAbono;
+                        }
                     }
-                });
+
+                    eventos.push({
+                        id: `pago-${poliza._id}_${index}`,
+                        title: `COBRO: ${poliza.cliente || 'N/A'}`,
+                        start: fechaIterada.toISOString().split('T')[0],
+                        backgroundColor: '#ffc107',
+                        borderColor: '#ffc107',
+                        textColor: '#000',
+                        allDay: true,
+                        extendedProps: {
+                            tipo: 'pago',
+                            polizaId: poliza._id,
+                            cliente: poliza.cliente,
+                            montoPago: montoPago,
+                            tipoPago: poliza.tipoPago
+                        }
+                    });
+
+                    // Incrementar fecha según tipo de pago
+                    fechaIterada.setMonth(fechaIterada.getMonth() + mesesIncremento);
+                    index++;
+                }
             }
         });
 
@@ -708,6 +778,240 @@ const enviarRecordatorioCorreo = async (req, res) => {
     }
 };
 
+// ENDPOINT: Renovar póliza (crear nueva póliza y marcar antigua como renovada)
+const renovarPoliza = async (req, res) => {
+    try {
+        console.log('[RENOVAR] Iniciando proceso de renovación...');
+        console.log('[RENOVAR] Body recibido:', req.body);
+        console.log('[RENOVAR] Archivo recibido:', req.file);
+
+        const { id } = req.params;
+        const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
+        const userRole = req.user.role;
+
+        console.log('[RENOVAR] ID de póliza:', id);
+        console.log('[RENOVAR] Empresa ID:', empresaId);
+        console.log('[RENOVAR] Asesor ID:', asesorId);
+        console.log('[RENOVAR] Rol de usuario:', userRole);
+
+        // Validar que la empresa tenga el módulo de seguros activado
+        const Empresa = require('../models/Empresa');
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            console.log('[RENOVAR] Error: Empresa no encontrada');
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+
+        if (!empresa.moduloSeguros) {
+            console.log('[RENOVAR] Error: Módulo de seguros no activado');
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        console.log('[RENOVAR] Buscando póliza antigua...');
+        // Buscar póliza antigua
+        const polizaAntigua = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+
+        if (!polizaAntigua) {
+            console.log('[RENOVAR] Error: Póliza no encontrada');
+            return res.status(404).json({ error: 'Póliza no encontrada' });
+        }
+
+        console.log('[RENOVAR] Póliza antigua encontrada:', polizaAntigua.numeroPoliza);
+
+        // RBAC: Verificar que el asesor tenga acceso a la póliza (si no es admin)
+        if (userRole !== 'admin' && polizaAntigua.asesorId.toString() !== asesorId.toString()) {
+            console.log('[RENOVAR] Error: Sin permisos para renovar esta póliza');
+            return res.status(403).json({ error: 'No tienes permiso para renovar esta póliza' });
+        }
+
+        // PREPARACIÓN DE DATOS
+        let datosNuevaPoliza = {};
+
+        if (req.file) {
+            // ESCENARIO A: Procesamiento de PDF
+            console.log('[RENOVAR] Procesando PDF de renovación...');
+
+            let pdfData;
+            try {
+                const parser = new PDFParse({ data: req.file.buffer });
+                pdfData = await parser.getText();
+                await parser.destroy();
+                console.log('[RENOVAR] PDF parseado exitosamente');
+            } catch (pdfError) {
+                console.error('[RENOVAR] Error al procesar PDF:', pdfError);
+                return res.status(400).json({ error: 'No se pudo procesar el PDF', details: pdfError.message });
+            }
+
+            const textoCompleto = normalizeText(pdfData.text);
+            const lineas = textoCompleto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            // Datos extraídos del PDF
+            const datosExtraidos = {
+                numeroPoliza: '',
+                cliente: '',
+                aseguradora: 'CHUBB',
+                inciso: '',
+                tipoSeguro: 'Vehicular',
+                paquete: '',
+                fechaInicio: '',
+                fechaVencimiento: '',
+                primaTotal: 0
+            };
+
+            // Extraer fechas
+            const regexFechas = /\b(\d{1,2}\/[A-Za-z]{3}\/\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\b/ig;
+            const todasLasFechas = [...textoCompleto.matchAll(regexFechas)].map(m => m[1]);
+            const fechasVigencia = todasLasFechas.filter(f => parseInt(f.split('/')[2]) >= 2020);
+
+            if (fechasVigencia.length >= 2) {
+                datosExtraidos.fechaInicio = fechasVigencia[0];
+                datosExtraidos.fechaVencimiento = fechasVigencia[1];
+            }
+
+            // Extraer número de póliza
+            const polizaMatch = textoCompleto.match(/\b(AN[\s\-]*\d{8})\b/i);
+            if (polizaMatch) datosExtraidos.numeroPoliza = polizaMatch[1].replace(/\s+/g, '');
+
+            // Extraer datos de las líneas
+            for (let i = 0; i < lineas.length; i++) {
+                const linea = lineas[i];
+                const lineaUpper = linea.toUpperCase();
+
+                if (datosExtraidos.numeroPoliza && lineaUpper.replace(/\s+/g, '') === datosExtraidos.numeroPoliza.replace(/\s+/g, '')) {
+                    if (lineas[i + 1] && lineas[i + 1].match(/^\d{1,2}$/)) datosExtraidos.inciso = lineas[i + 1];
+                }
+
+                const paqueteMatch = lineaUpper.match(/\b(AMPLIA|LIMITADA|INTEGRAL|BASICA|PREMIER|ESENCIAL)\b/);
+                if (paqueteMatch && !datosExtraidos.paquete) {
+                    datosExtraidos.paquete = paqueteMatch[1];
+                    if (lineas[i + 1]) datosExtraidos.cliente = lineas[i + 1];
+                }
+
+                if (lineaUpper === 'CARÁTULA' || lineaUpper === 'CARATULA') {
+                    if (i > 0 && lineas[i - 1].match(/[0-9,]+\.[0-9]{2}/)) {
+                        const montoRaw = lineas[i - 1].match(/[0-9,]+\.[0-9]{2}/)[0];
+                        datosExtraidos.primaTotal = parseFloat(montoRaw.replace(/,/g, ''));
+                    }
+                }
+            }
+
+            if (!datosExtraidos.inciso) datosExtraidos.inciso = "1";
+            if (!datosExtraidos.cliente) {
+                const clienteFallback = textoCompleto.match(/Asegurado:\s*([A-Z\s]{10,})/i);
+                if (clienteFallback) datosExtraidos.cliente = clienteFallback[1].trim();
+            }
+
+            console.log('[RENOVAR] Datos extraídos del PDF:', JSON.stringify(datosExtraidos, null, 2));
+
+            // Validar que se hayan extraído las fechas
+            if (!datosExtraidos.fechaInicio || !datosExtraidos.fechaVencimiento) {
+                console.log('[RENOVAR] Error: No se pudieron extraer las fechas del PDF');
+                return res.status(400).json({ error: 'No se pudieron extraer las fechas del PDF. Intenta la carga manual.' });
+            }
+
+            // Convertir fechas de DD/MM/YYYY a objetos Date
+            const convertirFecha = (fechaStr) => {
+                if (!fechaStr) return null;
+                const meses = { ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06', jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12' };
+                const partes = fechaStr.toLowerCase().split('/');
+                if (partes.length === 3) {
+                    const dia = partes[0].padStart(2, '0');
+                    const mes = meses[partes[1].substring(0, 3)] || '01';
+                    return new Date(`${partes[2]}-${mes}-${dia}`);
+                }
+                return null;
+            };
+
+            // Mapear datos extraídos con fallback de polizaAntigua
+            datosNuevaPoliza = {
+                numeroPoliza: datosExtraidos.numeroPoliza || polizaAntigua.numeroPoliza,
+                cliente: polizaAntigua.cliente, // Mantener el cliente de la póliza antigua
+                clienteEmail: polizaAntigua.clienteEmail,
+                clienteTelefono: polizaAntigua.clienteTelefono,
+                tipoPago: polizaAntigua.tipoPago,
+                tipoSeguro: datosExtraidos.tipoSeguro || polizaAntigua.tipoSeguro,
+                aseguradora: datosExtraidos.aseguradora || polizaAntigua.aseguradora,
+                inciso: datosExtraidos.inciso || polizaAntigua.inciso,
+                paquete: datosExtraidos.paquete || polizaAntigua.paquete,
+                primaTotal: datosExtraidos.primaTotal || polizaAntigua.primaTotal,
+                primerPago: polizaAntigua.primerPago,
+                montoAbono: polizaAntigua.montoAbono,
+                fechas: {
+                    inicio: convertirFecha(datosExtraidos.fechaInicio),
+                    vencimiento: convertirFecha(datosExtraidos.fechaVencimiento)
+                }
+            };
+        } else {
+            // ESCENARIO B: Carga manual desde req.body
+            const {
+                numeroPoliza,
+                fechas,
+                primaTotal,
+                tipoPago,
+                primerPago,
+                montoAbono,
+                tipoSeguro,
+                aseguradora,
+                inciso,
+                paquete
+            } = req.body;
+
+            datosNuevaPoliza = {
+                numeroPoliza: numeroPoliza || polizaAntigua.numeroPoliza,
+                fechas: fechas || polizaAntigua.fechas,
+                primaTotal: primaTotal || polizaAntigua.primaTotal,
+                tipoPago: tipoPago || polizaAntigua.tipoPago,
+                primerPago: primerPago || polizaAntigua.primerPago,
+                montoAbono: montoAbono || polizaAntigua.montoAbono,
+                tipoSeguro: tipoSeguro || polizaAntigua.tipoSeguro,
+                aseguradora: aseguradora || polizaAntigua.aseguradora,
+                inciso: inciso || polizaAntigua.inciso,
+                paquete: paquete || polizaAntigua.paquete,
+                cliente: polizaAntigua.cliente,
+                clienteEmail: polizaAntigua.clienteEmail,
+                clienteTelefono: polizaAntigua.clienteTelefono
+            };
+        }
+
+        // HISTORIAL: Crear nueva póliza con los mismos datos del cliente
+        const nuevaPoliza = new Poliza({
+            empresaId,
+            asesorId,
+            clienteId: polizaAntigua.clienteId, // Mantener el mismo clienteId si existe
+            ...datosNuevaPoliza,
+            estado: 'Activa',
+            proximoPago: datosNuevaPoliza.fechas?.inicio || new Date()
+        });
+
+        await nuevaPoliza.save();
+
+        // ESTADO LEGACY: Actualizar póliza antigua a 'Renovada'
+        polizaAntigua.estado = 'Renovada';
+        await polizaAntigua.save();
+
+        res.status(201).json({
+            message: 'Póliza renovada exitosamente',
+            polizaAntigua: {
+                id: polizaAntigua._id,
+                estado: polizaAntigua.estado
+            },
+            nuevaPoliza
+        });
+    } catch (error) {
+        console.error('[renovarPoliza] Error:', error);
+
+        // Manejo de error de llave duplicada
+        if (error.code === 11000) {
+            return res.status(400).json({
+                error: 'Ya existe una póliza activa con este número en el sistema. Si la aseguradora mantuvo el mismo número para la renovación, por favor agrégale un sufijo (ej. -01) al número de póliza.'
+            });
+        }
+
+        res.status(500).json({ error: 'Error al renovar póliza', details: error.message });
+    }
+};
+
 module.exports = {
     crearPoliza,
     obtenerPolizas,
@@ -725,5 +1029,6 @@ module.exports = {
     renovarPago,
     eliminarPago,
     actualizarProximoPago,
-    enviarRecordatorioCorreo
+    enviarRecordatorioCorreo,
+    renovarPoliza
 };

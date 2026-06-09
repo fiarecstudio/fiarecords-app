@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Proyecto = require('../models/Proyecto');
+const Cliente = require('../models/Cliente');
+const Poliza = require('../models/Poliza');
+const Empresa = require('../models/Empresa');
 const auth = require('../middleware/auth');
 const { applyTenantFilter, buildQueryFilter } = require('../middleware/tenantFilter');
 
@@ -10,7 +13,12 @@ router.use(applyTenantFilter);
 
 router.get('/stats', async (req, res) => {
     try {
-        const isAdmin = req.user.role === 'admin'; 
+        const isAdmin = req.user.role === 'admin';
+        const empresaId = req.user.empresaId;
+
+        // Verificar si la empresa tiene el módulo de seguros activado
+        const empresa = await Empresa.findById(empresaId);
+        const esModuloSeguros = empresa && empresa.moduloSeguros;
 
         // 1. DATOS OPERATIVOS (Para todos los usuarios)
         // FASE 4: Usar buildQueryFilter para respetar filtro de empresa (Super Admin con header o usuario normal)
@@ -41,8 +49,38 @@ router.get('/stats', async (req, res) => {
 
         // SI NO ES ADMIN: Retornamos solo lo operativo y una bandera para ocultar lo financiero
         if (!isAdmin) {
+            // Si es módulo de seguros, agregar métricas de seguros
+            if (esModuloSeguros) {
+                const totalClientes = await Cliente.countDocuments({ empresaId, deletedAt: null });
+                const polizasActivas = await Poliza.countDocuments({ empresaId, estado: 'Activa', deletedAt: null });
+                const polizasActivasData = await Poliza.find({ empresaId, estado: 'Activa', deletedAt: null });
+                const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
+
+                const hoy = new Date();
+                const en30Dias = new Date();
+                en30Dias.setDate(hoy.getDate() + 30);
+                const proximosVencimientos = await Poliza.countDocuments({
+                    empresaId,
+                    estado: 'Activa',
+                    deletedAt: null,
+                    'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
+                });
+
+                return res.json({
+                    showFinancials: false,
+                    esModuloSeguros: true,
+                    proyectosActivos,
+                    proyectosPorCobrar,
+                    totalClientes,
+                    polizasActivas,
+                    primasTotales,
+                    proximosVencimientos
+                });
+            }
+
             return res.json({
-                showFinancials: false, // Bandera para el Frontend
+                showFinancials: false,
+                esModuloSeguros: false,
                 proyectosActivos,
                 proyectosPorCobrar
             });
@@ -97,13 +135,40 @@ router.get('/stats', async (req, res) => {
             }
         });
 
-        res.json({
+        // Si es módulo de seguros, agregar métricas de seguros también para admin
+        let response = {
             showFinancials: true,
+            esModuloSeguros: false,
             ingresosMes,
             proyectosActivos,
             proyectosPorCobrar,
             monthlyIncome
-        });
+        };
+
+        if (esModuloSeguros) {
+            const totalClientes = await Cliente.countDocuments({ empresaId, deletedAt: null });
+            const polizasActivas = await Poliza.countDocuments({ empresaId, estado: 'Activa', deletedAt: null });
+            const polizasActivasData = await Poliza.find({ empresaId, estado: 'Activa', deletedAt: null });
+            const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
+
+            const hoy = new Date();
+            const en30Dias = new Date();
+            en30Dias.setDate(hoy.getDate() + 30);
+            const proximosVencimientos = await Poliza.countDocuments({
+                empresaId,
+                estado: 'Activa',
+                deletedAt: null,
+                'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
+            });
+
+            response.esModuloSeguros = true;
+            response.totalClientes = totalClientes;
+            response.polizasActivas = polizasActivas;
+            response.primasTotales = primasTotales;
+            response.proximosVencimientos = proximosVencimientos;
+        }
+
+        res.json(response);
 
     } catch (error) {
         console.error("Error Dashboard:", error);

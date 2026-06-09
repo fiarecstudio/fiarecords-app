@@ -13,12 +13,19 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'El ID de asesor es obligatorio'],
         index: true
     },
+    clienteId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Cliente',
+        index: true
+    },
     numeroPoliza: {
         type: String,
         required: [true, 'El número de póliza es obligatorio'],
         trim: true,
         index: true
     },
+    // LEGACY/TRANSICIONAL: Mantener este campo temporalmente para compatibilidad con pólizas existentes
+    // En el futuro, las pólizas deberían usar clienteId para referenciar al modelo Cliente
     cliente: {
         type: String,
         required: [true, 'El cliente es obligatorio'],

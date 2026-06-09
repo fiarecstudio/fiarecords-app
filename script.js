@@ -1056,18 +1056,16 @@ let proyectoIdEnEdicion = null;
     // ==================================================================
     // 6. DASHBOARD SEGURO
     // ==================================================================
-    async function cargarDashboard() { 
+    async function cargarDashboard() {
         try {
-            const tipoDashboard = configCache?.tipoDashboard || 'estandar';
-            
-            // FASE 6: Si es dashboard de seguros, cargar métricas de seguros
-            // BLOQUEO RADICAL: comparar sin espacios, en minúsculas
-            const dashboardTrimmed = (tipoDashboard || '').trim().toLowerCase();
-            if (dashboardTrimmed === 'seguros') {
+            const moduloSeguros = configCache?.moduloSeguros || false;
+
+            // Si la empresa tiene el módulo de seguros activado, cargar dashboard de seguros
+            if (moduloSeguros) {
                 await cargarDashboardSeguros();
                 return;
             }
-            
+
             // Dashboard estándar original
             const stats = await fetchAPI('/api/dashboard/stats'); 
             const kpiIngresos = document.getElementById('kpi-ingresos-mes');
@@ -1102,22 +1100,99 @@ let proyectoIdEnEdicion = null;
     // FASE 6: DASHBOARD DE SEGUROS
     async function cargarDashboardSeguros() {
         try {
-            // Mostrar tarjetas de seguros y ocultar tarjetas estándar
-            const dashboardSeguros = document.getElementById('dashboard-seuros');
-            const dashboardEstandar = document.getElementById('dashboard-estandar');
-            
-            if (dashboardSeguros) dashboardSeguros.classList.remove('d-none');
-            if (dashboardEstandar) dashboardEstandar.classList.add('d-none');
-            
-            // Cargar los datos desde el endpoint de métricas
-            const res = await fetchAPI('/api/polizas/dashboard/metricas');
-            if (res && res.metricas) {
-                document.getElementById('kpi-renovaciones-30-dias').innerText = res.metricas.porVencer;
-                document.getElementById('kpi-pagos-pendientes').innerText = res.metricas.pagosPendientes;
-                document.getElementById('kpi-polizas-activas').innerText = res.metricas.activas;
-                } else {
-                console.warn('[cargarDashboardSeguros] No se recibieron métricas válidas');
+            // Cargar los datos desde el endpoint de métricas del dashboard
+            const stats = await fetchAPI('/api/dashboard/stats');
+
+            // Ocultar tarjetas estándar
+            const cardIngresos = document.getElementById('kpi-ingresos-mes')?.closest('.card');
+            const cardProyectosActivos = document.getElementById('kpi-proyectos-activos')?.closest('.card');
+            const cardProyectosPorCobrar = document.getElementById('kpi-proyectos-por-cobrar')?.closest('.card');
+            const chartContainer = document.getElementById('incomeChart')?.parentElement?.parentElement;
+
+            if (cardIngresos) cardIngresos.style.display = 'none';
+            if (cardProyectosActivos) cardProyectosActivos.style.display = 'none';
+            if (cardProyectosPorCobrar) cardProyectosPorCobrar.style.display = 'none';
+            if (chartContainer) chartContainer.style.display = 'none';
+
+            // Ocultar secciones irrelevantes (Proyectos Recientes y Pagos Pendientes)
+            const dashboardCommandCenter = document.querySelector('.dashboard-command-center');
+            if (dashboardCommandCenter) {
+                dashboardCommandCenter.classList.add('d-none');
             }
+
+            // Mostrar tarjetas de seguros
+            const dashboardContainer = document.getElementById('dashboard');
+            if (!dashboardContainer) return;
+
+            // Crear o actualizar tarjetas de seguros
+            const tarjetasSegurosHTML = `
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white" style="cursor: pointer; transition: transform 0.2s;" onclick="app.mostrarSeccion('clientes-crm')" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Total de Clientes</h6>
+                                        <h3 class="mb-0">${stats.totalClientes || 0}</h3>
+                                    </div>
+                                    <i class="bi bi-people fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white" style="cursor: pointer; transition: transform 0.2s;" onclick="app.mostrarSeccion('polizas')" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Pólizas Activas</h6>
+                                        <h3 class="mb-0">${stats.polizasActivas || 0}</h3>
+                                    </div>
+                                    <i class="bi bi-shield-check fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white" style="cursor: pointer; transition: transform 0.2s;" onclick="app.mostrarSeccion('polizas')" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Primas Colocadas</h6>
+                                        <h3 class="mb-0">$${safeMoney(stats.primasTotales || 0)}</h3>
+                                    </div>
+                                    <i class="bi bi-currency-dollar fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white" style="cursor: pointer; transition: transform 0.2s;" onclick="app.mostrarSeccion('polizas')" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Vencimientos (30 días)</h6>
+                                        <h3 class="mb-0">${stats.proximosVencimientos || 0}</h3>
+                                    </div>
+                                    <i class="bi bi-exclamation-triangle fs-1 opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Insertar las tarjetas de seguros al inicio del dashboard
+            const existingTarjetas = document.getElementById('tarjetas-seguros');
+            if (existingTarjetas) {
+                existingTarjetas.innerHTML = tarjetasSegurosHTML;
+            } else {
+                const tarjetasDiv = document.createElement('div');
+                tarjetasDiv.id = 'tarjetas-seguros';
+                tarjetasDiv.innerHTML = tarjetasSegurosHTML;
+                dashboardContainer.insertBefore(tarjetasDiv, dashboardContainer.firstChild);
+            }
+
         } catch (error) {
             console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
         }
@@ -1728,13 +1803,13 @@ let proyectoIdEnEdicion = null;
                     if (props.tipo === 'vencimiento') {
                         Swal.fire({
                             title: 'Vencimiento de Póliza',
-                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Aseguradora:</strong> ${escapeHTML(props.aseguradora || 'N/A')}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p>`,
+                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Aseguradora:</strong> ${escapeHTML(props.aseguradora || 'N/A')}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p><p><strong>Recordatorio:</strong> Esta póliza está por vencer. No se ha definido precio de renovación aún.</p>`,
                             icon: 'warning'
                         });
                     } else if (props.tipo === 'pago') {
                         Swal.fire({
                             title: 'Próximo Pago',
-                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Monto:</strong> $${safeMoney(props.monto || 0)}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p>`,
+                            html: `<p><strong>Cliente:</strong> ${escapeHTML(props.cliente || 'N/A')}</p><p><strong>Pago a cobrar:</strong> $${safeMoney(props.montoPago || 0)}</p><p><strong>Fecha:</strong> ${info.event.start.toLocaleDateString('es-ES')}</p>`,
                             icon: 'info'
                         });
                     }
@@ -2222,7 +2297,7 @@ let proyectoIdEnEdicion = null;
         const tipoDashboard = configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        const seccionesSeguros = ['polizas', 'config-correos'];
+        const seccionesSeguros = ['polizas', 'config-correos', 'clientes-crm'];
         // NOTA: 'dashboard' y 'agenda' están permitidos para AMBOS tipos
         const seccionesEstandarBloqueadas = ['flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
         
@@ -2292,6 +2367,7 @@ let proyectoIdEnEdicion = null;
                 'configuracion': cargarConfiguracion,
                 'mis-deudas': cargarDeudas,
                 'polizas': cargarPolizas,
+                'clientes-crm': cargarClientesCrm,
                 'vista-artista': () => { } 
             }; 
             if(loadDataActions[id]) await loadDataActions[id](); 
@@ -5515,6 +5591,7 @@ Fecha de firma: {{FECHA}}`;
                             <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
                             <a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>
                             <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
+                            <a class="nav-link-sidebar" data-seccion="clientes-crm"><i class="bi person-lines-fill"></i> Directorio de Clientes</a>
                             ${isSuperAdmin ? '<a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>' : ''}
                          </div>`;
                 
@@ -5629,11 +5706,20 @@ Fecha de firma: {{FECHA}}`;
                 const formData = new FormData();
                 formData.append('archivo', file);
 
+                console.log('[Frontend PDF] Enviando PDF al backend:', file.name);
+
                 const responseBody = await fetchAPI('/api/polizas/extraer-datos', {
                     method: 'POST',
                     body: formData,
                     isFormData: true
                 });
+
+                console.log('[Frontend PDF] Respuesta del backend:', responseBody);
+
+                if (!responseBody || !responseBody.success) {
+                    Swal.showValidationMessage('No se pudo procesar el PDF: ' + (responseBody?.message || 'Error desconocido'));
+                    return;
+                }
 
                 return responseBody.datos || responseBody;
             },
@@ -5649,12 +5735,17 @@ Fecha de firma: {{FECHA}}`;
     function mapearDatosAFormulario(datos) {
         const mapeo = {
             'poliza-numero': datos.numeroPoliza || '',
-            'poliza-cliente': datos.cliente || '',
             'poliza-aseguradora': datos.aseguradora || '',
             'poliza-inciso': datos.inciso || '1',
             'poliza-paquete': datos.paquete || datos.tipoSeguro || '',
             'poliza-prima': datos.primaTotal || ''
         };
+
+        // NO sobrescribir el campo de cliente si ya tiene un valor (viene del CRM)
+        const inputCliente = document.getElementById('poliza-cliente');
+        if (inputCliente && !inputCliente.readOnly && datos.cliente) {
+            mapeo['poliza-cliente'] = datos.cliente;
+        }
 
         // Mapear tipo de seguro al select
         if (datos.tipoSeguro) {
@@ -5691,17 +5782,20 @@ Fecha de firma: {{FECHA}}`;
         }
 
     async function mostrarFormularioPoliza(datosPrellenados = {}) {
+        const clienteId = datosPrellenados.clienteId || null;
+
         const { value: formValues } = await Swal.fire({
             title: 'Registrar Nueva Póliza',
             html: `
                 <div class="text-start">
+                    <input type="hidden" id="poliza-cliente-id" value="${clienteId || ''}">
                     <div class="mb-3">
                         <label class="form-label">Número de Póliza *</label>
                         <input id="poliza-numero" class="swal2-input" value="${datosPrellenados.numeroPoliza || ''}" placeholder="Ej: POL-2024-001">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Cliente *</label>
-                        <input id="poliza-cliente" class="swal2-input" value="${datosPrellenados.cliente || ''}" placeholder="Nombre del cliente">
+                        <input id="poliza-cliente" class="swal2-input" value="${datosPrellenados.cliente || ''}" placeholder="Nombre del cliente" ${clienteId ? 'readonly' : ''}>
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
@@ -5801,6 +5895,7 @@ Fecha de firma: {{FECHA}}`;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
                 const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
+                const clienteIdValue = document.getElementById('poliza-cliente-id').value || null;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                     Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
@@ -5824,26 +5919,41 @@ Fecha de firma: {{FECHA}}`;
                     primaTotal: parseFloat(primaTotal),
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                     primerPago: primerPago ? parseFloat(primerPago) : null,
-                    diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
+                    diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3,
+                    clienteId: clienteIdValue
                 };
             }
         });
 
         if (!formValues) {
+            // Limpiar variable de renovación al cancelar
+            window.polizaARenovar = null;
             return;
         }
 
         try {
-            const responseBody = await fetchAPI('/api/polizas', {
-                method: 'POST',
+            let url = '/api/polizas';
+            let method = 'POST';
+
+            // Verificar si es una renovación
+            if (window.polizaARenovar) {
+                url = `/api/polizas/${window.polizaARenovar}/renovar`;
+                console.log('[mostrarFormularioPoliza] Modo renovación, enviando a:', url);
+            }
+
+            const responseBody = await fetchAPI(url, {
+                method: method,
                 body: JSON.stringify(formValues)
             });
 
-            await Swal.fire('Éxito', 'Póliza registrada correctamente', 'success');
+            await Swal.fire('Éxito', window.polizaARenovar ? 'Póliza renovada correctamente' : 'Póliza registrada correctamente', 'success');
             cargarPolizas();
         } catch (error) {
             console.error('[mostrarFormularioPoliza] Error al guardar póliza:', error);
             Swal.fire('Error', error.message || 'No se pudo guardar la póliza', 'error');
+        } finally {
+            // Limpiar variable de renovación
+            window.polizaARenovar = null;
         }
     }
 
@@ -6951,6 +7061,434 @@ Fecha de firma: {{FECHA}}`;
     }
 
     // ==================================================================
+    // MODULO DE CRM - DIRECTORIO DE CLIENTES
+    // ==================================================================
+    async function cargarClientesCrm() {
+        const tabla = document.getElementById('tablaClientesBody');
+        if (!tabla) return;
+        tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+
+        try {
+            const data = await fetchAPI('/api/clientes');
+            
+            if (!data.clientes || data.clientes.length === 0) {
+                tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay clientes registrados</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.clientes.forEach(cliente => {
+                const polizasActivas = cliente.polizas ? cliente.polizas.filter(p => p.estado === 'Activa').length : 0;
+                html += `
+                    <tr>
+                        <td>${escapeHTML(cliente.nombre)}</td>
+                        <td>${escapeHTML(cliente.telefono || '-')}</td>
+                        <td>${escapeHTML(cliente.email || '-')}</td>
+                        <td><span class="badge bg-primary">${polizasActivas}</span></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="app.abrirPerfilCliente('${cliente._id}')" title="Ver Perfil">
+                                    <i class="bi bi-person"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="app.abrirModalEditarCliente('${cliente._id}')" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="app.eliminarCliente('${cliente._id}')" title="Eliminar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tabla.innerHTML = html;
+        } catch (error) {
+            console.error('[cargarClientesCrm] Error:', error);
+            tabla.innerHTML = '<tr><td colspan="5" class="text-danger">Error al cargar clientes</td></tr>';
+        }
+    }
+
+    async function abrirPerfilCliente(clienteId) {
+        try {
+            const data = await fetchAPI('/api/clientes');
+            const cliente = data.clientes.find(c => c._id === clienteId);
+
+            if (!cliente) {
+                Swal.fire('Error', 'Cliente no encontrado', 'error');
+                return;
+            }
+
+            // Guardar clienteId en el modal para uso posterior
+            document.getElementById('modalPerfilCliente').dataset.clienteId = clienteId;
+            document.getElementById('modalPerfilCliente').dataset.clienteNombre = cliente.nombre || '';
+
+            // Llenar datos del cliente
+            document.getElementById('perfil-cliente-nombre').textContent = cliente.nombre || '-';
+            document.getElementById('perfil-cliente-telefono').textContent = cliente.telefono || '-';
+            document.getElementById('perfil-cliente-email').textContent = cliente.email || '-';
+            document.getElementById('perfil-cliente-rfc').textContent = cliente.rfc || '-';
+            document.getElementById('perfil-cliente-direccion').textContent = cliente.direccion || '-';
+
+            // Llenar tabla de pólizas
+            const tablaPolizas = document.getElementById('tablaPolicasClienteBody');
+
+            if (!cliente.polizas || cliente.polizas.length === 0) {
+                tablaPolizas.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+            } else {
+                let html = '';
+                cliente.polizas.forEach(poliza => {
+                    const fechaVencimiento = poliza.fechas && poliza.fechas.vencimiento
+                        ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-ES')
+                        : '-';
+
+                    const estadoClass = poliza.estado === 'Activa' ? 'bg-success' :
+                                       poliza.estado === 'Renovada' ? 'bg-secondary' :
+                                       poliza.estado === 'Vencida' ? 'bg-danger' : 'bg-warning';
+
+                    const btnRenovar = poliza.estado === 'Activa'
+                        ? `<button class="btn btn-sm btn-outline-primary" onclick="app.renovarPoliza('${poliza._id}')">
+                             <i class="bi bi-arrow-repeat"></i> Renovar
+                           </button>`
+                        : '';
+
+                    const btnVerDetalles = `<button class="btn btn-sm btn-info me-1" onclick="app.verPolizaDesdeCRM(${JSON.stringify(poliza).replace(/"/g, '&quot;')})" title="Ver Detalles"><i class="bi bi-eye"></i></button>`;
+
+                    html += `
+                        <tr>
+                            <td>${escapeHTML(poliza.aseguradora || '-')}</td>
+                            <td>${escapeHTML(poliza.tipoSeguro || '-')}</td>
+                            <td>${fechaVencimiento}</td>
+                            <td><span class="badge ${estadoClass}">${poliza.estado}</span></td>
+                            <td>${btnVerDetalles}${btnRenovar}</td>
+                        </tr>
+                    `;
+                });
+                tablaPolizas.innerHTML = html;
+            }
+
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalPerfilCliente'));
+            modal.show();
+        } catch (error) {
+            console.error('[abrirPerfilCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo cargar el perfil del cliente', 'error');
+        }
+    }
+
+    async function renovarPoliza(polizaId) {
+        // Abrir modal de renovación con PDF
+        abrirModalRenovarPoliza(polizaId);
+    }
+
+    function abrirModalRenovarPoliza(polizaId) {
+        // Cerrar el modal del Expediente del Cliente si está abierto
+        const modalPerfilCliente = bootstrap.Modal.getInstance(document.getElementById('modalPerfilCliente'));
+        if (modalPerfilCliente) {
+            modalPerfilCliente.hide();
+        }
+
+        // Guardar el ID de la póliza a renovar en variable global
+        window.polizaARenovar = polizaId;
+
+        // Abrir el modal estándar de "Nueva Póliza"
+        abrirModalNuevaPoliza();
+    }
+
+    function verPolizaDesdeCRM(poliza) {
+        // Cerrar el modal del Expediente del Cliente para evitar superposición
+        const modalPerfilCliente = bootstrap.Modal.getInstance(document.getElementById('modalPerfilCliente'));
+        if (modalPerfilCliente) {
+            modalPerfilCliente.hide();
+        }
+
+        // Llamar a la función existente que muestra los detalles de la póliza
+        abrirModalPagos(poliza);
+    }
+
+    async function procesarRenovacion(event) {
+        event.preventDefault();
+
+        try {
+            const polizaId = document.getElementById('renovarPolizaId').value;
+            const pdfFile = document.getElementById('pdfRenovacion').files[0];
+
+            if (!pdfFile) {
+                Swal.fire('Error', 'Debes seleccionar un archivo PDF', 'warning');
+                return;
+            }
+
+            // Crear FormData para enviar el archivo
+            const formData = new FormData();
+            formData.append('pdf', pdfFile);
+
+            console.log('[procesarRenovacion] Enviando renovación para póliza:', polizaId);
+            console.log('[procesarRenovacion] Archivo:', pdfFile.name);
+
+            // Mostrar loading
+            Swal.fire({
+                title: 'Procesando renovación...',
+                text: 'Por favor espera',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            await fetchAPI(`/api/polizas/${polizaId}/renovar`, {
+                method: 'POST',
+                body: formData,
+                isFormData: true
+            });
+
+            Swal.fire('Éxito', 'Póliza renovada correctamente', 'success');
+
+            // Cerrar modal y recargar datos
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalRenovarPoliza'));
+            modal.hide();
+            cargarClientesCrm();
+        } catch (error) {
+            console.error('[procesarRenovacion] Error:', error);
+            console.error('[procesarRenovacion] Error message:', error.message);
+            console.error('[procesarRenovacion] Error details:', JSON.stringify(error, null, 2));
+            const errorMessage = error.message || error.error || 'No se pudo renovar la póliza';
+            Swal.fire('Error', errorMessage, 'error');
+        }
+    }
+
+    function abrirModalNuevoCliente() {
+        // Limpiar formulario
+        document.getElementById('formNuevoCliente').reset();
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalNuevoCliente'));
+        modal.show();
+    }
+
+    async function guardarNuevoCliente(event) {
+        event.preventDefault();
+
+        try {
+            const nombre = document.getElementById('nuevoClienteNombre').value;
+            const rfc = document.getElementById('nuevoClienteRfc').value;
+            const telefono = document.getElementById('nuevoClienteTelefono').value;
+            const email = document.getElementById('nuevoClienteEmail').value;
+            const direccion = document.getElementById('nuevoClienteDireccion').value;
+
+            if (!nombre) {
+                Swal.fire('Error', 'El nombre del cliente es obligatorio', 'warning');
+                return;
+            }
+
+            await fetchAPI('/api/clientes', {
+                method: 'POST',
+                body: JSON.stringify({
+                    nombre,
+                    rfc,
+                    telefono,
+                    email,
+                    direccion
+                })
+            });
+
+            Swal.fire('Éxito', 'Cliente creado correctamente', 'success');
+
+            // Cerrar modal y recargar tabla
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+            modal.hide();
+            cargarClientesCrm();
+        } catch (error) {
+            console.error('[guardarNuevoCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo crear el cliente', 'error');
+        }
+    }
+
+    async function abrirModalEditarCliente(clienteId) {
+        try {
+            const data = await fetchAPI('/api/clientes');
+            const cliente = data.clientes.find(c => c._id === clienteId);
+
+            if (!cliente) {
+                Swal.fire('Error', 'Cliente no encontrado', 'error');
+                return;
+            }
+
+            // Llenar formulario con datos del cliente
+            document.getElementById('editarClienteId').value = cliente._id;
+            document.getElementById('editarClienteNombre').value = cliente.nombre || '';
+            document.getElementById('editarClienteRfc').value = cliente.rfc || '';
+            document.getElementById('editarClienteTelefono').value = cliente.telefono || '';
+            document.getElementById('editarClienteEmail').value = cliente.email || '';
+            document.getElementById('editarClienteDireccion').value = cliente.direccion || '';
+
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEditarCliente'));
+            modal.show();
+        } catch (error) {
+            console.error('[abrirModalEditarCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo cargar el cliente', 'error');
+        }
+    }
+
+    async function guardarEdicionCliente(event) {
+        event.preventDefault();
+
+        try {
+            const clienteId = document.getElementById('editarClienteId').value;
+            const nombre = document.getElementById('editarClienteNombre').value;
+            const rfc = document.getElementById('editarClienteRfc').value;
+            const telefono = document.getElementById('editarClienteTelefono').value;
+            const email = document.getElementById('editarClienteEmail').value;
+            const direccion = document.getElementById('editarClienteDireccion').value;
+
+            if (!nombre) {
+                Swal.fire('Error', 'El nombre del cliente es obligatorio', 'warning');
+                return;
+            }
+
+            await fetchAPI(`/api/clientes/${clienteId}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    nombre,
+                    rfc,
+                    telefono,
+                    email,
+                    direccion
+                })
+            });
+
+            Swal.fire('Éxito', 'Cliente actualizado correctamente', 'success');
+
+            // Cerrar modal y recargar tabla
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarCliente'));
+            modal.hide();
+            cargarClientesCrm();
+        } catch (error) {
+            console.error('[guardarEdicionCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo actualizar el cliente', 'error');
+        }
+    }
+
+    async function eliminarCliente(clienteId) {
+        try {
+            const result = await Swal.fire({
+                title: '¿Eliminar Cliente?',
+                text: 'Esta acción no se puede deshacer. El cliente se marcará como eliminado pero se conservará en el historial.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc3545'
+            });
+
+            if (result.isConfirmed) {
+                await fetchAPI(`/api/clientes/${clienteId}`, {
+                    method: 'DELETE'
+                });
+
+                Swal.fire('Éxito', 'Cliente eliminado correctamente', 'success');
+                cargarClientesCrm();
+            }
+        } catch (error) {
+            console.error('[eliminarCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo eliminar el cliente', 'error');
+        }
+    }
+
+    async function prepararNuevaPolizaDesdeCliente() {
+        try {
+            // Leer el ID del cliente actual del dataset del modal
+            const modalPerfil = document.getElementById('modalPerfilCliente');
+            const clienteId = modalPerfil.dataset.clienteId;
+            const clienteNombre = modalPerfil.dataset.clienteNombre;
+
+            if (!clienteId) {
+                Swal.fire('Error', 'No se pudo identificar el cliente', 'error');
+                return;
+            }
+
+            // Cerrar el modal de perfil del cliente
+            const modalInstance = bootstrap.Modal.getInstance(modalPerfil);
+            modalInstance.hide();
+
+            // Llamar a abrirModalNuevaPoliza y pasar los datos del cliente
+            await abrirModalNuevaPolizaConCliente(clienteId, clienteNombre);
+        } catch (error) {
+            console.error('[prepararNuevaPolizaDesdeCliente] Error:', error);
+            Swal.fire('Error', 'No se pudo preparar la nueva póliza', 'error');
+        }
+    }
+
+    async function abrirModalNuevaPolizaConCliente(clienteId, clienteNombre) {
+        const result = await Swal.fire({
+            title: '¿Cómo deseas registrar la póliza?',
+            icon: 'question',
+            showDenyButton: true,
+            showCancelButton: false,
+            confirmButtonText: 'Subir PDF',
+            denyButtonText: 'Llenado Manual',
+            confirmButtonColor: '#3085d6',
+            denyButtonColor: '#6c757d',
+            reverseButtons: true
+        });
+
+        if (result.isDenied) {
+            await mostrarFormularioPoliza({ clienteId, cliente: clienteNombre });
+            return;
+        }
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        const pdfResult = await Swal.fire({
+            title: 'Subir PDF de Póliza',
+            html: `<input id="pdfPoliza" type="file" accept="application/pdf" class="swal2-file">`,
+            showCancelButton: true,
+            confirmButtonText: 'Procesar',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            showLoaderOnConfirm: true,
+            preConfirm: async () => {
+                const fileInput = document.getElementById('pdfPoliza');
+                const file = fileInput?.files?.[0];
+                if (!file) {
+                    Swal.showValidationMessage('Selecciona un archivo PDF');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('archivo', file);
+
+                console.log('[Frontend PDF] Enviando PDF al backend:', file.name);
+
+                const responseBody = await fetchAPI('/api/polizas/extraer-datos', {
+                    method: 'POST',
+                    body: formData,
+                    isFormData: true
+                });
+
+                console.log('[Frontend PDF] Respuesta del backend:', responseBody);
+
+                if (!responseBody || !responseBody.success) {
+                    Swal.showValidationMessage('No se pudo procesar el PDF: ' + (responseBody?.message || 'Error desconocido'));
+                    return;
+                }
+
+                return responseBody.datos || responseBody;
+            }
+        });
+
+        if (pdfResult.isConfirmed && pdfResult.value) {
+            console.log('[Frontend PDF] Datos extraídos, inyectando clienteId y clienteNombre');
+            // Inyectar clienteId y clienteNombre en los datos extraídos del PDF
+            pdfResult.value.clienteId = clienteId;
+            pdfResult.value.cliente = clienteNombre;
+            await mostrarFormularioPoliza(pdfResult.value);
+        }
+    }
+
+    // ==================================================================
     // MODULO DE DEUDAS PERSONALES (ADMIN)
     // ==================================================================
     async function cargarDeudas() {
@@ -7790,6 +8328,9 @@ Fecha de firma: {{FECHA}}`;
         mostrarOverlayKanban,
         abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, ejecutarMigracionAsesor, ejecutarMigracionFechas, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         guardarYProbarSMTP, enviarCorreoPrueba,
+        abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, renovarPoliza,
+        abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, abrirModalRenovarPoliza, procesarRenovacion,
+        prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,
         enviarNotificacionManual,
 // ... (rest of the code remains the same)
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,

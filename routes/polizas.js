@@ -114,6 +114,9 @@ router.put('/:id/proximo-pago', auth, applyTenantFilter, polizaController.actual
 // FASE 7: RENOVACIÓN DE PAGO
 router.put('/:id/renovar-pago', auth, applyTenantFilter, polizaController.renovarPago);
 
+// FASE 8: RENOVACIÓN DE PÓLIZA (CRM)
+router.post('/:id/renovar', auth, applyTenantFilter, upload.single('pdf'), polizaController.renovarPoliza);
+
 // FASE 5: NOTIFICACIONES MANUALES
 router.post('/:id/notificar-manual', auth, applyTenantFilter, polizaController.enviarRecordatorioManual);
 router.post('/enviar-recordatorio', auth, applyTenantFilter, polizaController.enviarRecordatorioCorreo);
@@ -126,28 +129,41 @@ router.get('/dashboard/metricas', auth, applyTenantFilter, polizaController.obte
  */
 router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) => {
     try {
+        console.log('[Extraer Datos] Iniciando proceso de extracción...');
+
         if (!req.file) {
+            console.log('[Extraer Datos] Error: No se proporcionó archivo');
             return res.status(400).json({ success: false, message: 'No se proporcionó archivo' });
         }
 
         console.log('[Extraer Datos] Procesando PDF:', req.file.originalname);
+        console.log('[Extraer Datos] Tamaño del archivo:', req.file.size, 'bytes');
 
         let pdfData;
         try {
+            console.log('[Extraer Datos] Iniciando parser PDF...');
             const parser = new PDFParse({ data: req.file.buffer });
             pdfData = await parser.getText();
+            console.log('[Extraer Datos] PDF parseado exitosamente, longitud del texto:', pdfData.text.length);
             await parser.destroy();
+            console.log('[Extraer Datos] Parser destruido');
         } catch (pdfError) {
-            return res.status(400).json({ success: false, message: 'No se pudo procesar el PDF' });
+            console.error('[Extraer Datos] Error al procesar PDF:', pdfError.message);
+            console.error('[Extraer Datos] Stack trace:', pdfError.stack);
+            return res.status(400).json({ success: false, message: 'No se pudo procesar el PDF', error: pdfError.message });
         }
 
+        console.log('[Extraer Datos] Normalizando texto...');
         const textoCompleto = normalizeText(pdfData.text);
+        console.log('[Extraer Datos] Texto normalizado, longitud:', textoCompleto.length);
+
         const lineas = textoCompleto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        console.log('[Extraer Datos] Número de líneas:', lineas.length);
 
         const datos = {
             numeroPoliza: '',
             cliente: '',
-            aseguradora: 'CHUBB', 
+            aseguradora: 'CHUBB',
             inciso: '',
             tipoSeguro: 'Vehicular',
             paquete: '',
@@ -156,50 +172,81 @@ router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) =
             primaTotal: 0
         };
 
+        console.log('[Extraer Datos] Extrayendo fechas...');
         const regexFechas = /\b(\d{1,2}\/[A-Za-z]{3}\/\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\b/ig;
         const todasLasFechas = [...textoCompleto.matchAll(regexFechas)].map(m => m[1]);
+        console.log('[Extraer Datos] Fechas encontradas:', todasLasFechas);
         const fechasVigencia = todasLasFechas.filter(f => parseInt(f.split('/')[2]) >= 2020);
+        console.log('[Extraer Datos] Fechas de vigencia (>=2020):', fechasVigencia);
 
         if (fechasVigencia.length >= 2) {
             datos.fechaInicio = fechasVigencia[0];
             datos.fechaVencimiento = fechasVigencia[1];
+            console.log('[Extraer Datos] Fechas asignadas - Inicio:', datos.fechaInicio, 'Vencimiento:', datos.fechaVencimiento);
         }
 
+        console.log('[Extraer Datos] Extrayendo número de póliza...');
         const polizaMatch = textoCompleto.match(/\b(AN[\s\-]*\d{8})\b/i);
-        if (polizaMatch) datos.numeroPoliza = polizaMatch[1].replace(/\s+/g, '');
+        if (polizaMatch) {
+            datos.numeroPoliza = polizaMatch[1].replace(/\s+/g, '');
+            console.log('[Extraer Datos] Número de póliza encontrado:', datos.numeroPoliza);
+        }
 
+        console.log('[Extraer Datos] Procesando líneas para extraer inciso, paquete, cliente y prima...');
         for (let i = 0; i < lineas.length; i++) {
             const linea = lineas[i];
             const lineaUpper = linea.toUpperCase();
 
             if (datos.numeroPoliza && lineaUpper.replace(/\s+/g, '') === datos.numeroPoliza.replace(/\s+/g, '')) {
-                if (lineas[i + 1] && lineas[i + 1].match(/^\d{1,2}$/)) datos.inciso = lineas[i + 1];
+                if (lineas[i + 1] && lineas[i + 1].match(/^\d{1,2}$/)) {
+                    datos.inciso = lineas[i + 1];
+                    console.log('[Extraer Datos] Inciso encontrado:', datos.inciso);
+                }
             }
 
             const paqueteMatch = lineaUpper.match(/\b(AMPLIA|LIMITADA|INTEGRAL|BASICA|PREMIER|ESENCIAL)\b/);
             if (paqueteMatch && !datos.paquete) {
                 datos.paquete = paqueteMatch[1];
-                if (lineas[i + 1]) datos.cliente = lineas[i + 1];
+                console.log('[Extraer Datos] Paquete encontrado:', datos.paquete);
+                if (lineas[i + 1]) {
+                    datos.cliente = lineas[i + 1];
+                    console.log('[Extraer Datos] Cliente encontrado (después de paquete):', datos.cliente);
+                }
             }
 
             if (lineaUpper === 'CARÁTULA' || lineaUpper === 'CARATULA') {
                 if (i > 0 && lineas[i - 1].match(/[0-9,]+\.[0-9]{2}/)) {
                     const montoRaw = lineas[i - 1].match(/[0-9,]+\.[0-9]{2}/)[0];
                     datos.primaTotal = parseFloat(montoRaw.replace(/,/g, ''));
+                    console.log('[Extraer Datos] Prima total encontrada:', datos.primaTotal);
                 }
             }
         }
 
-        if (!datos.inciso) datos.inciso = "1";
-        if (!datos.cliente) {
-            const clienteFallback = textoCompleto.match(/Asegurado:\s*([A-Z\s]{10,})/i);
-            if (clienteFallback) datos.cliente = clienteFallback[1].trim();
+        if (!datos.inciso) {
+            datos.inciso = "1";
+            console.log('[Extraer Datos] Inciso no encontrado, usando default: 1');
         }
 
+        if (!datos.cliente) {
+            console.log('[Extraer Datos] Cliente no encontrado, buscando fallback...');
+            const clienteFallback = textoCompleto.match(/Asegurado:\s*([A-Z\s]{10,})/i);
+            if (clienteFallback) {
+                datos.cliente = clienteFallback[1].trim();
+                console.log('[Extraer Datos] Cliente encontrado en fallback:', datos.cliente);
+            } else {
+                console.log('[Extraer Datos] Cliente no encontrado en fallback');
+            }
+        }
+
+        console.log('[Extraer Datos] Datos extraídos exitosamente:', JSON.stringify(datos, null, 2));
+        console.log('[Extraer Datos] Enviando respuesta JSON...');
         res.json({ success: true, datos: datos });
+        console.log('[Extraer Datos] Respuesta enviada exitosamente');
     } catch (error) {
-        console.error('[Extraer Datos] Error:', error.message);
-        res.status(500).json({ success: false, message: 'Error interno' });
+        console.error('[Extraer Datos] Error general:', error.message);
+        console.error('[Extraer Datos] Stack trace:', error.stack);
+        res.status(500).json({ success: false, message: 'Error interno', error: error.message });
     }
 });
 
