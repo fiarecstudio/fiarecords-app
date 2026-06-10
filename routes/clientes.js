@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { crearCliente, obtenerClientes, migrarClientesHistoricos, actualizarCliente, eliminarCliente } = require('../controllers/clienteController');
+const { crearCliente, obtenerClientes, migrarClientesHistoricos, actualizarCliente, eliminarCliente, obtenerClientesPapelera, restaurarClientePapelera, destruirClientePapelera } = require('../controllers/clienteController');
 
 // Crear un nuevo cliente
 router.post('/', auth, crearCliente);
@@ -17,5 +17,15 @@ router.put('/:id', auth, actualizarCliente);
 
 // Eliminar un cliente (soft delete)
 router.delete('/:id', auth, eliminarCliente);
+
+// --- PAPELERA DE RECICLAJE ---
+// Obtener clientes eliminados (papelera)
+router.get('/papelera', auth, obtenerClientesPapelera);
+
+// Restaurar cliente de la papelera
+router.put('/papelera/:id/restaurar', auth, restaurarClientePapelera);
+
+// Destruir cliente definitivamente de la papelera
+router.delete('/papelera/:id/destruir', auth, destruirClientePapelera);
 
 module.exports = router;

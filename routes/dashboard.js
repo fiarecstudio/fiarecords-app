@@ -66,6 +66,41 @@ router.get('/stats', async (req, res) => {
                     'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
                 });
 
+                // Gráfica de tipos de seguro
+                const graficaTipos = await Poliza.aggregate([
+                    { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null } },
+                    { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
+                    { $sort: { count: -1 } }
+                ]);
+
+                // Gráfica de vencimientos próximos 6 meses
+                const hoyInicio = new Date();
+                hoyInicio.setHours(0, 0, 0, 0);
+                const en6Meses = new Date();
+                en6Meses.setMonth(en6Meses.getMonth() + 6);
+                en6Meses.setHours(23, 59, 59, 999);
+
+                const graficaVencimientos = await Poliza.aggregate([
+                    {
+                        $match: {
+                            empresaId: new mongoose.Types.ObjectId(empresaId),
+                            estado: 'Activa',
+                            deletedAt: null,
+                            'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: {
+                                year: { $year: '$fechas.vencimiento' },
+                                month: { $month: '$fechas.vencimiento' }
+                            },
+                            count: { $sum: 1 }
+                        }
+                    },
+                    { $sort: { '_id.year': 1, '_id.month': 1 } }
+                ]);
+
                 return res.json({
                     showFinancials: false,
                     esModuloSeguros: true,
@@ -74,7 +109,9 @@ router.get('/stats', async (req, res) => {
                     totalClientes,
                     polizasActivas,
                     primasTotales,
-                    proximosVencimientos
+                    proximosVencimientos,
+                    graficaTipos,
+                    graficaVencimientos
                 });
             }
 
@@ -161,11 +198,48 @@ router.get('/stats', async (req, res) => {
                 'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
             });
 
+            // Gráfica de tipos de seguro
+            const graficaTipos = await Poliza.aggregate([
+                { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null } },
+                { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]);
+
+            // Gráfica de vencimientos próximos 6 meses
+            const hoyInicio = new Date();
+            hoyInicio.setHours(0, 0, 0, 0);
+            const en6Meses = new Date();
+            en6Meses.setMonth(en6Meses.getMonth() + 6);
+            en6Meses.setHours(23, 59, 59, 999);
+
+            const graficaVencimientos = await Poliza.aggregate([
+                {
+                    $match: {
+                        empresaId: new mongoose.Types.ObjectId(empresaId),
+                        estado: 'Activa',
+                        deletedAt: null,
+                        'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: '$fechas.vencimiento' },
+                            month: { $month: '$fechas.vencimiento' }
+                        },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]);
+
             response.esModuloSeguros = true;
             response.totalClientes = totalClientes;
             response.polizasActivas = polizasActivas;
             response.primasTotales = primasTotales;
             response.proximosVencimientos = proximosVencimientos;
+            response.graficaTipos = graficaTipos;
+            response.graficaVencimientos = graficaVencimientos;
         }
 
         res.json(response);

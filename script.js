@@ -1193,8 +1193,110 @@ let proyectoIdEnEdicion = null;
                 dashboardContainer.insertBefore(tarjetasDiv, dashboardContainer.firstChild);
             }
 
+            // Mostrar contenedor de gráficas y renderizarlas
+            const graficasSeguros = document.getElementById('graficas-seguros');
+            if (graficasSeguros) {
+                graficasSeguros.style.display = 'block';
+            }
+
+            // Renderizar gráficas si hay datos
+            if (stats.graficaTipos && stats.graficaVencimientos) {
+                renderizarGraficasSeguros(stats.graficaTipos, stats.graficaVencimientos);
+            }
+
         } catch (error) {
             console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
+        }
+    }
+
+    // Función para renderizar gráficas de seguros
+    function renderizarGraficasSeguros(datosTipos, datosVencimientos) {
+        // Variables globales para almacenar instancias de gráficas
+        if (!window.chartTiposSeguroInstance) window.chartTiposSeguroInstance = null;
+        if (!window.chartVencimientosInstance) window.chartVencimientosInstance = null;
+
+        // Gráfica de tipos de seguro (Dona)
+        const canvasTipos = document.getElementById('chartTiposSeguro');
+        if (canvasTipos) {
+            if (window.chartTiposSeguroInstance) {
+                window.chartTiposSeguroInstance.destroy();
+            }
+
+            const labelsTipos = datosTipos.map(item => item._id || 'Sin tipo');
+            const dataTipos = datosTipos.map(item => item.count);
+
+            const colores = [
+                '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#14b8a6'
+            ];
+
+            window.chartTiposSeguroInstance = new Chart(canvasTipos, {
+                type: 'doughnut',
+                data: {
+                    labels: labelsTipos,
+                    datasets: [{
+                        data: dataTipos,
+                        backgroundColor: colores.slice(0, labelsTipos.length),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Gráfica de vencimientos (Barras)
+        const canvasVencimientos = document.getElementById('chartVencimientos');
+        if (canvasVencimientos) {
+            if (window.chartVencimientosInstance) {
+                window.chartVencimientosInstance.destroy();
+            }
+
+            const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const labelsVencimientos = datosVencimientos.map(item => {
+                const mes = meses[item._id.month - 1];
+                const anio = item._id.year;
+                return `${mes} ${anio}`;
+            });
+            const dataVencimientos = datosVencimientos.map(item => item.count);
+
+            window.chartVencimientosInstance = new Chart(canvasVencimientos, {
+                type: 'bar',
+                data: {
+                    labels: labelsVencimientos,
+                    datasets: [{
+                        label: 'Pólizas por Vencer',
+                        data: dataVencimientos,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#d97706',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -4281,16 +4383,150 @@ Fecha de firma: {{FECHA}}`;
         for (const endpoint of endpoints) {
             try {
                 const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
-                localCache.trash[endpoint] = data; 
-                trashPagination[endpoint].page = 1; 
-                renderTrashList(endpoint); 
+                localCache.trash[endpoint] = data;
+                trashPagination[endpoint].page = 1;
+                renderTrashList(endpoint);
             } catch (e) {
                 console.error(`Error loading trash for ${endpoint}:`, e);
                 const listEl = document.getElementById(`papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
                 if(listEl) listEl.innerHTML = `<li class="list-group-item text-danger small">Error cargando.</li>`;
             }
         }
+
+        // Cargar pólizas de la papelera
+        const tablaPolizas = document.getElementById('tablaPapeleraBody');
+        if (tablaPolizas) {
+            tablaPolizas.innerHTML = '<tr><td colspan="7" class="text-center">Cargando pólizas...</td></tr>';
+            try {
+                const polizas = await fetchAPI('/api/polizas/papelera/recuperar');
+                if (polizas && polizas.length > 0) {
+                    tablaPolizas.innerHTML = polizas.map(p => {
+                        const fechaEliminacion = p.deletedAt
+                            ? new Date(p.deletedAt).toLocaleDateString()
+                            : 'N/A';
+                        const fechaVencimiento = p.fechas?.vencimiento
+                            ? new Date(p.fechas.vencimiento).toLocaleDateString()
+                            : 'N/A';
+
+                        const pagosArray = p.pagos || [];
+                        const cantidadPagos = pagosArray.length;
+                        const totalPagado = pagosArray.reduce((sum, pago) => sum + (pago.estado === 'pagado' ? parseFloat(pago.monto || 0) : 0), 0);
+
+                        let pagosHTML = '<span class="text-muted small">Sin pagos</span>';
+                        if (cantidadPagos > 0) {
+                            pagosHTML = `
+                                <span class="badge bg-primary">${cantidadPagos} pago${cantidadPagos > 1 ? 's' : ''}</span>
+                                <span class="small text-success fw-bold">$${totalPagado.toFixed(2)}</span>
+                            `;
+                        }
+
+                        return `
+                            <tr>
+                                <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
+                                <td>${escapeHTML(p.cliente || 'N/A')}</td>
+                                <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
+                                <td>${fechaVencimiento}</td>
+                                <td>${pagosHTML}</td>
+                                <td>${fechaEliminacion}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success" onclick="app.restaurarPoliza('${p._id}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="app.borrarPermanente('${p._id}')" title="Eliminar definitivamente"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tablaPolizas.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas en la papelera</td></tr>';
+                }
+            } catch (e) {
+                console.error('Error loading trash for polizas:', e);
+                tablaPolizas.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error cargando pólizas</td></tr>';
+            }
+        }
+
+        // Cargar clientes de la papelera
+        try {
+            const clientes = await fetchAPI('/api/clientes/papelera');
+            localCache.trash.clientes = clientes;
+            renderTrashClientes();
+        } catch (e) {
+            console.error('Error loading trash for clientes:', e);
+            const tablaClientes = document.getElementById('tablaPapeleraClientesBody');
+            if(tablaClientes) tablaClientes.innerHTML = `<tr><td colspan="5" class="text-center text-danger small">Error cargando clientes.</td></tr>`;
+        }
+
+        // Agregar listener para el tab de clientes
+        const tabClientes = document.querySelector('button[data-bs-target="#papelera-tab-clientes"]');
+        if (tabClientes) {
+            tabClientes.addEventListener('shown.bs.tab', cargarPapeleraClientes);
+        }
     }
+
+    window.cargarPapeleraClientes = async function() {
+        console.log("🔥 [DIAGNÓSTICO] Iniciando cargarPapeleraClientes...");
+
+        const tablaBody = document.getElementById('tablaPapeleraClientesBody');
+        if (!tablaBody) {
+            console.error("❌ [DIAGNÓSTICO FATAL] No se encontró el tbody 'tablaPapeleraClientesBody' en el HTML.");
+            return;
+        }
+
+        console.log("✅ [DIAGNÓSTICO] tbody encontrado correctamente");
+        tablaBody.innerHTML = '<tr><td colspan="5" class="text-center">Cargando clientes...</td></tr>';
+
+        try {
+            console.log("🔥 [DIAGNÓSTICO] Haciendo fetch al servidor...");
+            const response = await fetch('/api/clientes/papelera', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            console.log("🔥 [DIAGNÓSTICO] Respuesta recibida, status:", response.status);
+
+            if (!response.ok) {
+                throw new Error(`Fallo en la petición al servidor (${response.status})`);
+            }
+
+            const clientes = await response.json();
+            console.log("✅ [DIAGNÓSTICO] Clientes recibidos:", clientes);
+
+            if (!clientes || clientes.length === 0) {
+                tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay clientes en la papelera</td></tr>';
+                console.log("✅ [DIAGNÓSTICO] No hay clientes en la papelera");
+                return;
+            }
+
+            console.log("🔥 [DIAGNÓSTICO] Renderizando", clientes.length, "clientes");
+            tablaBody.innerHTML = clientes.map(cliente => {
+                const fechaEliminacion = cliente.deletedAt ? new Date(cliente.deletedAt).toLocaleDateString('es-ES') : '-';
+                return `
+                    <tr>
+                        <td>${escapeHTML(cliente.nombre || '-')}</td>
+                        <td>${escapeHTML(cliente.email || '-')}</td>
+                        <td>${escapeHTML(cliente.telefono || '-')}</td>
+                        <td>${fechaEliminacion}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-success" onclick="restaurarClientePapelera('${cliente._id}')" title="Restaurar">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="destruirClientePapelera('${cliente._id}')" title="Destruir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            console.log("✅ [DIAGNÓSTICO] Tabla actualizada correctamente");
+        } catch (error) {
+            console.error("❌ [DIAGNÓSTICO] Error en cargarPapeleraClientes:", error);
+            tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar clientes: ' + error.message + '</td></tr>';
+        }
+    };
 
     function renderTrashList(endpoint) {
         const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
@@ -4300,7 +4536,7 @@ Fecha de firma: {{FECHA}}`;
 
         const items = localCache.trash[endpoint] ||[];
         const { page, limit } = trashPagination[endpoint];
-        
+
         const start = (page - 1) * limit;
         const end = start + limit;
         const paginatedItems = items.slice(start, end);
@@ -4320,31 +4556,119 @@ Fecha de firma: {{FECHA}}`;
                 displayName = `${nombreProj} - ${nombreArt} (${safeDate(item.fecha)})`;
             } else {
                 displayName = item.nombre || item.username || item.nombreArtistico || item.nombreProyecto || 'Item sin nombre';
-                if (endpoint === 'servicios' && item.precio) displayName += ` ($${item.precio})`;
-                if (endpoint === 'usuarios') displayName += ` (${item.role})`;
             }
             return `
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span class="text-truncate" style="max-width: 70%;">${escapeHTML(displayName)}</span>
-                <div class="btn-group">
-                    <button class="btn btn-sm btn-outline-success" onclick="app.restaurarItem('${item._id}', '${endpoint}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="app.eliminarPermanente('${item._id}', '${endpoint}')" title="Eliminar Permanente"><i class="bi bi-x-octagon-fill"></i></button>
-                </div>
-            </li>`;
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${escapeHTML(displayName)}</strong>
+                        <div class="text-muted small">Eliminado: ${safeDate(item.deletedAt)}</div>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-success" onclick="restaurarItem('${item._id}', '${endpoint}')">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="destruirItem('${item._id}', '${endpoint}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </li>
+            `;
         }).join('');
 
-        if (controlsEl) {
-            if (totalPages > 1) {
-                controlsEl.innerHTML = `
-                    <button class="btn btn-sm btn-outline-secondary" ${page === 1 ? 'disabled' : ''} onclick="app.changeTrashPage('${endpoint}', -1)">Anterior</button>
-                    <span class="small text-muted fw-bold">Pág ${page} de ${totalPages}</span>
-                    <button class="btn btn-sm btn-outline-secondary" ${page === totalPages ? 'disabled' : ''} onclick="app.changeTrashPage('${endpoint}', 1)">Siguiente</button>
-                `;
-            } else {
-                controlsEl.innerHTML = ''; 
-            }
+        if(controlsEl) {
+            controlsEl.innerHTML = `
+                <small class="text-muted">Página ${page} de ${totalPages}</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" ${page === 1 ? 'disabled' : ''} onclick="changeTrashPage('${endpoint}', -1)">Anterior</button>
+                    <button class="btn btn-outline-secondary" ${page === totalPages ? 'disabled' : ''} onclick="changeTrashPage('${endpoint}', 1)">Siguiente</button>
+                </div>
+            `;
         }
     }
+
+    function renderTrashClientes() {
+        const tablaClientes = document.getElementById('tablaPapeleraClientes');
+        if (!tablaClientes) return;
+
+        const clientes = localCache.trash.clientes || [];
+
+        if (clientes.length === 0) {
+            tablaClientes.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Papelera de clientes vacía.</td></tr>`;
+            return;
+        }
+
+        tablaClientes.innerHTML = clientes.map(cliente => {
+            const fechaEliminacion = cliente.deletedAt ? new Date(cliente.deletedAt).toLocaleDateString('es-ES') : '-';
+            return `
+                <tr>
+                    <td>${escapeHTML(cliente.nombre || '-')}</td>
+                    <td>${escapeHTML(cliente.email || '-')}</td>
+                    <td>${escapeHTML(cliente.telefono || '-')}</td>
+                    <td>${fechaEliminacion}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-success" onclick="restaurarClientePapelera('${cliente._id}')">
+                                <i class="bi bi-arrow-counterclockwise"></i> Restaurar
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="destruirClientePapelera('${cliente._id}')">
+                                <i class="bi bi-trash"></i> Destruir
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    window.restaurarClientePapelera = async function(id) {
+        try {
+            const result = await Swal.fire({
+                title: '¿Restaurar cliente?',
+                text: 'El cliente será restaurado y volverá a estar disponible.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Sí, restaurar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                await fetchAPI(`/api/clientes/papelera/${id}/restaurar`, { method: 'PUT' });
+                Swal.fire('Éxito', 'Cliente restaurado correctamente', 'success');
+                cargarPapelera();
+                cargarDashboard();
+            }
+        } catch (error) {
+            console.error('[restaurarClientePapelera] Error:', error);
+            Swal.fire('Error', error.message || 'No se pudo restaurar el cliente', 'error');
+        }
+    };
+
+    window.destruirClientePapelera = async function(id) {
+        try {
+            const result = await Swal.fire({
+                title: '¿Destruir cliente definitivamente?',
+                text: 'Esta acción es irreversible. El cliente y sus pólizas asociadas serán eliminados permanentemente.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Sí, destruir',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                await fetchAPI(`/api/clientes/papelera/${id}/destruir`, { method: 'DELETE' });
+                Swal.fire('Éxito', 'Cliente destruido correctamente', 'success');
+                cargarPapelera();
+                cargarDashboard();
+            }
+        } catch (error) {
+            console.error('[destruirClientePapelera] Error:', error);
+            Swal.fire('Error', error.message || 'No se pudo destruir el cliente', 'error');
+        }
+    };
 
     function changeTrashPage(endpoint, delta) {
         trashPagination[endpoint].page += delta;

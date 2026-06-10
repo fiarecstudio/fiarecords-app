@@ -297,10 +297,150 @@ const eliminarCliente = async (req, res) => {
     }
 };
 
+// Obtener clientes eliminados (papelera)
+const obtenerClientesPapelera = async (req, res) => {
+    try {
+        const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
+        const userRole = req.user.role;
+
+        // Validar que la empresa tenga el módulo de seguros activado
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+
+        if (!empresa.moduloSeguros) {
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        // Esto permite que el Super Admin use el header X-Empresa-Id para cambiar de empresa
+        const filtroEmpresa = req.tenantFilter || {};
+
+        // Combinar filtro de empresa con condición de soft delete
+        const filtroPapelera = {
+            ...filtroEmpresa,
+            deletedAt: { $ne: null }
+        };
+
+        // RBAC: Si no es admin, filtrar por asesorId
+        if (userRole !== 'admin') {
+            filtroPapelera.asesorId = asesorId;
+        }
+
+        // Devolver solo clientes eliminados (deletedAt != null) respetando el filtro de empresa
+        const clientesEliminados = await Cliente.find(filtroPapelera).sort({ deletedAt: -1 });
+
+        res.json(clientesEliminados);
+    } catch (error) {
+        console.error('[obtenerClientesPapelera] Error:', error);
+        res.status(500).json({ error: 'Error al obtener clientes de la papelera', details: error.message });
+    }
+};
+
+// Restaurar cliente de la papelera
+const restaurarClientePapelera = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
+        const userRole = req.user.role;
+
+        // Validar que la empresa tenga el módulo de seguros activado
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+
+        if (!empresa.moduloSeguros) {
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        // Restaurar cliente (poner deletedAt en null)
+        const cliente = await Cliente.findOneAndUpdate(
+            { _id: id, empresaId, deletedAt: { $ne: null } },
+            { deletedAt: null },
+            { new: true }
+        );
+
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente no encontrado en la papelera' });
+        }
+
+        // RBAC: Si no es admin, verificar que el cliente pertenezca al asesor
+        if (userRole !== 'admin' && cliente.asesorId.toString() !== asesorId.toString()) {
+            return res.status(403).json({ error: 'No tienes permiso para restaurar este cliente' });
+        }
+
+        res.json({
+            message: 'Cliente restaurado exitosamente',
+            cliente
+        });
+    } catch (error) {
+        console.error('[restaurarClientePapelera] Error:', error);
+        res.status(500).json({ error: 'Error al restaurar cliente', details: error.message });
+    }
+};
+
+// Destruir cliente definitivamente de la papelera
+const destruirClientePapelera = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
+        const userRole = req.user.role;
+
+        // Validar que la empresa tenga el módulo de seguros activado
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+
+        if (!empresa.moduloSeguros) {
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        // Buscar cliente para verificar permisos
+        const cliente = await Cliente.findOne({
+            _id: id,
+            empresaId,
+            deletedAt: { $ne: null }
+        });
+
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente no encontrado en la papelera' });
+        }
+
+        // RBAC: Si no es admin, verificar que el cliente pertenezca al asesor
+        if (userRole !== 'admin' && cliente.asesorId.toString() !== asesorId.toString()) {
+            return res.status(403).json({ error: 'No tienes permiso para destruir este cliente' });
+        }
+
+        // Marcar las pólizas asociadas como eliminadas (soft delete)
+        await Poliza.updateMany(
+            { clienteId: id, empresaId, deletedAt: null },
+            { deletedAt: new Date() }
+        );
+
+        // Destruir cliente definitivamente
+        await Cliente.findByIdAndDelete(id);
+
+        res.json({
+            message: 'Cliente destruido exitosamente'
+        });
+    } catch (error) {
+        console.error('[destruirClientePapelera] Error:', error);
+        res.status(500).json({ error: 'Error al destruir cliente', details: error.message });
+    }
+};
+
 module.exports = {
     crearCliente,
     obtenerClientes,
     migrarClientesHistoricos,
     actualizarCliente,
-    eliminarCliente
+    eliminarCliente,
+    obtenerClientesPapelera,
+    restaurarClientePapelera,
+    destruirClientePapelera
 };

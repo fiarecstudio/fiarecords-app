@@ -289,6 +289,34 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Gráficas de Seguros -->
+                <div class="row mt-4" id="graficas-seguros" style="display: none;">
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-header py-3 border-0">
+                                <h5 class="mb-0"><i class="bi bi-pie-chart me-2 text-primary"></i>Distribución por Tipo de Seguro</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="chartTiposSeguro"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-header py-3 border-0">
+                                <h5 class="mb-0"><i class="bi bi-bar-chart me-2 text-warning"></i>Proyección de Vencimientos (6 meses)</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="chartVencimientos"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <section id="agenda" class="section-view">
@@ -740,82 +768,62 @@
                     <div class="card-header pt-3 pb-0 border-0">
                         <h2>Papelera de Reciclaje</h2>
                     </div>
-                                        <div class="card-body">
-                    <!-- VISTA: PAPELERA DE PÓLIZAS (SEGUROS) -->
-                    <div id="vista-papelera-polizas" style="display:none;">
-                        <h4 class="text-danger"><i class="bi bi-trash"></i> Pólizas Eliminadas</h4>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Número de Póliza</th>
-                                        <th>Cliente</th>
-                                        <th>Aseguradora</th>
-                                        <th>Vencimiento</th>
-                                        <th>Pagos</th>
-                                        <th>Fecha de Eliminación</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaPapeleraBody">
-                                    <tr><td colspan="7" class="text-center text-muted">Cargando papelera...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <!-- VISTA: PAGOS DE SEGUROS -->
-                    <div id="vista-pagos-seguros" style="display:none;">
-                        <h4 class="text-success"><i class="bi bi-shield-check"></i> Pagos de Pólizas</h4>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Cliente</th>
-                                        <th>Póliza</th>
-                                        <th>Aseguradora</th>
-                                        <th>Prima Total</th>
-                                        <th>Pagado</th>
-                                        <th>Saldo Restante</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaPagosSegurosBody">
-                                    <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                        <ul class="nav nav-tabs mb-3" id="papeleraTabs" role="tablist">
+                    <div class="card-body">
+                        <!-- Tabs de Seguros (Pólizas y Clientes) -->
+                        <ul class="nav nav-tabs mb-3" id="papeleraSegurosTabs" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="papelera-proyectos-tab" data-bs-toggle="tab" data-bs-target="#papelera-tab-proyectos" type="button" role="tab" aria-controls="papelera-tab-proyectos" aria-selected="true">🗑️ Proyectos</button>
+                                <button class="nav-link active" id="papelera-polizas-tab" data-bs-toggle="tab" data-bs-target="#papelera-tab-polizas" type="button" role="tab" aria-controls="papelera-tab-polizas" aria-selected="true">
+                                    <i class="bi bi-shield-exclamation me-2"></i>Pólizas Eliminadas
+                                </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="papelera-artistas-tab" data-bs-toggle="tab" data-bs-target="#papelera-tab-artistas" type="button" role="tab" aria-controls="papelera-tab-artistas" aria-selected="false">👤 Artistas</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="papelera-servicios-tab" data-bs-toggle="tab" data-bs-target="#papelera-tab-servicios" type="button" role="tab" aria-controls="papelera-tab-servicios" aria-selected="false">🛠️ Servicios</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="papelera-usuarios-tab" data-bs-toggle="tab" data-bs-target="#papelera-tab-usuarios" type="button" role="tab" aria-controls="papelera-tab-usuarios" aria-selected="false">👥 Usuarios</button>
+                                <button class="nav-link" id="tab-clientes-eliminados" data-bs-toggle="tab" data-bs-target="#papelera-tab-clientes" type="button" role="tab" aria-controls="papelera-tab-clientes" aria-selected="false" onclick="cargarPapeleraClientes()">
+                                    <i class="bi bi-people me-2"></i>Clientes Eliminados
+                                </button>
                             </li>
                         </ul>
 
-                        <div class="tab-content" id="papeleraTabsContent">
-                            <div class="tab-pane fade show active" id="papelera-tab-proyectos" role="tabpanel" aria-labelledby="papelera-proyectos-tab" tabindex="0">
-                                <ul id="papeleraProyectos" class="list-group mb-2"></ul>
-                                <div id="papeleraProyectosControls" class="d-flex justify-content-between align-items-center pagination-controls-mini"></div>
+                        <div class="tab-content" id="papeleraSegurosTabsContent">
+                            <!-- Tab-pane de Pólizas Eliminadas -->
+                            <div class="tab-pane fade show active" id="papelera-tab-polizas" role="tabpanel" aria-labelledby="papelera-polizas-tab" tabindex="0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Número de Póliza</th>
+                                                <th>Cliente</th>
+                                                <th>Aseguradora</th>
+                                                <th>Vencimiento</th>
+                                                <th>Pagos</th>
+                                                <th>Fecha de Eliminación</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaPapeleraBody">
+                                            <tr><td colspan="7" class="text-center text-muted">Cargando pólizas...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <div class="tab-pane fade" id="papelera-tab-artistas" role="tabpanel" aria-labelledby="papelera-artistas-tab" tabindex="0">
-                                <ul id="papeleraArtistas" class="list-group mb-2"></ul>
-                                <div id="papeleraArtistasControls" class="d-flex justify-content-between align-items-center pagination-controls-mini"></div>
-                            </div>
-                            <div class="tab-pane fade" id="papelera-tab-servicios" role="tabpanel" aria-labelledby="papelera-servicios-tab" tabindex="0">
-                                <ul id="papeleraServicios" class="list-group mb-2"></ul>
-                                <div id="papeleraServiciosControls" class="d-flex justify-content-between align-items-center pagination-controls-mini"></div>
-                            </div>
-                            <div class="tab-pane fade" id="papelera-tab-usuarios" role="tabpanel" aria-labelledby="papelera-usuarios-tab" tabindex="0">
-                                <ul id="papeleraUsuarios" class="list-group mb-2"></ul>
-                                <div id="papeleraUsuariosControls" class="d-flex justify-content-between align-items-center pagination-controls-mini"></div>
+
+                            <!-- Tab-pane de Clientes Eliminados -->
+                            <div class="tab-pane fade" id="papelera-tab-clientes" role="tabpanel" aria-labelledby="papelera-clientes-tab" tabindex="0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Nombre</th>
+                                                <th>Correo</th>
+                                                <th>Teléfono</th>
+                                                <th>Fecha de Eliminación</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaPapeleraClientesBody">
+                                            <tr><td colspan="5" class="text-center text-muted">Cargando clientes...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
