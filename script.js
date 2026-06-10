@@ -1193,20 +1193,65 @@ let proyectoIdEnEdicion = null;
                 dashboardContainer.insertBefore(tarjetasDiv, dashboardContainer.firstChild);
             }
 
-            // Mostrar contenedor de gráficas y renderizarlas
-            const graficasSeguros = document.getElementById('graficas-seguros');
-            if (graficasSeguros) {
-                graficasSeguros.style.display = 'block';
+            // Mostrar y renderizar próximos pagos
+            const proximosPagosContainer = document.getElementById('proximos-pagos');
+            if (proximosPagosContainer) {
+                proximosPagosContainer.style.display = 'block';
             }
 
-            // Renderizar gráficas si hay datos
-            if (stats.graficaTipos && stats.graficaVencimientos) {
-                renderizarGraficasSeguros(stats.graficaTipos, stats.graficaVencimientos);
+            if (stats.proximosPagos && stats.proximosPagos.length > 0) {
+                renderizarProximosPagos(stats.proximosPagos);
+            } else {
+                const tablaBody = document.getElementById('tablaProximosPagosBody');
+                if (tablaBody) {
+                    tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay próximos pagos registrados</td></tr>';
+                }
             }
 
         } catch (error) {
             console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
         }
+    }
+
+    // Función para renderizar próximos pagos
+    function renderizarProximosPagos(proximosPagos) {
+        const tablaBody = document.getElementById('tablaProximosPagosBody');
+        if (!tablaBody) return;
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        tablaBody.innerHTML = proximosPagos.map(pago => {
+            const fechaPago = new Date(pago.proximoPago);
+            fechaPago.setHours(0, 0, 0, 0);
+
+            const diffTime = fechaPago - hoy;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            let badgeHTML = '';
+            if (diffDays < 0) {
+                badgeHTML = `<span class="badge bg-danger">Vencido hace ${Math.abs(diffDays)} días</span>`;
+            } else if (diffDays <= 5) {
+                badgeHTML = `<span class="badge bg-warning">Vence en ${diffDays} días</span>`;
+            } else {
+                badgeHTML = `<span class="badge bg-info">En ${diffDays} días</span>`;
+            }
+
+            const clienteNombre = pago.clienteId?.nombre || pago.cliente || '-';
+            const polizaNumero = pago.numeroPoliza || '-';
+            const fechaPagoFormateada = fechaPago.toLocaleDateString('es-ES');
+            const monto = pago.primaTotal || '-';
+
+            return `
+                <tr>
+                    <td>${escapeHTML(clienteNombre)}</td>
+                    <td>${escapeHTML(polizaNumero)}</td>
+                    <td>${fechaPagoFormateada}</td>
+                    <td>$${monto}</td>
+                    <td>${badgeHTML}</td>
+                </tr>
+            `;
+        }).join('');
     }
 
     // Función para renderizar gráficas de seguros
@@ -6310,14 +6355,14 @@ Fecha de firma: {{FECHA}}`;
             console.error('[cargarPolizas] No se encontró tablaPolizasBody');
             return;
         }
-        tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
-        
+        tabla.innerHTML = '<tr><td colspan="8" class="text-center">Cargando...</td></tr>';
+
         // Mostrar/ocultar filtro de asesor según el rol del usuario
         const user = getUserRoleAndId();
         const filtroAsesorContainer = document.getElementById('filtro-asesor-container');
         const btnMigrarAsesor = document.getElementById('btn-migrar-asesor');
         const btnMigrarFechas = document.getElementById('btn-migrar-fechas');
-        
+
         if (filtroAsesorContainer) {
             if (user.role === 'admin') {
                 filtroAsesorContainer.classList.remove('d-none');
@@ -6343,7 +6388,7 @@ Fecha de firma: {{FECHA}}`;
                 }
             }
         }
-        
+
         try {
             // Construir URL con parámetro de asesor si está seleccionado
             let url = '/api/polizas';
@@ -6351,18 +6396,18 @@ Fecha de firma: {{FECHA}}`;
             if (user.role === 'admin' && asesorSeleccionado) {
                 url += `?asesorId=${asesorSeleccionado}`;
             }
-            
+
             const polizas = await fetchAPI(url);
             if (polizas && polizas.length > 0) {
                 tabla.innerHTML = polizas.map(p => {
-                    const fechaVencimiento = p.fechas?.vencimiento 
-                        ? new Date(p.fechas.vencimiento).toLocaleDateString() 
+                    const fechaVencimiento = p.fechas?.vencimiento
+                        ? new Date(p.fechas.vencimiento).toLocaleDateString()
                         : 'N/A';
-                    const fechaProximoPago = p.proximoPago 
-                        ? new Date(p.proximoPago).toLocaleDateString() 
+                    const fechaProximoPago = p.proximoPago
+                        ? new Date(p.proximoPago).toLocaleDateString()
                         : 'N/A';
                     const estado = calcularEstado(p.fechas?.vencimiento);
-                    
+
                     return `
                         <tr>
                             <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
@@ -6371,6 +6416,9 @@ Fecha de firma: {{FECHA}}`;
                             <td>${fechaVencimiento}</td>
                             <td>${fechaProximoPago}</td>
                             <td><span class="badge bg-${estado.clase}">${estado.texto}</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
+                            </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos"><i class="bi bi-cash-coin"></i></button>
                                 <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar"><i class="bi bi-bell"></i></button>
@@ -6381,11 +6429,69 @@ Fecha de firma: {{FECHA}}`;
                     `;
                 }).join('');
             } else {
-                tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay pólizas registradas</td></tr>';
             }
         } catch (error) {
             console.error('[cargarPolizas] Error al cargar pólizas:', error);
-            tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar pólizas</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="8" class="text-danger">Error al cargar pólizas</td></tr>';
+        }
+    }
+
+    // Función para ver historial de notificaciones
+    async function verHistorialNotificaciones(polizaId) {
+        try {
+            const notificaciones = await fetchAPI(`/api/polizas/${polizaId}/notificaciones`);
+
+            if (!notificaciones || notificaciones.length === 0) {
+                await Swal.fire({
+                    title: 'Historial de Notificaciones',
+                    text: 'No hay notificaciones registradas para esta póliza',
+                    icon: 'info'
+                });
+                return;
+            }
+
+            const html = notificaciones.map(n => {
+                const fecha = n.createdAt ? new Date(n.createdAt).toLocaleString('es-ES') : 'N/A';
+                const fechaEnvio = n.fechaEnvio ? new Date(n.fechaEnvio).toLocaleString('es-ES') : '-';
+                const estadoBadge = n.estado === 'enviada' ? 'bg-success' : n.estado === 'fallida' ? 'bg-danger' : 'bg-warning';
+
+                return `
+                    <tr>
+                        <td>${fecha}</td>
+                        <td>${n.tipo}</td>
+                        <td>${n.canal}</td>
+                        <td>${n.destinatario}</td>
+                        <td><span class="badge ${estadoBadge}">${n.estado}</span></td>
+                        <td>${fechaEnvio}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            await Swal.fire({
+                title: 'Historial de Notificaciones',
+                html: `
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Canal</th>
+                                    <th>Destinatario</th>
+                                    <th>Estado</th>
+                                    <th>Enviado</th>
+                                </tr>
+                            </thead>
+                            <tbody>${html}</tbody>
+                        </table>
+                    </div>
+                `,
+                width: '800px'
+            });
+        } catch (error) {
+            console.error('[verHistorialNotificaciones] Error:', error);
+            Swal.fire('Error', 'No se pudo cargar el historial de notificaciones', 'error');
         }
     }
 
@@ -7104,13 +7210,26 @@ Fecha de firma: {{FECHA}}`;
     async function enviarRecordatorioWhatsApp(polizaId) {
         try {
             const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
-            const telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
+
+            // PRIORIDAD: Usar teléfono del modelo Cliente si existe clienteId, fallback a poliza.clienteTelefono
+            let telefono;
+            if (poliza.clienteId) {
+                try {
+                    const cliente = await fetchAPI(`/api/clientes/${poliza.clienteId}`);
+                    telefono = cliente.telefono?.replace(/\s/g, '') || poliza.clienteTelefono?.replace(/\s/g, '') || '';
+                } catch (error) {
+                    telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
+                }
+            } else {
+                telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
+            }
+
             const cliente = poliza.cliente || 'Cliente';
             const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
 
             // Verificar si ya hay pagos registrados
             const tienePagos = poliza.pagos && poliza.pagos.length > 0;
-            
+
             // Si no hay pagos y existe primerPago, usar primerPago
             // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
             let montoAbono;
@@ -7157,13 +7276,26 @@ Fecha de firma: {{FECHA}}`;
     async function enviarRecordatorioCorreo(polizaId) {
         try {
             const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
-            const email = poliza.clienteEmail || '';
+
+            // PRIORIDAD: Usar correo del modelo Cliente si existe clienteId, fallback a poliza.clienteEmail
+            let email;
+            if (poliza.clienteId) {
+                try {
+                    const cliente = await fetchAPI(`/api/clientes/${poliza.clienteId}`);
+                    email = cliente.email || poliza.clienteEmail || '';
+                } catch (error) {
+                    email = poliza.clienteEmail || '';
+                }
+            } else {
+                email = poliza.clienteEmail || '';
+            }
+
             const cliente = poliza.cliente || 'Cliente';
             const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
 
             // Verificar si ya hay pagos registrados
             const tienePagos = poliza.pagos && poliza.pagos.length > 0;
-            
+
             // Si no hay pagos y existe primerPago, usar primerPago
             // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
             let montoAbono;
@@ -7458,7 +7590,7 @@ Fecha de firma: {{FECHA}}`;
             const tablaPolizas = document.getElementById('tablaPolicasClienteBody');
 
             if (!cliente.polizas || cliente.polizas.length === 0) {
-                tablaPolizas.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+                tablaPolizas.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay pólizas registradas</td></tr>';
             } else {
                 let html = '';
                 cliente.polizas.forEach(poliza => {
@@ -7478,13 +7610,18 @@ Fecha de firma: {{FECHA}}`;
 
                     const btnVerDetalles = `<button class="btn btn-sm btn-info me-1" onclick="app.verPolizaDesdeCRM(${JSON.stringify(poliza).replace(/"/g, '&quot;')})" title="Ver Detalles"><i class="bi bi-eye"></i></button>`;
 
+                    const btnNotificaciones = `<button class="btn btn-sm btn-outline-info me-1" onclick="app.verHistorialNotificaciones('${poliza._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>`;
+
+                    const btnEnviarNotificacion = `<button class="btn btn-sm btn-outline-warning me-1" onclick="app.enviarNotificacionManual('${poliza._id}')" title="Enviar Notificación"><i class="bi bi-bell"></i></button>`;
+
                     html += `
                         <tr>
                             <td>${escapeHTML(poliza.aseguradora || '-')}</td>
                             <td>${escapeHTML(poliza.tipoSeguro || '-')}</td>
                             <td>${fechaVencimiento}</td>
                             <td><span class="badge ${estadoClass}">${poliza.estado}</span></td>
-                            <td>${btnVerDetalles}${btnRenovar}</td>
+                            <td>${btnNotificaciones}</td>
+                            <td>${btnEnviarNotificacion}${btnVerDetalles}${btnRenovar}</td>
                         </tr>
                     `;
                 });
@@ -7744,6 +7881,19 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function abrirModalNuevaPolizaConCliente(clienteId, clienteNombre) {
+        // Obtener datos del cliente para sincronizar correo y teléfono
+        let clienteEmail = '';
+        let clienteTelefono = '';
+        try {
+            const cliente = await fetchAPI(`/api/clientes/${clienteId}`);
+            if (cliente) {
+                clienteEmail = cliente.email || '';
+                clienteTelefono = cliente.telefono || '';
+            }
+        } catch (error) {
+            console.warn('[abrirModalNuevaPolizaConCliente] No se pudo obtener datos del cliente:', error);
+        }
+
         const result = await Swal.fire({
             title: '¿Cómo deseas registrar la póliza?',
             icon: 'question',
@@ -7757,7 +7907,7 @@ Fecha de firma: {{FECHA}}`;
         });
 
         if (result.isDenied) {
-            await mostrarFormularioPoliza({ clienteId, cliente: clienteNombre });
+            await mostrarFormularioPoliza({ clienteId, cliente: clienteNombre, clienteEmail, clienteTelefono });
             return;
         }
 
@@ -7804,10 +7954,12 @@ Fecha de firma: {{FECHA}}`;
         });
 
         if (pdfResult.isConfirmed && pdfResult.value) {
-            console.log('[Frontend PDF] Datos extraídos, inyectando clienteId y clienteNombre');
-            // Inyectar clienteId y clienteNombre en los datos extraídos del PDF
+            console.log('[Frontend PDF] Datos extraídos, inyectando clienteId, clienteNombre y datos de contacto');
+            // Inyectar clienteId, clienteNombre y datos de contacto en los datos extraídos del PDF
             pdfResult.value.clienteId = clienteId;
             pdfResult.value.cliente = clienteNombre;
+            pdfResult.value.clienteEmail = clienteEmail;
+            pdfResult.value.clienteTelefono = clienteTelefono;
             await mostrarFormularioPoliza(pdfResult.value);
         }
     }
@@ -8656,6 +8808,7 @@ Fecha de firma: {{FECHA}}`;
         abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, abrirModalRenovarPoliza, procesarRenovacion,
         prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,
         enviarNotificacionManual,
+        verHistorialNotificaciones,
 // ... (rest of the code remains the same)
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,

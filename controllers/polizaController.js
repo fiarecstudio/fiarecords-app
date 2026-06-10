@@ -311,12 +311,28 @@ const enviarRecordatorioManual = async (req, res) => {
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
         if (!poliza) return res.status(404).json({ error: 'Póliza no encontrada' });
 
-        const destinatario = canal === 'email' 
-            ? (poliza.clienteEmail || 'prueba_correo@ejemplo.com')
-            : (poliza.clienteTelefono || '5512345678');
+        // PRIORIDAD: Usar datos del modelo Cliente si existe clienteId, fallback a campos de póliza
+        let destinatario;
+        if (poliza.clienteId) {
+            const Cliente = require('../models/Cliente');
+            const cliente = await Cliente.findById(poliza.clienteId);
+            if (cliente) {
+                destinatario = canal === 'email'
+                    ? (cliente.email || poliza.clienteEmail || 'prueba_correo@ejemplo.com')
+                    : (cliente.telefono || poliza.clienteTelefono || '5512345678');
+            } else {
+                destinatario = canal === 'email'
+                    ? (poliza.clienteEmail || 'prueba_correo@ejemplo.com')
+                    : (poliza.clienteTelefono || '5512345678');
+            }
+        } else {
+            destinatario = canal === 'email'
+                ? (poliza.clienteEmail || 'prueba_correo@ejemplo.com')
+                : (poliza.clienteTelefono || '5512345678');
+        }
 
         let mensaje = tipo === 'vencimiento_poliza'
-            ? `Hola ${poliza.cliente}, tu póliza No. ${poliza.numeroPoliza} vencerá el ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}.` 
+            ? `Hola ${poliza.cliente}, tu póliza No. ${poliza.numeroPoliza} vencerá el ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}.`
             : `Hola ${poliza.cliente}, tienes un pago pendiente en tu póliza No. ${poliza.numeroPoliza} por $${poliza.primaTotal || 0}.`;
 
         const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');

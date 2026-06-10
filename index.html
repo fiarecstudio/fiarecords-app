@@ -215,7 +215,6 @@
         <main class="p-3 p-md-4">
             
             <section id="dashboard" class="active section-view">
-                <h2 class="mb-3">Resumen General</h2>
                 <div class="grid-container">
                     <!-- Tarjetas para Módulo de Seguros -->
                     <div id="dashboard-seuros" class="d-none">
@@ -290,28 +289,29 @@
                     </div>
                 </div>
 
-                <!-- Gráficas de Seguros -->
-                <div class="row mt-4" id="graficas-seguros" style="display: none;">
-                    <div class="col-md-6 mb-4">
-                        <div class="card h-100 shadow-sm">
+                <!-- Próximos Pagos a Vencer -->
+                <div class="row mt-4" id="proximos-pagos" style="display: none;">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
                             <div class="card-header py-3 border-0">
-                                <h5 class="mb-0"><i class="bi bi-pie-chart me-2 text-primary"></i>Distribución por Tipo de Seguro</h5>
+                                <h5 class="mb-0"><i class="bi bi-calendar-check me-2 text-success"></i>Próximos Pagos a Vencer</h5>
                             </div>
                             <div class="card-body">
-                                <div class="chart-container">
-                                    <canvas id="chartTiposSeguro"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 mb-4">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-header py-3 border-0">
-                                <h5 class="mb-0"><i class="bi bi-bar-chart me-2 text-warning"></i>Proyección de Vencimientos (6 meses)</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-container">
-                                    <canvas id="chartVencimientos"></canvas>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Cliente</th>
+                                                <th>Póliza</th>
+                                                <th>Fecha de Pago</th>
+                                                <th>Monto</th>
+                                                <th>Estatus</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaProximosPagosBody">
+                                            <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -1205,11 +1205,12 @@
                                         <th>Aseguradora</th>
                                         <th>Vencimiento</th>
                                         <th>Estado</th>
+                                        <th>Notificaciones</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaPolizasBody">
-                                    <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1383,11 +1384,12 @@
                     <th>Tipo</th>
                     <th>Vencimiento</th>
                     <th>Estado</th>
+                    <th>Notificaciones</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="tablaPolicasClienteBody">
-                  <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
                 </tbody>
               </table>
             </div>

@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const Poliza = require('../models/Poliza');
+const Cliente = require('../models/Cliente');
 const Empresa = require('../models/Empresa');
 const Notificacion = require('../models/Notificacion');
 const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
@@ -10,7 +11,7 @@ async function procesarNotificacionesDiarias() {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const empresasSeguros = await Empresa.find({ moduloSeguros: true });
-        
+
         for (const empresa of empresasSeguros) {
             const empresaId = empresa._id;
             const polizas = await Poliza.find({ empresaId, deletedAt: null });
@@ -26,7 +27,7 @@ async function procesarNotificacionesDiarias() {
                             empresaId,
                             poliza,
                             tipo: 'vencimiento_poliza',
-                            mensaje: `Estimado(a) ${poliza.cliente}, su póliza No. ${poliza.numeroPoliza} vence en ${diasRestantes} días.` 
+                            mensaje: `Estimado(a) ${poliza.cliente}, su póliza No. ${poliza.numeroPoliza} vence en ${diasRestantes} días.`
                         });
                     }
                 }
@@ -45,7 +46,7 @@ async function procesarNotificacionesDiarias() {
                                 empresaId,
                                 poliza,
                                 tipo: 'pago_pendiente',
-                                mensaje: `Estimado(a) ${poliza.cliente}, presenta un pago pendiente por su póliza No. ${poliza.numeroPoliza}.` 
+                                mensaje: `Estimado(a) ${poliza.cliente}, presenta un pago pendiente por su póliza No. ${poliza.numeroPoliza}.`
                             });
                         }
                     }
@@ -59,8 +60,24 @@ async function procesarNotificacionesDiarias() {
 }
 
 async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje }) {
-    const canal = 'email'; 
-    const destinatario = poliza.clienteEmail || 'correo_prueba@ejemplo.com';
+    const canal = 'email';
+
+    // PRIORIDAD: Usar email del modelo Cliente, fallback a poliza.clienteEmail
+    let destinatario = 'correo_prueba@ejemplo.com';
+    if (poliza.clienteId) {
+        const cliente = await Cliente.findById(poliza.clienteId);
+        if (cliente && cliente.email) {
+            destinatario = cliente.email;
+            console.log(`[Cron Notificaciones] Usando email del cliente: ${cliente.email}`);
+        } else if (poliza.clienteEmail) {
+            destinatario = poliza.clienteEmail;
+            console.log(`[Cron Notificaciones] Fallback a poliza.clienteEmail: ${poliza.clienteEmail}`);
+        }
+    } else if (poliza.clienteEmail) {
+        destinatario = poliza.clienteEmail;
+        console.log(`[Cron Notificaciones] Sin clienteId, usando poliza.clienteEmail: ${poliza.clienteEmail}`);
+    }
+
     const registro = new Notificacion({ empresaId, polizaId: poliza._id, tipo, canal, destinatario, mensaje });
 
     try {
@@ -69,7 +86,7 @@ async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje }) 
                 empresaId,
                 destinatario,
                 asunto: tipo === 'vencimiento_poliza' ? 'Vencimiento de Póliza' : 'Pago Pendiente',
-                cuerpo: `<p>${mensaje}</p>` 
+                cuerpo: `<p>${mensaje}</p>`
             });
         }
         registro.estado = 'enviada';

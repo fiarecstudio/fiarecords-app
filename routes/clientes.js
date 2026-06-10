@@ -1,13 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { crearCliente, obtenerClientes, migrarClientesHistoricos, actualizarCliente, eliminarCliente, obtenerClientesPapelera, restaurarClientePapelera, destruirClientePapelera } = require('../controllers/clienteController');
+const { crearCliente, obtenerClientes, obtenerClientePorId, migrarClientesHistoricos, actualizarCliente, eliminarCliente, obtenerClientesPapelera, restaurarClientePapelera, destruirClientePapelera } = require('../controllers/clienteController');
 
 // Crear un nuevo cliente
 router.post('/', auth, crearCliente);
 
 // Obtener todos los clientes con sus pólizas asociadas
 router.get('/', auth, obtenerClientes);
+
+// Obtener un cliente por ID
+router.get('/:id', auth, obtenerClientePorId);
 
 // Migración temporal: Vincular pólizas históricas con clientes
 router.get('/migrar-historico', auth, migrarClientesHistoricos);

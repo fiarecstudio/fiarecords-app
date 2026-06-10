@@ -67,7 +67,7 @@ const obtenerClientes = async (req, res) => {
 
         // Construir filtro base
         const filtro = { empresaId, deletedAt: null };
-        
+
         // RBAC: Si no es admin, filtrar por asesorId
         if (userRole !== 'admin') {
             filtro.asesorId = asesorId;
@@ -99,6 +99,35 @@ const obtenerClientes = async (req, res) => {
     } catch (error) {
         console.error('[obtenerClientes] Error:', error);
         res.status(500).json({ error: 'Error al obtener clientes', details: error.message });
+    }
+};
+
+// Obtener un cliente por ID
+const obtenerClientePorId = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const empresaId = req.user.empresaId;
+
+        // Validar que la empresa tenga el módulo de seguros activado
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+
+        if (!empresa.moduloSeguros) {
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        const cliente = await Cliente.findOne({ _id: id, empresaId, deletedAt: null });
+
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente no encontrado' });
+        }
+
+        res.json(cliente);
+    } catch (error) {
+        console.error('[obtenerClientePorId] Error:', error);
+        res.status(500).json({ error: 'Error al obtener cliente', details: error.message });
     }
 };
 
@@ -437,6 +466,7 @@ const destruirClientePapelera = async (req, res) => {
 module.exports = {
     crearCliente,
     obtenerClientes,
+    obtenerClientePorId,
     migrarClientesHistoricos,
     actualizarCliente,
     eliminarCliente,

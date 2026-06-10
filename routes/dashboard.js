@@ -72,6 +72,16 @@ router.get('/stats', async (req, res) => {
                     'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
                 });
 
+                // Próximos pagos a vencer
+                const proximosPagos = await Poliza.find({
+                    ...filtroSeguros,
+                    estado: 'Activa',
+                    proximoPago: { $exists: true, $ne: null }
+                })
+                .populate('clienteId', 'nombre')
+                .sort({ proximoPago: 1 })
+                .limit(15);
+
                 // Gráfica de tipos de seguro
                 const graficaTipos = await Poliza.aggregate([
                     { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null, ...(isAdmin ? {} : { asesorId }) } },
@@ -117,6 +127,7 @@ router.get('/stats', async (req, res) => {
                     polizasActivas,
                     primasTotales,
                     proximosVencimientos,
+                    proximosPagos,
                     graficaTipos,
                     graficaVencimientos
                 });
@@ -204,6 +215,16 @@ router.get('/stats', async (req, res) => {
                 'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
             });
 
+            // Próximos pagos a vencer
+            const proximosPagos = await Poliza.find({
+                ...filtroSeguros,
+                estado: 'Activa',
+                proximoPago: { $exists: true, $ne: null }
+            })
+            .populate('clienteId', 'nombre')
+            .sort({ proximoPago: 1 })
+            .limit(15);
+
             // Gráfica de tipos de seguro
             const graficaTipos = await Poliza.aggregate([
                 { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null } },
@@ -244,6 +265,7 @@ router.get('/stats', async (req, res) => {
             response.polizasActivas = polizasActivas;
             response.primasTotales = primasTotales;
             response.proximosVencimientos = proximosVencimientos;
+            response.proximosPagos = proximosPagos;
             response.graficaTipos = graficaTipos;
             response.graficaVencimientos = graficaVencimientos;
         }

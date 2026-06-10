@@ -12,6 +12,7 @@ const auth = require('../middleware/auth');
 const { applyTenantFilter } = require('../middleware/tenantFilter');
 const polizaController = require('../controllers/polizaController');
 const Poliza = require('../models/Poliza');
+const Notificacion = require('../models/Notificacion');
 
 /**
  * Normaliza el texto del PDF respetando saltos de línea vitales
@@ -105,7 +106,31 @@ router.put('/papelera/restaurar/:id', auth, applyTenantFilter, polizaController.
 router.delete('/papelera/definitivo/:id', auth, applyTenantFilter, polizaController.eliminarDefinitivamente);
 
 // ==========================================
-// FASE 3: GESTIÓN DE PAGOS
+// FASE 3: HISTORIAL DE NOTIFICACIONES
+// ==========================================
+router.get('/:id/notificaciones', auth, async (req, res) => {
+    try {
+        const polizaId = req.params.id;
+        const empresaId = req.user.empresaId;
+
+        const poliza = await Poliza.findOne({ _id: polizaId, empresaId });
+        if (!poliza) {
+            return res.status(404).json({ error: 'Póliza no encontrada' });
+        }
+
+        const notificaciones = await Notificacion.find({ polizaId, empresaId })
+            .sort({ createdAt: -1 })
+            .limit(20);
+
+        res.json(notificaciones);
+    } catch (error) {
+        console.error('[Notificaciones] Error:', error);
+        res.status(500).json({ error: 'Error al obtener notificaciones', details: error.message });
+    }
+});
+
+// ==========================================
+// FASE 4: GESTIÓN DE PAGOS
 // ==========================================
 router.post('/:id/pagos', auth, applyTenantFilter, polizaController.registrarPago);
 router.delete('/:id/pagos/:pagoIndex', auth, applyTenantFilter, polizaController.eliminarPago);
