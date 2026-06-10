@@ -2424,7 +2424,7 @@ let proyectoIdEnEdicion = null;
         ];
 
         // Secciones que solo los administradores pueden acceder
-        const seccionesSoloAdmin = ['config-correos', 'configuracion', 'papelera-reciclaje', 'mis-deudas', 'gestion-usuarios'];
+        const seccionesSoloAdmin = ['config-correos', 'configuracion', 'mis-deudas', 'gestion-usuarios'];
 
         if (esCliente && seccionesProhibidasParaCliente.includes(id)) {
             id = 'vista-artista'; 
@@ -5916,14 +5916,14 @@ Fecha de firma: {{FECHA}}`;
                             <a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>
                             <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
                             <a class="nav-link-sidebar" data-seccion="clientes-crm"><i class="bi person-lines-fill"></i> Directorio de Clientes</a>
+                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                             ${isSuperAdmin ? '<a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>' : ''}
                          </div>`;
-                
+
                 if (isSuperAdmin) {
                     html += `<div class="nav-group">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
                                 <a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>
-                                <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
                              </div>`;
                 }
@@ -5950,6 +5950,7 @@ Fecha de firma: {{FECHA}}`;
                     html += `<div class="nav-group mb-3">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
                                 <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                                <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                                 <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>
                              </div>`;
                 }
@@ -5959,7 +5960,6 @@ Fecha de firma: {{FECHA}}`;
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
                                 <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi wallet2"></i> Mis Deudas</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
-                                <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                              </div>`;
                 }
             }

@@ -155,19 +155,27 @@ const obtenerPolizaPorId = async (req, res) => {
 // FASE 2: PAPELERA DE RECICLAJE
 const obtenerPapelera = async (req, res) => {
     try {
+        const asesorId = req.user._id || req.user.id;
+        const userRole = req.user.role;
+
         // Usar req.tenantFilter proporcionado por el middleware applyTenantFilter
         // Esto permite que el Super Admin use el header X-Empresa-Id para cambiar de empresa
         const filtroEmpresa = req.tenantFilter || {};
-        
+
         // Combinar filtro de empresa con condición de soft delete (usando deletedAt según modelo Poliza.js)
         const filtroPapelera = {
             ...filtroEmpresa,
             deletedAt: { $ne: null }
         };
-        
+
+        // RBAC: Si no es admin, filtrar por asesorId
+        if (userRole !== 'admin') {
+            filtroPapelera.asesorId = asesorId;
+        }
+
         // Devolver solo pólizas eliminadas (deletedAt != null) respetando el filtro de empresa
         const polizasEliminadas = await Poliza.find(filtroPapelera).sort({ deletedAt: -1 });
-        
+
         res.json(polizasEliminadas);
     } catch (error) {
         console.error('Error al obtener papelera:', error);

@@ -15,6 +15,7 @@ router.get('/stats', async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin';
         const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
 
         // Verificar si la empresa tiene el módulo de seguros activado
         const empresa = await Empresa.findById(empresaId);
@@ -33,12 +34,12 @@ router.get('/stats', async (req, res) => {
         });
 
         // Proyectos Por Cobrar (Cálculo manual para precisión)
-        const todosProyectos = await Proyecto.find({ 
+        const todosProyectos = await Proyecto.find({
             ...filtroBase,
-            isDeleted: false, 
-            estatus: { $nin: ['Cotizacion', 'Cancelado'] } 
+            isDeleted: false,
+            estatus: { $nin: ['Cotizacion', 'Cancelado'] }
         });
-        
+
         let proyectosPorCobrar = 0;
         todosProyectos.forEach(p => {
             // Si el total es mayor a lo pagado (con margen de error de $1 peso)
@@ -47,28 +48,33 @@ router.get('/stats', async (req, res) => {
             }
         });
 
+        // Filtro base para seguros con RBAC
+        const filtroSeguros = { empresaId, deletedAt: null };
+        if (!isAdmin) {
+            filtroSeguros.asesorId = asesorId;
+        }
+
         // SI NO ES ADMIN: Retornamos solo lo operativo y una bandera para ocultar lo financiero
         if (!isAdmin) {
             // Si es módulo de seguros, agregar métricas de seguros
             if (esModuloSeguros) {
-                const totalClientes = await Cliente.countDocuments({ empresaId, deletedAt: null });
-                const polizasActivas = await Poliza.countDocuments({ empresaId, estado: 'Activa', deletedAt: null });
-                const polizasActivasData = await Poliza.find({ empresaId, estado: 'Activa', deletedAt: null });
+                const totalClientes = await Cliente.countDocuments(filtroSeguros);
+                const polizasActivas = await Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' });
+                const polizasActivasData = await Poliza.find({ ...filtroSeguros, estado: 'Activa' });
                 const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
 
                 const hoy = new Date();
                 const en30Dias = new Date();
                 en30Dias.setDate(hoy.getDate() + 30);
                 const proximosVencimientos = await Poliza.countDocuments({
-                    empresaId,
+                    ...filtroSeguros,
                     estado: 'Activa',
-                    deletedAt: null,
                     'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
                 });
 
                 // Gráfica de tipos de seguro
                 const graficaTipos = await Poliza.aggregate([
-                    { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null } },
+                    { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null, ...(isAdmin ? {} : { asesorId }) } },
                     { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
                     { $sort: { count: -1 } }
                 ]);
@@ -86,7 +92,8 @@ router.get('/stats', async (req, res) => {
                             empresaId: new mongoose.Types.ObjectId(empresaId),
                             estado: 'Activa',
                             deletedAt: null,
-                            'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses }
+                            'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses },
+                            ...(isAdmin ? {} : { asesorId })
                         }
                     },
                     {
@@ -133,7 +140,7 @@ router.get('/stats', async (req, res) => {
         // Ingresos Mes Actual
         // FASE 4: Construir filtro base y asegurar conversión explícita de empresaId a ObjectId
         let baseMatch = buildQueryFilter(req, { isDeleted: false, 'pagos.0': { $exists: true } });
-        
+
         // Asegurar que empresaId sea ObjectId válido para aggregations
         if (baseMatch.empresaId && typeof baseMatch.empresaId === 'string') {
             try {
@@ -142,7 +149,7 @@ router.get('/stats', async (req, res) => {
                 console.warn('[Dashboard] Error convirtiendo empresaId:', e.message);
             }
         }
-        
+
         const ingresosMesData = await Proyecto.aggregate([
             { $match: baseMatch },
             { $unwind: '$pagos' },
@@ -156,11 +163,11 @@ router.get('/stats', async (req, res) => {
             { $match: baseMatch },
             { $unwind: '$pagos' },
             { $match: { 'pagos.fecha': { $gte: inicioAnio, $lte: finAnio } } },
-            { 
-                $group: { 
-                    _id: { $month: "$pagos.fecha" }, 
-                    total: { $sum: '$pagos.monto' } 
-                } 
+            {
+                $group: {
+                    _id: { $month: "$pagos.fecha" },
+                    total: { $sum: '$pagos.monto' }
+                }
             }
         ]);
 
@@ -183,18 +190,17 @@ router.get('/stats', async (req, res) => {
         };
 
         if (esModuloSeguros) {
-            const totalClientes = await Cliente.countDocuments({ empresaId, deletedAt: null });
-            const polizasActivas = await Poliza.countDocuments({ empresaId, estado: 'Activa', deletedAt: null });
-            const polizasActivasData = await Poliza.find({ empresaId, estado: 'Activa', deletedAt: null });
+            const totalClientes = await Cliente.countDocuments(filtroSeguros);
+            const polizasActivas = await Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' });
+            const polizasActivasData = await Poliza.find({ ...filtroSeguros, estado: 'Activa' });
             const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
 
             const hoy = new Date();
             const en30Dias = new Date();
             en30Dias.setDate(hoy.getDate() + 30);
             const proximosVencimientos = await Poliza.countDocuments({
-                empresaId,
+                ...filtroSeguros,
                 estado: 'Activa',
-                deletedAt: null,
                 'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
             });
 
