@@ -3909,16 +3909,31 @@ Fecha de firma: {{FECHA}}`;
             }
         });
         
-        document.getElementById('toggle-password').addEventListener('click', () => {
-             const passwordInput = document.getElementById('password');
-             passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
-        });
-        document.getElementById('toggle-password-reg').addEventListener('click', () => {
-             const passwordInput = document.getElementById('password-reg');
-             if (passwordInput) {
-                 passwordInput.setAttribute('type', passwordInput.getAttribute('type') === 'password' ? 'text' : 'password');
-             }
-        });
+        // Función genérica para toggle de visibilidad de contraseña (usando delegación de eventos)
+        function initPasswordToggles() {
+            document.addEventListener('click', function(e) {
+                const toggleButton = e.target.closest('[id*="toggle-password"], .toggle-password');
+                if (!toggleButton) return;
+                
+                const inputGroup = toggleButton.closest('.input-group');
+                if (!inputGroup) return;
+                
+                const passwordInput = inputGroup.querySelector('input[type="password"], input[type="text"]');
+                if (!passwordInput) return;
+                
+                const currentType = passwordInput.getAttribute('type');
+                const newType = currentType === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', newType);
+                
+                const icon = toggleButton.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('bi-eye', 'bi-eye-slash');
+                    icon.classList.add(newType === 'password' ? 'bi-eye' : 'bi-eye-slash');
+                }
+            });
+        }
+        
+        initPasswordToggles();
     }
 
     function filtrarTablas(query) { 
@@ -5634,26 +5649,76 @@ Fecha de firma: {{FECHA}}`;
     async function resetPassword(e) { e.preventDefault(); const token = document.getElementById('reset-token').value; const password = document.getElementById('new-password').value; try { const res = await fetch(`${API_URL}/api/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: password }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('¡Contraseña actualizada!', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
     async function registerUser(e) {
         e.preventDefault();
-        const username = document.getElementById('reg-username').value;
-        const email = document.getElementById('reg-email').value;
+        
+        const username = document.getElementById('reg-username').value.trim();
+        const email = document.getElementById('reg-email').value.trim();
         const password = document.getElementById('reg-password').value;
-        const nombreArtistico = document.getElementById('reg-artistname').value;
+        const nombreArtistico = document.getElementById('reg-artistname').value.trim();
         const empresaInvitacion = registroEmpresaInvitacion || sessionStorage.getItem('registro_empresa_invitacion');
+        const errorElement = document.getElementById('login-error');
+        
+        // Limpiar error anterior
+        if (errorElement) errorElement.textContent = '';
+        
+        // Validaciones básicas
+        if (!username || !email || !password || !nombreArtistico) {
+            if (errorElement) errorElement.textContent = 'Todos los campos son obligatorios';
+            return;
+        }
+        
+        if (password.length < 6) {
+            if (errorElement) errorElement.textContent = 'La contraseña debe tener al menos 6 caracteres';
+            return;
+        }
+        
         const body = { username, email, password, nombre: nombreArtistico, createArtist: true };
         if (empresaInvitacion) body.empresaId = empresaInvitacion;
+        
         try {
-            const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const res = await fetch(`${API_URL}/api/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
+            
+            if (!res.ok) {
+                // Error del servidor - extraer mensaje específico del objeto de error
+                let errorMessage = 'Error al registrar usuario';
+                
+                if (typeof data.error === 'string') {
+                    errorMessage = data.error;
+                } else if (typeof data.message === 'string') {
+                    errorMessage = data.message;
+                } else if (data.error && typeof data.error === 'object') {
+                    errorMessage = data.error.message || data.error.error || JSON.stringify(data.error);
+                } else if (data.errors && Array.isArray(data.errors)) {
+                    errorMessage = data.errors.map(e => e.msg || e.message).join(', ');
+                } else {
+                    errorMessage = JSON.stringify(data);
+                }
+                
+                if (errorElement) errorElement.textContent = errorMessage;
+                console.error('[registerUser] Error del servidor:', data);
+                return;
+            }
+            
+            // Registro exitoso
             const msg = data.message || (data.estado === 'pendiente'
                 ? 'Cuenta creada. Espera la aprobación de un administrador.'
                 : '¡Cuenta creada!');
+            
             showToast(msg, 'success');
             sessionStorage.removeItem('registro_empresa_invitacion');
             registroEmpresaInvitacion = null;
             toggleAuth('login');
+            
         } catch (err) {
-            document.getElementById('login-error').textContent = err.message;
+            // Error de red o error inesperado
+            const errorMessage = err.message || 'Error de conexión. Por favor, verifica tu internet e intenta nuevamente.';
+            if (errorElement) errorElement.textContent = errorMessage;
+            console.error('[registerUser] Error:', err);
         }
     }
     async function recoverPassword(e) { e.preventDefault(); const email = document.getElementById('rec-email').value; try { const res = await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); showToast('Correo enviado.', 'success'); toggleAuth('login'); } catch (err) { document.getElementById('login-error').textContent = err.message; } }
