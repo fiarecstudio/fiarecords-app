@@ -1,13 +1,75 @@
 const express = require('express');
 const router = express.Router();
 const Usuario = require('../models/Usuario');
-const Artista = require('../models/Artista'); 
+const Artista = require('../models/Artista');
 const auth = require('../middleware/auth');
 const { applyTenantFilter, buildQueryFilter, hasTenantAccess } = require('../middleware/tenantFilter');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 
 router.use(auth);
 router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticamente
+
+// ==========================================
+// OBTENER ASESORES (Solo usuarios con role 'asesor')
+// ==========================================
+router.get('/asesores', async (req, res) => {
+    try {
+        const filtro = buildQueryFilter(req, { role: 'asesor', isDeleted: false });
+        const asesores = await Usuario.find(filtro).select('-password').sort({ createdAt: -1 });
+        res.json({ asesores });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener asesores' });
+    }
+});
+
+// ==========================================
+// CREAR ASESOR (Solo admins pueden crear asesores)
+// ==========================================
+router.post('/asesores', async (req, res) => {
+    try {
+        // Verificar que sea admin
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Solo administradores pueden crear asesores' });
+        }
+
+        const { username, email, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña son obligatorios' });
+        }
+
+        // Verificar si el usuario ya existe
+        const existeUsuario = await Usuario.findOne({
+            username: username.trim(),
+            empresaId: req.user.empresaId,
+            isDeleted: false
+        });
+
+        if (existeUsuario) {
+            return res.status(400).json({ error: 'El usuario ya existe' });
+        }
+
+        // Crear asesor con role 'asesor'
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const nuevoAsesor = new Usuario({
+            username: username.trim(),
+            email: email ? email.trim() : undefined,
+            password: hashedPassword,
+            role: 'asesor',
+            empresaId: req.user.empresaId,
+            estado: 'activo',
+            permisos: ['polizas']
+        });
+
+        await nuevoAsesor.save();
+        res.status(201).json({ message: 'Asesor creado exitosamente', asesor: nuevoAsesor });
+    } catch (err) {
+        console.error('[POST /api/usuarios/asesores] Error:', err);
+        res.status(500).json({ error: 'Error al crear asesor: ' + err.message });
+    }
+});
 
 // ==========================================
 // OBTENER USUARIOS (ACTIVOS)

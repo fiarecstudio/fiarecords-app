@@ -98,6 +98,37 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 }
 
 /* --- ESTILOS ESPECIALES PARA FILAS CANCELADAS --- */
+
+/* ==========================================
+   ESTILOS PARA MÓDULO DE ASESORES
+   ========================================== */
+.asesores-container {
+    padding: 20px;
+}
+
+.form-container {
+    background: var(--secondary-button-bg);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    border: 1px solid var(--border-color);
+}
+
+.table-container {
+    margin-top: 20px;
+}
+
+.export-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.export-buttons .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
 .fila-cancelada, .fila-cancelada td {
     background-color: #f1f5f9 !important; 
     color: #94a3b8 !important;

@@ -1,6 +1,10 @@
 const Poliza = require('../models/Poliza');
+const Usuario = require('../models/Usuario');
+const Configuracion = require('../models/Configuracion');
 const pdfParseModule = require('pdf-parse');
 const PDFParse = pdfParseModule.PDFParse || (pdfParseModule.default && pdfParseModule.default.PDFParse) || pdfParseModule.default || pdfParseModule;
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 
 /**
  * Normaliza el texto del PDF respetando saltos de línea vitales
@@ -20,17 +24,17 @@ function normalizeText(text) {
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
 
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
 
-        // Asignar automáticamente el asesorId del usuario que crea la póliza
-        const asesorId = req.user._id || req.user.id;
+        // Si no se especifica asesorId, asignar automáticamente el del usuario que crea la póliza
+        const asesorIdFinal = asesorId || (req.user._id || req.user.id);
 
         const nuevaPoliza = new Poliza({
             empresaId,
-            asesorId,
+            asesorId: asesorIdFinal,
             numeroPoliza,
             cliente,
             clienteEmail,
@@ -1036,6 +1040,245 @@ const renovarPoliza = async (req, res) => {
     }
 };
 
+// ==========================================
+// ASIGNAR ASESOR A PÓLIZA
+// ==========================================
+const asignarAsesor = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nuevoAsesorId } = req.body;
+        const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+
+        // Verificar que sea admin
+        if (userRole !== 'admin') {
+            return res.status(403).json({ error: 'Solo administradores pueden reasignar asesores' });
+        }
+
+        // Verificar que el nuevo asesor exista y pertenezca a la empresa
+        const nuevoAsesor = await Usuario.findOne({ _id: nuevoAsesorId, empresaId, role: 'asesor' });
+        if (!nuevoAsesor) {
+            return res.status(404).json({ error: 'Asesor no encontrado o no pertenece a tu empresa' });
+        }
+
+        // Actualizar la póliza
+        const poliza = await Poliza.findOneAndUpdate(
+            { _id: id, empresaId, deletedAt: null },
+            { asesorId: nuevoAsesorId },
+            { new: true }
+        );
+
+        if (!poliza) {
+            return res.status(404).json({ error: 'Póliza no encontrada' });
+        }
+
+        res.json({ message: 'Asesor reasignado correctamente', poliza });
+    } catch (error) {
+        console.error('[asignarAsesor] Error:', error);
+        res.status(500).json({ error: 'Error al reasignar asesor', details: error.message });
+    }
+};
+
+// ==========================================
+// EXPORTAR REPORTE EXCEL (ACTUALIZADO CON ASESOR)
+// ==========================================
+const exportarReporteExcel = async (req, res) => {
+    try {
+        const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+        const userId = req.user._id || req.user.id;
+
+        // Construir filtro
+        let filtro = { empresaId, deletedAt: null };
+        if (userRole !== 'admin') {
+            filtro.asesorId = userId;
+        }
+
+        // AGREGADO: .populate('asesorId', 'username') para traer el nombre del asesor
+        const polizas = await Poliza.find(filtro)
+            .populate('asesorId', 'username')
+            .sort({ createdAt: -1 });
+
+        // Crear workbook
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Pólizas');
+
+        // Agregar encabezados (Incluyendo la nueva columna Asesor)
+        worksheet.columns = [
+            { header: 'Número de Póliza', key: 'numeroPoliza', width: 20 },
+            { header: 'Cliente', key: 'cliente', width: 30 },
+            { header: 'Asesor', key: 'asesor', width: 20 }, // <--- NUEVA COLUMNA
+            { header: 'Email', key: 'clienteEmail', width: 25 },
+            { header: 'Teléfono', key: 'clienteTelefono', width: 15 },
+            { header: 'Aseguradora', key: 'aseguradora', width: 20 },
+            { header: 'Tipo de Seguro', key: 'tipoSeguro', width: 15 },
+            { header: 'Fecha Inicio', key: 'fechaInicio', width: 15 },
+            { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 15 },
+            { header: 'Prima Total', key: 'primaTotal', width: 15 },
+            { header: 'Estado', key: 'estado', width: 12 },
+            { header: 'Estado Pago', key: 'estadoPago', width: 15 }
+        ];
+
+        // Agregar datos
+        polizas.forEach(poliza => {
+            worksheet.addRow({
+                numeroPoliza: poliza.numeroPoliza,
+                cliente: poliza.cliente,
+                asesor: poliza.asesorId ? poliza.asesorId.username : 'Sin Asesor', // <--- Mapeo del asesor
+                clienteEmail: poliza.clienteEmail || '',
+                clienteTelefono: poliza.clienteTelefono || '',
+                aseguradora: poliza.aseguradora,
+                tipoSeguro: poliza.tipoSeguro,
+                fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
+                fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
+                primaTotal: poliza.primaTotal,
+                estado: poliza.estado,
+                estadoPago: poliza.estadoPago
+            });
+        });
+
+        // Enviar archivo
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error('[exportarReporteExcel] Error:', error);
+        res.status(500).json({ error: 'Error al exportar reporte Excel', details: error.message });
+    }
+};
+
+// ==========================================
+// EXPORTAR REPORTE PDF (CORREGIDO)
+// ==========================================
+const exportarReportePDF = async (req, res) => {
+    try {
+        const empresaId = req.user.empresaId;
+        const userRole = req.user.role;
+        const userId = req.user._id || req.user.id;
+
+        // Construir filtro
+        let filtro = { empresaId, deletedAt: null };
+        if (userRole !== 'admin') {
+            filtro.asesorId = userId;
+        }
+
+        const polizas = await Poliza.find(filtro).populate('asesorId', 'username').sort({ createdAt: -1 });
+
+        // Obtener configuración de la empresa para el logo
+        const config = await Configuracion.findOne({ empresaId });
+        const logoBase64 = config?.logoBase64 || null;
+
+        // Crear documento PDF con márgenes
+        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_${new Date().toISOString().split('T')[0]}.pdf`);
+
+        doc.pipe(res);
+
+        // Logo: Posición X=20, Y=20. Usamos fit: [80, 80] para que no se corte.
+        if (logoBase64) {
+            try {
+                const cleanBase64 = logoBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+                const logoBuffer = Buffer.from(cleanBase64, 'base64');
+                doc.image(logoBuffer, 20, 20, { 
+                    fit: [80, 80], 
+                    align: 'left', 
+                    valign: 'top' 
+                });
+            } catch (err) {
+                console.warn('[exportarReportePDF] Error al cargar logo:', err);
+            }
+        }
+
+        // Título: Posicionado para no chocar con el logo (si hay logo)
+        const titleX = 120; 
+        doc.fontSize(20).font('Helvetica-Bold').text('Reporte de Pólizas', titleX, 30);
+        doc.fontSize(10).font('Helvetica').text(`Fecha: ${new Date().toLocaleDateString()}`, titleX, 55);
+        
+        // Espacio entre logo/título y la tabla
+        const tableTop = 120; 
+        const tableLeft = 20;
+        const columnWidths = [60, 80, 80, 60, 60, 50, 60, 60, 50, 40, 50, 60];
+        const headers = ['Número', 'Cliente', 'Email', 'Teléfono', 'Aseguradora', 'Tipo', 'Inicio', 'Vencimiento', 'Prima', 'Estado', 'Pago', 'Asesor'];
+
+        // Encabezados
+        const drawHeaders = (yPos) => {
+            doc.fontSize(8).font('Helvetica-Bold');
+            let x = tableLeft;
+            headers.forEach((header, i) => {
+                doc.rect(x, yPos, columnWidths[i], 20).fill('#f0f0f0');
+                doc.fillColor('black').text(header, x + 2, yPos + 5, { width: columnWidths[i] - 4, align: 'center' });
+                x += columnWidths[i];
+            });
+            doc.moveTo(tableLeft, yPos + 20).lineTo(x, yPos + 20).stroke();
+        };
+
+        drawHeaders(tableTop);
+
+        // Datos
+        doc.fontSize(7).font('Helvetica');
+        let y = tableTop + 25;
+        const rowHeight = 18;
+
+        polizas.forEach((poliza, index) => {
+            // Verificar espacio para nueva página
+            if (y + rowHeight > doc.page.height - 40) {
+                doc.addPage();
+                y = 20;
+                drawHeaders(y);
+                y += 25;
+            }
+
+            // Alternar color
+            if (index % 2 === 0) {
+                doc.rect(tableLeft, y, columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill('#f9f9f9');
+            }
+            doc.fillColor('black');
+
+            let x = tableLeft;
+            const data = [
+                poliza.numeroPoliza || '',
+                poliza.cliente || '',
+                poliza.clienteEmail || '',
+                poliza.clienteTelefono || '',
+                poliza.aseguradora || '',
+                poliza.tipoSeguro || '',
+                poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
+                poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
+                poliza.primaTotal ? '$' + poliza.primaTotal.toFixed(2) : '',
+                poliza.estado || '',
+                poliza.estadoPago || '',
+                poliza.asesorId?.username || ''
+            ];
+
+            data.forEach((text, i) => {
+                doc.text(text, x + 2, y + 5, { width: columnWidths[i] - 4, align: 'center' });
+                x += columnWidths[i];
+            });
+
+            y += rowHeight;
+        });
+
+        // Pie de página (Numeración)
+        const pages = doc.bufferedPageRange();
+        for (let i = 0; i < pages.count; i++) {
+            doc.switchToPage(i);
+            doc.fontSize(8).text(
+                `Página ${i + 1} de ${pages.count}`,
+                20, doc.page.height - 30, { align: 'center' }
+            );
+        }
+
+        doc.end();
+    } catch (error) {
+        console.error('[exportarReportePDF] Error:', error);
+        res.status(500).json({ error: 'Error al exportar reporte PDF', details: error.message });
+    }
+};
+
 module.exports = {
     crearPoliza,
     obtenerPolizas,
@@ -1046,6 +1289,9 @@ module.exports = {
     restaurarPoliza,
     eliminarDefinitivamente,
     registrarPago,
+    asignarAsesor,
+    exportarReporteExcel,
+    exportarReportePDF,
     enviarRecordatorioManual,
     obtenerMetricasSeguros,
     obtenerEventosAgenda,

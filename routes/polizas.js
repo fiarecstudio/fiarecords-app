@@ -149,6 +149,17 @@ router.post('/enviar-recordatorio', auth, applyTenantFilter, polizaController.en
 // FASE 6: MÉTRICAS DEL DASHBOARD DE SEGUROS
 router.get('/dashboard/metricas', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
 
+// ==========================================
+// RUTAS PARA EXPORTACIÓN DE REPORTES
+// ==========================================
+router.get('/exportar/excel', auth, applyTenantFilter, polizaController.exportarReporteExcel);
+router.get('/exportar/pdf', auth, applyTenantFilter, polizaController.exportarReportePDF);
+
+// ==========================================
+// RUTA PARA ASIGNAR ASESOR A PÓLIZA
+// ==========================================
+router.put('/:id/asignar-asesor', auth, applyTenantFilter, polizaController.asignarAsesor);
+
 /**
  * ENDPOINT DE EXTRACCIÓN (Optimizado con Lógica Posicional para CHUBB)
  */

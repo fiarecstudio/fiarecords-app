@@ -1176,6 +1176,15 @@
                     <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <h2 class="mb-0"><i class="bi bi-shield-check me-2"></i>Gestión de Pólizas</h2>
                         <div class="d-flex gap-2 flex-wrap">
+                            <!-- Botones de Exportación -->
+                            <div class="export-buttons">
+                                <button id="btnExportarExcel" type="button" class="btn btn-success btn-sm">
+                                    <i class="bi bi-file-earmark-excel"></i> Excel
+                                </button>
+                                <button id="btnExportarPDF" type="button" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </button>
+                            </div>
                             <!-- Filtro por Asesor (Solo visible para admins) -->
                             <div id="filtro-asesor-container" class="d-none align-items-center gap-2">
                                 <label class="form-label mb-0 small"><i class="bi bi-person"></i> Asesor:</label>
@@ -1183,13 +1192,6 @@
                                     <option value="">Todos los asesores</option>
                                 </select>
                             </div>
-                            <!-- Botón de migración temporal (Solo visible para admins) -->
-                            <button id="btn-migrar-asesor" class="btn btn-warning d-none" onclick="app.ejecutarMigracionAsesor()">
-                                <i class="bi bi-database-gear"></i> Migrar Asesor
-                            </button>
-                            <button id="btn-migrar-fechas" class="btn btn-info d-none" onclick="app.ejecutarMigracionFechas()">
-                                <i class="bi bi-calendar-check"></i> Migrar Fechas
-                            </button>
                             <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
                                 <i class="bi bi-plus-circle"></i> Nueva Póliza
                             </button>

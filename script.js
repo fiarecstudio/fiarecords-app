@@ -1051,6 +1051,7 @@ let proyectoIdEnEdicion = null;
                 document.getElementById('media-container').innerHTML = '<div class="text-muted small">Cargando reproductor...</div>';
             });
         }
+
     });
 
     // ==================================================================
@@ -5968,7 +5969,7 @@ Fecha de firma: {{FECHA}}`;
                 if (isSuperAdmin) {
                     html += `<div class="nav-group">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
-                                <a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi person-badge"></i> Usuarios</a>
+                                <a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi people"></i> Usuarios</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
                              </div>`;
                 }
@@ -6153,6 +6154,19 @@ Fecha de firma: {{FECHA}}`;
     async function mostrarFormularioPoliza(datosPrellenados = {}) {
         const clienteId = datosPrellenados.clienteId || null;
 
+        // Cargar lista de asesores para el select
+        let asesoresOptions = '';
+        try {
+            const asesores = await fetchAPI('/api/usuarios/asesores');
+            if (asesores && asesores.asesores) {
+                asesores.asesores.forEach(asesor => {
+                    asesoresOptions += `<option value="${asesor._id}">${asesor.username}</option>`;
+                });
+            }
+        } catch (error) {
+            console.warn('[mostrarFormularioPoliza] No se pudieron cargar asesores:', error);
+        }
+
         const { value: formValues } = await Swal.fire({
             title: 'Registrar Nueva Póliza',
             html: `
@@ -6236,6 +6250,13 @@ Fecha de firma: {{FECHA}}`;
                             <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso || 3}" placeholder="3">
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Asesor</label>
+                        <select id="poliza-asesor" class="swal2-input">
+                            <option value="">Seleccionar asesor...</option>
+                            ${asesoresOptions}
+                        </select>
+                    </div>
                 </div>
             `,
             focusConfirm: false,
@@ -6264,6 +6285,7 @@ Fecha de firma: {{FECHA}}`;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
                 const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
+                const asesorId = document.getElementById('poliza-asesor').value;
                 const clienteIdValue = document.getElementById('poliza-cliente-id').value || null;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
@@ -6289,6 +6311,7 @@ Fecha de firma: {{FECHA}}`;
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                     primerPago: primerPago ? parseFloat(primerPago) : null,
                     diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3,
+                    asesorId: asesorId || null,
                     clienteId: clienteIdValue
                 };
             }
@@ -6360,8 +6383,6 @@ Fecha de firma: {{FECHA}}`;
         // Mostrar/ocultar filtro de asesor según el rol del usuario
         const user = getUserRoleAndId();
         const filtroAsesorContainer = document.getElementById('filtro-asesor-container');
-        const btnMigrarAsesor = document.getElementById('btn-migrar-asesor');
-        const btnMigrarFechas = document.getElementById('btn-migrar-fechas');
 
         if (filtroAsesorContainer) {
             if (user.role === 'admin') {
@@ -6369,23 +6390,9 @@ Fecha de firma: {{FECHA}}`;
                 filtroAsesorContainer.classList.add('d-flex');
                 // Cargar lista de asesores si aún no está cargada
                 await cargarListaAsesores();
-                // Mostrar botones de migración
-                if (btnMigrarAsesor) {
-                    btnMigrarAsesor.classList.remove('d-none');
-                }
-                if (btnMigrarFechas) {
-                    btnMigrarFechas.classList.remove('d-none');
-                }
             } else {
                 filtroAsesorContainer.classList.add('d-none');
                 filtroAsesorContainer.classList.remove('d-flex');
-                // Ocultar botones de migración
-                if (btnMigrarAsesor) {
-                    btnMigrarAsesor.classList.add('d-none');
-                }
-                if (btnMigrarFechas) {
-                    btnMigrarFechas.classList.add('d-none');
-                }
             }
         }
 
@@ -6523,90 +6530,6 @@ Fecha de firma: {{FECHA}}`;
         await cargarPolizas();
     }
 
-    // Función para ejecutar la migración de asesorId
-    async function ejecutarMigracionAsesor() {
-        const { value: confirmar } = await Swal.fire({
-            title: '¿Ejecutar migración de asesor?',
-            text: 'Esto asignará tu ID de usuario como asesor a todas las pólizas históricas que no tengan este campo.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, ejecutar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#ffc107'
-        });
-
-        if (!confirmar) return;
-
-        try {
-            const resultado = await fetchAPI('/api/polizas/migrar-asesor-historico');
-            
-            if (resultado.success) {
-                await Swal.fire({
-                    title: '¡Migración completada!',
-                    text: `Se actualizaron ${resultado.polizasActualizadas} pólizas exitosamente.`,
-                    icon: 'success'
-                });
-                // Recargar pólizas para reflejar los cambios
-                await cargarPolizas();
-            } else {
-                await Swal.fire({
-                    title: 'Error',
-                    text: resultado.error || 'Error al ejecutar migración',
-                    icon: 'error'
-                });
-            }
-        } catch (error) {
-            console.error('[ejecutarMigracionAsesor] Error:', error);
-            await Swal.fire({
-                title: 'Error',
-                text: error.message || 'Error al ejecutar migración',
-                icon: 'error'
-            });
-        }
-    }
-
-    // Función para ejecutar la migración de fechas
-    async function ejecutarMigracionFechas() {
-        const { value: confirmar } = await Swal.fire({
-            title: '¿Ejecutar migración de fechas?',
-            text: 'Esto corregirá las fechas de vencimiento y próximo pago de las pólizas para que se muestren correctamente en el calendario.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, ejecutar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#0dcaf0'
-        });
-
-        if (!confirmar) return;
-
-        try {
-            const resultado = await fetchAPI('/api/polizas/migrar-fechas-agenda');
-            
-            if (resultado.success) {
-                await Swal.fire({
-                    title: '¡Migración completada!',
-                    text: resultado.message || `Se actualizaron ${resultado.polizasActualizadas} pólizas exitosamente.`,
-                    icon: 'success'
-                });
-                // Recargar pólizas para reflejar los cambios
-                await cargarPolizas();
-            } else {
-                await Swal.fire({
-                    title: 'Error',
-                    text: resultado.error || 'Error al ejecutar migración',
-                    icon: 'error'
-                });
-            }
-        } catch (error) {
-            console.error('[ejecutarMigracionFechas] Error:', error);
-            await Swal.fire({
-                title: 'Error',
-                text: error.message || 'Error al ejecutar migración',
-                icon: 'error'
-            });
-        }
-    }
-
     // Función para eliminar póliza
     async function eliminarPoliza(id) {
         const { value: confirmar } = await Swal.fire({
@@ -6664,6 +6587,19 @@ Fecha de firma: {{FECHA}}`;
         try {
             // Obtener datos de la póliza
             const poliza = await fetchAPI(`/api/polizas/${id}`);
+            
+            // Cargar lista de asesores para el select de reasignación
+            let asesoresOptions = '<option value="">Mantener asesor actual</option>';
+            try {
+                const asesores = await fetchAPI('/api/usuarios/asesores');
+                if (asesores && asesores.asesores) {
+                    asesores.asesores.forEach(asesor => {
+                        asesoresOptions += `<option value="${asesor._id}">${asesor.username}</option>`;
+                    });
+                }
+            } catch (error) {
+                console.warn('[editarPoliza] No se pudieron cargar asesores:', error);
+            }
             
             // Preparar datos para el formulario - INCLUIR TODOS LOS CAMPOS
             const datosPrellenados = {
@@ -6766,13 +6702,19 @@ Fecha de firma: {{FECHA}}`;
                                 <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${datosPrellenados.diasAnticipacionAviso}" placeholder="3">
                             </div>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Reasignar Asesor</label>
+                            <select id="poliza-asesor" class="swal2-input">
+                                ${asesoresOptions}
+                            </select>
+                        </div>
                     </div>
                 `,
                 focusConfirm: false,
                 showCancelButton: true,
                 confirmButtonText: 'Actualizar',
                 cancelButtonText: 'Cancelar',
-                preConfirm: () => {
+                preConfirm: async () => {
                     const numero = document.getElementById('poliza-numero').value.trim();
                     const cliente = document.getElementById('poliza-cliente').value.trim();
                     const clienteEmail = document.getElementById('poliza-email').value.trim();
@@ -6788,10 +6730,24 @@ Fecha de firma: {{FECHA}}`;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
                     const primerPago = document.getElementById('poliza-primer-pago').value;
                     const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
+                    const nuevoAsesorId = document.getElementById('poliza-asesor').value;
 
                     if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                         Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
                         return;
+                    }
+
+                    // Si se seleccionó un nuevo asesor, reasignar primero
+                    if (nuevoAsesorId) {
+                        try {
+                            await fetchAPI(`/api/polizas/${id}/asignar-asesor`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ nuevoAsesorId })
+                            });
+                        } catch (error) {
+                            Swal.showValidationMessage('Error al reasignar asesor: ' + error.message);
+                            return;
+                        }
                     }
 
                     return {
@@ -6834,6 +6790,97 @@ Fecha de firma: {{FECHA}}`;
             Swal.fire('Error', error.message || 'No se pudo cargar la póliza', 'error');
         }
     }
+
+    // ==================================================================
+    // EXPORTACIÓN DE REPORTES
+    // ==================================================================
+    async function exportarReporteExcel() {
+        try {
+            console.log('[exportarReporteExcel] Iniciando exportación...');
+            showToast('Generando reporte Excel...', 'info');
+
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/polizas/exportar/excel', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            console.log('[exportarReporteExcel] Response:', response);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[exportarReporteExcel] Error response:', errorText);
+                throw new Error('Error al exportar Excel');
+            }
+
+            const blob = await response.blob();
+            console.log('[exportarReporteExcel] Blob size:', blob.size);
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fecha = new Date().toISOString().split('T')[0];
+            a.download = `reporte_polizas_${fecha}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showToast('Reporte Excel descargado correctamente', 'success');
+        } catch (error) {
+            console.error('[exportarReporteExcel] Error:', error);
+            showToast('No se pudo descargar el reporte Excel: ' + error.message, 'error');
+        }
+    }
+
+    async function exportarReportePDF() {
+        try {
+            console.log('[exportarReportePDF] Iniciando exportación...');
+            showToast('Generando reporte PDF...', 'info');
+
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/polizas/exportar/pdf', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            console.log('[exportarReportePDF] Response:', response);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[exportarReportePDF] Error response:', errorText);
+                throw new Error('Error al exportar PDF');
+            }
+
+            const blob = await response.blob();
+            console.log('[exportarReportePDF] Blob size:', blob.size);
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fecha = new Date().toISOString().split('T')[0];
+            a.download = `reporte_polizas_${fecha}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showToast('Reporte PDF descargado correctamente', 'success');
+        } catch (error) {
+            console.error('[exportarReportePDF] Error:', error);
+            showToast('No se pudo descargar el reporte PDF: ' + error.message, 'error');
+        }
+    }
+
+    // Event listeners para botones de exportación (se agregan después de definir las funciones)
+    const btnExportarExcel = document.getElementById('btnExportarExcel');
+    const btnExportarPDF = document.getElementById('btnExportarPDF');
+    if (btnExportarExcel) btnExportarExcel.addEventListener('click', (e) => {
+        e.preventDefault();
+        exportarReporteExcel();
+    });
+    if (btnExportarPDF) btnExportarPDF.addEventListener('click', (e) => {
+        e.preventDefault();
+        exportarReportePDF();
+    });
 
     // ==================================================================
     // FASE 2: PAPELERA DE RECICLAJE
@@ -8802,7 +8849,8 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, ejecutarMigracionAsesor, ejecutarMigracionFechas, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, cargarPolizas, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        exportarReporteExcel, exportarReportePDF,
         guardarYProbarSMTP, enviarCorreoPrueba,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, renovarPoliza,
         abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, abrirModalRenovarPoliza, procesarRenovacion,
