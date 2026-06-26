@@ -104,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const IDENTITY_CACHE_KEY = 'fia_identity_cache';
     const IDENTITY_TIMESTAMP_KEY = 'fia_identity_timestamp';
+    const CONFIG_CACHE_KEY = 'fia_config_cache';
+    const CONFIG_TIMESTAMP_KEY = 'fia_config_timestamp';
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
     let isApplyingIdentity = false; // LOCK para evitar ejecuciones simultáneas
     
@@ -205,81 +207,87 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
+     * Descarga identidad visual del servidor y actualiza caché/DOM
+     */
+    async function validarIdentidadVisualDesdeServidor(empresaId, actualizarDOM = true) {
+        const url = `${API_URL}/api/configuracion/public/logo` +
+                    (empresaId !== 'all' ? `?empresaId=${empresaId}` : '');
+
+        const res = await fetch(url, {
+            headers: { 'X-Empresa-Id': empresaId }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (actualizarDOM && (data.logoBase64 || data.faviconBase64)) {
+            aplicarIdentidadVisualAlDOM(data, true);
+        }
+
+        actualizarTituloEmpresa();
+
+        localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
+            logoBase64: data.logoBase64,
+            faviconBase64: data.faviconBase64,
+            empresaId: empresaId,
+            timestamp: Date.now()
+        }));
+        localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
+        if (data.logoBase64) {
+            localStorage.setItem('fia_logo_cache', data.logoBase64);
+        }
+
+        return data;
+    }
+
+    /**
      * EL GUARDIA DE IDENTIDAD - Función centralizada
      * Aplica identidad visual con sistema anti-flicker (placeholder + validación)
      * @param {boolean} forzarCambio - Si es true, fuerza recarga desde servidor
      */
     async function aplicarIdentidadVisual(forzarCambio = false) {
-        // LOCK: Si ya está ejecutándose, no iniciar otra vez
         if (isApplyingIdentity) {
             return;
         }
-        
+
         try {
-            isApplyingIdentity = true; // Activar LOCK
-            
+            isApplyingIdentity = true;
+
             const empresaId = obtenerIdEmpresaPrioridad();
-            // FASE 1: PLACEHOLDER INMEDIATO (Anti-Flicker)
-            // Si tenemos caché válido y NO es forzado, ponemos el logo al instante
+
             if (!forzarCambio) {
                 const cacheStr = localStorage.getItem(IDENTITY_CACHE_KEY);
                 const cacheTimestamp = localStorage.getItem(IDENTITY_TIMESTAMP_KEY);
                 const ahora = Date.now();
-                
+
                 if (cacheStr && cacheTimestamp) {
                     const cache = JSON.parse(cacheStr);
-                    const edadCache = ahora - parseInt(cacheTimestamp);
-                    
-                    // Si el caché es válido, corresponde a la misma empresa Y no ha expirado
+                    const edadCache = ahora - parseInt(cacheTimestamp, 10);
+
                     if (edadCache < CACHE_DURATION_MS && cache.empresaId === empresaId) {
                         aplicarIdentidadVisualAlDOM(cache, false);
-                        // Continuar para validar en segundo plano
-                    } else if (cache.empresaId !== empresaId) {
-                        // CAMBIO DE EMPRESA: Limpiar caché y forzar recarga
+                        setTimeout(() => {
+                            validarIdentidadVisualDesdeServidor(empresaId, true).catch((err) => {
+                                console.warn('[GuardiaIdentidad] Validación en segundo plano:', err.message);
+                            });
+                        }, 0);
+                        return cache;
+                    }
+
+                    if (cache.empresaId !== empresaId) {
                         localStorage.removeItem(IDENTITY_CACHE_KEY);
                         localStorage.removeItem(IDENTITY_TIMESTAMP_KEY);
                         localStorage.removeItem('fia_logo_cache');
-                        forzarCambio = true; // Forzar recarga desde servidor
+                        forzarCambio = true;
                     }
                 }
             }
-            
-            // FASE 2: VALIDACIÓN EN SEGUNDO PLANO (fetch real)
-            const url = `${API_URL}/api/configuracion/public/logo` + 
-                        (empresaId !== 'all' ? `?empresaId=${empresaId}` : '');
-            
-            // FASE 4: Incluir header X-Empresa-Id para que el backend identifique correctamente la empresa
-            const res = await fetch(url, {
-                headers: { 'X-Empresa-Id': empresaId }
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
-            const data = await res.json();
-            
-            // FASE 3: ACTUALIZAR DOM con datos frescos
-            if (data.logoBase64 || data.faviconBase64) {
-                aplicarIdentidadVisualAlDOM(data, true);
-            }
-            
-            // Actualizar título de la pestaña
-            await actualizarTituloEmpresa();
-            
-            // Guardar en caché para próximas cargas
-            localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
-                logoBase64: data.logoBase64,
-                faviconBase64: data.faviconBase64,
-                empresaId: empresaId,
-                timestamp: Date.now()
-            }));
-            localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
-            localStorage.setItem('fia_logo_cache', data.logoBase64); // Legacy para guardia inmediato
-            
-            return data;
+
+            return await validarIdentidadVisualDesdeServidor(empresaId, true);
         } catch (err) {
             console.error('[GuardiaIdentidad] Error:', err);
-            // En caso de error, mantener el placeholder si existe
         } finally {
-            isApplyingIdentity = false; // Liberar LOCK
+            isApplyingIdentity = false;
         }
     }
     
@@ -296,6 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 localStorage.setItem('empresaActiva', 'all');
             }
+
+            localStorage.removeItem(CONFIG_CACHE_KEY);
+            localStorage.removeItem(CONFIG_TIMESTAMP_KEY);
             
             // Forzar cambio de identidad visual inmediato (sin F5)
             aplicarIdentidadVisual(true);
@@ -519,10 +530,8 @@ let proyectoIdEnEdicion = null;
         }
     }
 
-    async function loadInitialConfig(empresaId = null) {
+    async function loadInitialConfig(empresaId = null, forzarRecarga = false) {
         try {
-            // Carga centralizada con empresaId explícito
-            // Si no se pasa empresaId, se obtiene de localStorage o se usa 'all'
             let finalEmpresaId = empresaId ||
                                    localStorage.getItem('empresaActiva') ||
                                    localStorage.getItem('selected_empresa_id') ||
@@ -534,6 +543,25 @@ let proyectoIdEnEdicion = null;
                 finalEmpresaId = 'all';
             }
 
+            if (!forzarRecarga) {
+                const cacheStr = localStorage.getItem(CONFIG_CACHE_KEY);
+                const cacheTimestamp = localStorage.getItem(CONFIG_TIMESTAMP_KEY);
+                if (cacheStr && cacheTimestamp) {
+                    const edadCache = Date.now() - parseInt(cacheTimestamp, 10);
+                    const cache = JSON.parse(cacheStr);
+                    if (edadCache < CACHE_DURATION_MS && cache.empresaId === finalEmpresaId && cache.config) {
+                        configCache = cache.config;
+                        if (configCache.logoBase64) logoBase64 = configCache.logoBase64;
+                        setTimeout(() => {
+                            loadInitialConfig(finalEmpresaId, true).catch((err) => {
+                                console.warn('[loadInitialConfig] Actualización en segundo plano:', err.message);
+                            });
+                        }, 0);
+                        return configCache;
+                    }
+                }
+            }
+
             const config = await fetchAPI('/api/configuracion', {
                 headers: { 'X-Empresa-Id': finalEmpresaId }
             });
@@ -541,6 +569,13 @@ let proyectoIdEnEdicion = null;
             if (config) { 
                 configCache = config; 
                 if(config.logoBase64) logoBase64 = config.logoBase64;
+
+                localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
+                    empresaId: finalEmpresaId,
+                    config,
+                    timestamp: Date.now()
+                }));
+                localStorage.setItem(CONFIG_TIMESTAMP_KEY, Date.now().toString());
                 
                 // Rellenar inputs SMTP con la configuración del backend
                 if (config.notificacionesEmail) {
@@ -557,12 +592,13 @@ let proyectoIdEnEdicion = null;
                     if (smtpUser && config.notificacionesEmail.smtpUser) {
                         smtpUser.value = config.notificacionesEmail.smtpUser;
                     }
-                    // Nota: smtpPass NO se rellena por seguridad
                 }
-                }
+            }
+            return configCache;
         } catch (e) { 
             console.error('[loadInitialConfig] Error cargando config:', e);
             configCache = null; 
+            return null;
         }
     }
 
@@ -3891,11 +3927,7 @@ Fecha de firma: {{FECHA}}`;
                     localStorage.setItem('empresaActiva', payload.empresaId);
                     }
                 
-                // PASO 2: REACTIVIDAD - Aplicar identidad visual INMEDIATAMENTE (sin esperar nada)
-                // Esto asegura que el logo cambie al instante sin F5
-                await aplicarIdentidadVisual(true);
-                
-                // PASO 3: Mostrar app
+                // showApp carga config + logo; evitar fetch duplicado antes del login
                 await showApp(payload);
                 
                 // PASO 4: Inicializar chat después del login
@@ -8354,10 +8386,9 @@ Fecha de firma: {{FECHA}}`;
                     // Usuario normal - sincronizar desde token
                     localStorage.setItem('empresaActiva', payload.empresaId);
                 }
-                // PASO 3: Aplicar identidad visual ANTI-FLICKER (placeholder inmediato + validación)
-                // El parámetro false permite usar el caché como placeholder mientras se valida
+                // PASO 3: Identidad visual desde caché (validación en segundo plano)
                 await aplicarIdentidadVisual(false);
-                // PASO 4: Mostrar app
+                // PASO 4: Mostrar app (config también usa caché local)
                 await showApp(payload);
                 
                 // PASO 5: Inicializar chat

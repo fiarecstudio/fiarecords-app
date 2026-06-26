@@ -11,125 +11,138 @@ const { applyTenantFilter, buildQueryFilter } = require('../middleware/tenantFil
 router.use(auth);
 router.use(applyTenantFilter);
 
+async function obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId) {
+    const empresaObjectId = new mongoose.Types.ObjectId(empresaId);
+    const matchPolizas = {
+        empresaId: empresaObjectId,
+        estado: 'Activa',
+        deletedAt: null,
+        ...(!isAdmin ? { asesorId } : {})
+    };
+
+    const hoy = new Date();
+    const en30Dias = new Date();
+    en30Dias.setDate(hoy.getDate() + 30);
+
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+    const en6Meses = new Date();
+    en6Meses.setMonth(en6Meses.getMonth() + 6);
+    en6Meses.setHours(23, 59, 59, 999);
+
+    const [
+        totalClientes,
+        polizasActivas,
+        primasResult,
+        proximosVencimientos,
+        proximosPagos,
+        graficaTipos,
+        graficaVencimientos
+    ] = await Promise.all([
+        Cliente.countDocuments(filtroSeguros),
+        Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' }),
+        Poliza.aggregate([
+            { $match: { ...filtroSeguros, estado: 'Activa' } },
+            { $group: { _id: null, total: { $sum: '$primaTotal' } } }
+        ]),
+        Poliza.countDocuments({
+            ...filtroSeguros,
+            estado: 'Activa',
+            'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
+        }),
+        Poliza.find({
+            ...filtroSeguros,
+            estado: 'Activa',
+            proximoPago: { $exists: true, $ne: null }
+        })
+            .populate('clienteId', 'nombre')
+            .sort({ proximoPago: 1 })
+            .limit(15),
+        Poliza.aggregate([
+            { $match: matchPolizas },
+            { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]),
+        Poliza.aggregate([
+            {
+                $match: {
+                    ...matchPolizas,
+                    'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$fechas.vencimiento' },
+                        month: { $month: '$fechas.vencimiento' }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ])
+    ]);
+
+    return {
+        totalClientes,
+        polizasActivas,
+        primasTotales: primasResult[0]?.total || 0,
+        proximosVencimientos,
+        proximosPagos,
+        graficaTipos,
+        graficaVencimientos
+    };
+}
+
 router.get('/stats', async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin';
         const empresaId = req.user.empresaId;
         const asesorId = req.user._id || req.user.id;
 
-        // Verificar si la empresa tiene el módulo de seguros activado
-        const empresa = await Empresa.findById(empresaId);
+        const empresa = await Empresa.findById(empresaId).select('moduloSeguros').lean();
         const esModuloSeguros = empresa && empresa.moduloSeguros;
 
-        // 1. DATOS OPERATIVOS (Para todos los usuarios)
-        // FASE 4: Usar buildQueryFilter para respetar filtro de empresa (Super Admin con header o usuario normal)
         const filtroBase = buildQueryFilter(req, {});
-
-        // Proyectos Activos (No cotizaciones, no completados, no cancelados)
-        const proyectosActivos = await Proyecto.countDocuments({
-            ...filtroBase,
-            isDeleted: false,
-            proceso: { $nin: ['Cotizacion', 'Completo'] },
-            estatus: { $ne: 'Cancelado' }
-        });
-
-        // Proyectos Por Cobrar (Cálculo manual para precisión)
-        const todosProyectos = await Proyecto.find({
-            ...filtroBase,
-            isDeleted: false,
-            estatus: { $nin: ['Cotizacion', 'Cancelado'] }
-        });
-
-        let proyectosPorCobrar = 0;
-        todosProyectos.forEach(p => {
-            // Si el total es mayor a lo pagado (con margen de error de $1 peso)
-            if ((p.total - (p.montoPagado || 0)) > 1) {
-                proyectosPorCobrar++;
-            }
-        });
-
-        // Filtro base para seguros con RBAC
         const filtroSeguros = { empresaId, deletedAt: null };
         if (!isAdmin) {
             filtroSeguros.asesorId = asesorId;
         }
 
-        // SI NO ES ADMIN: Retornamos solo lo operativo y una bandera para ocultar lo financiero
+        let proyectosActivos = 0;
+        let proyectosPorCobrar = 0;
+
+        if (!esModuloSeguros) {
+            proyectosActivos = await Proyecto.countDocuments({
+                ...filtroBase,
+                isDeleted: false,
+                proceso: { $nin: ['Cotizacion', 'Completo'] },
+                estatus: { $ne: 'Cancelado' }
+            });
+
+            const todosProyectos = await Proyecto.find({
+                ...filtroBase,
+                isDeleted: false,
+                estatus: { $nin: ['Cotizacion', 'Cancelado'] }
+            }).select('total montoPagado').lean();
+
+            todosProyectos.forEach(p => {
+                if ((p.total - (p.montoPagado || 0)) > 1) {
+                    proyectosPorCobrar++;
+                }
+            });
+        }
+
         if (!isAdmin) {
-            // Si es módulo de seguros, agregar métricas de seguros
             if (esModuloSeguros) {
-                const totalClientes = await Cliente.countDocuments(filtroSeguros);
-                const polizasActivas = await Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' });
-                const polizasActivasData = await Poliza.find({ ...filtroSeguros, estado: 'Activa' });
-                const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
-
-                const hoy = new Date();
-                const en30Dias = new Date();
-                en30Dias.setDate(hoy.getDate() + 30);
-                const proximosVencimientos = await Poliza.countDocuments({
-                    ...filtroSeguros,
-                    estado: 'Activa',
-                    'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
-                });
-
-                // Próximos pagos a vencer
-                const proximosPagos = await Poliza.find({
-                    ...filtroSeguros,
-                    estado: 'Activa',
-                    proximoPago: { $exists: true, $ne: null }
-                })
-                .populate('clienteId', 'nombre')
-                .sort({ proximoPago: 1 })
-                .limit(15);
-
-                // Gráfica de tipos de seguro
-                const graficaTipos = await Poliza.aggregate([
-                    { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null, ...(isAdmin ? {} : { asesorId }) } },
-                    { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
-                    { $sort: { count: -1 } }
-                ]);
-
-                // Gráfica de vencimientos próximos 6 meses
-                const hoyInicio = new Date();
-                hoyInicio.setHours(0, 0, 0, 0);
-                const en6Meses = new Date();
-                en6Meses.setMonth(en6Meses.getMonth() + 6);
-                en6Meses.setHours(23, 59, 59, 999);
-
-                const graficaVencimientos = await Poliza.aggregate([
-                    {
-                        $match: {
-                            empresaId: new mongoose.Types.ObjectId(empresaId),
-                            estado: 'Activa',
-                            deletedAt: null,
-                            'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses },
-                            ...(isAdmin ? {} : { asesorId })
-                        }
-                    },
-                    {
-                        $group: {
-                            _id: {
-                                year: { $year: '$fechas.vencimiento' },
-                                month: { $month: '$fechas.vencimiento' }
-                            },
-                            count: { $sum: 1 }
-                        }
-                    },
-                    { $sort: { '_id.year': 1, '_id.month': 1 } }
-                ]);
+                const metricasSeguros = await obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId);
 
                 return res.json({
                     showFinancials: false,
                     esModuloSeguros: true,
                     proyectosActivos,
                     proyectosPorCobrar,
-                    totalClientes,
-                    polizasActivas,
-                    primasTotales,
-                    proximosVencimientos,
-                    proximosPagos,
-                    graficaTipos,
-                    graficaVencimientos
+                    ...metricasSeguros
                 });
             }
 
@@ -141,7 +154,21 @@ router.get('/stats', async (req, res) => {
             });
         }
 
-        // --- DATOS FINANCIEROS (SOLO ADMIN) ---
+        if (esModuloSeguros) {
+            const metricasSeguros = await obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId);
+
+            return res.json({
+                showFinancials: false,
+                esModuloSeguros: true,
+                ingresosMes: 0,
+                proyectosActivos,
+                proyectosPorCobrar,
+                monthlyIncome: Array(12).fill(0),
+                ...metricasSeguros
+            });
+        }
+
+        // --- DATOS FINANCIEROS (SOLO ADMIN, empresas estándar) ---
         const ahora = new Date();
         const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
         const finMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59);
@@ -190,7 +217,6 @@ router.get('/stats', async (req, res) => {
             }
         });
 
-        // Si es módulo de seguros, agregar métricas de seguros también para admin
         let response = {
             showFinancials: true,
             esModuloSeguros: false,
@@ -199,76 +225,6 @@ router.get('/stats', async (req, res) => {
             proyectosPorCobrar,
             monthlyIncome
         };
-
-        if (esModuloSeguros) {
-            const totalClientes = await Cliente.countDocuments(filtroSeguros);
-            const polizasActivas = await Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' });
-            const polizasActivasData = await Poliza.find({ ...filtroSeguros, estado: 'Activa' });
-            const primasTotales = polizasActivasData.reduce((sum, p) => sum + (p.primaTotal || 0), 0);
-
-            const hoy = new Date();
-            const en30Dias = new Date();
-            en30Dias.setDate(hoy.getDate() + 30);
-            const proximosVencimientos = await Poliza.countDocuments({
-                ...filtroSeguros,
-                estado: 'Activa',
-                'fechas.vencimiento': { $gte: hoy, $lte: en30Dias }
-            });
-
-            // Próximos pagos a vencer
-            const proximosPagos = await Poliza.find({
-                ...filtroSeguros,
-                estado: 'Activa',
-                proximoPago: { $exists: true, $ne: null }
-            })
-            .populate('clienteId', 'nombre')
-            .sort({ proximoPago: 1 })
-            .limit(15);
-
-            // Gráfica de tipos de seguro
-            const graficaTipos = await Poliza.aggregate([
-                { $match: { empresaId: new mongoose.Types.ObjectId(empresaId), estado: 'Activa', deletedAt: null } },
-                { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ]);
-
-            // Gráfica de vencimientos próximos 6 meses
-            const hoyInicio = new Date();
-            hoyInicio.setHours(0, 0, 0, 0);
-            const en6Meses = new Date();
-            en6Meses.setMonth(en6Meses.getMonth() + 6);
-            en6Meses.setHours(23, 59, 59, 999);
-
-            const graficaVencimientos = await Poliza.aggregate([
-                {
-                    $match: {
-                        empresaId: new mongoose.Types.ObjectId(empresaId),
-                        estado: 'Activa',
-                        deletedAt: null,
-                        'fechas.vencimiento': { $gte: hoyInicio, $lte: en6Meses }
-                    }
-                },
-                {
-                    $group: {
-                        _id: {
-                            year: { $year: '$fechas.vencimiento' },
-                            month: { $month: '$fechas.vencimiento' }
-                        },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { '_id.year': 1, '_id.month': 1 } }
-            ]);
-
-            response.esModuloSeguros = true;
-            response.totalClientes = totalClientes;
-            response.polizasActivas = polizasActivas;
-            response.primasTotales = primasTotales;
-            response.proximosVencimientos = proximosVencimientos;
-            response.proximosPagos = proximosPagos;
-            response.graficaTipos = graficaTipos;
-            response.graficaVencimientos = graficaVencimientos;
-        }
 
         res.json(response);
 
