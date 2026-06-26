@@ -10,11 +10,11 @@ router.use(auth);
 router.use(applyTenantFilter); // FASE 3: Aplicar filtro de empresa automáticamente
 
 // ==========================================
-// OBTENER ASESORES (Solo usuarios con role 'asesor')
+// OBTENER ASESORES (asesores + admins para asignación/reasignación)
 // ==========================================
 router.get('/asesores', async (req, res) => {
     try {
-        const filtro = buildQueryFilter(req, { role: 'asesor', isDeleted: false });
+        const filtro = buildQueryFilter(req, { role: { $in: ['asesor', 'admin'] }, isDeleted: false });
         const asesores = await Usuario.find(filtro).select('-password').sort({ createdAt: -1 });
         res.json({ asesores });
     } catch (err) {

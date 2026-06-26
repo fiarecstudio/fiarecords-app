@@ -1,5 +1,6 @@
 const Poliza = require('../models/Poliza');
 const Usuario = require('../models/Usuario');
+const Cliente = require('../models/Cliente');
 const Configuracion = require('../models/Configuracion');
 const pdfParseModule = require('pdf-parse');
 const PDFParse = pdfParseModule.PDFParse || (pdfParseModule.default && pdfParseModule.default.PDFParse) || pdfParseModule.default || pdfParseModule;
@@ -22,6 +23,90 @@ function normalizeText(text) {
         .trim();
 }
 
+function normalizarFechaLocal(fecha) {
+    if (!fecha) return null;
+    if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [y, m, d] = fecha.split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0, 0);
+    }
+    const parsed = new Date(fecha);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizarFechasPoliza(fechas) {
+    if (!fechas) return fechas;
+    return {
+        inicio: normalizarFechaLocal(fechas.inicio),
+        vencimiento: normalizarFechaLocal(fechas.vencimiento)
+    };
+}
+
+function calcularProximoPago(fechaBase, tipoPago) {
+    const proximoPago = new Date(fechaBase);
+    switch (tipoPago) {
+        case 'mensual':
+            proximoPago.setMonth(proximoPago.getMonth() + 1);
+            break;
+        case 'trimestral':
+            proximoPago.setMonth(proximoPago.getMonth() + 3);
+            break;
+        case 'anual':
+        default:
+            proximoPago.setFullYear(proximoPago.getFullYear() + 1);
+            break;
+    }
+    return proximoPago;
+}
+
+async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clienteEmail, clienteTelefono, clienteId }) {
+    if (clienteId) {
+        const existente = await Cliente.findOne({ _id: clienteId, empresaId, deletedAt: null });
+        if (existente) {
+            let changed = false;
+            if (clienteEmail && !existente.email) {
+                existente.email = clienteEmail.trim();
+                changed = true;
+            }
+            if (clienteTelefono && !existente.telefono) {
+                existente.telefono = clienteTelefono.trim();
+                changed = true;
+            }
+            if (changed) await existente.save();
+            return existente._id;
+        }
+    }
+
+    const nombreNorm = (clienteNombre || '').trim();
+    if (!nombreNorm) return null;
+
+    let cliente = await Cliente.findOne({ empresaId, nombre: nombreNorm, deletedAt: null });
+
+    if (!cliente) {
+        cliente = new Cliente({
+            empresaId,
+            asesorId,
+            nombre: nombreNorm,
+            email: clienteEmail ? clienteEmail.trim() : '',
+            telefono: clienteTelefono ? clienteTelefono.trim() : ''
+        });
+        await cliente.save();
+        return cliente._id;
+    }
+
+    let changed = false;
+    if (clienteEmail && !cliente.email) {
+        cliente.email = clienteEmail.trim();
+        changed = true;
+    }
+    if (clienteTelefono && !cliente.telefono) {
+        cliente.telefono = clienteTelefono.trim();
+        changed = true;
+    }
+    if (changed) await cliente.save();
+
+    return cliente._id;
+}
+
 const crearPoliza = async (req, res) => {
     try {
         const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
@@ -31,6 +116,25 @@ const crearPoliza = async (req, res) => {
 
         // Si no se especifica asesorId, asignar automáticamente el del usuario que crea la póliza
         const asesorIdFinal = asesorId || (req.user._id || req.user.id);
+        const fechasNormalizadas = normalizarFechasPoliza(fechas);
+        const tipoPagoFinal = tipoPago || 'anual';
+
+        const clienteIdFinal = await vincularOCrearCliente({
+            empresaId,
+            asesorId: asesorIdFinal,
+            clienteNombre: cliente,
+            clienteEmail,
+            clienteTelefono,
+            clienteId
+        });
+
+        let proximoPago = null;
+        if (fechasNormalizadas?.inicio) {
+            proximoPago = calcularProximoPago(fechasNormalizadas.inicio, tipoPagoFinal);
+            if (fechasNormalizadas.vencimiento && proximoPago > fechasNormalizadas.vencimiento) {
+                proximoPago = fechasNormalizadas.vencimiento;
+            }
+        }
 
         const nuevaPoliza = new Poliza({
             empresaId,
@@ -39,10 +143,10 @@ const crearPoliza = async (req, res) => {
             cliente,
             clienteEmail,
             clienteTelefono,
-            tipoPago,
+            tipoPago: tipoPagoFinal,
             tipoSeguro,
             aseguradora,
-            fechas,
+            fechas: fechasNormalizadas,
             primaTotal,
             documentoDriveId,
             inciso,
@@ -50,8 +154,9 @@ const crearPoliza = async (req, res) => {
             montoAbono: montoAbono || null,
             primerPago: primerPago || null,
             diasAnticipacionAviso: diasAnticipacionAviso || 3,
-            saldoRestante: primaTotal, // Inicializar saldoRestante con la prima total
-            clienteId: clienteId || null // Guardar clienteId si viene del CRM
+            saldoRestante: primaTotal,
+            proximoPago,
+            clienteId: clienteIdFinal
         });
 
         const polizaGuardada = await nuevaPoliza.save();
@@ -95,18 +200,61 @@ const actualizarPoliza = async (req, res) => {
     try {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
-        
-        // Buscar y actualizar, asegurando que pertenezca al empresaId y no esté eliminada
-        const poliza = await Poliza.findOneAndUpdate(
-            { _id: id, empresaId, deletedAt: null },
-            req.body,
-            { new: true, runValidators: true }
-        );
-        
-        if (!poliza) {
+
+        const polizaExistente = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        if (!polizaExistente) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
         }
-        
+
+        const datosActualizacion = { ...req.body };
+
+        if (datosActualizacion.fechas) {
+            datosActualizacion.fechas = normalizarFechasPoliza(datosActualizacion.fechas);
+        }
+
+        const fechasCambiaron = datosActualizacion.fechas && (
+            (datosActualizacion.fechas.inicio && polizaExistente.fechas?.inicio &&
+                new Date(datosActualizacion.fechas.inicio).getTime() !== new Date(polizaExistente.fechas.inicio).getTime()) ||
+            (datosActualizacion.fechas.vencimiento && polizaExistente.fechas?.vencimiento &&
+                new Date(datosActualizacion.fechas.vencimiento).getTime() !== new Date(polizaExistente.fechas.vencimiento).getTime())
+        );
+        const tipoPagoCambio = datosActualizacion.tipoPago && datosActualizacion.tipoPago !== polizaExistente.tipoPago;
+        const sinPagosRegistrados = !polizaExistente.pagos || polizaExistente.pagos.length === 0;
+
+        if (fechasCambiaron || tipoPagoCambio) {
+            const inicioBase = datosActualizacion.fechas?.inicio || polizaExistente.fechas?.inicio;
+            const vencimiento = datosActualizacion.fechas?.vencimiento || polizaExistente.fechas?.vencimiento;
+            const tipoPago = datosActualizacion.tipoPago || polizaExistente.tipoPago || 'anual';
+
+            if (inicioBase && (sinPagosRegistrados || fechasCambiaron || tipoPagoCambio)) {
+                let proximoPago = calcularProximoPago(inicioBase, tipoPago);
+                if (vencimiento && proximoPago > vencimiento) {
+                    proximoPago = vencimiento;
+                }
+                datosActualizacion.proximoPago = proximoPago;
+            } else if (vencimiento && polizaExistente.proximoPago && polizaExistente.proximoPago > vencimiento) {
+                datosActualizacion.proximoPago = vencimiento;
+            }
+        }
+
+        if (datosActualizacion.cliente) {
+            const asesorParaCliente = datosActualizacion.asesorId || polizaExistente.asesorId;
+            datosActualizacion.clienteId = await vincularOCrearCliente({
+                empresaId,
+                asesorId: asesorParaCliente,
+                clienteNombre: datosActualizacion.cliente,
+                clienteEmail: datosActualizacion.clienteEmail ?? polizaExistente.clienteEmail,
+                clienteTelefono: datosActualizacion.clienteTelefono ?? polizaExistente.clienteTelefono,
+                clienteId: datosActualizacion.clienteId || polizaExistente.clienteId
+            });
+        }
+
+        const poliza = await Poliza.findOneAndUpdate(
+            { _id: id, empresaId, deletedAt: null },
+            datosActualizacion,
+            { new: true, runValidators: true }
+        );
+
         res.json(poliza);
     } catch (error) {
         console.error('Error al actualizar póliza:', error);
@@ -274,30 +422,23 @@ const registrarPago = async (req, res) => {
             poliza.estadoPago = 'al_corriente';
         }
         
-        // Calcular próximo pago según tipoPago
-        const fechaBase = poliza.proximoPago || new Date();
-        let proximoPago;
-        
-        switch (poliza.tipoPago) {
-            case 'mensual':
-                proximoPago = new Date(fechaBase);
-                proximoPago.setMonth(proximoPago.getMonth() + 1);
-                break;
-            case 'trimestral':
-                proximoPago = new Date(fechaBase);
-                proximoPago.setMonth(proximoPago.getMonth() + 3);
-                break;
-            case 'anual':
-            default:
-                proximoPago = new Date(fechaBase);
-                proximoPago.setFullYear(proximoPago.getFullYear() + 1);
-                break;
+        // Calcular próximo pago según tipoPago (desde inicio si aún no hay próximo pago)
+        const fechaBase = poliza.proximoPago
+            || (poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : new Date());
+        let proximoPago = calcularProximoPago(fechaBase, poliza.tipoPago);
+
+        if (poliza.fechas?.vencimiento && proximoPago > poliza.fechas.vencimiento) {
+            proximoPago = poliza.fechas.vencimiento;
         }
-        
+
         poliza.proximoPago = proximoPago;
-        
+
         await poliza.save();
-        res.json({ message: 'Pago registrado correctamente', poliza });
+        res.json({
+            message: 'Pago registrado correctamente',
+            poliza,
+            nuevoProximoPago: proximoPago
+        });
     } catch (error) {
         console.error('[registrarPago] Error detallado:', error);
         console.error('[registrarPago] Stack trace:', error.stack);
@@ -417,29 +558,6 @@ const obtenerMetricasSeguros = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener métricas', details: error.message });
     }
-};
-
-// FUNCIÓN UTILITARIA: Calcular próximo pago según tipoPago
-const calcularProximoPago = (fechaBase, tipoPago) => {
-    const proximoPago = new Date(fechaBase);
-    
-    switch (tipoPago) {
-        case 'mensual':
-            proximoPago.setMonth(proximoPago.getMonth() + 1);
-            break;
-        case 'trimestral':
-            proximoPago.setMonth(proximoPago.getMonth() + 3);
-            break;
-        case 'semestral':
-            proximoPago.setMonth(proximoPago.getMonth() + 6);
-            break;
-        case 'anual':
-        default:
-            proximoPago.setFullYear(proximoPago.getFullYear() + 1);
-            break;
-    }
-    
-    return proximoPago;
 };
 
 // ENDPOINT: Migración de fechas para el calendario (Temporal)
@@ -1055,8 +1173,13 @@ const asignarAsesor = async (req, res) => {
             return res.status(403).json({ error: 'Solo administradores pueden reasignar asesores' });
         }
 
-        // Verificar que el nuevo asesor exista y pertenezca a la empresa
-        const nuevoAsesor = await Usuario.findOne({ _id: nuevoAsesorId, empresaId, role: 'asesor' });
+        // Verificar que el nuevo asesor exista y pertenezca a la empresa (asesor o admin)
+        const nuevoAsesor = await Usuario.findOne({
+            _id: nuevoAsesorId,
+            empresaId,
+            role: { $in: ['asesor', 'admin'] },
+            isDeleted: false
+        });
         if (!nuevoAsesor) {
             return res.status(404).json({ error: 'Asesor no encontrado o no pertenece a tu empresa' });
         }

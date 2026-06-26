@@ -6216,6 +6216,26 @@ Fecha de firma: {{FECHA}}`;
 
         }
 
+    function parseInputDate(value) {
+        if (!value) return null;
+        const [y, m, d] = value.split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0, 0);
+    }
+
+    function formatDateForInput(dateVal) {
+        if (!dateVal) return '';
+        const d = new Date(dateVal);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function etiquetaAsesor(usuario) {
+        const nombre = usuario.username || usuario.email || 'Usuario';
+        return usuario.role === 'admin' ? `${nombre} (Admin)` : nombre;
+    }
+
     async function mostrarFormularioPoliza(datosPrellenados = {}) {
         const clienteId = datosPrellenados.clienteId || null;
 
@@ -6225,7 +6245,7 @@ Fecha de firma: {{FECHA}}`;
             const asesores = await fetchAPI('/api/usuarios/asesores');
             if (asesores && asesores.asesores) {
                 asesores.asesores.forEach(asesor => {
-                    asesoresOptions += `<option value="${asesor._id}">${asesor.username}</option>`;
+                    asesoresOptions += `<option value="${asesor._id}">${escapeHTML(etiquetaAsesor(asesor))}</option>`;
                 });
             }
         } catch (error) {
@@ -6369,8 +6389,8 @@ Fecha de firma: {{FECHA}}`;
                     paquete,
                     tipoSeguro,
                     fechas: {
-                        inicio: new Date(fechaInicio),
-                        vencimiento: new Date(fechaVencimiento)
+                        inicio: parseInputDate(fechaInicio),
+                        vencimiento: parseInputDate(fechaVencimiento)
                     },
                     primaTotal: parseFloat(primaTotal),
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
@@ -6659,7 +6679,7 @@ Fecha de firma: {{FECHA}}`;
                 const asesores = await fetchAPI('/api/usuarios/asesores');
                 if (asesores && asesores.asesores) {
                     asesores.asesores.forEach(asesor => {
-                        asesoresOptions += `<option value="${asesor._id}">${asesor.username}</option>`;
+                        asesoresOptions += `<option value="${asesor._id}">${escapeHTML(etiquetaAsesor(asesor))}</option>`;
                     });
                 }
             } catch (error) {
@@ -6677,8 +6697,8 @@ Fecha de firma: {{FECHA}}`;
                 inciso: poliza.inciso || '1',
                 paquete: poliza.paquete || poliza.tipoSeguro || '',
                 tipoSeguro: poliza.tipoSeguro || 'Vehicular',
-                fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toISOString().split('T')[0] : '',
-                fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toISOString().split('T')[0] : '',
+                fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
+                fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
                 primaTotal: poliza.primaTotal || 0,
                 montoAbono: poliza.montoAbono || 0,
                 primerPago: poliza.primerPago || 0,
@@ -6826,8 +6846,8 @@ Fecha de firma: {{FECHA}}`;
                         paquete,
                         tipoSeguro,
                         fechas: {
-                            inicio: new Date(fechaInicio),
-                            vencimiento: new Date(fechaVencimiento)
+                            inicio: parseInputDate(fechaInicio),
+                            vencimiento: parseInputDate(fechaVencimiento)
                         },
                         primaTotal: parseFloat(primaTotal),
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
