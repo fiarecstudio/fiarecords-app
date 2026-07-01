@@ -11,13 +11,22 @@ const { applyTenantFilter, buildQueryFilter } = require('../middleware/tenantFil
 router.use(auth);
 router.use(applyTenantFilter);
 
-async function obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId) {
-    const empresaObjectId = new mongoose.Types.ObjectId(empresaId);
+function construirFiltroSeguros(empresaId, isAdmin, asesorId) {
+    const filtro = {
+        empresaId: new mongoose.Types.ObjectId(empresaId),
+        deletedAt: null
+    };
+    if (!isAdmin && asesorId) {
+        filtro.asesorId = new mongoose.Types.ObjectId(asesorId);
+    }
+    return filtro;
+}
+
+async function obtenerMetricasSeguros(empresaId, isAdmin, asesorId) {
+    const filtroSeguros = construirFiltroSeguros(empresaId, isAdmin, asesorId);
     const matchPolizas = {
-        empresaId: empresaObjectId,
-        estado: 'Activa',
-        deletedAt: null,
-        ...(!isAdmin ? { asesorId } : {})
+        ...filtroSeguros,
+        estado: 'Activa'
     };
 
     const hoy = new Date();
@@ -42,8 +51,22 @@ async function obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorI
         Cliente.countDocuments(filtroSeguros),
         Poliza.countDocuments({ ...filtroSeguros, estado: 'Activa' }),
         Poliza.aggregate([
-            { $match: { ...filtroSeguros, estado: 'Activa' } },
-            { $group: { _id: null, total: { $sum: '$primaTotal' } } }
+            { $match: { ...filtroSeguros, estado: { $nin: ['Cancelada', 'Renovada'] } } },
+            {
+                $group: {
+                    _id: null,
+                    total: {
+                        $sum: {
+                            $convert: {
+                                input: '$primaTotal',
+                                to: 'double',
+                                onError: 0,
+                                onNull: 0
+                            }
+                        }
+                    }
+                }
+            }
         ]),
         Poliza.countDocuments({
             ...filtroSeguros,
@@ -86,7 +109,7 @@ async function obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorI
     return {
         totalClientes,
         polizasActivas,
-        primasTotales: primasResult[0]?.total || 0,
+        primasTotales: Number(primasResult[0]?.total) || 0,
         proximosVencimientos,
         proximosPagos,
         graficaTipos,
@@ -104,11 +127,6 @@ router.get('/stats', async (req, res) => {
         const esModuloSeguros = empresa && empresa.moduloSeguros;
 
         const filtroBase = buildQueryFilter(req, {});
-        const filtroSeguros = { empresaId, deletedAt: null };
-        if (!isAdmin) {
-            filtroSeguros.asesorId = asesorId;
-        }
-
         let proyectosActivos = 0;
         let proyectosPorCobrar = 0;
 
@@ -135,7 +153,7 @@ router.get('/stats', async (req, res) => {
 
         if (!isAdmin) {
             if (esModuloSeguros) {
-                const metricasSeguros = await obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId);
+                const metricasSeguros = await obtenerMetricasSeguros(empresaId, isAdmin, asesorId);
 
                 return res.json({
                     showFinancials: false,
@@ -155,7 +173,7 @@ router.get('/stats', async (req, res) => {
         }
 
         if (esModuloSeguros) {
-            const metricasSeguros = await obtenerMetricasSeguros(empresaId, filtroSeguros, isAdmin, asesorId);
+            const metricasSeguros = await obtenerMetricasSeguros(empresaId, isAdmin, asesorId);
 
             return res.json({
                 showFinancials: false,

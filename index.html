@@ -781,6 +781,11 @@
                                     <i class="bi bi-people me-2"></i>Clientes Eliminados
                                 </button>
                             </li>
+                            <li class="nav-item" role="presentation" id="papelera-usuarios-tab-item">
+                                <button class="nav-link" id="tab-usuarios-eliminados" data-bs-toggle="tab" data-bs-target="#papelera-tab-usuarios" type="button" role="tab" aria-controls="papelera-tab-usuarios" aria-selected="false" onclick="app.cargarPapeleraUsuarios()">
+                                    <i class="bi bi-person-badge me-2"></i>Usuarios Eliminados
+                                </button>
+                            </li>
                         </ul>
 
                         <div class="tab-content" id="papeleraSegurosTabsContent">
@@ -821,6 +826,26 @@
                                         </thead>
                                         <tbody id="tablaPapeleraClientesBody">
                                             <tr><td colspan="5" class="text-center text-muted">Cargando clientes...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Tab-pane de Usuarios Eliminados -->
+                            <div class="tab-pane fade" id="papelera-tab-usuarios" role="tabpanel" aria-labelledby="papelera-usuarios-tab" tabindex="0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Usuario</th>
+                                                <th>Email</th>
+                                                <th>Rol</th>
+                                                <th>Fecha de Eliminación</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaPapeleraUsuariosBody">
+                                            <tr><td colspan="5" class="text-center text-muted">Cargando usuarios...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>

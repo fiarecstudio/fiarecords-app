@@ -460,8 +460,9 @@ let proyectoIdEnEdicion = null;
     }
     
     function safeMoney(amount) {
-        if (typeof amount !== 'number') return '0.00';
-        return amount.toFixed(2);
+        const n = Number(amount);
+        if (Number.isNaN(n)) return '0.00';
+        return n.toFixed(2);
     }
 
     function safeString(str, defaultVal = '') {
@@ -4468,22 +4469,36 @@ Fecha de firma: {{FECHA}}`;
     }
     
     async function cargarPapelera() {
-        const tabProyectos = document.getElementById('papelera-proyectos-tab');
-        if (tabProyectos && typeof bootstrap !== 'undefined') {
-            bootstrap.Tab.getOrCreateInstance(tabProyectos).show();
+        const tipoDashboard = (configCache?.tipoDashboard || 'estandar').trim().toLowerCase();
+        const esDashboardSeguros = tipoDashboard === 'seguros';
+        const userInfo = getUserRoleAndId();
+        const isAdmin = userInfo.role === 'admin';
+
+        const tabUsuariosItem = document.getElementById('papelera-usuarios-tab-item');
+        if (tabUsuariosItem) {
+            tabUsuariosItem.style.display = isAdmin ? '' : 'none';
         }
-        const endpoints =['servicios', 'artistas', 'usuarios', 'proyectos'];
-        for (const endpoint of endpoints) {
-            try {
-                const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
-                localCache.trash[endpoint] = data;
-                trashPagination[endpoint].page = 1;
-                renderTrashList(endpoint);
-            } catch (e) {
-                console.error(`Error loading trash for ${endpoint}:`, e);
-                const listEl = document.getElementById(`papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
-                if(listEl) listEl.innerHTML = `<li class="list-group-item text-danger small">Error cargando.</li>`;
+
+        if (!esDashboardSeguros) {
+            const tabProyectos = document.getElementById('papelera-proyectos-tab');
+            if (tabProyectos && typeof bootstrap !== 'undefined') {
+                bootstrap.Tab.getOrCreateInstance(tabProyectos).show();
             }
+            const endpoints = ['servicios', 'artistas', 'usuarios', 'proyectos'];
+            for (const endpoint of endpoints) {
+                try {
+                    const data = await fetchAPI(`/api/${endpoint}/papelera/all`);
+                    localCache.trash[endpoint] = data;
+                    trashPagination[endpoint].page = 1;
+                    renderTrashList(endpoint);
+                } catch (e) {
+                    console.error(`Error loading trash for ${endpoint}:`, e);
+                    const listEl = document.getElementById(`papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`);
+                    if (listEl) listEl.innerHTML = `<li class="list-group-item text-danger small">Error cargando.</li>`;
+                }
+            }
+        } else if (isAdmin) {
+            await cargarPapeleraUsuarios();
         }
 
         // Cargar pólizas de la papelera
@@ -4556,70 +4571,57 @@ Fecha de firma: {{FECHA}}`;
     }
 
     window.cargarPapeleraClientes = async function() {
-        console.log("🔥 [DIAGNÓSTICO] Iniciando cargarPapeleraClientes...");
-
         const tablaBody = document.getElementById('tablaPapeleraClientesBody');
-        if (!tablaBody) {
-            console.error("❌ [DIAGNÓSTICO FATAL] No se encontró el tbody 'tablaPapeleraClientesBody' en el HTML.");
-            return;
-        }
+        if (!tablaBody) return;
 
-        console.log("✅ [DIAGNÓSTICO] tbody encontrado correctamente");
         tablaBody.innerHTML = '<tr><td colspan="5" class="text-center">Cargando clientes...</td></tr>';
 
         try {
-            console.log("🔥 [DIAGNÓSTICO] Haciendo fetch al servidor...");
-            const response = await fetch('/api/clientes/papelera', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
+            const clientes = await fetchAPI('/api/clientes/papelera');
+            localCache.trash.clientes = clientes;
+            renderTrashClientes();
+        } catch (error) {
+            console.error('[cargarPapeleraClientes] Error:', error);
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar clientes: ${escapeHTML(error.message)}</td></tr>`;
+        }
+    };
 
-            console.log("🔥 [DIAGNÓSTICO] Respuesta recibida, status:", response.status);
+    async function cargarPapeleraUsuarios() {
+        const tablaBody = document.getElementById('tablaPapeleraUsuariosBody');
+        if (!tablaBody) return;
 
-            if (!response.ok) {
-                throw new Error(`Fallo en la petición al servidor (${response.status})`);
-            }
+        tablaBody.innerHTML = '<tr><td colspan="5" class="text-center">Cargando usuarios...</td></tr>';
 
-            const clientes = await response.json();
-            console.log("✅ [DIAGNÓSTICO] Clientes recibidos:", clientes);
-
-            if (!clientes || clientes.length === 0) {
-                tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay clientes en la papelera</td></tr>';
-                console.log("✅ [DIAGNÓSTICO] No hay clientes en la papelera");
+        try {
+            const usuarios = await fetchAPI('/api/usuarios/papelera/all');
+            if (!usuarios || usuarios.length === 0) {
+                tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay usuarios en la papelera</td></tr>';
                 return;
             }
 
-            console.log("🔥 [DIAGNÓSTICO] Renderizando", clientes.length, "clientes");
-            tablaBody.innerHTML = clientes.map(cliente => {
-                const fechaEliminacion = cliente.deletedAt ? new Date(cliente.deletedAt).toLocaleDateString('es-ES') : '-';
+            tablaBody.innerHTML = usuarios.map((usuario) => {
+                const fechaEliminacion = usuario.updatedAt
+                    ? new Date(usuario.updatedAt).toLocaleDateString('es-ES')
+                    : '-';
                 return `
                     <tr>
-                        <td>${escapeHTML(cliente.nombre || '-')}</td>
-                        <td>${escapeHTML(cliente.email || '-')}</td>
-                        <td>${escapeHTML(cliente.telefono || '-')}</td>
+                        <td>${escapeHTML(usuario.username || '-')}</td>
+                        <td>${escapeHTML(usuario.email || '-')}</td>
+                        <td>${escapeHTML(usuario.role || '-')}</td>
                         <td>${fechaEliminacion}</td>
                         <td>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-success" onclick="restaurarClientePapelera('${cliente._id}')" title="Restaurar">
-                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                                <button class="btn btn-outline-danger" onclick="destruirClientePapelera('${cliente._id}')" title="Destruir">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
+                            <button class="btn btn-sm btn-outline-success" onclick="restaurarItem('${usuario._id}', 'usuarios')" title="Restaurar">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
                         </td>
                     </tr>
                 `;
             }).join('');
-            console.log("✅ [DIAGNÓSTICO] Tabla actualizada correctamente");
         } catch (error) {
-            console.error("❌ [DIAGNÓSTICO] Error en cargarPapeleraClientes:", error);
-            tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar clientes: ' + error.message + '</td></tr>';
+            console.error('[cargarPapeleraUsuarios] Error:', error);
+            tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar usuarios: ${escapeHTML(error.message)}</td></tr>`;
         }
-    };
+    }
 
     function renderTrashList(endpoint) {
         const listId = `papelera${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}`;
@@ -4680,7 +4682,7 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function renderTrashClientes() {
-        const tablaClientes = document.getElementById('tablaPapeleraClientes');
+        const tablaClientes = document.getElementById('tablaPapeleraClientesBody');
         if (!tablaClientes) return;
 
         const clientes = localCache.trash.clientes || [];
@@ -6053,23 +6055,30 @@ Fecha de firma: {{FECHA}}`;
             // FASE 6: Si es dashboard de seguros, ocultar secciones estándar
             if (esDashboardSeguros) {
                 html = `<div class="nav-group mb-3">
-                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Inicio</div>
                             ${canAccess('dashboard') ? '<a class="nav-link-sidebar" data-seccion="dashboard"><i class="bi speedometer2"></i> Dashboard</a>' : ''}
                             <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                            <a class="nav-link-sidebar" data-seccion="clientes-crm"><i class="bi person-lines-fill"></i> Clientes</a>
                             <a class="nav-link-sidebar" data-seccion="agenda"><i class="bi calendar-event"></i> Agenda</a>
+                         </div>
+                         <div class="nav-group mb-3">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Cobranza</div>
                             <a class="nav-link-sidebar" data-seccion="pagos"><i class="bi cash-stack"></i> Gestión de Pagos</a>
-                            <a class="nav-link-sidebar" data-seccion="clientes-crm"><i class="bi person-lines-fill"></i> Directorio de Clientes</a>
-                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
-                            ${isSuperAdmin ? '<a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>' : ''}
                          </div>`;
 
                 if (isSuperAdmin) {
-                    html += `<div class="nav-group">
-                                <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
+                    html += `<div class="nav-group mb-3">
+                                <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administración</div>
                                 <a class="nav-link-sidebar" data-seccion="gestion-usuarios"><i class="bi people"></i> Usuarios</a>
+                                <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Correos SMTP</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
                              </div>`;
                 }
+
+                html += `<div class="nav-group">
+                            <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Sistema</div>
+                            <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
+                         </div>`;
             } else {
                 // Dashboard estándar para empresas sin seguros
                 html = `<div class="nav-group mb-3">
@@ -6692,6 +6701,7 @@ Fecha de firma: {{FECHA}}`;
                 });
                 await Swal.fire('Éxito', 'Pago registrado correctamente. Próximo pago: ' + new Date(resultado.nuevoProximoPago).toLocaleDateString(), 'success');
                 cargarPolizas();
+                cargarPagosSeguros(); // Recargar también la tabla de pagos
             } catch (error) {
                 console.error('[registrarPagoRapido] Error al registrar pago:', error);
                 Swal.fire('Error', error.message || 'No se pudo registrar el pago', 'error');
@@ -7544,7 +7554,7 @@ Fecha de firma: {{FECHA}}`;
         // Si es WhatsApp, abrir directamente en el frontend
         if (canalSeleccionado === 'whatsapp') {
             try {
-                // Obtenemos los datos frescos de la póliza
+                // Obtenemos los datos frescos de la póliza con populate del cliente
                 const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
                 if (!poliza) return Swal.fire('Error', 'No se pudo obtener la póliza.', 'error');
 
@@ -7561,8 +7571,16 @@ Fecha de firma: {{FECHA}}`;
                     texto = `Hola ${clienteNombre}, tienes un pago pendiente en tu póliza No. ${numeroPolizaClean} por un monto de $${montoFormateado}. Próxima fecha de pago: ${fechaPago}.`;
                 }
 
+                // Obtener teléfono del cliente asociado (prioridad: clienteId.telefono > poliza.clienteTelefono > default)
+                let telefono = '5512345678';
+                if (poliza.clienteId && poliza.clienteId.telefono) {
+                    telefono = poliza.clienteId.telefono;
+                } else if (poliza.clienteTelefono) {
+                    telefono = poliza.clienteTelefono;
+                }
+                
                 // Limpiamos el número de teléfono (remueve espacios y guiones)
-                const telefonoClean = (poliza.clienteTelefono || '5512345678').replace(/[^0-9]/g, '');
+                const telefonoClean = telefono.replace(/[^0-9]/g, '');
                 const whatsappUrl = `https://wa.me/${telefonoClean}?text=${encodeURIComponent(texto)}`;
                 
                 // ABRIR DIRECTAMENTE WHATSAPP WEB REAL EN OTRA PESTAÑA

@@ -1,6 +1,33 @@
+const mongoose = require('mongoose');
 const Cliente = require('../models/Cliente');
 const Empresa = require('../models/Empresa');
 const Poliza = require('../models/Poliza');
+
+function normalizarEmpresaId(empresaId) {
+    if (!empresaId) return empresaId;
+    if (empresaId instanceof mongoose.Types.ObjectId) return empresaId;
+    if (mongoose.Types.ObjectId.isValid(empresaId)) {
+        return new mongoose.Types.ObjectId(empresaId);
+    }
+    return empresaId;
+}
+
+async function sincronizarPolizasDesdeCliente(cliente) {
+    await Poliza.updateMany(
+        {
+            clienteId: cliente._id,
+            empresaId: normalizarEmpresaId(cliente.empresaId),
+            deletedAt: null
+        },
+        {
+            $set: {
+                cliente: cliente.nombre,
+                clienteEmail: cliente.email || '',
+                clienteTelefono: cliente.telefono || ''
+            }
+        }
+    );
+}
 
 // Crear un nuevo cliente
 const crearCliente = async (req, res) => {
@@ -65,8 +92,8 @@ const obtenerClientes = async (req, res) => {
             return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
         }
 
-        // Construir filtro base
-        const filtro = { empresaId, deletedAt: null };
+        // Construir filtro base (ObjectId explícito para evitar desajustes de tipo)
+        const filtro = { empresaId: normalizarEmpresaId(empresaId), deletedAt: null };
 
         // RBAC: Si no es admin, filtrar por asesorId
         if (userRole !== 'admin') {
@@ -80,7 +107,7 @@ const obtenerClientes = async (req, res) => {
         const clientesConPolizas = await Promise.all(
             clientes.map(async (cliente) => {
                 const polizas = await Poliza.find({
-                    empresaId,
+                    empresaId: normalizarEmpresaId(empresaId),
                     clienteId: cliente._id,
                     deletedAt: null
                 }).sort({ 'fechas.vencimiento': -1 });
@@ -274,6 +301,9 @@ const actualizarCliente = async (req, res) => {
 
         await cliente.save();
 
+        // Sincronizar campos denormalizados en todas las pólizas vinculadas
+        await sincronizarPolizasDesdeCliente(cliente);
+
         res.json({
             message: 'Cliente actualizado exitosamente',
             cliente
@@ -344,11 +374,8 @@ const obtenerClientesPapelera = async (req, res) => {
         }
 
         // Esto permite que el Super Admin use el header X-Empresa-Id para cambiar de empresa
-        const filtroEmpresa = req.tenantFilter || {};
-
-        // Combinar filtro de empresa con condición de soft delete
         const filtroPapelera = {
-            ...filtroEmpresa,
+            empresaId,
             deletedAt: { $ne: null }
         };
 

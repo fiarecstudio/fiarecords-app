@@ -58,7 +58,18 @@ function calcularProximoPago(fechaBase, tipoPago) {
     return proximoPago;
 }
 
+function datosClienteDesdeModelo(cliente) {
+    return {
+        clienteId: cliente._id,
+        nombre: cliente.nombre,
+        email: cliente.email || '',
+        telefono: cliente.telefono || ''
+    };
+}
+
 async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clienteEmail, clienteTelefono, clienteId }) {
+    const vacio = { clienteId: null, nombre: '', email: '', telefono: '' };
+
     if (clienteId) {
         const existente = await Cliente.findOne({ _id: clienteId, empresaId, deletedAt: null });
         if (existente) {
@@ -72,12 +83,12 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
                 changed = true;
             }
             if (changed) await existente.save();
-            return existente._id;
+            return datosClienteDesdeModelo(existente);
         }
     }
 
     const nombreNorm = (clienteNombre || '').trim();
-    if (!nombreNorm) return null;
+    if (!nombreNorm) return vacio;
 
     let cliente = await Cliente.findOne({ empresaId, nombre: nombreNorm, deletedAt: null });
 
@@ -90,7 +101,7 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
             telefono: clienteTelefono ? clienteTelefono.trim() : ''
         });
         await cliente.save();
-        return cliente._id;
+        return datosClienteDesdeModelo(cliente);
     }
 
     let changed = false;
@@ -104,7 +115,7 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
     }
     if (changed) await cliente.save();
 
-    return cliente._id;
+    return datosClienteDesdeModelo(cliente);
 }
 
 const crearPoliza = async (req, res) => {
@@ -119,7 +130,7 @@ const crearPoliza = async (req, res) => {
         const fechasNormalizadas = normalizarFechasPoliza(fechas);
         const tipoPagoFinal = tipoPago || 'anual';
 
-        const clienteIdFinal = await vincularOCrearCliente({
+        const clienteVinculado = await vincularOCrearCliente({
             empresaId,
             asesorId: asesorIdFinal,
             clienteNombre: cliente,
@@ -140,9 +151,9 @@ const crearPoliza = async (req, res) => {
             empresaId,
             asesorId: asesorIdFinal,
             numeroPoliza,
-            cliente,
-            clienteEmail,
-            clienteTelefono,
+            cliente: clienteVinculado.nombre || cliente,
+            clienteEmail: clienteVinculado.email || clienteEmail || '',
+            clienteTelefono: clienteVinculado.telefono || clienteTelefono || '',
             tipoPago: tipoPagoFinal,
             tipoSeguro,
             aseguradora,
@@ -156,7 +167,7 @@ const crearPoliza = async (req, res) => {
             diasAnticipacionAviso: diasAnticipacionAviso || 3,
             saldoRestante: primaTotal,
             proximoPago,
-            clienteId: clienteIdFinal
+            clienteId: clienteVinculado.clienteId
         });
 
         const polizaGuardada = await nuevaPoliza.save();
@@ -237,16 +248,28 @@ const actualizarPoliza = async (req, res) => {
             }
         }
 
-        if (datosActualizacion.cliente) {
+        const datosClienteCambiaron = datosActualizacion.cliente !== undefined
+            || datosActualizacion.clienteEmail !== undefined
+            || datosActualizacion.clienteTelefono !== undefined
+            || datosActualizacion.clienteId !== undefined;
+
+        if (datosClienteCambiaron) {
             const asesorParaCliente = datosActualizacion.asesorId || polizaExistente.asesorId;
-            datosActualizacion.clienteId = await vincularOCrearCliente({
+            const clienteVinculado = await vincularOCrearCliente({
                 empresaId,
                 asesorId: asesorParaCliente,
-                clienteNombre: datosActualizacion.cliente,
+                clienteNombre: datosActualizacion.cliente ?? polizaExistente.cliente,
                 clienteEmail: datosActualizacion.clienteEmail ?? polizaExistente.clienteEmail,
                 clienteTelefono: datosActualizacion.clienteTelefono ?? polizaExistente.clienteTelefono,
                 clienteId: datosActualizacion.clienteId || polizaExistente.clienteId
             });
+
+            datosActualizacion.clienteId = clienteVinculado.clienteId;
+            if (clienteVinculado.clienteId) {
+                datosActualizacion.cliente = clienteVinculado.nombre || datosActualizacion.cliente || polizaExistente.cliente;
+                datosActualizacion.clienteEmail = clienteVinculado.email || (datosActualizacion.clienteEmail ?? polizaExistente.clienteEmail ?? '');
+                datosActualizacion.clienteTelefono = clienteVinculado.telefono || (datosActualizacion.clienteTelefono ?? polizaExistente.clienteTelefono ?? '');
+            }
         }
 
         const poliza = await Poliza.findOneAndUpdate(
@@ -290,8 +313,9 @@ const obtenerPolizaPorId = async (req, res) => {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
         
-        // Buscar por id, empresaId y que no esté eliminada
-        const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        // Buscar por id, empresaId y que no esté eliminada, con populate de clienteId
+        const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
+            .populate('clienteId', 'nombre telefono email');
         
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
@@ -1203,7 +1227,7 @@ const asignarAsesor = async (req, res) => {
 };
 
 // ==========================================
-// EXPORTAR REPORTE EXCEL (ACTUALIZADO CON ASESOR)
+// EXPORTAR REPORTE EXCEL (ACTUALIZADO CON ASESOR Y DESGLOSE DE PAGOS)
 // ==========================================
 const exportarReporteExcel = async (req, res) => {
     try {
@@ -1226,43 +1250,131 @@ const exportarReporteExcel = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Pólizas');
 
-        // Agregar encabezados (Incluyendo la nueva columna Asesor)
+        // Agregar encabezados con desglose de pagos
         worksheet.columns = [
             { header: 'Número de Póliza', key: 'numeroPoliza', width: 20 },
             { header: 'Cliente', key: 'cliente', width: 30 },
-            { header: 'Asesor', key: 'asesor', width: 20 }, // <--- NUEVA COLUMNA
+            { header: 'Asesor', key: 'asesor', width: 20 },
             { header: 'Email', key: 'clienteEmail', width: 25 },
             { header: 'Teléfono', key: 'clienteTelefono', width: 15 },
             { header: 'Aseguradora', key: 'aseguradora', width: 20 },
             { header: 'Tipo de Seguro', key: 'tipoSeguro', width: 15 },
+            { header: 'Tipo de Pago', key: 'tipoPago', width: 12 },
             { header: 'Fecha Inicio', key: 'fechaInicio', width: 15 },
             { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 15 },
             { header: 'Prima Total', key: 'primaTotal', width: 15 },
             { header: 'Estado', key: 'estado', width: 12 },
-            { header: 'Estado Pago', key: 'estadoPago', width: 15 }
+            { header: 'No. Pago', key: 'numeroPago', width: 10 },
+            { header: 'Fecha Esperada', key: 'fechaEsperada', width: 15 },
+            { header: 'Monto Pago', key: 'montoPago', width: 12 },
+            { header: 'Estado Pago', key: 'estadoPago', width: 12 }
         ];
 
-        // Agregar datos
+        // Función para calcular número de pagos según tipo
+        const getNumeroPagos = (tipoPago) => {
+            switch (tipoPago) {
+                case 'mensual': return 12;
+                case 'trimestral': return 4;
+                case 'semestral': return 2;
+                case 'anual': return 1;
+                default: return 1;
+            }
+        };
+
+        // Función para calcular fechas de pagos esperados
+        const calcularFechasPagos = (fechaInicio, tipoPago, numPagos) => {
+            const fechas = [];
+            const inicio = new Date(fechaInicio);
+            
+            for (let i = 0; i < numPagos; i++) {
+                const fechaPago = new Date(inicio);
+                switch (tipoPago) {
+                    case 'mensual':
+                        fechaPago.setMonth(inicio.getMonth() + i);
+                        break;
+                    case 'trimestral':
+                        fechaPago.setMonth(inicio.getMonth() + (i * 3));
+                        break;
+                    case 'semestral':
+                        fechaPago.setMonth(inicio.getMonth() + (i * 6));
+                        break;
+                    case 'anual':
+                        fechaPago.setFullYear(inicio.getFullYear() + i);
+                        break;
+                }
+                fechas.push(fechaPago);
+            }
+            return fechas;
+        };
+
+        // Función para verificar estado de un pago específico
+        const getEstadoPago = (poliza, indexPago, fechaEsperada) => {
+            if (!poliza.pagos || poliza.pagos.length === 0) {
+                return 'Pendiente';
+            }
+            
+            // Buscar si existe un pago registrado para este índice
+            const pagoRegistrado = poliza.pagos[indexPago];
+            if (pagoRegistrado) {
+                return pagoRegistrado.estado === 'pagado' ? 'Pagado' : 'Pendiente';
+            }
+            
+            // Verificar si la fecha esperada ya pasó
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            const fechaEsperadaClean = new Date(fechaEsperada);
+            fechaEsperadaClean.setHours(0, 0, 0, 0);
+            
+            if (fechaEsperadaClean < hoy) {
+                return 'Atrasado';
+            }
+            
+            return 'Pendiente';
+        };
+
+        // Función para obtener monto del pago según tipo
+        const getMontoPago = (primaTotal, tipoPago) => {
+            switch (tipoPago) {
+                case 'mensual': return primaTotal / 12;
+                case 'trimestral': return primaTotal / 4;
+                case 'semestral': return primaTotal / 2;
+                case 'anual': return primaTotal;
+                default: return primaTotal;
+            }
+        };
+
+        // Agregar datos con desglose de pagos
         polizas.forEach(poliza => {
-            worksheet.addRow({
-                numeroPoliza: poliza.numeroPoliza,
-                cliente: poliza.cliente,
-                asesor: poliza.asesorId ? poliza.asesorId.username : 'Sin Asesor', // <--- Mapeo del asesor
-                clienteEmail: poliza.clienteEmail || '',
-                clienteTelefono: poliza.clienteTelefono || '',
-                aseguradora: poliza.aseguradora,
-                tipoSeguro: poliza.tipoSeguro,
-                fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
-                fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
-                primaTotal: poliza.primaTotal,
-                estado: poliza.estado,
-                estadoPago: poliza.estadoPago
-            });
+            const numPagos = getNumeroPagos(poliza.tipoPago);
+            const fechasPagos = calcularFechasPagos(poliza.fechas?.inicio, poliza.tipoPago, numPagos);
+            const montoPago = getMontoPago(poliza.primaTotal, poliza.tipoPago);
+
+            // Generar una fila por cada pago esperado
+            for (let i = 0; i < numPagos; i++) {
+                worksheet.addRow({
+                    numeroPoliza: poliza.numeroPoliza,
+                    cliente: poliza.cliente,
+                    asesor: poliza.asesorId ? poliza.asesorId.username : 'Sin Asesor',
+                    clienteEmail: poliza.clienteEmail || '',
+                    clienteTelefono: poliza.clienteTelefono || '',
+                    aseguradora: poliza.aseguradora,
+                    tipoSeguro: poliza.tipoSeguro,
+                    tipoPago: poliza.tipoPago,
+                    fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
+                    fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
+                    primaTotal: poliza.primaTotal,
+                    estado: poliza.estado,
+                    numeroPago: i + 1,
+                    fechaEsperada: fechasPagos[i] ? fechasPagos[i].toLocaleDateString() : '',
+                    montoPago: montoPago.toFixed(2),
+                    estadoPago: getEstadoPago(poliza, i, fechasPagos[i])
+                });
+            }
         });
 
         // Enviar archivo
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_pagos_${new Date().toISOString().split('T')[0]}.xlsx`);
 
         await workbook.xlsx.write(res);
         res.end();
@@ -1273,7 +1385,7 @@ const exportarReporteExcel = async (req, res) => {
 };
 
 // ==========================================
-// EXPORTAR REPORTE PDF (CORREGIDO)
+// EXPORTAR REPORTE PDF (CON DESGLOSE DE PAGOS)
 // ==========================================
 const exportarReportePDF = async (req, res) => {
     try {
@@ -1297,7 +1409,7 @@ const exportarReportePDF = async (req, res) => {
         const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_${new Date().toISOString().split('T')[0]}.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename=reporte_polizas_pagos_${new Date().toISOString().split('T')[0]}.pdf`);
 
         doc.pipe(res);
 
@@ -1318,71 +1430,156 @@ const exportarReportePDF = async (req, res) => {
 
         // Título: Posicionado para no chocar con el logo (si hay logo)
         const titleX = 120; 
-        doc.fontSize(20).font('Helvetica-Bold').text('Reporte de Pólizas', titleX, 30);
+        doc.fontSize(20).font('Helvetica-Bold').text('Reporte de Pólizas con Desglose de Pagos', titleX, 30);
         doc.fontSize(10).font('Helvetica').text(`Fecha: ${new Date().toLocaleDateString()}`, titleX, 55);
         
         // Espacio entre logo/título y la tabla
         const tableTop = 120; 
         const tableLeft = 20;
-        const columnWidths = [60, 80, 80, 60, 60, 50, 60, 60, 50, 40, 50, 60];
-        const headers = ['Número', 'Cliente', 'Email', 'Teléfono', 'Aseguradora', 'Tipo', 'Inicio', 'Vencimiento', 'Prima', 'Estado', 'Pago', 'Asesor'];
+        const columnWidths = [50, 60, 50, 50, 40, 40, 40, 35, 30, 35, 30, 35, 40, 35];
+        const headers = ['Número', 'Cliente', 'Tipo Pago', 'Inicio', 'Vencimiento', 'Prima', 'No.', 'Fecha Esperada', 'Monto', 'Estado', 'Asesor'];
+
+        // Funciones auxiliares (mismas que en Excel)
+        const getNumeroPagos = (tipoPago) => {
+            switch (tipoPago) {
+                case 'mensual': return 12;
+                case 'trimestral': return 4;
+                case 'semestral': return 2;
+                case 'anual': return 1;
+                default: return 1;
+            }
+        };
+
+        const calcularFechasPagos = (fechaInicio, tipoPago, numPagos) => {
+            const fechas = [];
+            const inicio = new Date(fechaInicio);
+            
+            for (let i = 0; i < numPagos; i++) {
+                const fechaPago = new Date(inicio);
+                switch (tipoPago) {
+                    case 'mensual':
+                        fechaPago.setMonth(inicio.getMonth() + i);
+                        break;
+                    case 'trimestral':
+                        fechaPago.setMonth(inicio.getMonth() + (i * 3));
+                        break;
+                    case 'semestral':
+                        fechaPago.setMonth(inicio.getMonth() + (i * 6));
+                        break;
+                    case 'anual':
+                        fechaPago.setFullYear(inicio.getFullYear() + i);
+                        break;
+                }
+                fechas.push(fechaPago);
+            }
+            return fechas;
+        };
+
+        const getEstadoPago = (poliza, indexPago, fechaEsperada) => {
+            if (!poliza.pagos || poliza.pagos.length === 0) {
+                return 'Pendiente';
+            }
+            
+            const pagoRegistrado = poliza.pagos[indexPago];
+            if (pagoRegistrado) {
+                return pagoRegistrado.estado === 'pagado' ? 'Pagado' : 'Pendiente';
+            }
+            
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            const fechaEsperadaClean = new Date(fechaEsperada);
+            fechaEsperadaClean.setHours(0, 0, 0, 0);
+            
+            if (fechaEsperadaClean < hoy) {
+                return 'Atrasado';
+            }
+            
+            return 'Pendiente';
+        };
+
+        const getMontoPago = (primaTotal, tipoPago) => {
+            switch (tipoPago) {
+                case 'mensual': return primaTotal / 12;
+                case 'trimestral': return primaTotal / 4;
+                case 'semestral': return primaTotal / 2;
+                case 'anual': return primaTotal;
+                default: return primaTotal;
+            }
+        };
 
         // Encabezados
         const drawHeaders = (yPos) => {
-            doc.fontSize(8).font('Helvetica-Bold');
+            doc.fontSize(7).font('Helvetica-Bold');
             let x = tableLeft;
             headers.forEach((header, i) => {
-                doc.rect(x, yPos, columnWidths[i], 20).fill('#f0f0f0');
-                doc.fillColor('black').text(header, x + 2, yPos + 5, { width: columnWidths[i] - 4, align: 'center' });
+                doc.rect(x, yPos, columnWidths[i], 18).fill('#f0f0f0');
+                doc.fillColor('black').text(header, x + 2, yPos + 4, { width: columnWidths[i] - 4, align: 'center' });
                 x += columnWidths[i];
             });
-            doc.moveTo(tableLeft, yPos + 20).lineTo(x, yPos + 20).stroke();
+            doc.moveTo(tableLeft, yPos + 18).lineTo(x, yPos + 18).stroke();
         };
 
         drawHeaders(tableTop);
 
-        // Datos
-        doc.fontSize(7).font('Helvetica');
-        let y = tableTop + 25;
-        const rowHeight = 18;
+        // Datos con desglose de pagos
+        doc.fontSize(6).font('Helvetica');
+        let y = tableTop + 23;
+        const rowHeight = 15;
 
-        polizas.forEach((poliza, index) => {
-            // Verificar espacio para nueva página
-            if (y + rowHeight > doc.page.height - 40) {
-                doc.addPage();
-                y = 20;
-                drawHeaders(y);
-                y += 25;
+        // Generar filas para cada pago de cada póliza
+        polizas.forEach((poliza) => {
+            const numPagos = getNumeroPagos(poliza.tipoPago);
+            const fechasPagos = calcularFechasPagos(poliza.fechas?.inicio, poliza.tipoPago, numPagos);
+            const montoPago = getMontoPago(poliza.primaTotal, poliza.tipoPago);
+
+            for (let i = 0; i < numPagos; i++) {
+                // Verificar espacio para nueva página
+                if (y + rowHeight > doc.page.height - 40) {
+                    doc.addPage();
+                    y = 20;
+                    drawHeaders(y);
+                    y += 23;
+                }
+
+                // Alternar color
+                if (i % 2 === 0) {
+                    doc.rect(tableLeft, y, columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill('#f9f9f9');
+                }
+                doc.fillColor('black');
+
+                let x = tableLeft;
+                const estadoPago = getEstadoPago(poliza, i, fechasPagos[i]);
+                
+                // Color según estado del pago
+                if (estadoPago === 'Pagado') {
+                    doc.fillColor('green');
+                } else if (estadoPago === 'Atrasado') {
+                    doc.fillColor('red');
+                } else {
+                    doc.fillColor('black');
+                }
+
+                const data = [
+                    poliza.numeroPoliza || '',
+                    poliza.cliente || '',
+                    poliza.tipoPago || '',
+                    poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
+                    poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
+                    poliza.primaTotal ? '$' + poliza.primaTotal.toFixed(2) : '',
+                    i + 1,
+                    fechasPagos[i] ? fechasPagos[i].toLocaleDateString() : '',
+                    '$' + montoPago.toFixed(2),
+                    estadoPago,
+                    poliza.asesorId?.username || ''
+                ];
+
+                data.forEach((text, i) => {
+                    doc.text(text, x + 2, y + 4, { width: columnWidths[i] - 4, align: 'center' });
+                    x += columnWidths[i];
+                });
+
+                y += rowHeight;
             }
-
-            // Alternar color
-            if (index % 2 === 0) {
-                doc.rect(tableLeft, y, columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill('#f9f9f9');
-            }
-            doc.fillColor('black');
-
-            let x = tableLeft;
-            const data = [
-                poliza.numeroPoliza || '',
-                poliza.cliente || '',
-                poliza.clienteEmail || '',
-                poliza.clienteTelefono || '',
-                poliza.aseguradora || '',
-                poliza.tipoSeguro || '',
-                poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
-                poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
-                poliza.primaTotal ? '$' + poliza.primaTotal.toFixed(2) : '',
-                poliza.estado || '',
-                poliza.estadoPago || '',
-                poliza.asesorId?.username || ''
-            ];
-
-            data.forEach((text, i) => {
-                doc.text(text, x + 2, y + 5, { width: columnWidths[i] - 4, align: 'center' });
-                x += columnWidths[i];
-            });
-
-            y += rowHeight;
         });
 
         // Pie de página (Numeración)
