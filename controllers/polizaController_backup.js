@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const Poliza = require('../models/Poliza');
 const Usuario = require('../models/Usuario');
 const Cliente = require('../models/Cliente');
@@ -457,12 +456,6 @@ const registrarPago = async (req, res) => {
         }
 
         poliza.proximoPago = proximoPago;
-
-        // Resetear enlacePago si es pago fraccionado (mensual, trimestral, semestral)
-        if (poliza.tipoPago === 'mensual' || poliza.tipoPago === 'trimestral' || poliza.tipoPago === 'semestral') {
-            poliza.enlacePago = null;
-            console.log('[registrarPago] Enlace de pago reseteado para tipoPago:', poliza.tipoPago);
-        }
 
         await poliza.save();
         res.json({
@@ -925,178 +918,24 @@ const enviarRecordatorioCorreo = async (req, res) => {
             return res.status(404).json({ error: 'Póliza no encontrada' });
         }
         
-        // Calcular destinatario automáticamente si está vacío (para Cobranza Diaria)
-        let destinatarioFinal = destinatario;
-        if (!destinatario || destinatario.trim() === '') {
-            console.log('[enviarRecordatorioCorreo] Destinatario vacío, calculando desde póliza...');
-            
-            // PRIORIDAD: Usar correo del modelo Cliente si existe clienteId
-            if (poliza.clienteId) {
-                const Cliente = require('../models/Cliente');
-                const cliente = await Cliente.findById(poliza.clienteId);
-                if (cliente && cliente.email) {
-                    destinatarioFinal = cliente.email;
-                    console.log('[enviarRecordatorioCorreo] Email desde modelo Cliente:', destinatarioFinal);
-                }
-            }
-            
-            // Fallback a campos legacy de póliza
-            if (!destinatarioFinal) {
-                destinatarioFinal = poliza.clienteEmail || '';
-                console.log('[enviarRecordatorioCorreo] Email desde póliza.clienteEmail:', destinatarioFinal);
-            }
-            
-            // Fallback final a email de prueba
-            if (!destinatarioFinal) {
-                destinatarioFinal = 'correoprueba@ejemplo.com';
-                console.log('[enviarRecordatorioCorreo] Usando email de prueba:', destinatarioFinal);
-            }
-        }
-        
-        console.log('[enviarRecordatorioCorreo] Destinatario final:', destinatarioFinal);
-        
-        // Calcular monto a pagar según la lógica existente
-        let montoPago = 0;
-        if (poliza.primerPago && poliza.primerPago > 0) {
-            montoPago = poliza.primerPago;
-        } else if (poliza.montoAbono && poliza.montoAbono > 0) {
-            montoPago = poliza.montoAbono;
-        } else {
-            const primaTotal = poliza.primaTotal || 0;
-            switch (poliza.tipoPago) {
-                case 'mensual':
-                    montoPago = primaTotal / 12;
-                    break;
-                case 'trimestral':
-                    montoPago = primaTotal / 4;
-                    break;
-                case 'semestral':
-                    montoPago = primaTotal / 2;
-                    break;
-                case 'anual':
-                default:
-                    montoPago = primaTotal;
-                    break;
-            }
-        }
-        
-        // Formatear monto
-        const montoFormateado = new Intl.NumberFormat('es-MX', {
-            style: 'currency',
-            currency: 'MXN'
-        }).format(montoPago);
-        
-        // Formatear fecha de vencimiento
-        const fechaVencimiento = poliza.fechas?.vencimiento 
-            ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            })
-            : 'N/A';
-        
-        // Plantilla HTML profesional
-        const htmlPlantilla = `
-<div style="font-family: Arial, sans-serif; color: #333333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
-    <div style="background-color: #003366; padding: 20px; text-align: center;">
-        <h2 style="color: #ffffff; margin: 0; font-size: 24px;">Recordatorio de Vencimiento</h2>
-    </div>
-    <div style="padding: 30px 20px;">
-        <p style="font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
-            Estimado/a <strong>${poliza.cliente}</strong>,
-        </p>
-        <p style="font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
-            Esperamos que se encuentre muy bien. Nos comunicamos de parte de su equipo de asesores para recordarle amablemente que su póliza de seguro está próxima a vencer.
-        </p>
-        <div style="background-color: #f9f9f9; border-left: 4px solid #003366; padding: 15px; margin-bottom: 25px;">
-            <h3 style="margin-top: 0; color: #003366; font-size: 18px;">Detalles de la Póliza</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; width: 40%;">Aseguradora:</td>
-                    <td style="padding: 8px 0;">${poliza.aseguradora || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold;">Ramo / Tipo:</td>
-                    <td style="padding: 8px 0;">${poliza.tipoSeguro || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold;">No. de Póliza:</td>
-                    <td style="padding: 8px 0;">${poliza.numeroPoliza || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold;">Fecha de Vencimiento:</td>
-                    <td style="padding: 8px 0; color: #d9534f; font-weight: bold;">${fechaVencimiento}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold;">Monto a Pagar:</td>
-                    <td style="padding: 8px 0; font-size: 18px; color: #28a745; font-weight: bold;">${montoFormateado}</td>
-                </tr>
-            </table>
-        </div>
-        <p style="font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
-            Para mantener su cobertura activa y evitar recargos, le invitamos a realizar el pago correspondiente antes de la fecha señalada. Si usted ya realizó este pago, por favor haga caso omiso a este mensaje.
-        </p>
-        ${poliza.enlacePago ? `
-        <div style="background-color: #e8f5e9; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 25px;">
-            <h3 style="margin-top: 0; color: #28a745; font-size: 18px;">💳 Enlace de Pago</h3>
-            <p style="font-size: 16px; line-height: 1.5; margin-bottom: 10px;">
-                Puede realizar su pago de forma segura a través del siguiente enlace:
-            </p>
-            <p style="font-size: 16px; line-height: 1.5; margin: 0;">
-                <a href="${poliza.enlacePago}" style="color: #003366; font-weight: bold; text-decoration: underline;">${poliza.enlacePago}</a>
-            </p>
-        </div>
-        ` : ''}
-    </div>
-    <div style="background-color: #f1f1f1; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
-        <p style="margin: 0; font-size: 14px; font-weight: bold; color: #333333;">EME Asesores</p>
-        <p style="margin: 5px 0 0; font-size: 12px; color: #777777;">
-            Protegiendo su tranquilidad y patrimonio.
-        </p>
-    </div>
-</div>
-`;
-        
         const { enviarEmail } = require('../services/notificationService');
         const Notificacion = require('../models/Notificacion');
         
         await enviarEmail({ 
             empresaId, 
-            destinatario: destinatarioFinal, 
-            asunto: asunto || 'Recordatorio de Vencimiento - Póliza', 
-            cuerpo: htmlPlantilla 
+            destinatario, 
+            asunto, 
+            cuerpo: `<p>${mensaje}</p>` 
         });
         
-        // Guardar en historial de notificaciones de la póliza
-        const diasRestantes = poliza.fechas?.vencimiento 
-            ? Math.ceil((new Date(poliza.fechas.vencimiento) - new Date()) / (1000 * 60 * 60 * 24))
-            : 0;
-        
-        poliza.historialNotificaciones.push({
-            fecha: new Date(),
-            tipo: 'recordatorio_manual',
-            canal: 'email',
-            mensaje: htmlPlantilla,
-            estado: 'enviada',
-            diasRestantes: diasRestantes,
-            enviadoManualmente: true
-        });
-        
-        // Limitar historial a 50 registros más recientes
-        if (poliza.historialNotificaciones.length > 50) {
-            poliza.historialNotificaciones = poliza.historialNotificaciones.slice(-50);
-        }
-        
-        await poliza.save();
-        
-        // Guardar log de notificación en modelo Notificación
+        // Guardar log de notificación
         const logNotificacion = new Notificacion({ 
             empresaId, 
             polizaId: poliza._id, 
             tipo: 'recordatorio_pago', 
             canal: 'email', 
-            destinatario: destinatarioFinal, 
-            mensaje: htmlPlantilla 
+            destinatario, 
+            mensaje 
         });
         logNotificacion.estado = 'enviada';
         logNotificacion.fechaEnvio = new Date();
@@ -1110,313 +949,131 @@ const enviarRecordatorioCorreo = async (req, res) => {
 };
 
 // ENDPOINT: Cobranza Diaria - Pólizas que requieren gestión hoy
-const COBRANZA_TZ = 'America/Mexico_City';
-
 const obtenerCobranzaDiaria = async (req, res) => {
     try {
         const empresaId = req.user.empresaId;
         const userRole = req.user.role;
         const userId = req.user._id || req.user.id;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-        const hoyString = new Intl.DateTimeFormat('en-CA', { timeZone: COBRANZA_TZ }).format(new Date());
-        const hoyInicio = { $dateFromString: { dateString: hoyString, timezone: COBRANZA_TZ } };
+        console.log('[obtenerCobranzaDiaria] Usuario:', userId, 'Rol:', userRole, 'Empresa:', empresaId);
+        console.log('[obtenerCobranzaDiaria] Fecha hoy:', hoy.toISOString());
 
-        const matchInicial = {
-            empresaId: new mongoose.Types.ObjectId(empresaId),
-            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
-        };
+        // Construir filtro base con RBAC
+        let filtroBase = { empresaId, deletedAt: null };
+        
+        // RBAC: Si el usuario no es admin, filtrar por asesorId
         if (userRole !== 'admin') {
-            matchInicial.asesorId = new mongoose.Types.ObjectId(userId);
+            filtroBase.asesorId = userId;
         }
 
-        const pipeline = [
-            { $match: matchInicial },
-            {
-                $addFields: {
-                    _fechaVencimiento: {
-                        $cond: {
-                            if: { $ne: [{ $ifNull: ['$fechas.vencimiento', null] }, null] },
-                            then: { $toDate: '$fechas.vencimiento' },
-                            else: null
-                        }
-                    },
-                    _fechaProximoPago: {
-                        $cond: {
-                            if: { $ne: [{ $ifNull: ['$proximoPago', null] }, null] },
-                            then: { $toDate: '$proximoPago' },
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $addFields: {
-                    diasRestantesVencimiento: {
-                        $cond: {
-                            if: { $ne: ['$_fechaVencimiento', null] },
-                            then: {
-                                $dateDiff: {
-                                    startDate: hoyInicio,
-                                    endDate: '$_fechaVencimiento',
-                                    unit: 'day',
-                                    timezone: COBRANZA_TZ
-                                }
-                            },
-                            else: null
-                        }
-                    },
-                    diasRestantesPago: {
-                        $cond: {
-                            if: { $ne: ['$_fechaProximoPago', null] },
-                            then: {
-                                $dateDiff: {
-                                    startDate: hoyInicio,
-                                    endDate: '$_fechaProximoPago',
-                                    unit: 'day',
-                                    timezone: COBRANZA_TZ
-                                }
-                            },
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $addFields: {
-                    diasRestantes: {
-                        $switch: {
-                            branches: [
-                                {
-                                    case: {
-                                        $and: [
-                                            { $ne: ['$diasRestantesVencimiento', null] },
-                                            { $ne: ['$diasRestantesPago', null] }
-                                        ]
-                                    },
-                                    then: { $min: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
-                                },
-                                {
-                                    case: { $ne: ['$diasRestantesVencimiento', null] },
-                                    then: '$diasRestantesVencimiento'
-                                },
-                                {
-                                    case: { $ne: ['$diasRestantesPago', null] },
-                                    then: '$diasRestantesPago'
-                                }
-                            ],
-                            default: null
-                        }
-                    },
-                    tipoGestion: {
-                        $cond: {
-                            if: {
-                                $and: [
-                                    { $ne: ['$diasRestantesVencimiento', null] },
-                                    {
-                                        $or: [
-                                            { $eq: ['$diasRestantesPago', null] },
-                                            { $lte: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
-                                        ]
-                                    }
-                                ]
-                            },
-                            then: 'vencimiento_poliza',
-                            else: 'pago_pendiente'
-                        }
-                    },
-                    montoCalculado: {
-                        $cond: {
-                            if: { $and: [{ $gt: ['$primerPago', 0] }, { $ne: ['$primerPago', null] }] },
-                            then: '$primerPago',
-                            else: {
-                                $cond: {
-                                    if: { $and: [{ $gt: ['$montoAbono', 0] }, { $ne: ['$montoAbono', null] }] },
-                                    then: '$montoAbono',
-                                    else: {
-                                        $cond: {
-                                            if: { $eq: ['$tipoPago', 'mensual'] },
-                                            then: { $divide: ['$primaTotal', 12] },
-                                            else: {
-                                                $cond: {
-                                                    if: { $eq: ['$tipoPago', 'trimestral'] },
-                                                    then: { $divide: ['$primaTotal', 4] },
-                                                    else: '$primaTotal'
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            { $match: { diasRestantes: { $ne: null, $lte: 7 } } },
-            {
-                $facet: {
-                    vencidas: [
-                        { $match: { diasRestantes: { $lt: 0 } } },
-                        { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
-                        {
-                            $project: {
-                                _id: 1,
-                                numeroPoliza: 1,
-                                cliente: 1,
-                                clienteTelefono: 1,
-                                clienteEmail: 1,
-                                tipoSeguro: 1,
-                                tipoPago: 1,
-                                montoCalculado: 1,
-                                vencimiento: '$_fechaVencimiento',
-                                proximoPago: '$_fechaProximoPago',
-                                estado: 1,
-                                estadoPago: 1,
-                                tipoGestion: 1,
-                                diasRestantes: 1,
-                                aseguradora: 1,
-                                enlacePago: 1,
-                                historialNotificaciones: 1
-                            }
-                        }
-                    ],
-                    cobrosHoy: [
-                        { $match: { diasRestantes: 0 } },
-                        { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
-                        {
-                            $project: {
-                                _id: 1,
-                                numeroPoliza: 1,
-                                cliente: 1,
-                                clienteTelefono: 1,
-                                clienteEmail: 1,
-                                tipoSeguro: 1,
-                                tipoPago: 1,
-                                montoCalculado: 1,
-                                vencimiento: '$_fechaVencimiento',
-                                proximoPago: '$_fechaProximoPago',
-                                estado: 1,
-                                estadoPago: 1,
-                                tipoGestion: 1,
-                                diasRestantes: 1,
-                                aseguradora: 1,
-                                enlacePago: 1,
-                                historialNotificaciones: 1
-                            }
-                        }
-                    ],
-                    porVencer: [
-                        { $match: { diasRestantes: { $gt: 0, $lte: 7 } } },
-                        { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
-                        {
-                            $project: {
-                                _id: 1,
-                                numeroPoliza: 1,
-                                cliente: 1,
-                                clienteTelefono: 1,
-                                clienteEmail: 1,
-                                tipoSeguro: 1,
-                                tipoPago: 1,
-                                montoCalculado: 1,
-                                vencimiento: '$_fechaVencimiento',
-                                proximoPago: '$_fechaProximoPago',
-                                estado: 1,
-                                estadoPago: 1,
-                                tipoGestion: 1,
-                                diasRestantes: 1,
-                                aseguradora: 1,
-                                enlacePago: 1,
-                                historialNotificaciones: 1
-                            }
-                        }
-                    ]
+        console.log('[obtenerCobranzaDiaria] Filtro:', JSON.stringify(filtroBase));
+
+        // Obtener todas las pólizas activas (sin populate por ahora para evitar errores)
+        const polizas = await Poliza.find(filtroBase);
+        console.log('[obtenerCobranzaDiaria] Total pólizas encontradas:', polizas.length);
+
+        const polizasCobranza = [];
+
+        polizas.forEach(poliza => {
+            console.log('[obtenerCobranzaDiaria] Analizando póliza:', poliza.numeroPoliza, 'Vencimiento:', poliza.fechas?.vencimiento, 'Próximo pago:', poliza.proximoPago, 'Recordatorios:', poliza.recordatoriosPago);
+            
+            let requiereGestion = false;
+            let tipoGestion = '';
+            let diasRestantes = 0;
+            let montoPagar = 0;
+
+            // Calcular monto a pagar según tipo de pago
+            if (poliza.tipoPago === 'mensual') {
+                montoPagar = poliza.primaTotal / 12;
+            } else if (poliza.tipoPago === 'trimestral') {
+                montoPagar = poliza.primaTotal / 4;
+            } else {
+                montoPagar = poliza.primaTotal;
+            }
+
+            // Si tiene primerPago definido, usar ese para el primer pago
+            if (poliza.primerPago && poliza.primerPago > 0) {
+                montoPagar = poliza.primerPago;
+            }
+            // Si tiene montoAbono definido, usar ese para pagos subsecuentes
+            else if (poliza.montoAbono && poliza.montoAbono > 0) {
+                montoPagar = poliza.montoAbono;
+            }
+
+            // Verificar vencimiento de póliza
+            if (poliza.fechas?.vencimiento) {
+                const fVenc = new Date(poliza.fechas.vencimiento);
+                fVenc.setHours(0, 0, 0, 0);
+                diasRestantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
+                const recordatorios = poliza.recordatoriosPago || [7, 3, 1, 0];
+
+                console.log('[obtenerCobranzaDiaria] Póliza', poliza.numeroPoliza, '- Días restantes vencimiento:', diasRestantes, 'Recordatorios:', recordatorios);
+
+                if (recordatorios.includes(diasRestantes) && diasRestantes >= 0) {
+                    requiereGestion = true;
+                    tipoGestion = 'vencimiento_poliza';
+                    console.log('[obtenerCobranzaDiaria] Póliza', poliza.numeroPoliza, '- REQUIERE GESTIÓN por vencimiento');
                 }
             }
-        ];
 
-        const resultado = await Poliza.aggregate(pipeline);
-        console.log('[obtenerCobranzaDiaria] Raw facet counts:', {
-            vencidas: resultado[0]?.vencidas?.length ?? 0,
-            cobrosHoy: resultado[0]?.cobrosHoy?.length ?? 0,
-            porVencer: resultado[0]?.porVencer?.length ?? 0
-        });
-        const datos = resultado[0] || { vencidas: [], cobrosHoy: [], porVencer: [] };
+            // Verificar próximo pago
+            if (poliza.proximoPago && !requiereGestion) {
+                const fPago = new Date(poliza.proximoPago);
+                fPago.setHours(0, 0, 0, 0);
+                const diasParaPago = Math.ceil((fPago - hoy) / (1000 * 60 * 60 * 24));
+                const recordatorios = poliza.recordatoriosPago || [7, 3, 1, 0];
 
-        const mapPolizaRespuesta = (poliza) => ({
-            polizaId: poliza._id,
-            numeroPoliza: poliza.numeroPoliza,
-            cliente: poliza.cliente || 'Sin nombre',
-            telefono: poliza.clienteTelefono || '',
-            email: poliza.clienteEmail || '',
-            tipoSeguro: poliza.tipoSeguro,
-            tipoPago: poliza.tipoPago,
-            montoPagar: poliza.montoCalculado || 0,
-            vencimiento: poliza.vencimiento,
-            proximoPago: poliza.proximoPago,
-            estado: poliza.estado,
-            estadoPago: poliza.estadoPago,
-            tipoGestion: poliza.tipoGestion,
-            diasRestantes: poliza.diasRestantes,
-            aseguradora: poliza.aseguradora,
-            enlacePago: poliza.enlacePago || null,
-            historialNotificaciones: poliza.historialNotificaciones || []
-        });
+                console.log('[obtenerCobranzaDiaria] Póliza', poliza.numeroPoliza, '- Días para pago:', diasParaPago, 'Recordatorios:', recordatorios);
 
-        const vencidas = (datos.vencidas || []).map(mapPolizaRespuesta);
-        const cobrosHoy = (datos.cobrosHoy || []).map(mapPolizaRespuesta);
-        const porVencer = (datos.porVencer || []).map(mapPolizaRespuesta);
-
-        const resultados = {
-            success: true,
-            fecha: hoyString,
-            vencidas,
-            cobrosHoy,
-            porVencer,
-            totales: {
-                vencidas: vencidas.length,
-                cobrosHoy: cobrosHoy.length,
-                porVencer: porVencer.length
+                if (recordatorios.includes(diasParaPago) && diasParaPago >= 0) {
+                    requiereGestion = true;
+                    tipoGestion = 'pago_pendiente';
+                    diasRestantes = diasParaPago;
+                    console.log('[obtenerCobranzaDiaria] Póliza', poliza.numeroPoliza, '- REQUIERE GESTIÓN por pago');
+                }
             }
-        };
 
-        console.log('Resultados de agregación:', resultados);
-        res.json(resultados);
-    } catch (error) {
-        console.error('[obtenerCobranzaDiaria] Error:', error);
-        res.status(500).json({ error: 'Error al obtener cobranza diaria', details: error.message });
-    }
-};
+            // Si requiere gestión, agregar al resultado
+            if (requiereGestion) {
+                // Obtener nombre del cliente (solo campos legacy por ahora para evitar errores)
+                const nombreCliente = poliza.cliente || 'Sin nombre';
+                const telefonoCliente = poliza.clienteTelefono || '';
+                const emailCliente = poliza.clienteEmail || '';
 
-// ENDPOINT: Marcar póliza como resuelta en Cobranza Diaria
-const marcarCobranzaResuelta = async (req, res) => {
-    try {
-        const { polizaId } = req.params;
-        const empresaId = req.user.empresaId;
-        const { resuelta } = req.body;
+                polizasCobranza.push({
+                    polizaId: poliza._id,
+                    numeroPoliza: poliza.numeroPoliza,
+                    cliente: nombreCliente,
+                    telefono: telefonoCliente,
+                    email: emailCliente,
+                    tipoSeguro: poliza.tipoSeguro,
+                    tipoPago: poliza.tipoPago,
+                    montoPagar: montoPagar,
+                    vencimiento: poliza.fechas?.vencimiento,
+                    proximoPago: poliza.proximoPago,
+                    estado: poliza.estado,
+                    estadoPago: poliza.estadoPago,
+                    tipoGestion,
+                    diasRestantes,
+                    aseguradora: poliza.aseguradora
+                });
+            }
+        });
 
-        const poliza = await Poliza.findOneAndUpdate(
-            { _id: polizaId, empresaId, deletedAt: null },
-            { 
-                cobranzaResuelta: resuelta,
-                fechaResolucionCobranza: resuelta ? new Date() : null
-            },
-            { new: true }
-        );
-
-        if (!poliza) {
-            return res.status(404).json({ error: 'Póliza no encontrada' });
-        }
+        // Ordenar por días restantes (ascendente) - los más urgentes primero
+        polizasCobranza.sort((a, b) => a.diasRestantes - b.diasRestantes);
 
         res.json({
             success: true,
-            message: resuelta ? 'Póliza marcada como resuelta' : 'Póliza reactivada en cobranza',
-            poliza
+            fecha: hoy.toISOString().split('T')[0],
+            total: polizasCobranza.length,
+            polizas: polizasCobranza
         });
     } catch (error) {
-        console.error('[marcarCobranzaResuelta] Error:', error);
-        res.status(500).json({ error: 'Error al marcar póliza como resuelta', details: error.message });
+        console.error('[obtenerCobranzaDiaria] Error:', error);
+        res.status(500).json({ error: 'Error al obtener cobranza diaria', details: error.message });
     }
 };
 
@@ -1444,248 +1101,26 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
             }
         }
 
-        // Generar mensaje dinámico profesional
+        // Generar mensaje dinámico
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         
-        let asunto = '';
-        let cuerpo = '';
+        let mensaje = '';
         let tipo = '';
-        let montoPagar = 0;
-        
-        // Calcular monto a pagar
-        if (poliza.primerPago && poliza.primerPago > 0) {
-            montoPagar = poliza.primerPago;
-        } else if (poliza.montoAbono && poliza.montoAbono > 0) {
-            montoPagar = poliza.montoAbono;
-        } else if (poliza.tipoPago === 'mensual') {
-            montoPagar = poliza.primaTotal / 12;
-        } else if (poliza.tipoPago === 'trimestral') {
-            montoPagar = poliza.primaTotal / 4;
-        } else {
-            montoPagar = poliza.primaTotal;
-        }
-        
-        const montoFormateado = new Intl.NumberFormat('es-MX', { 
-            style: 'currency', 
-            currency: 'MXN' 
-        }).format(montoPagar);
         
         if (poliza.fechas?.vencimiento) {
             const fVenc = new Date(poliza.fechas.vencimiento);
             fVenc.setHours(0, 0, 0, 0);
             const diasRestantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
-            const fechaFormateada = fVenc.toLocaleDateString('es-MX', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            
-            asunto = `Recordatorio de Pago de Póliza - EME Asesores`;
-            
-            let enlacePagoHTML = '';
-            if (poliza.enlacePago) {
-                enlacePagoHTML = `
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="${poliza.enlacePago}" 
-                           style="background-color: #007bff; color: white; padding: 12px 25px; 
-                                  text-decoration: none; border-radius: 5px; font-weight: bold; 
-                                  display: inline-block;">
-                            Realizar Pago Online
-                        </a>
-                    </div>
-                `;
-            }
-            
-            cuerpo = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #003366; padding: 20px; text-align: center;">
-                        <h1 style="color: white; margin: 0;">EME Asesores</h1>
-                        <p style="color: #cce5ff; margin: 5px 0 0 0;">Seguros y Servicios Financieros</p>
-                    </div>
-                    
-                    <div style="padding: 30px; background-color: #f8f9fa;">
-                        <h2 style="color: #333; margin-top: 0;">Recordatorio de Pago de Póliza</h2>
-                        
-                        <p>Estimado(a) <strong>${poliza.cliente}</strong>,</p>
-                        
-                        <p>Le recordamos que su póliza de seguro está próxima a vencer. A continuación presentamos los detalles:</p>
-                        
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <tr style="background-color: #003366; color: white;">
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Concepto</th>
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Detalle</th>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Número de Póliza:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.numeroPoliza}</td>
-                            </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Tipo de Seguro:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.tipoSeguro}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Aseguradora:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.aseguradora || 'N/A'}</td>
-                            </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Fecha Límite:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${fechaFormateada}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Monto a Pagar:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: #28a745;">${montoFormateado}</td>
-                            </tr>
-                            <tr style="background-color: ${diasRestantes <= 3 ? '#ffeeee' : '#e6f7ff'};">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Días Restantes:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: ${diasRestantes <= 3 ? '#dc3545' : '#007bff'};">${diasRestantes} días</td>
-                            </tr>
-                        </table>
-                        
-                        ${enlacePagoHTML}
-                        
-                        <p style="font-size: 14px; color: #666; margin-top: 25px;">
-                            <strong>Información de Contacto:</strong><br>
-                            Teléfono: 55-1234-5678<br>
-                            Email: contacto@emeasesores.com
-                        </p>
-                        
-                        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px;">
-                            Este correo es un recordatorio automático. Si ya realizó su pago, puede ignorar este mensaje.
-                        </p>
-                    </div>
-                </div>
-            `;
-            
+            mensaje = `Estimado(a) ${poliza.cliente}, su póliza No. ${poliza.numeroPoliza} vence en ${diasRestantes} días. Por favor contactarnos para su renovación.`;
             tipo = 'vencimiento_poliza';
         } else if (poliza.proximoPago) {
             const fPago = new Date(poliza.proximoPago);
             fPago.setHours(0, 0, 0, 0);
-            const diasRestantes = Math.ceil((fPago - hoy) / (1000 * 60 * 60 * 24));
-            const fechaFormateada = fPago.toLocaleDateString('es-MX', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            
-            asunto = `Recordatorio de Pago Pendiente - EME Asesores`;
-            
-            let enlacePagoHTML = '';
-            if (poliza.enlacePago) {
-                enlacePagoHTML = `
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="${poliza.enlacePago}" 
-                           style="background-color: #007bff; color: white; padding: 12px 25px; 
-                                  text-decoration: none; border-radius: 5px; font-weight: bold; 
-                                  display: inline-block;">
-                            Realizar Pago Online
-                        </a>
-                    </div>
-                `;
-            }
-            
-            cuerpo = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #003366; padding: 20px; text-align: center;">
-                        <h1 style="color: white; margin: 0;">EME Asesores</h1>
-                        <p style="color: #cce5ff; margin: 5px 0 0 0;">Seguros y Servicios Financieros</p>
-                    </div>
-                    
-                    <div style="padding: 30px; background-color: #f8f9fa;">
-                        <h2 style="color: #333; margin-top: 0;">Recordatorio de Pago Pendiente</h2>
-                        
-                        <p>Estimado(a) <strong>${poliza.cliente}</strong>,</p>
-                        
-                        <p>Le recordamos que tiene un pago pendiente por su póliza de seguro. A continuación presentamos los detalles:</p>
-                        
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <tr style="background-color: #003366; color: white;">
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Concepto</th>
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Detalle</th>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Número de Póliza:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.numeroPoliza}</td>
-                            </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Tipo de Seguro:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.tipoSeguro}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Fecha Límite:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${fechaFormateada}</td>
-                            </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Monto a Pagar:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: #28a745;">${montoFormateado}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Días Restantes:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: ${diasRestantes <= 3 ? '#dc3545' : '#007bff'};">${diasRestantes} días</td>
-                            </tr>
-                        </table>
-                        
-                        ${enlacePagoHTML}
-                        
-                        <p style="font-size: 14px; color: #666; margin-top: 25px;">
-                            <strong>Información de Contacto:</strong><br>
-                            Teléfono: 55-1234-5678<br>
-                            Email: contacto@emeasesores.com
-                        </p>
-                        
-                        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px;">
-                            Este correo es un recordatorio automático. Si ya realizó su pago, puede ignorar este mensaje.
-                        </p>
-                    </div>
-                </div>
-            `;
-            
+            mensaje = `Estimado(a) ${poliza.cliente}, tiene un pago pendiente por su póliza No. ${poliza.numeroPoliza} con fecha límite el ${fPago.toLocaleDateString()}.`;
             tipo = 'pago_pendiente';
         } else {
-            asunto = `Recordatorio de Póliza - EME Asesores`;
-            cuerpo = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #003366; padding: 20px; text-align: center;">
-                        <h1 style="color: white; margin: 0;">EME Asesores</h1>
-                        <p style="color: #cce5ff; margin: 5px 0 0 0;">Seguros y Servicios Financieros</p>
-                    </div>
-                    
-                    <div style="padding: 30px; background-color: #f8f9fa;">
-                        <h2 style="color: #333; margin-top: 0;">Recordatorio de Póliza</h2>
-                        
-                        <p>Estimado(a) <strong>${poliza.cliente}</strong>,</p>
-                        
-                        <p>Le recordamos sobre su póliza de seguro con EME Asesores:</p>
-                        
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <tr style="background-color: #003366; color: white;">
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Concepto</th>
-                                <th style="padding: 12px; text-align: left; border: 1px solid #003366;">Detalle</th>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Número de Póliza:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.numeroPoliza}</td>
-                            </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Tipo de Seguro:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${poliza.tipoSeguro}</td>
-                            </tr>
-                        </table>
-                        
-                        <p style="font-size: 14px; color: #666; margin-top: 25px;">
-                            <strong>Información de Contacto:</strong><br>
-                            Teléfono: 55-1234-5678<br>
-                            Email: contacto@emeasesores.com
-                        </p>
-                        
-                        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px;">
-                            Este correo es un recordatorio automático.
-                        </p>
-                    </div>
-                </div>
-            `;
+            mensaje = `Estimado(a) ${poliza.cliente}, te recordamos sobre tu póliza No. ${poliza.numeroPoliza}.`;
             tipo = 'recordatorio_manual';
         }
 
@@ -2400,32 +1835,6 @@ const exportarReportePDF = async (req, res) => {
     }
 };
 
-const actualizarEnlacePago = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { enlacePago } = req.body;
-        const empresaId = req.user.empresaId;
-
-        const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
-
-        if (!poliza) {
-            return res.status(404).json({ error: 'Póliza no encontrada' });
-        }
-
-        poliza.enlacePago = enlacePago || null;
-        await poliza.save();
-
-        res.json({
-            success: true,
-            message: 'Enlace de pago actualizado correctamente',
-            enlacePago: poliza.enlacePago
-        });
-    } catch (error) {
-        console.error('[actualizarEnlacePago] Error:', error);
-        res.status(500).json({ error: 'Error al actualizar enlace de pago' });
-    }
-};
-
 module.exports = {
     crearPoliza,
     obtenerPolizas,
@@ -2449,7 +1858,5 @@ module.exports = {
     enviarRecordatorioCorreo,
     renovarPoliza,
     obtenerCobranzaDiaria,
-    marcarCobranzaResuelta,
-    enviarCorreoCobranzaDiaria,
-    actualizarEnlacePago
+    enviarCorreoCobranzaDiaria
 };

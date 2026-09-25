@@ -94,6 +94,14 @@ router.get('/migrar-asesor-historico', auth, async (req, res) => {
         });
     }
 });
+
+// ==========================================
+// FASE 9: COBRANZA DIARIA (DEBE ESTAR ANTES DE /:id)
+// ==========================================
+router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
+router.put('/cobranza-diaria/:polizaId/resolver', auth, applyTenantFilter, polizaController.marcarCobranzaResuelta);
+router.put('/:id/enlace-pago', auth, applyTenantFilter, polizaController.actualizarEnlacePago);
+
 router.get('/:id', auth, applyTenantFilter, polizaController.obtenerPolizaPorId);
 router.put('/:id', auth, applyTenantFilter, polizaController.actualizarPoliza);
 router.delete('/:id', auth, applyTenantFilter, polizaController.eliminarPoliza);

@@ -40,6 +40,10 @@ const notificacionSchema = new mongoose.Schema({
     },
     errorDetalle: {
         type: String
+    },
+    enviadoManualmente: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

@@ -137,6 +137,69 @@ const polizaSchema = new mongoose.Schema({
         type: String,
         enum: ['pendiente', 'al_corriente', 'pagado_completo'],
         default: 'pendiente'
+    },
+    // CAMPOS DE CONFIGURACIÓN DINÁMICA DE RECORDATORIOS
+    recordatoriosPago: {
+        type: [Number],
+        default: [7, 3, 1, 0], // Días previos al vencimiento para enviar recordatorios
+        validate: {
+            validator: function(arr) {
+                return arr.every(num => num >= 0);
+            },
+            message: 'Los días de recordatorio deben ser mayores o iguales a 0'
+        }
+    },
+    ultimaNotificacionPago: {
+        type: Date,
+        default: null
+    },
+    historialNotificaciones: [{
+        fecha: {
+            type: Date,
+            default: Date.now
+        },
+        tipo: {
+            type: String,
+            enum: ['vencimiento_poliza', 'pago_pendiente', 'recordatorio_manual'],
+            required: true
+        },
+        canal: {
+            type: String,
+            enum: ['email', 'whatsapp', 'sms'],
+            required: true
+        },
+        mensaje: {
+            type: String,
+            required: true
+        },
+        estado: {
+            type: String,
+            enum: ['enviada', 'fallida'],
+            default: 'enviada'
+        },
+        diasRestantes: {
+            type: Number,
+            default: 0
+        },
+        enviadoManualmente: {
+            type: Boolean,
+            default: false
+        }
+    }],
+    // Cobranza Diaria: Marcar como resuelta
+    cobranzaResuelta: {
+        type: Boolean,
+        default: false
+    },
+    fechaResolucionCobranza: {
+        type: Date,
+        default: null
+    },
+    // Enlace de pago personalizado
+    enlacePago: {
+        type: String,
+        trim: true,
+        default: null
     }
 }, {
     timestamps: true
@@ -147,5 +210,16 @@ polizaSchema.index({ empresaId: 1, numeroPoliza: 1 }, { partialFilterExpression:
 polizaSchema.index({ empresaId: 1, estado: 1 });
 polizaSchema.index({ empresaId: 1, fechas: 1 });
 polizaSchema.index({ empresaId: 1, deletedAt: 1 });
+// Índices optimizados para cobranza diaria
+polizaSchema.index({ empresaId: 1, 'fechas.vencimiento': 1 }, { partialFilterExpression: { deletedAt: null } });
+polizaSchema.index({ empresaId: 1, proximoPago: 1 }, { partialFilterExpression: { deletedAt: null } });
+
+// Middleware pre-save para limitar el tamaño de historialNotificaciones
+polizaSchema.pre('save', function(next) {
+    if (this.historialNotificaciones && this.historialNotificaciones.length > 50) {
+        this.historialNotificaciones = this.historialNotificaciones.slice(-50);
+    }
+    next();
+});
 
 module.exports = mongoose.model('Poliza', polizaSchema);

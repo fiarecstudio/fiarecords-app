@@ -2553,10 +2553,7 @@ let proyectoIdEnEdicion = null;
                 'mis-deudas': cargarDeudas,
                 'polizas': cargarPolizas,
                 'clientes-crm': cargarClientesCrm,
-                'cobranza-diaria': () => {
-                    initEventosCobranzaDiaria();
-                    return cargarCobranzaDiaria();
-                },
+                'cobranza-diaria': cargarCobranzaDiaria,
                 'vista-artista': () => { } 
             }; 
             if(loadDataActions[id]) await loadDataActions[id](); 
@@ -6661,248 +6658,87 @@ Fecha de firma: {{FECHA}}`;
         await cargarPolizas();
     }
 
-    // Cobranza Diaria: estado en memoria y UI
+    // Función para cargar Cobranza Diaria
     let debounceCobranzaDiaria;
-    let cobranzaDiariaEventosListos = false;
-    let estadoCobranza = {
-        vencidas: [],
-        cobrosHoy: [],
-        porVencer: [],
-        tabActiva: 'cobrosHoy',
-        fecha: null,
-        totales: { vencidas: 0, cobrosHoy: 0, porVencer: 0 }
-    };
-
-    function initEventosCobranzaDiaria() {
-        if (cobranzaDiariaEventosListos) return;
-
-        const seccion = document.getElementById('cobranza-diaria');
-        if (!seccion) {
-            console.warn('[initEventosCobranzaDiaria] Sección cobranza-diaria no encontrada');
-            return;
-        }
-
-        seccion.addEventListener('click', (e) => {
-            if (e.target.closest('#btn-actualizar-cobranza')) {
-                e.preventDefault();
-                cargarCobranzaDiaria();
-                return;
-            }
-
-            const tabBtn = e.target.closest('[data-cobranza-tab]');
-            if (tabBtn) {
-                e.preventDefault();
-                const tab = tabBtn.getAttribute('data-cobranza-tab');
-                if (tab) seleccionarTabCobranza(tab);
-                return;
-            }
-
-            const actionBtn = e.target.closest('[data-cobranza-action]');
-            if (!actionBtn) return;
-
-            e.preventDefault();
-            const action = actionBtn.getAttribute('data-cobranza-action');
-            const polizaId = actionBtn.getAttribute('data-poliza-id');
-            if (!polizaId) return;
-
-            if (action === 'correo') enviarCorreoCobranza(polizaId);
-            else if (action === 'resolver') marcarCobranzaResuelta(polizaId);
-            else if (action === 'editar') editarPoliza(polizaId);
-        });
-
-        cobranzaDiariaEventosListos = true;
-    }
-
-    function actualizarTabsActivasCobranza() {
-        document.querySelectorAll('[data-cobranza-tab]').forEach((btn) => {
-            const tab = btn.getAttribute('data-cobranza-tab');
-            const activo = tab === estadoCobranza.tabActiva;
-            btn.classList.toggle('active', activo);
-            btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
-        });
-    }
-
-    function seleccionarTabCobranza(tabActiva) {
-        if (!['vencidas', 'cobrosHoy', 'porVencer'].includes(tabActiva)) return;
-        estadoCobranza.tabActiva = tabActiva;
-        actualizarTabsActivasCobranza();
-        renderizarTablaCobranza(estadoCobranza[tabActiva] || [], tabActiva);
-    }
-
-    function cambiarPestanaCobranza(pestaña) {
-        seleccionarTabCobranza(pestaña);
-    }
-
-    function cambiarPestañaCobranza(pestaña) {
-        cambiarPestanaCobranza(pestaña);
-    }
-
     async function cargarCobranzaDiaria() {
-        initEventosCobranzaDiaria();
-
         if (debounceCobranzaDiaria) {
             clearTimeout(debounceCobranzaDiaria);
         }
-
+        
         debounceCobranzaDiaria = setTimeout(async () => {
             const tabla = document.getElementById('tablaCobranzaDiariaBody');
             const sinCobranza = document.getElementById('sin-cobranza');
             const fechaBadge = document.getElementById('fecha-cobranza');
-
+            
             if (!tabla) {
                 console.error('[cargarCobranzaDiaria] No se encontró tablaCobranzaDiariaBody');
                 return;
             }
-
+            
             tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando datos de cobranza...</td></tr>';
-
+            
             if (sinCobranza) sinCobranza.style.display = 'none';
-
+            
             try {
                 const datos = await fetchAPI('/api/polizas/cobranza-diaria');
-
-                estadoCobranza.vencidas = datos.vencidas || [];
-                estadoCobranza.cobrosHoy = datos.cobrosHoy || datos.polizas || [];
-                estadoCobranza.porVencer = datos.porVencer || [];
-                estadoCobranza.fecha = datos.fecha || null;
-                estadoCobranza.totales = datos.totales || {
-                    vencidas: estadoCobranza.vencidas.length,
-                    cobrosHoy: estadoCobranza.cobrosHoy.length,
-                    porVencer: estadoCobranza.porVencer.length
-                };
-
-                if (fechaBadge && estadoCobranza.fecha) {
-                    const [anio, mes, dia] = estadoCobranza.fecha.split('-').map(Number);
-                    const fecha = new Date(anio, mes - 1, dia);
-                    fechaBadge.textContent = fecha.toLocaleDateString('es-MX', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                
+                if (fechaBadge && datos.fecha) {
+                    const fecha = new Date(datos.fecha);
+                    fechaBadge.textContent = fecha.toLocaleDateString('es-ES', { 
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
                     });
                 }
-
-                actualizarContadoresCobranza(estadoCobranza.totales);
-                actualizarTabsActivasCobranza();
-                renderizarTablaCobranza(estadoCobranza[estadoCobranza.tabActiva] || [], estadoCobranza.tabActiva);
-
+                
+                if (datos.polizas && datos.polizas.length > 0) {
+                    tabla.innerHTML = datos.polizas.map(p => {
+                        const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString() : 'N/A';
+                        const fechaProximoPago = p.proximoPago ? new Date(p.proximoPago).toLocaleDateString() : 'N/A';
+                        const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
+                        const montoFormateado = "$" + p.montoPagar.toFixed(2);
+                        
+                        let estadoClase = 'bg-secondary';
+                        if (p.estado === 'Activa') estadoClase = 'bg-success';
+                        else if (p.estado === 'Por Vencer') estadoClase = 'bg-warning';
+                        else if (p.estado === 'Vencida') estadoClase = 'bg-danger';
+                        
+                        let diasClase = 'text-primary';
+                        if (p.diasRestantes === 0) diasClase = 'text-danger fw-bold';
+                        else if (p.diasRestantes <= 3) diasClase = 'text-warning fw-bold';
+                        else if (p.diasRestantes <= 7) diasClase = 'text-info';
+                        
+                        const telefonoLimpio = p.telefono ? p.telefono.replace(/[^0-9]/g, '') : '';
+                        const telefonoValido = telefonoLimpio.length === 10 && /^d+$/.test(telefonoLimpio);
+                        
+                        const mensajeWhatsApp = encodeURIComponent(
+                            "Hola " + p.cliente + ", te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de " + p.tipoSeguro + " por la cantidad de " + montoFormateado + " con fecha límite el " + fechaMostrar + ". Cualquier duda estamos a tus órdenes."
+                        );
+                        
+                        const whatsappUrl = telefonoValido ? "https://wa.me/52" + telefonoLimpio + "?text=" + mensajeWhatsApp : '#';
+                        
+                        const whatsappButton = telefonoValido 
+                            ? '<a href="' + whatsappUrl + '" target="_blank" class="btn btn-sm btn-success" title="Enviar WhatsApp"><i class="bi bi-whatsapp"></i> WhatsApp</a>'
+                            : '<button class="btn btn-sm btn-outline-secondary" disabled title="' + (telefonoLimpio ? 'Formato de teléfono inválido (requiere 10 dígitos)' : 'Sin teléfono registrado') + '"><i class="bi bi-whatsapp"></i> WhatsApp</button>';
+                        
+                        return '<tr><td><div class="fw-bold">' + p.cliente + '</div><small class="text-muted">' + p.numeroPoliza + '</small></td><td>' + p.tipoSeguro + '</td><td class="fw-bold text-success">' + montoFormateado + '</td><td>' + fechaMostrar + '</td><td><span class="badge ' + estadoClase + '">' + p.estado + '</span></td><td class="' + diasClase + '">' + p.diasRestantes + ' días</td><td><div class="btn-group" role="group">' + whatsappButton + '<button class="btn btn-sm btn-info" onclick="app.enviarCorreoCobranza('' + p.polizaId + '')" title="Enviar Correo Manual"><i class="bi bi-envelope"></i> Correo</button><button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('' + p.polizaId + '')" title="Editar Póliza"><i class="bi bi-pencil"></i></button></div></td></tr>';
+                    }).join('');
+                    
+                    if (sinCobranza) sinCobranza.style.display = 'none';
+                } else {
+                    tabla.innerHTML = '';
+                    if (sinCobranza) sinCobranza.style.display = 'block';
+                }
+                
                 const kpiCobranzaHoy = document.getElementById('kpi-cobranza-hoy');
                 if (kpiCobranzaHoy) {
-                    kpiCobranzaHoy.textContent = estadoCobranza.totales.cobrosHoy || 0;
+                    kpiCobranzaHoy.textContent = datos.total || 0;
                 }
+                
             } catch (error) {
                 console.error('[cargarCobranzaDiaria] Error al cargar cobranza diaria:', error);
                 tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar datos de cobranza</td></tr>';
             }
         }, 500);
-    }
-
-    function actualizarContadoresCobranza(totales) {
-        const badgeVencidas = document.getElementById('badge-vencidas');
-        const badgeHoy = document.getElementById('badge-hoy');
-        const badgePorVencer = document.getElementById('badge-por-vencer');
-
-        if (badgeVencidas) badgeVencidas.textContent = totales.vencidas || 0;
-        if (badgeHoy) badgeHoy.textContent = totales.cobrosHoy || 0;
-        if (badgePorVencer) badgePorVencer.textContent = totales.porVencer || 0;
-    }
-
-    function renderizarTablaCobranza(polizas, tabActiva) {
-        const tabla = document.getElementById('tablaCobranzaDiariaBody');
-        const sinCobranza = document.getElementById('sin-cobranza');
-
-        if (!tabla) return;
-
-        if (polizas.length > 0) {
-            tabla.innerHTML = polizas.map(p => {
-                const polizaIdAttr = escapeHTML(String(p.polizaId || ''));
-                const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString() : 'N/A';
-                const fechaProximoPago = p.proximoPago ? new Date(p.proximoPago).toLocaleDateString() : 'N/A';
-                const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
-                const montoFormateado = '$' + Number(p.montoPagar || 0).toFixed(2);
-
-                let estadoClase = 'bg-secondary';
-                if (p.estado === 'Activa') estadoClase = 'bg-success';
-                else if (p.estado === 'Por Vencer') estadoClase = 'bg-warning';
-                else if (p.estado === 'Vencida') estadoClase = 'bg-danger';
-
-                let diasClase = 'text-primary';
-                let diasTexto = p.diasRestantes + ' días';
-
-                if (p.diasRestantes === 0) {
-                    diasClase = 'text-danger fw-bold';
-                    diasTexto = 'Vence hoy';
-                } else if (p.diasRestantes < 0) {
-                    diasClase = 'text-danger fw-bold';
-                    diasTexto = 'Vencida hace ' + Math.abs(p.diasRestantes) + ' días';
-                } else if (p.diasRestantes <= 3) {
-                    diasClase = 'text-warning fw-bold';
-                } else if (p.diasRestantes <= 7) {
-                    diasClase = 'text-info';
-                }
-
-                // Alerta pre-envío: mostrar ⚠️ si faltan 4-5 días y no hay enlace
-                const mostrarAlertaEnlace = (p.diasRestantes >= 4 && p.diasRestantes <= 5) && !p.enlacePago;
-                const nombreClienteConAlerta = mostrarAlertaEnlace 
-                    ? '<span class="me-1" title="Falta enlace de pago para envío automático">⚠️</span>' + escapeHTML(p.cliente)
-                    : escapeHTML(p.cliente);
-
-                const telefonoLimpio = p.telefono ? p.telefono.replace(/[^0-9]/g, '') : '';
-                const telefonoValido = telefonoLimpio.length === 10 && /^\d+$/.test(telefonoLimpio);
-
-                // Construir mensaje de WhatsApp con enlace de pago si existe
-                let mensajeWhatsAppBase = 'Hola ' + p.cliente + ', te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ' + p.tipoSeguro + ' por la cantidad de ' + montoFormateado + ' con fecha límite el ' + fechaMostrar + '. Cualquier duda estamos a tus órdenes.';
-                if (p.enlacePago) {
-                    mensajeWhatsAppBase += ' Puedes realizar tu pago de forma segura aquí: ' + p.enlacePago;
-                }
-                const mensajeWhatsApp = encodeURIComponent(mensajeWhatsAppBase);
-
-                const whatsappUrl = telefonoValido ? 'https://wa.me/52' + telefonoLimpio + '?text=' + mensajeWhatsApp : '#';
-
-                const whatsappButton = telefonoValido
-                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success" title="Enviar WhatsApp"><i class="bi bi-whatsapp"></i> WhatsApp</a>'
-                    : '<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="' + escapeHTML(telefonoLimpio ? 'Formato de teléfono inválido (requiere 10 dígitos)' : 'Sin teléfono registrado') + '"><i class="bi bi-whatsapp"></i> WhatsApp</button>';
-
-                // Verificar si ya se envió un correo recientemente (últimos 7 días)
-                const fechaLimite = new Date();
-                fechaLimite.setDate(fechaLimite.getDate() - 7);
-                const tieneCorreoReciente = p.historialNotificaciones && p.historialNotificaciones.some(
-                    notif => notif.canal === 'email' && 
-                            notif.estado === 'enviada' && 
-                            new Date(notif.fecha) >= fechaLimite
-                );
-                
-                let botonCorreo;
-                if (tieneCorreoReciente) {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary" onclick="app.enviarCorreoCobranzaConfirmado(\'' + p.polizaId + '\')" title="Correo ya enviado (clic para reenviar)"><i class="bi bi-check-circle"></i> Enviado</button>';
-                } else {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-info" onclick="app.enviarCorreoCobranza(\'' + p.polizaId + '\')" title="Enviar Correo Manual"><i class="bi bi-envelope"></i> Correo</button>';
-                }
-                const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success" data-cobranza-action="resolver" data-poliza-id="' + polizaIdAttr + '" title="Marcar como Resuelta"><i class="bi bi-check-circle"></i> Resolver</button>';
-                const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza"><i class="bi bi-pencil"></i></button>';
-                const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info" onclick="app.agregarEnlacePago(\'' + p.polizaId + '\')" title="Agregar Enlace de Pago"><i class="bi bi-link-45deg"></i></button>';
-
-                return '<tr><td><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td>' + escapeHTML(p.tipoSeguro) + '</td><td class="fw-bold text-success">' + escapeHTML(montoFormateado) + '</td><td>' + escapeHTML(fechaMostrar) + '</td><td><span class="badge ' + estadoClase + '">' + escapeHTML(p.estado) + '</span></td><td class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td><div class="btn-group" role="group">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
-            }).join('');
-
-            if (sinCobranza) sinCobranza.style.display = 'none';
-        } else {
-            tabla.innerHTML = '';
-            if (sinCobranza) {
-                const mensajes = {
-                    vencidas: 'No hay pólizas vencidas en este momento.',
-                    cobrosHoy: 'No hay cobros programados para hoy.',
-                    porVencer: 'No hay pólizas por vencer en los próximos 7 días.'
-                };
-                const msgEl = sinCobranza.querySelector('p');
-                if (msgEl) msgEl.textContent = mensajes[tabActiva] || mensajes.cobrosHoy;
-                sinCobranza.style.display = 'block';
-            }
-        }
-    }
-
-    function renderizarPestañaCobranza(pestaña) {
-        renderizarTablaCobranza(estadoCobranza[pestaña] || [], pestaña);
-    }
-
-    // Función para eliminar póliza
+    }    // Función para eliminar póliza
     async function eliminarPoliza(id) {
         const { value: confirmar } = await Swal.fire({
             title: '¿Eliminar póliza?',
@@ -6990,8 +6826,7 @@ Fecha de firma: {{FECHA}}`;
                 primaTotal: poliza.primaTotal || 0,
                 montoAbono: poliza.montoAbono || 0,
                 primerPago: poliza.primerPago || 0,
-                diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3,
-                enlacePago: poliza.enlacePago || ''
+                diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3
             };
             
             const { value: formValues } = await Swal.fire({
@@ -7077,11 +6912,6 @@ Fecha de firma: {{FECHA}}`;
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Enlace de Pago (Opcional)</label>
-                            <input id="poliza-enlace-pago" type="url" class="swal2-input" value="${datosPrellenados.enlacePago}" placeholder="https://ejemplo.com/pago">
-                            <small class="text-muted">Este enlace se incluirá en los correos de recordatorio de pago</small>
-                        </div>
-                        <div class="mb-3">
                             <label class="form-label">Reasignar Asesor</label>
                             <select id="poliza-asesor" class="swal2-input">
                                 ${asesoresOptions}
@@ -7109,7 +6939,6 @@ Fecha de firma: {{FECHA}}`;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
                     const primerPago = document.getElementById('poliza-primer-pago').value;
                     const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
-                    const enlacePago = document.getElementById('poliza-enlace-pago').value.trim();
                     const nuevoAsesorId = document.getElementById('poliza-asesor').value;
 
                     if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
@@ -7147,8 +6976,7 @@ Fecha de firma: {{FECHA}}`;
                         primaTotal: parseFloat(primaTotal),
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                         primerPago: primerPago ? parseFloat(primerPago) : null,
-                        diasAnticipacionAviso: parseInt(diasAnticipacionAviso) || 3,
-                        enlacePago: enlacePago || null
+                        diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3
                     };
                 }
             });
@@ -9246,15 +9074,8 @@ Fecha de firma: {{FECHA}}`;
         enviarNotificacionManual,
         verHistorialNotificaciones,
         cargarCobranzaDiaria,
-        initEventosCobranzaDiaria,
-        seleccionarTabCobranza,
-        renderizarTablaCobranza,
         enviarCorreoCobranza,
-        enviarCorreoCobranzaConfirmado,
-        agregarEnlacePago,
-        marcarCobranzaResuelta,
-        cambiarPestanaCobranza,
-        cambiarPestañaCobranza,
+// ... (rest of the code remains the same)
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         cerrarPrintPreview, ejecutarImpresion
@@ -9463,22 +9284,6 @@ Fecha de firma: {{FECHA}}`;
     capturarEmpresaInvitacionDesdeUrl();
 
     // Función para enviar correo manual desde Cobranza Diaria
-    async function enviarCorreoCobranzaConfirmado(polizaId) {
-        const { value: confirmar } = await Swal.fire({
-            title: '¿Reenviar correo?',
-            text: 'Este cliente ya recibió un recordatorio recientemente. ¿Estás seguro de que deseas enviarlo de nuevo?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, reenviar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#0d6efd'
-        });
-        
-        if (confirmar) {
-            await enviarCorreoCobranza(polizaId);
-        }
-    }
-    
     async function enviarCorreoCobranza(polizaId) {
         try {
             const { value: confirmar } = await Swal.fire({
@@ -9493,14 +9298,8 @@ Fecha de firma: {{FECHA}}`;
             
             if (!confirmar) return;
             
-            const resultado = await fetchAPI('/api/polizas/enviar-recordatorio', {
-                method: 'POST',
-                body: JSON.stringify({
-                    polizaId,
-                    destinatario: '', // Se llenará en el backend
-                    asunto: 'Recordatorio de Cobranza - Póliza',
-                    mensaje: 'Recordatorio de cobranza desde Cobranza Diaria'
-                })
+            const resultado = await fetchAPI('/api/cobranza-temp/enviar-correo-manual/' + polizaId, {
+                method: 'POST'
             });
             
             if (resultado.success) {
@@ -9521,102 +9320,6 @@ Fecha de firma: {{FECHA}}`;
             await Swal.fire({
                 title: '❌ Error',
                 text: error.message || 'No se pudo enviar el correo',
-                icon: 'error',
-                confirmButtonColor: '#dc3545'
-            });
-        }
-    }
-
-    async function agregarEnlacePago(polizaId) {
-        try {
-            const { value: enlacePago } = await Swal.fire({
-                title: 'Agregar Enlace de Pago',
-                text: 'Ingresa el enlace de pago para este cliente',
-                input: 'text',
-                inputPlaceholder: 'https://...',
-                inputLabel: 'Enlace de pago',
-                showCancelButton: true,
-                confirmButtonText: 'Guardar',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#0d6efd',
-                preConfirm: (inputValue) => {
-                    if (!inputValue) {
-                        Swal.showValidationMessage('Por favor ingresa un enlace');
-                        return false;
-                    }
-                    return inputValue;
-                }
-            });
-
-            if (!enlacePago) return;
-
-            const resultado = await fetchAPI('/api/polizas/' + polizaId + '/enlace-pago', {
-                method: 'PUT',
-                body: JSON.stringify({ enlacePago })
-            });
-
-            if (resultado.success) {
-                await Swal.fire({
-                    title: '✅ Enlace Guardado',
-                    text: 'El enlace de pago ha sido actualizado correctamente.',
-                    icon: 'success',
-                    confirmButtonColor: '#0d6efd'
-                });
-
-                // Recargar la tabla para actualizar indicadores
-                cargarCobranzaDiaria();
-            } else {
-                throw new Error(resultado.error || 'Error al actualizar enlace');
-            }
-        } catch (error) {
-            console.error('[agregarEnlacePago] Error:', error);
-            await Swal.fire({
-                title: '❌ Error',
-                text: error.message || 'No se pudo actualizar el enlace',
-                icon: 'error',
-                confirmButtonColor: '#dc3545'
-            });
-        }
-    }
-    
-    async function marcarCobranzaResuelta(polizaId) {
-        try {
-            const { value: confirmar } = await Swal.fire({
-                title: '¿Marcar póliza como resuelta?',
-                text: 'Esta póliza ya no aparecerá en la lista de cobranza diaria.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, marcar como resuelta',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#28a745'
-            });
-            
-            if (!confirmar) return;
-            
-            const resultado = await fetchAPI('/api/polizas/cobranza-diaria/' + polizaId + '/resolver', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resuelta: true })
-            });
-            
-            if (resultado.success) {
-                await Swal.fire({
-                    title: '✅ Póliza Resuelta',
-                    text: 'La póliza ha sido marcada como resuelta y ya no aparecerá en cobranza diaria.',
-                    icon: 'success',
-                    confirmButtonColor: '#28a745'
-                });
-                
-                // Recargar la tabla
-                cargarCobranzaDiaria();
-            } else {
-                throw new Error(resultado.error || 'Error al marcar póliza como resuelta');
-            }
-        } catch (error) {
-            console.error('[marcarCobranzaResuelta] Error:', error);
-            await Swal.fire({
-                title: '❌ Error',
-                text: error.message || 'Error al marcar póliza como resuelta',
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });

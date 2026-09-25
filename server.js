@@ -159,6 +159,7 @@ app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google
 app.use('/api/chat', require('./routes/chat')); // FASE 2: Sistema de Chat
 app.use('/api/polizas', require('./routes/polizas')); // Módulo de Seguros
 app.use('/api/clientes', require('./routes/clientes')); // Módulo de Seguros - CRM
+app.use('/api/cobranza-temp', require('./routes/cobranza-temp')); // Ruta temporal para envio manual
 
 // --- 5. Ruta Catch-All (SPA) ---
 // Usar middleware en lugar de app.get para evitar problemas con Express 5
