@@ -86,6 +86,9 @@
                 if (url === '/api/servicios') return localCache.servicios;
                 if (url === '/api/usuarios') return localCache.usuarios;
                 if (url === '/api/deudas') return localCache.deudas;
+                if (url.includes('/proyectos/pagos/todos')) {
+                    throw new Error('El historial de pagos no está disponible en la caché temporal.');
+                }
                 if (url.includes('/proyectos')) {
                     if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
                     if (url.includes('completos')) return localCache.proyectos.filter(p => (p.proceso === 'Completo' || p.estatus === 'Cancelado') && !p.deleted);
@@ -101,19 +104,31 @@
         // --- MODO OFFLINE (ESCRITURA A COLA) ---
         if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
             if (!navigator.onLine) {
+                if (options.skipOfflineQueue) {
+                    throw new Error('La conexión se perdió durante la sincronización.');
+                }
+                const requiereConexion = options.isFormData
+                    || /\/(auth\/|enviar-recordatorio|notificar-manual|importar-|extraer-datos|backups?\/|drive\/|configuracion\/notificaciones-email)/i.test(url);
+                if (requiereConexion) {
+                    throw new Error('Esta operación requiere conexión a internet.');
+                }
                 const tempId = `temp_${Date.now()}`;
                 const OfflineManager = getOfflineManager();
-                if (OfflineManager) {
-                    OfflineManager.addToQueue(`${API_URL}${url}`, { ...options, headers }, tempId);
-                }
-                return { ok: true, offline: true, _id: tempId };
+                if (!OfflineManager) throw new Error('No se pudo iniciar la cola offline.');
+                await OfflineManager.addToQueue(url, { ...options, headers }, tempId);
+                window.notificarGuardadoOffline?.();
+                return { ok: true, success: true, offline: true, _id: tempId };
             }
         }
 
-        if (!url.includes('/configuracion')) getShowLoader()();
+        const silent = options.silent === true;
+        if (!silent && !url.includes('/configuracion')) getShowLoader()();
 
         // FASE 4: Si Super Admin tiene empresa seleccionada, evitar caché del navegador
-        const fetchOptions = { ...options, headers };
+        const requestOptions = { ...options };
+        delete requestOptions.skipOfflineQueue;
+        delete requestOptions.silent;
+        const fetchOptions = { ...requestOptions, headers };
 
         // DEBUG FASE 5: Verificar headers antes de enviar
         if (url === '/api/proyectos') {
@@ -231,7 +246,9 @@
                 }
             }
             return data;
-        } catch (e) { throw e; } finally { getHideLoader()(); }
+        } catch (e) { throw e; } finally {
+            if (!silent) getHideLoader()();
+        }
     }
 
     // Helper para peticiones públicas sin autenticación

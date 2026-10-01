@@ -15,7 +15,8 @@ const obtenerPagos = async (req, res) => {
 
         const pagos = await Pago.find(filtroPagos)
             .populate('polizaId', 'numeroPoliza cliente aseguradora')
-            .sort({ fechaPago: -1 });
+            .sort({ fechaPago: -1 })
+            .lean();
 
         res.json(pagos);
     } catch (error) {
@@ -165,7 +166,7 @@ const obtenerPagosPorPoliza = async (req, res) => {
             polizaId, 
             ...filtroEmpresa, 
             deletedAt: null 
-        }).sort({ fechaPago: -1 });
+        }).sort({ fechaPago: -1 }).lean();
 
         res.json(pagos);
     } catch (error) {

@@ -688,7 +688,7 @@ const obtenerPolizas = async (req, res) => {
             filtro.asesorId = userId;
         }
         
-        const polizas = await Poliza.find(filtro);
+        const polizas = await Poliza.find(filtro).lean();
         
         res.json(polizas);
     } catch (error) {
@@ -970,7 +970,7 @@ const obtenerPapelera = async (req, res) => {
         }
 
         // Devolver solo pólizas eliminadas (deletedAt != null) respetando el filtro de empresa
-        const polizasEliminadas = await Poliza.find(filtroPapelera).sort({ deletedAt: -1 });
+        const polizasEliminadas = await Poliza.find(filtroPapelera).sort({ deletedAt: -1 }).lean();
 
         res.json(polizasEliminadas);
     } catch (error) {
@@ -1171,7 +1171,7 @@ const obtenerMetricasSeguros = async (req, res) => {
             if (asesorId) filtroBase.asesorId = asesorId;
         }
 
-        const polizas = await Poliza.find(filtroBase);
+        const polizas = await Poliza.find(filtroBase).lean();
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -1468,7 +1468,7 @@ const obtenerEventosAgenda = async (req, res) => {
         }
 
         // Buscar todas las pólizas activas
-        const polizas = await Poliza.find(filtroBase);
+        const polizas = await Poliza.find(filtroBase).lean();
 
         const eventos = [];
 
@@ -2199,7 +2199,6 @@ const obtenerCobranzaDiaria = async (req, res) => {
             }
         };
 
-        console.log('Resultados de agregación:', resultados);
         res.json(resultados);
     } catch (error) {
         console.error('[obtenerCobranzaDiaria] Error:', error);
@@ -2939,7 +2938,8 @@ const exportarReporteExcel = async (req, res) => {
         // AGREGADO: .populate('asesorId', 'username') para traer el nombre del asesor
         const polizas = await Poliza.find(filtro)
             .populate('asesorId', 'username')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
 
         // Crear workbook
         const workbook = new ExcelJS.Workbook();
@@ -3128,7 +3128,7 @@ const exportarReportePDF = async (req, res) => {
             filtro.asesorId = asesorExportado._id;
         }
 
-        const polizas = await Poliza.find(filtro).populate('asesorId', 'username').sort({ createdAt: -1 });
+        const polizas = await Poliza.find(filtro).populate('asesorId', 'username').sort({ createdAt: -1 }).lean();
 
         // Obtener configuración de la empresa para el logo
         const config = await Configuracion.findOne({ empresaId });

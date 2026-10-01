@@ -1053,6 +1053,36 @@ body.dark-mode .project-card:hover {
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
     .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+    #cobranza-diaria .table-responsive table tbody td {
+        min-width: 0;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere;
+    }
+    #cobranza-diaria .table-responsive table tbody td > * {
+        min-width: 0;
+        max-width: 100%;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere;
+    }
+    #cobranza-diaria .table-responsive table tbody td::before {
+        flex: 0 1 45%;
+        max-width: 45%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #cobranza-diaria .table-responsive table tbody td.table-actions .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+    #cobranza-diaria .table-responsive table tbody td.table-actions .btn-group > * {
+        min-width: 0;
+        max-width: 100%;
+        white-space: normal;
+    }
 
     .kanban-board { grid-template-columns: 1fr; }
     .kanban-column {

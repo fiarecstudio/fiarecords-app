@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // PRIORIDAD 1: Token decodificado (la fuente de verdad)
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
-            
+
             // Si es Super Admin, revisar selected_empresa_id primero
             if (payload.isSuperAdmin) {
                 const selectedEmpresa = localStorage.getItem('selected_empresa_id');
@@ -365,10 +365,28 @@ let proyectoIdEnEdicion = null;
     let paginaActualPolizas = 1;
     const limitePolizas = 15;
     let polizasGlobales = [];
+    let polizasCacheCargada = false;
+    let polizasCacheAsesorId = '';
+    let polizasCacheScope = null;
     let clientesGlobales = [];
+    let clientesCacheCargada = false;
+    let clientesCacheScope = null;
     let paginaActualClientes = 1;
     let cobranzaGlobales = [];
     let paginaActualCobranza = 1;
+    let dashboardStatsCache = null;
+    let dashboardCacheScope = null;
+    const dashboardSegurosCache = new Map();
+
+    function prepararCacheDashboard() {
+        const scope = obtenerScopeOffline();
+        if (dashboardCacheScope !== scope) {
+            dashboardCacheScope = scope;
+            dashboardStatsCache = null;
+            dashboardSegurosCache.clear();
+        }
+        return scope;
+    }
 
     // Paginación para Respaldos (Backups)
     const backupPagination = {
@@ -625,8 +643,62 @@ let proyectoIdEnEdicion = null;
     // ==================================================================
     // 3. OFFLINE MANAGER (AHORA CON INDEXED DB)
     // ==================================================================
+    function obtenerScopeOffline() {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = payload.id || payload.userId || payload.sub;
+            if (!userId) return null;
+            const empresaId = localStorage.getItem('empresaActiva')
+                || localStorage.getItem('selected_empresa_id')
+                || payload.empresaId
+                || 'all';
+            return `${empresaId}:${userId}`;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function guardarRespaldoOffline(clave, datos, variante = 'default') {
+        const scope = obtenerScopeOffline();
+        if (!scope) return;
+
+        try {
+            const respaldos = JSON.parse(localStorage.getItem(clave) || '{}');
+            respaldos[scope] = respaldos[scope] || {};
+            respaldos[scope][variante] = { datos, actualizado: Date.now() };
+            localStorage.setItem(clave, JSON.stringify(respaldos));
+        } catch (error) {
+            console.warn(`[Offline] No se pudo guardar ${clave}:`, error);
+        }
+    }
+
+    function leerRespaldoOffline(clave, variante = 'default') {
+        const scope = obtenerScopeOffline();
+        if (!scope) return null;
+
+        try {
+            const respaldos = JSON.parse(localStorage.getItem(clave) || '{}');
+            return respaldos[scope]?.[variante]?.datos ?? null;
+        } catch (error) {
+            console.warn(`[Offline] No se pudo leer ${clave}:`, error);
+            return null;
+        }
+    }
+
+    function notificarDatosOffline() {
+        showToast('Estás en Modo Offline. Mostrando datos guardados.', 'info');
+    }
+
+    function notificarGuardadoOffline() {
+        showToast('Guardado localmente. Se sincronizará al reconectar.', 'info');
+    }
+
     const OfflineManager = {
         QUEUE_KEY: 'fia_offline_queue',
+        isSyncing: false,
         
         getQueue: async () => {
             const queue = await localforage.getItem(OfflineManager.QUEUE_KEY);
@@ -634,22 +706,31 @@ let proyectoIdEnEdicion = null;
         },
 
         addToQueue: async (url, options, tempId = null) => {
+            const scope = obtenerScopeOffline();
+            if (!scope) throw new Error('Inicia sesión para guardar cambios offline.');
             const queue = await OfflineManager.getQueue();
-            queue.push({ url, options, timestamp: Date.now(), tempId });
+            const safeOptions = { ...options, headers: { ...(options.headers || {}) } };
+            Object.keys(safeOptions.headers).forEach(header => {
+                if (header.toLowerCase() === 'authorization') delete safeOptions.headers[header];
+            });
+            queue.push({ url, options: safeOptions, timestamp: Date.now(), tempId, scope });
             await localforage.setItem(OfflineManager.QUEUE_KEY, queue);
             OfflineManager.updateIndicator();
         },
 
         updateIndicator: async () => {
             const queue = await OfflineManager.getQueue();
+            const currentScope = obtenerScopeOffline();
+            const queueForCurrentScope = queue.filter(req => req.scope === currentScope);
             if (navigator.onLine) {
-                if (queue.length > 0) {
+                if (queueForCurrentScope.length > 0) {
                     DOMElements.connectionStatus.className = 'connection-status status-syncing';
-                    DOMElements.connectionText.textContent = `Sincronizando (${queue.length})`;
-                    OfflineManager.sync();
+                    DOMElements.connectionText.textContent = `Pendientes de sincronizar (${queueForCurrentScope.length})`;
                 } else {
                     DOMElements.connectionStatus.className = 'connection-status status-online';
-                    DOMElements.connectionText.textContent = 'En Línea';
+                    DOMElements.connectionText.textContent = queue.length > 0
+                        ? `Pendientes de otra sesión (${queue.length})`
+                        : 'En Línea';
                 }
             } else {
                 DOMElements.connectionStatus.className = 'connection-status status-offline';
@@ -658,40 +739,76 @@ let proyectoIdEnEdicion = null;
         },
 
         sync: async () => {
+            if (!navigator.onLine || OfflineManager.isSyncing) return;
             const queue = await OfflineManager.getQueue();
             if (queue.length === 0) return;
             const token = localStorage.getItem('token');
+            const currentScope = obtenerScopeOffline();
+            if (!token || !currentScope) return;
+
+            OfflineManager.isSyncing = true;
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
             let newQueue = [];
             
-            for (const req of queue) {
-                try {
-                    let bodyObj = req.options.body ? JSON.parse(req.options.body) : {};
-                    if (bodyObj._id && bodyObj._id.startsWith('temp_')) delete bodyObj._id;
-                    const res = await fetch(req.url, { ...req.options, body: JSON.stringify(bodyObj), headers: { ...req.options.headers, ...headers } });
-                    if (!res.ok) throw new Error('Failed');
-                } catch (e) { 
-                    newQueue.push(req); // Si falla (ej. internet intermitente), lo devuelve a la cola
+            try {
+                for (const req of queue) {
+                    if (req.scope !== currentScope) {
+                        newQueue.push(req);
+                        continue;
+                    }
+
+                    try {
+                        const bodyObj = req.options.body ? JSON.parse(req.options.body) : null;
+                        if (bodyObj?._id?.startsWith('temp_')) delete bodyObj._id;
+                        const { isFormData, ...requestOptions } = req.options;
+                        const requestHeaders = { ...requestOptions.headers, ...headers };
+                        const res = await fetch(req.url, {
+                            ...requestOptions,
+                            body: bodyObj ? JSON.stringify(bodyObj) : requestOptions.body,
+                            headers: requestHeaders
+                        });
+                        if (!res.ok) throw new Error('Failed');
+                    } catch (error) {
+                        newQueue.push(req);
+                    }
                 }
-            }
-            
-            await localforage.setItem(OfflineManager.QUEUE_KEY, newQueue);
-            
-            if (newQueue.length === 0) {
-                showToast('Sincronización completada', 'success');
-                // Recargamos todos los cachés
-                await Promise.all([
-                    fetchAPI('/api/proyectos'), 
-                    fetchAPI('/api/artistas'), 
-                    fetchAPI('/api/servicios'),
-                    fetchAPI('/api/deudas')
-                ]);
-                const currentHash = location.hash.replace('#', '');
-                if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
+
+                await localforage.setItem(OfflineManager.QUEUE_KEY, newQueue);
+
+                if (newQueue.length === 0) {
+                    showToast('Sincronización completada', 'success');
+                    await Promise.all([
+                        fetchAPI('/api/proyectos'),
+                        fetchAPI('/api/artistas'),
+                        fetchAPI('/api/servicios'),
+                        fetchAPI('/api/deudas')
+                    ]);
+                    const currentHash = location.hash.replace('#', '');
+                    if (currentHash && window.app.mostrarSeccion) window.app.mostrarSeccion(currentHash, false);
+                }
+            } finally {
+                OfflineManager.isSyncing = false;
+                OfflineManager.updateIndicator();
             }
         },
         syncNow: () => { if (navigator.onLine) OfflineManager.sync(); }
     };
+
+    window.OfflineManager = OfflineManager;
+    window.notificarGuardadoOffline = notificarGuardadoOffline;
+
+    async function ejecutarOEncolar(url, options = {}, mensajeExito = '') {
+        const resultado = await window.fetchAPI(url, options);
+        if (!resultado?.offline && mensajeExito) showToast(mensajeExito, 'success');
+        return resultado;
+    }
+
+    async function procesarColaSync() {
+        if (navigator.onLine) await OfflineManager.sync();
+    }
+
+    window.ejecutarOEncolar = ejecutarOEncolar;
+    window.procesarColaSync = procesarColaSync;
 
     // =================================================================
     // 5. GOOGLE DRIVE Y REPRODUCTOR
@@ -1113,55 +1230,95 @@ let proyectoIdEnEdicion = null;
     // ==================================================================
     // 6. DASHBOARD SEGURO
     // ==================================================================
-    async function cargarDashboard() {
+    async function cargarDashboard(forzarRecarga = false) {
         try {
+            prepararCacheDashboard();
             const moduloSeguros = configCache?.moduloSeguros || false;
 
             // Si la empresa tiene el módulo de seguros activado, cargar dashboard de seguros
             if (moduloSeguros) {
-                await cargarDashboardSeguros();
+                await cargarDashboardSeguros(undefined, forzarRecarga);
                 return;
             }
 
-            // Dashboard estándar original
-            const stats = await fetchAPI('/api/dashboard/stats'); 
-            const kpiIngresos = document.getElementById('kpi-ingresos-mes');
-            const cardIngresos = kpiIngresos ? kpiIngresos.closest('.card') : null;
-            const chartContainer = document.getElementById('incomeChart').parentElement.parentElement; 
+            const renderizar = stats => {
+                const kpiIngresos = document.getElementById('kpi-ingresos-mes');
+                const cardIngresos = kpiIngresos ? kpiIngresos.closest('.card') : null;
+                const incomeChart = document.getElementById('incomeChart');
+                const chartContainer = incomeChart?.parentElement?.parentElement;
 
-            if (stats.showFinancials === false) {
-                if(cardIngresos) cardIngresos.style.display = 'none';
-                if(chartContainer) chartContainer.style.display = 'none';
-            } else {
-                if(cardIngresos) cardIngresos.style.display = 'block';
-                if(chartContainer) chartContainer.style.display = 'block';
-                
-                kpiIngresos.textContent = `$${safeMoney(stats.ingresosMes)}`;
-                
-                const ctx = document.getElementById('incomeChart').getContext('2d'); 
-                if (chartInstance) chartInstance.destroy(); 
-                const labels =['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']; 
-                const dataValues = stats.monthlyIncome || Array(12).fill(0); 
-                chartInstance = new Chart(ctx, { 
-                    type: 'line', 
-                    data: { labels: labels, datasets:[{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] }, 
-                    options: { responsive: true, maintainAspectRatio: false } 
-                });
+                if (stats.showFinancials === false) {
+                    if (cardIngresos) cardIngresos.style.display = 'none';
+                    if (chartContainer) chartContainer.style.display = 'none';
+                } else if (incomeChart) {
+                    if (cardIngresos) cardIngresos.style.display = 'block';
+                    if (chartContainer) chartContainer.style.display = 'block';
+                    if (kpiIngresos) kpiIngresos.textContent = `$${safeMoney(stats.ingresosMes)}`;
+
+                    const ctx = incomeChart.getContext('2d');
+                    if (chartInstance) chartInstance.destroy();
+                    const labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                    const dataValues = stats.monthlyIncome || Array(12).fill(0);
+                    chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: { labels, datasets: [{ label: 'Ingresos ($)', data: dataValues, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+                const proyectosActivos = document.getElementById('kpi-proyectos-activos');
+                const proyectosPorCobrar = document.getElementById('kpi-proyectos-por-cobrar');
+                if (proyectosActivos) proyectosActivos.textContent = stats.proyectosActivos || 0;
+                if (proyectosPorCobrar) proyectosPorCobrar.textContent = stats.proyectosPorCobrar || 0;
+                renderDashboardCommandCenter();
+            };
+
+            if (forzarRecarga) dashboardStatsCache = null;
+            const statsCacheados = forzarRecarga
+                ? null
+                : dashboardStatsCache || leerRespaldoOffline('backup_dashboard');
+
+            if (statsCacheados) {
+                dashboardStatsCache = statsCacheados;
+                renderizar(statsCacheados);
+                if (navigator.onLine) {
+                    fetchAPI('/api/dashboard/stats', { silent: true })
+                        .then(statsFrescos => {
+                            dashboardStatsCache = statsFrescos;
+                            guardarRespaldoOffline('backup_dashboard', statsFrescos);
+                            renderizar(statsFrescos);
+                        })
+                        .catch(error => console.warn('[cargarDashboard] Revalidación en segundo plano falló:', error));
+                }
+                return;
             }
-            document.getElementById('kpi-proyectos-activos').textContent = stats.proyectosActivos || 0; 
-            document.getElementById('kpi-proyectos-por-cobrar').textContent = stats.proyectosPorCobrar || 0; 
-            await renderDashboardCommandCenter();
+
+            const stats = await fetchAPI('/api/dashboard/stats');
+            dashboardStatsCache = stats;
+            guardarRespaldoOffline('backup_dashboard', stats);
+            renderizar(stats);
         } catch (e) { console.error("Error cargando dashboard:", e); } 
     }
 
     // FASE 6: DASHBOARD DE SEGUROS
-    async function cargarDashboardSeguros(filtroTiempo) {
+    async function cargarDashboardSeguros(filtroTiempo, forzarRecarga = false, respuestaActualizada = null) {
         try {
+            prepararCacheDashboard();
             // FASE 3: Cargar métricas enterprise con renovaciones y recibos
             const filtroSeleccionado = filtroTiempo
                 || document.getElementById('filtroTiempoGraficas')?.value
                 || 'mensual';
-            const response = await fetchAPI(`/api/polizas/metricas-seguros?filtroTiempo=${encodeURIComponent(filtroSeleccionado)}`);
+            const urlMetricas = `/api/polizas/metricas-seguros?filtroTiempo=${encodeURIComponent(filtroSeleccionado)}`;
+            if (forzarRecarga) dashboardSegurosCache.delete(filtroSeleccionado);
+            let response = respuestaActualizada;
+            let tieneCache = Boolean(respuestaActualizada);
+            if (!respuestaActualizada && !forzarRecarga) {
+                response = dashboardSegurosCache.get(filtroSeleccionado)
+                    || leerRespaldoOffline('backup_dashboard_seguros', filtroSeleccionado);
+                tieneCache = Boolean(response);
+            }
+            if (!response) response = await fetchAPI(urlMetricas);
+            dashboardSegurosCache.set(filtroSeleccionado, response);
+            guardarRespaldoOffline('backup_dashboard_seguros', response, filtroSeleccionado);
             const data = response.metricas || {};
             const datosGraficas = response.graficas || {};
             const detalles = response.detalles || {};
@@ -1378,6 +1535,12 @@ let proyectoIdEnEdicion = null;
                 }
             }
 
+            if (tieneCache && !respuestaActualizada && navigator.onLine) {
+                fetchAPI(urlMetricas, { silent: true })
+                    .then(responseFresca => cargarDashboardSeguros(filtroSeleccionado, false, responseFresca))
+                    .catch(error => console.warn('[cargarDashboardSeguros] Revalidación en segundo plano falló:', error));
+            }
+
         } catch (error) {
             console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
         }
@@ -1533,7 +1696,7 @@ let proyectoIdEnEdicion = null;
 
     async function obtenerProyectosDashboard() {
         try {
-            const proyectos = await fetchAPI(`/api/proyectos?_=${Date.now()}`, { cache: 'no-store' });
+            const proyectos = await fetchAPI(`/api/proyectos?_=${Date.now()}`, { cache: 'no-store', silent: true });
             if (Array.isArray(proyectos)) {
                 if (!window.localCache) {
                     window.localCache = {
@@ -1603,43 +1766,49 @@ let proyectoIdEnEdicion = null;
         const listaPagos = document.getElementById('dashboard-pagos-pendientes');
         if (!listaProyectos || !listaPagos) return;
 
+        const renderizarProyectos = proyectos => {
+            const recientes = [...proyectos]
+                .filter((p) => p && !p.isDeleted && !p.deleted)
+                .sort((a, b) => fechaProyectoOrden(b) - fechaProyectoOrden(a))
+                .slice(0, 5);
+
+            if (recientes.length === 0) {
+                listaProyectos.innerHTML = renderDashboardListaVacia('No hay proyectos recientes.');
+            } else {
+                listaProyectos.innerHTML = recientes.map((p) => {
+                    const titulo = nombreProyectoDisplay(p);
+                    const fecha = safeDate(p.fecha || p.createdAt);
+                    const total = `$${safeMoney(p.total || 0)}`;
+                    return renderDashboardMiniItem(titulo, fecha, total);
+                }).join('');
+            }
+
+            const pendientes = filtrarPagosPendientesCache(proyectos)
+                .sort((a, b) => {
+                    const saldoA = (a.total || 0) - (a.montoPagado || 0);
+                    const saldoB = (b.total || 0) - (b.montoPagado || 0);
+                    return saldoB - saldoA;
+                })
+                .slice(0, 5);
+
+            if (pendientes.length === 0) {
+                listaPagos.innerHTML = renderDashboardListaVacia('No hay pagos pendientes.');
+            } else {
+                listaPagos.innerHTML = pendientes.map((p) => {
+                    const titulo = nombreProyectoDisplay(p);
+                    const fecha = safeDate(p.fecha || p.createdAt);
+                    const restante = (p.total || 0) - (p.montoPagado || 0);
+                    const saldo = `<span class="text-danger">$${safeMoney(restante)}</span>`;
+                    return renderDashboardMiniItem(titulo, fecha, saldo);
+                }).join('');
+            }
+        };
+
+        const proyectosCacheados = await obtenerProyectosDesdeCache();
+        if (proyectosCacheados.length > 0) renderizarProyectos(proyectosCacheados);
+        if (!navigator.onLine) return;
         const proyectos = await obtenerProyectosDashboard();
-
-        const recientes = [...proyectos]
-            .filter((p) => p && !p.isDeleted && !p.deleted)
-            .sort((a, b) => fechaProyectoOrden(b) - fechaProyectoOrden(a))
-            .slice(0, 5);
-
-        if (recientes.length === 0) {
-            listaProyectos.innerHTML = renderDashboardListaVacia('No hay proyectos recientes.');
-        } else {
-            listaProyectos.innerHTML = recientes.map((p) => {
-                const titulo = nombreProyectoDisplay(p);
-                const fecha = safeDate(p.fecha || p.createdAt);
-                const total = `$${safeMoney(p.total || 0)}`;
-                return renderDashboardMiniItem(titulo, fecha, total);
-            }).join('');
-        }
-
-        const pendientes = filtrarPagosPendientesCache(proyectos)
-            .sort((a, b) => {
-                const saldoA = (a.total || 0) - (a.montoPagado || 0);
-                const saldoB = (b.total || 0) - (b.montoPagado || 0);
-                return saldoB - saldoA;
-            })
-            .slice(0, 5);
-
-        if (pendientes.length === 0) {
-            listaPagos.innerHTML = renderDashboardListaVacia('No hay pagos pendientes.');
-        } else {
-            listaPagos.innerHTML = pendientes.map((p) => {
-                const titulo = nombreProyectoDisplay(p);
-                const fecha = safeDate(p.fecha || p.createdAt);
-                const restante = (p.total || 0) - (p.montoPagado || 0);
-                const saldo = `<span class="text-danger">$${safeMoney(restante)}</span>`;
-                return renderDashboardMiniItem(titulo, fecha, saldo);
-            }).join('');
-        }
+        renderizarProyectos(proyectos);
     }
 
     // ==================================================================
@@ -4865,7 +5034,7 @@ Fecha de firma: {{FECHA}}`;
             });
 
             if (result.isConfirmed) {
-                await fetchAPI(`/api/clientes/papelera/${id}/restaurar`, { method: 'PUT' });
+                await ejecutarOEncolar(`/api/clientes/papelera/${id}/restaurar`, { method: 'PUT' });
                 Swal.fire('Éxito', 'Cliente restaurado correctamente', 'success');
                 cargarPapelera();
                 cargarDashboard();
@@ -4890,7 +5059,7 @@ Fecha de firma: {{FECHA}}`;
             });
 
             if (result.isConfirmed) {
-                await fetchAPI(`/api/clientes/papelera/${id}/destruir`, { method: 'DELETE' });
+                    await ejecutarOEncolar(`/api/clientes/papelera/${id}/destruir`, { method: 'DELETE' });
                 Swal.fire('Éxito', 'Cliente destruido correctamente', 'success');
                 cargarPapelera();
                 cargarDashboard();
@@ -5715,14 +5884,27 @@ Fecha de firma: {{FECHA}}`;
             console.error('[cargarPagosSeguros] No se encontró tablaPagosSegurosBody');
             return;
         }
-        tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
+        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'seguros')
+            || leerRespaldoOffline('backup_polizas', 'todos');
+        const tieneCache = Array.isArray(pagosCacheados);
+        if (tieneCache) {
+            vistaPagosGlobales = pagosCacheados;
+            paginaActualVistaPagos = 1;
+        if (tieneCache && !navigator.onLine) return;
+            renderizarPaginaGestionPagos();
+        } else {
+            tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
+        }
+
         try {
-            const polizas = await fetchAPI('/api/polizas');
+            const polizas = await fetchAPI('/api/polizas', { silent: tieneCache });
             vistaPagosGlobales = Array.isArray(polizas) ? polizas : [];
+            guardarRespaldoOffline('backup_pagos', vistaPagosGlobales, 'seguros');
             paginaActualVistaPagos = 1;
             renderizarPaginaGestionPagos();
         } catch (error) {
             console.error('[cargarPagosSeguros] Error al cargar pagos:', error);
+            if (tieneCache) return;
             vistaPagosGlobales = [];
             paginaActualVistaPagos = 1;
             renderizarPaginaGestionPagos();
@@ -5750,22 +5932,54 @@ Fecha de firma: {{FECHA}}`;
     
     async function cargarPagosPendientes() {
         const tabla = document.getElementById('tablaPendientesBody');
-        tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
-        await fetchAPI('/api/proyectos');
         const userInfo = getUserRoleAndId();
         const isClient = userInfo.role === 'cliente';
-        pagosPendientesCacheados = localCache.proyectos.filter(p => {
-            if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
-            const pagado = p.montoPagado || 0;
-            return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
-        });
-        tablePagination.pagosPendientes.page = 1;
-        window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
+        const renderizar = proyectos => {
+            pagosPendientesCacheados = proyectos.filter(p => {
+                if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
+                const pagado = p.montoPagado || 0;
+                return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
+            });
+            guardarRespaldoOffline('backup_pagos', pagosPendientesCacheados, 'pendientes');
+            tablePagination.pagosPendientes.page = 1;
+            window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
+        };
+
+        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'pendientes');
+        const tieneCache = Array.isArray(pagosCacheados);
+        if (tieneCache) {
+            pagosPendientesCacheados = pagosCacheados;
+            tablePagination.pagosPendientes.page = 1;
+            window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
+            if (!navigator.onLine) return;
+        } else if (tabla) {
+            tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
+        }
+
+        try {
+            await fetchAPI('/api/proyectos', { silent: tieneCache });
+            renderizar(localCache.proyectos);
+        } catch (error) {
+            if (tieneCache) return;
+            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar pagos pendientes.</td></tr>';
+            console.error('[cargarPagosPendientes] Error:', error);
+        }
     }
 
     async function cargarHistorialPagos() {
         const tablaBody = document.getElementById('tablaPagosBody');
-        if (tablaBody) tablaBody.innerHTML = '<tr><td colspan="5">Cargando historial...</td></tr>';
+        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'historial');
+        const tieneCache = Array.isArray(pagosCacheados);
+        if (tieneCache) {
+            pagosHistorialCacheados = pagosCacheados;
+            tablePagination.pagosHistorial.page = 1;
+            if (window.UIManager) {
+                window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
+            }
+        } else if (tablaBody) {
+            tablaBody.innerHTML = '<tr><td colspan="5">Cargando historial...</td></tr>';
+        }
+        if (tieneCache && !navigator.onLine) return;
 
         try {
             const userInfo = getUserRoleAndId();
@@ -5774,7 +5988,7 @@ Fecha de firma: {{FECHA}}`;
             let url = '/api/proyectos/pagos/todos';
             if (isClient) url += `?artistaId=${userInfo.artistaId}`;
 
-            const pagos = await fetchAPI(url);
+            const pagos = await fetchAPI(url, { silent: tieneCache });
             pagosHistorialCacheados = pagos.map(p => ({
                 fecha: p.fecha || new Date().toISOString(),
                 artista: p.artista || 'N/A',
@@ -5783,6 +5997,7 @@ Fecha de firma: {{FECHA}}`;
                 proyectoId: p.proyectoId,
                 pagoId: p.pagoId
             }));
+            guardarRespaldoOffline('backup_pagos', pagosHistorialCacheados, 'historial');
 
             tablePagination.pagosHistorial.page = 1;
             if (window.UIManager) {
@@ -5790,6 +6005,7 @@ Fecha de firma: {{FECHA}}`;
             }
         } catch (e) {
             console.error('[cargarHistorialPagos] Error:', e);
+            if (tieneCache) return;
             if (tablaBody) {
                 tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`;
             }
@@ -6033,9 +6249,13 @@ Fecha de firma: {{FECHA}}`;
         if (modalDatosBancarios) { modalDatosBancarios.addEventListener('show.bs.modal', function () { cargarDatosBancariosEnModal(); }); } 
         setupMobileMenu(); 
         if (DOMElements.logoutButton) { DOMElements.logoutButton.onclick = cerrarSesionConfirmacion; } 
-        window.addEventListener('online', OfflineManager.updateIndicator); 
+        window.addEventListener('online', () => {
+            OfflineManager.updateIndicator();
+            procesarColaSync();
+        });
         window.addEventListener('offline', OfflineManager.updateIndicator); 
         OfflineManager.updateIndicator(); 
+        procesarColaSync();
         
         document.querySelectorAll('.theme-switch-checkbox').forEach(chk => {
             chk.addEventListener('change', (e) => {
@@ -6699,13 +6919,13 @@ Fecha de firma: {{FECHA}}`;
                 console.log('[mostrarFormularioPoliza] Modo renovación, enviando a:', url);
             }
 
-            const responseBody = await fetchAPI(url, {
+            const responseBody = await ejecutarOEncolar(url, {
                 method: method,
                 body: JSON.stringify(formValues)
             });
 
             await Swal.fire('Éxito', window.polizaARenovar ? 'Póliza renovada correctamente' : 'Póliza registrada correctamente', 'success');
-            cargarPolizas();
+            cargarPolizas(true);
         } catch (error) {
             console.error('[mostrarFormularioPoliza] Error al guardar póliza:', error);
             Swal.fire('Error', error.message || 'No se pudo guardar la póliza', 'error');
@@ -6772,7 +6992,7 @@ Fecha de firma: {{FECHA}}`;
                 resultadoEl.textContent = resumen + fallos;
             }
             input.value = '';
-            await cargarPolizas();
+            await cargarPolizas(true);
         } catch (error) {
             console.error('[importarPolizasExcel] Error:', error);
             if (resultadoEl) {
@@ -6782,16 +7002,43 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
-    async function cargarPolizas() {
+    async function cargarPolizas(forzarRecarga = false) {
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) {
             console.error('[cargarPolizas] No se encontró tablaPolizasBody');
             return;
         }
-            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center">Cargando...</td></tr>';
+
+        const user = getUserRoleAndId();
+        const scopeOffline = obtenerScopeOffline();
+        if (forzarRecarga) {
+            polizasCacheCargada = false;
+            polizasCacheScope = null;
+            clientesCacheCargada = false;
+            clientesCacheScope = null;
+            dashboardStatsCache = null;
+            dashboardSegurosCache.clear();
+        }
+
+        const obtenerCachePolizas = asesorId => {
+            const cacheAsesorId = user.role === 'admin' ? asesorId : '';
+            if (polizasCacheCargada && polizasCacheScope === scopeOffline && polizasCacheAsesorId === cacheAsesorId) return polizasGlobales;
+            return leerRespaldoOffline('backup_polizas', cacheAsesorId || 'todos');
+        };
+        let asesorSeleccionado = document.getElementById('filtro-asesor')?.value || '';
+        let filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
+        let polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
+        let tieneCache = Array.isArray(polizasCacheadas);
+
+        if (tieneCache) {
+            polizasGlobales = polizasCacheadas;
+            polizasCacheAsesorId = filtroAsesorCache;
+            polizasCacheScope = scopeOffline;
+            paginaActualPolizas = 1;
+            renderizarPaginaPolizas();
+        }
 
         // Mostrar/ocultar filtro de asesor según el rol del usuario
-        const user = getUserRoleAndId();
         const filtroAsesorContainer = document.getElementById('filtro-asesor-container');
 
         if (filtroAsesorContainer) {
@@ -6799,27 +7046,59 @@ Fecha de firma: {{FECHA}}`;
                 filtroAsesorContainer.classList.remove('d-none');
                 filtroAsesorContainer.classList.add('d-flex');
                 // Cargar lista de asesores si aún no está cargada
-                await cargarListaAsesores();
+                await cargarListaAsesores(tieneCache);
             } else {
                 filtroAsesorContainer.classList.add('d-none');
                 filtroAsesorContainer.classList.remove('d-flex');
             }
         }
 
+        asesorSeleccionado = document.getElementById('filtro-asesor')?.value || '';
+        filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
+        if (!tieneCache || polizasCacheAsesorId !== filtroAsesorCache) {
+            polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
+            tieneCache = Array.isArray(polizasCacheadas);
+            if (tieneCache) {
+                polizasGlobales = polizasCacheadas;
+                polizasCacheAsesorId = filtroAsesorCache;
+                polizasCacheScope = scopeOffline;
+                paginaActualPolizas = 1;
+                renderizarPaginaPolizas();
+            }
+        }
+
+        if (!tieneCache) {
+            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center">Cargando...</td></tr>';
+        }
+        if (tieneCache && !navigator.onLine) return;
+
         try {
             // Construir URL con parámetro de asesor si está seleccionado
             let url = '/api/polizas';
-            const asesorSeleccionado = document.getElementById('filtro-asesor')?.value;
             if (user.role === 'admin' && asesorSeleccionado) {
                 url += `?asesorId=${asesorSeleccionado}`;
             }
 
-            const polizas = await fetchAPI(url);
+            const polizas = await fetchAPI(url, { silent: tieneCache });
             polizasGlobales = Array.isArray(polizas) ? polizas : [];
+            guardarRespaldoOffline('backup_polizas', polizasGlobales, filtroAsesorCache || 'todos');
+            polizasCacheAsesorId = filtroAsesorCache;
+            polizasCacheScope = scopeOffline;
+            polizasCacheCargada = true;
             paginaActualPolizas = 1;
             renderizarPaginaPolizas();
         } catch (error) {
+            polizasCacheCargada = false;
             console.error('[cargarPolizas] Error al cargar pólizas:', error);
+            if (tieneCache) return;
+            const respaldo = leerRespaldoOffline('backup_polizas', filtroAsesorCache || 'todos');
+            if (Array.isArray(respaldo)) {
+                polizasGlobales = respaldo;
+                paginaActualPolizas = 1;
+                renderizarPaginaPolizas();
+                notificarDatosOffline();
+                return;
+            }
             tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-danger">Error al cargar pólizas</td></tr>';
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
@@ -6972,7 +7251,7 @@ Fecha de firma: {{FECHA}}`;
     }
 
     // Función para cargar la lista de asesores (usuarios de la empresa)
-    async function cargarListaAsesores() {
+    async function cargarListaAsesores(silencioso = false) {
         const filtroAsesor = document.getElementById('filtro-asesor');
         if (!filtroAsesor) return;
         
@@ -6980,7 +7259,7 @@ Fecha de firma: {{FECHA}}`;
         if (filtroAsesor.options.length > 1) return;
         
         try {
-            const usuarios = await fetchAPI('/api/usuarios');
+            const usuarios = await fetchAPI('/api/usuarios', { silent: silencioso });
             if (usuarios && usuarios.length > 0) {
                 usuarios.forEach(usuario => {
                     const option = document.createElement('option');
@@ -7301,11 +7580,11 @@ Fecha de firma: {{FECHA}}`;
         
         if (confirmar) {
             try {
-                await fetchAPI(`/api/polizas/${id}`, {
+                await ejecutarOEncolar(`/api/polizas/${id}`, {
                     method: 'DELETE'
                 });
                 await Swal.fire('Éxito', 'Póliza eliminada correctamente', 'success');
-                cargarPolizas();
+                cargarPolizas(true);
             } catch (error) {
                 console.error('[eliminarPoliza] Error al eliminar póliza:', error);
                 Swal.fire('Error', error.message || 'No se pudo eliminar la póliza', 'error');
@@ -7327,11 +7606,11 @@ Fecha de firma: {{FECHA}}`;
         
         if (confirmar) {
             try {
-                const resultado = await fetchAPI(`/api/polizas/${id}/renovar-pago`, {
+                const resultado = await ejecutarOEncolar(`/api/polizas/${id}/renovar-pago`, {
                     method: 'PUT'
                 });
                 await Swal.fire('Éxito', 'Pago registrado correctamente. Próximo pago: ' + new Date(resultado.nuevoProximoPago).toLocaleDateString(), 'success');
-                cargarPolizas();
+                cargarPolizas(true);
                 cargarPagosSeguros(); // Recargar también la tabla de pagos
             } catch (error) {
                 console.error('[registrarPagoRapido] Error al registrar pago:', error);
@@ -7514,10 +7793,10 @@ Fecha de firma: {{FECHA}}`;
                         const boton = event.currentTarget;
                         boton.disabled = true;
                         try {
-                            const respuesta = await fetchAPI(`/api/polizas/${id}/cancelar`, { method: 'PUT' });
+                            const respuesta = await ejecutarOEncolar(`/api/polizas/${id}/cancelar`, { method: 'PUT' });
                             Swal.close();
                             await Swal.fire('Póliza cancelada', respuesta.message || 'La póliza se canceló correctamente.', 'success');
-                            await cargarPolizas();
+                            await cargarPolizas(true);
                         } catch (error) {
                             boton.disabled = false;
                             Swal.fire('Error', error.message || 'No se pudo cancelar la póliza.', 'error');
@@ -7527,7 +7806,7 @@ Fecha de firma: {{FECHA}}`;
                         const boton = event.currentTarget;
                         boton.disabled = true;
                         try {
-                            await fetchAPI(`/api/polizas/${id}/recalcular`, {
+                            await ejecutarOEncolar(`/api/polizas/${id}/recalcular`, {
                                 method: 'PUT',
                                 body: JSON.stringify({
                                     primaTotal: parseFloat(document.getElementById('poliza-prima').value) || 0,
@@ -7540,7 +7819,7 @@ Fecha de firma: {{FECHA}}`;
                                 })
                             });
                             await Swal.fire('Éxito', 'Recibos recalculados correctamente', 'success');
-                            cargarPolizas();
+                            cargarPolizas(true);
                         } catch (error) {
                             boton.disabled = false;
                             Swal.fire('Error', error.message || 'No se pudieron recalcular los recibos', 'error');
@@ -7576,7 +7855,7 @@ Fecha de firma: {{FECHA}}`;
                     // Si se seleccionó un nuevo asesor, reasignar primero
                     if (nuevoAsesorId) {
                         try {
-                            await fetchAPI(`/api/polizas/${id}/asignar-asesor`, {
+                            await ejecutarOEncolar(`/api/polizas/${id}/asignar-asesor`, {
                                 method: 'PUT',
                                 body: JSON.stringify({ nuevoAsesorId })
                             });
@@ -7613,12 +7892,12 @@ Fecha de firma: {{FECHA}}`;
 
             if (formValues) {
                 try {
-                    await fetchAPI(`/api/polizas/${id}`, {
+                    await ejecutarOEncolar(`/api/polizas/${id}`, {
                         method: 'PUT',
                         body: JSON.stringify(formValues)
                     });
                     await Swal.fire('Éxito', 'Póliza actualizada correctamente', 'success');
-                    cargarPolizas();
+                    cargarPolizas(true);
                 } catch (error) {
                     console.error('[editarPoliza] Error al actualizar póliza:', error);
                     Swal.fire('Error', error.message || 'No se pudo actualizar la póliza', 'error');
@@ -7864,12 +8143,12 @@ Fecha de firma: {{FECHA}}`;
         
         if (confirmar) {
             try {
-                await fetchAPI(`/api/polizas/papelera/restaurar/${id}`, {
+                await ejecutarOEncolar(`/api/polizas/papelera/restaurar/${id}`, {
                     method: 'PUT'
                 });
                 await Swal.fire('Éxito', 'Póliza restaurada correctamente', 'success');
                 cargarPapelera();
-                cargarPolizas(); // Actualizar tabla principal también
+                cargarPolizas(true); // Actualizar tabla principal también
             } catch (error) {
                 console.error('[restaurarPoliza] Error al restaurar póliza:', error);
                 Swal.fire('Error', error.message || 'No se pudo restaurar la póliza', 'error');
@@ -7890,11 +8169,12 @@ Fecha de firma: {{FECHA}}`;
         
         if (confirmar) {
             try {
-                await fetchAPI(`/api/polizas/papelera/definitivo/${id}`, {
+                await ejecutarOEncolar(`/api/polizas/papelera/definitivo/${id}`, {
                     method: 'DELETE'
                 });
                 await Swal.fire('Éxito', 'Póliza eliminada definitivamente', 'success');
                 cargarPapelera();
+                cargarPolizas(true);
             } catch (error) {
                 console.error('[borrarPermanente] Error al eliminar definitivamente:', error);
                 Swal.fire('Error', error.message || 'No se pudo eliminar la póliza', 'error');
@@ -8067,7 +8347,7 @@ Fecha de firma: {{FECHA}}`;
 
         if (formValues) {
             try {
-                const response = await fetchAPI(`/api/polizas/${polizaId}/resolver-cobranza`, {
+                const response = await ejecutarOEncolar(`/api/polizas/${polizaId}/resolver-cobranza`, {
                     method: 'POST',
                     body: JSON.stringify({
                         monto: recibo.montoRecibo,
@@ -8077,7 +8357,7 @@ Fecha de firma: {{FECHA}}`;
 
                 if (response.success) {
                     Swal.fire('Éxito', 'Recibo pagado correctamente', 'success');
-                    await cargarPolizas();
+                    await cargarPolizas(true);
                 } else {
                     Swal.fire('Error', response.error || 'Error al pagar recibo', 'error');
                 }
@@ -8101,7 +8381,7 @@ Fecha de firma: {{FECHA}}`;
                 didOpen: () => Swal.showLoading()
             });
 
-            await fetchAPI(`/api/polizas/${polizaActualPagos._id}/pagos`, {
+            await ejecutarOEncolar(`/api/polizas/${polizaActualPagos._id}/pagos`, {
                 method: 'POST',
                 body: JSON.stringify(pagoData)
             });
@@ -8110,10 +8390,9 @@ Fecha de firma: {{FECHA}}`;
             
             // Actualizar la vista activa
             const seccionActiva = document.querySelector('main > section.active');
+            await cargarPolizas(true);
             if (seccionActiva && seccionActiva.id === 'pagos') {
                 cargarPagos(); // Recargar tabla de pagos
-            } else {
-                cargarPolizas(); // Recargar tabla de pólizas
             }
         } catch (error) {
             console.error('[guardarPago] Error al registrar pago:', error);
@@ -8134,7 +8413,7 @@ Fecha de firma: {{FECHA}}`;
         if (!result.isConfirmed) return;
 
         try {
-            await fetchAPI(`/api/polizas/${polizaId}/pagos/${pagoIndex}`, {
+            await ejecutarOEncolar(`/api/polizas/${polizaId}/pagos/${pagoIndex}`, {
                 method: 'DELETE'
             });
 
@@ -8142,10 +8421,9 @@ Fecha de firma: {{FECHA}}`;
             
             // Actualizar la vista activa
             const seccionActiva = document.querySelector('main > section.active');
+            await cargarPolizas(true);
             if (seccionActiva && seccionActiva.id === 'pagos') {
                 cargarPagos(); // Recargar tabla de pagos
-            } else {
-                cargarPolizas(); // Recargar tabla de pólizas
             }
         } catch (error) {
             console.error('[eliminarPago] Error al eliminar pago:', error);
@@ -8169,7 +8447,7 @@ Fecha de firma: {{FECHA}}`;
         const fechaCorregida = fecha + 'T12:00:00';
 
         try {
-            await fetchAPI(`/api/polizas/${polizaId}/proximo-pago`, {
+            await ejecutarOEncolar(`/api/polizas/${polizaId}/proximo-pago`, {
                 method: 'PUT',
                 body: JSON.stringify({ proximoPago: fechaCorregida })
             });
@@ -8178,10 +8456,9 @@ Fecha de firma: {{FECHA}}`;
             
             // Actualizar la vista activa
             const seccionActiva = document.querySelector('main > section.active');
+            await cargarPolizas(true);
             if (seccionActiva && seccionActiva.id === 'pagos') {
                 cargarPagos(); // Recargar tabla de pagos
-            } else {
-                cargarPolizas(); // Recargar tabla de pólizas
             }
         } catch (error) {
             console.error('[editarProximoPago] Error al actualizar próximo pago:', error);
@@ -8509,20 +8786,61 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     // MODULO DE CRM - DIRECTORIO DE CLIENTES
     // ==================================================================
-    async function cargarClientesCrm() {
+    async function cargarClientesCrm(forzarRecarga = false) {
         const tabla = document.getElementById('tablaClientesBody');
         if (!tabla) return;
+        const scopeOffline = obtenerScopeOffline();
+        if (forzarRecarga) {
+            clientesCacheCargada = false;
+            clientesCacheScope = null;
+            polizasCacheCargada = false;
+            polizasCacheScope = null;
+            dashboardStatsCache = null;
+            dashboardSegurosCache.clear();
+        }
+
+        let clientesCacheados = null;
+        if (!forzarRecarga) {
+            clientesCacheados = clientesCacheCargada && clientesCacheScope === scopeOffline
+                ? clientesGlobales
+                : leerRespaldoOffline('backup_clientes');
+        }
+        const tieneCache = Array.isArray(clientesCacheados);
+        if (tieneCache) {
+            clientesGlobales = clientesCacheados;
+            clientesCacheScope = scopeOffline;
+        if (tieneCache && !navigator.onLine) return;
+            paginaActualClientes = 1;
+            renderizarPaginaClientes();
+        }
+
+        if (!tieneCache) {
             tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">Cargando...</td></tr>';
+        }
         const paginacion = document.getElementById('paginacionClientes');
         if (paginacion) paginacion.innerHTML = '';
 
         try {
-            const data = await fetchAPI('/api/clientes');
+            const data = await fetchAPI('/api/clientes', { silent: tieneCache });
             clientesGlobales = Array.isArray(data.clientes) ? data.clientes : [];
+            guardarRespaldoOffline('backup_clientes', clientesGlobales);
+            clientesCacheCargada = true;
+            clientesCacheScope = scopeOffline;
             paginaActualClientes = 1;
             renderizarPaginaClientes();
         } catch (error) {
+            clientesCacheCargada = false;
             console.error('[cargarClientesCrm] Error:', error);
+            if (tieneCache) return;
+            const respaldo = leerRespaldoOffline('backup_clientes');
+            if (Array.isArray(respaldo)) {
+                clientesGlobales = respaldo;
+                clientesCacheScope = scopeOffline;
+                paginaActualClientes = 1;
+                renderizarPaginaClientes();
+                notificarDatosOffline();
+                return;
+            }
             tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-danger">Error al cargar clientes</td></tr>';
             const paginacion = document.getElementById('paginacionClientes');
             if (paginacion) paginacion.innerHTML = '';
@@ -8740,7 +9058,8 @@ Fecha de firma: {{FECHA}}`;
             // Cerrar modal y recargar datos
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalRenovarPoliza'));
             modal.hide();
-            cargarClientesCrm();
+            cargarClientesCrm(true);
+            cargarPolizas(true);
         } catch (error) {
             console.error('[procesarRenovacion] Error:', error);
             console.error('[procesarRenovacion] Error message:', error.message);
@@ -8774,7 +9093,7 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
-            await fetchAPI('/api/clientes', {
+            await ejecutarOEncolar('/api/clientes', {
                 method: 'POST',
                 body: JSON.stringify({
                     nombre,
@@ -8790,7 +9109,8 @@ Fecha de firma: {{FECHA}}`;
             // Cerrar modal y recargar tabla
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
             modal.hide();
-            cargarClientesCrm();
+            cargarClientesCrm(true);
+            cargarPolizas(true);
         } catch (error) {
             console.error('[guardarNuevoCliente] Error:', error);
             Swal.fire('Error', 'No se pudo crear el cliente', 'error');
@@ -8840,7 +9160,7 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
-            await fetchAPI(`/api/clientes/${clienteId}`, {
+            await ejecutarOEncolar(`/api/clientes/${clienteId}`, {
                 method: 'PUT',
                 body: JSON.stringify({
                     nombre,
@@ -8856,7 +9176,8 @@ Fecha de firma: {{FECHA}}`;
             // Cerrar modal y recargar tabla
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarCliente'));
             modal.hide();
-            cargarClientesCrm();
+            cargarClientesCrm(true);
+            cargarPolizas(true);
         } catch (error) {
             console.error('[guardarEdicionCliente] Error:', error);
             Swal.fire('Error', 'No se pudo actualizar el cliente', 'error');
@@ -8876,12 +9197,13 @@ Fecha de firma: {{FECHA}}`;
             });
 
             if (result.isConfirmed) {
-                await fetchAPI(`/api/clientes/${clienteId}`, {
+                await ejecutarOEncolar(`/api/clientes/${clienteId}`, {
                     method: 'DELETE'
                 });
 
                 Swal.fire('Éxito', 'Cliente eliminado correctamente', 'success');
-                cargarClientesCrm();
+                cargarClientesCrm(true);
+                cargarPolizas(true);
             }
         } catch (error) {
             console.error('[eliminarCliente] Error:', error);
@@ -10111,6 +10433,7 @@ Fecha de firma: {{FECHA}}`;
                 
                 // Recargar la tabla para actualizar indicadores
                 cargarCobranzaDiaria();
+                cargarPolizas(true);
             } else {
                 throw new Error(resultado.error || 'Error al enviar correo');
             }
@@ -10148,7 +10471,7 @@ Fecha de firma: {{FECHA}}`;
 
             if (!enlacePago) return;
 
-            const resultado = await fetchAPI('/api/polizas/' + polizaId + '/enlace-pago', {
+            const resultado = await ejecutarOEncolar('/api/polizas/' + polizaId + '/enlace-pago', {
                 method: 'PUT',
                 body: JSON.stringify({ enlacePago })
             });
@@ -10214,7 +10537,7 @@ Fecha de firma: {{FECHA}}`;
 
             if (!formValues) return;
 
-            const resultado = await fetchAPI('/api/polizas/' + polizaId + '/resolver-cobranza', {
+            const resultado = await ejecutarOEncolar('/api/polizas/' + polizaId + '/resolver-cobranza', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formValues)
@@ -10230,6 +10553,7 @@ Fecha de firma: {{FECHA}}`;
 
                 // Recargar la tabla
                 cargarCobranzaDiaria();
+                cargarPolizas(true);
             } else {
                 throw new Error(resultado.error || 'Error al registrar pago');
             }
@@ -10358,7 +10682,7 @@ Fecha de firma: {{FECHA}}`;
 
                     if (response.success) {
                         Swal.fire('Éxito', 'Póliza renovada correctamente', 'success');
-                        await cargarPolizas();
+                        await cargarPolizas(true);
                     } else {
                         Swal.fire('Error', response.error || 'Error al renovar póliza', 'error');
                     }

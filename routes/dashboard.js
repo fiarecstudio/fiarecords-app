@@ -80,7 +80,8 @@ async function obtenerMetricasSeguros(empresaId, isAdmin, asesorId) {
         })
             .populate('clienteId', 'nombre')
             .sort({ proximoPago: 1 })
-            .limit(15),
+            .limit(15)
+            .lean(),
         Poliza.aggregate([
             { $match: matchPolizas },
             { $group: { _id: '$tipoSeguro', count: { $sum: 1 } } },

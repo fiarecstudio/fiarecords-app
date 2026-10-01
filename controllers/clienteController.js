@@ -101,7 +101,7 @@ const obtenerClientes = async (req, res) => {
         }
 
         // Obtener clientes
-        const clientes = await Cliente.find(filtro).sort({ nombre: 1 });
+        const clientes = await Cliente.find(filtro).sort({ nombre: 1 }).lean();
 
         // Para cada cliente, buscar sus pólizas asociadas
         const clientesConPolizas = await Promise.all(
@@ -110,10 +110,10 @@ const obtenerClientes = async (req, res) => {
                     empresaId: normalizarEmpresaId(empresaId),
                     clienteId: cliente._id,
                     deletedAt: null
-                }).sort({ 'fechas.vencimiento': -1 });
+                }).sort({ 'fechas.vencimiento': -1 }).lean();
 
                 return {
-                    ...cliente.toObject(),
+                    ...cliente,
                     polizas: polizas
                 };
             })
@@ -385,7 +385,7 @@ const obtenerClientesPapelera = async (req, res) => {
         }
 
         // Devolver solo clientes eliminados (deletedAt != null) respetando el filtro de empresa
-        const clientesEliminados = await Cliente.find(filtroPapelera).sort({ deletedAt: -1 });
+        const clientesEliminados = await Cliente.find(filtroPapelera).sort({ deletedAt: -1 }).lean();
 
         res.json(clientesEliminados);
     } catch (error) {
