@@ -1100,6 +1100,30 @@ body.dark-mode .project-card:hover {
 
     .modal-dialog { max-width: 95%; margin: 0.5rem auto; }
     .modal-content { max-width: 100%; margin: 0; }
+    .poliza-swal-popup {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        box-sizing: border-box;
+    }
+    .poliza-swal-popup .swal2-html-container {
+        width: 100%;
+        max-height: calc(100dvh - 13rem);
+        overflow-x: hidden;
+        overflow-y: auto;
+        box-sizing: border-box;
+    }
+    .poliza-swal-popup .row > .col-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    .poliza-swal-popup .swal2-input,
+    .poliza-swal-popup .swal2-select {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        box-sizing: border-box;
+    }
 
     .header-top-row { gap: 0.5rem; align-items: center; }
     .header-brand { flex: 1 1 auto; max-width: calc(100% - 5.5rem); }

@@ -5884,21 +5884,23 @@ Fecha de firma: {{FECHA}}`;
             console.error('[cargarPagosSeguros] No se encontró tablaPagosSegurosBody');
             return;
         }
-        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'seguros')
+        const pagosCacheados = leerBackupCobros()
+            || leerRespaldoOffline('backup_pagos', 'seguros')
             || leerRespaldoOffline('backup_polizas', 'todos');
         const tieneCache = Array.isArray(pagosCacheados);
         if (tieneCache) {
             vistaPagosGlobales = pagosCacheados;
             paginaActualVistaPagos = 1;
-        if (tieneCache && !navigator.onLine) return;
             renderizarPaginaGestionPagos();
         } else {
             tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
         }
+        if (tieneCache && !navigator.onLine) return;
 
         try {
             const polizas = await fetchAPI('/api/polizas', { silent: tieneCache });
             vistaPagosGlobales = Array.isArray(polizas) ? polizas : [];
+            guardarBackupCobros(vistaPagosGlobales);
             guardarRespaldoOffline('backup_pagos', vistaPagosGlobales, 'seguros');
             paginaActualVistaPagos = 1;
             renderizarPaginaGestionPagos();
@@ -6718,6 +6720,77 @@ Fecha de firma: {{FECHA}}`;
         });
         }
 
+    function obtenerClaveBackupAsesores() {
+        const userInfo = getUserRoleAndId();
+        const empresaId = localStorage.getItem('selected_empresa_id')
+            || localStorage.getItem('empresaActiva')
+            || 'all';
+        return { key: `backup_asesores_${empresaId}`, userId: String(userInfo.id || 'anon') };
+    }
+
+    function leerBackupAsesores(tipo) {
+        try {
+            const { key, userId } = obtenerClaveBackupAsesores();
+            const backups = JSON.parse(localStorage.getItem(key) || '{}');
+            return backups[userId]?.[tipo] || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function guardarBackupAsesores(tipo, data) {
+        try {
+            const { key, userId } = obtenerClaveBackupAsesores();
+            const backups = JSON.parse(localStorage.getItem(key) || '{}');
+            backups[userId] = { ...(backups[userId] || {}), [tipo]: data };
+            localStorage.setItem(key, JSON.stringify(backups));
+        } catch (error) {
+            console.warn('[Asesores] No se pudo guardar el respaldo local:', error);
+        }
+    }
+
+    async function obtenerAsesoresCacheados(tipo, endpoint) {
+        const asesoresCacheados = leerBackupAsesores(tipo);
+        if (Array.isArray(asesoresCacheados)) {
+            if (navigator.onLine) {
+                fetchAPI(endpoint, { silent: true }).then(data => {
+                    const lista = Array.isArray(data) ? data : data?.[tipo];
+                    if (Array.isArray(lista)) guardarBackupAsesores(tipo, lista);
+                }).catch(() => {});
+            }
+            return asesoresCacheados;
+        }
+
+        if (!navigator.onLine) return [];
+        const data = await fetchAPI(endpoint, { silent: true });
+        const lista = Array.isArray(data) ? data : data?.[tipo] || [];
+        if (Array.isArray(lista)) guardarBackupAsesores(tipo, lista);
+        return lista;
+    }
+
+    function leerBackupCobros() {
+        try {
+            const { key, userId } = obtenerClaveBackupAsesores();
+            const respaldos = JSON.parse(localStorage.getItem(`backup_cobros_${key.replace('backup_asesores_', '')}`) || '{}');
+            return respaldos[userId] || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function guardarBackupCobros(data) {
+        try {
+            const { key, userId } = obtenerClaveBackupAsesores();
+            const empresaId = key.replace('backup_asesores_', '');
+            const backupKey = `backup_cobros_${empresaId}`;
+            const respaldos = JSON.parse(localStorage.getItem(backupKey) || '{}');
+            respaldos[userId] = data;
+            localStorage.setItem(backupKey, JSON.stringify(respaldos));
+        } catch (error) {
+            console.warn('[Cobros] No se pudo guardar el respaldo local:', error);
+        }
+    }
+
     function etiquetaAsesor(usuario) {
         const nombre = usuario.username || usuario.email || 'Usuario';
         return usuario.role === 'admin' ? `${nombre} (Admin)` : nombre;
@@ -6729,9 +6802,9 @@ Fecha de firma: {{FECHA}}`;
         // Cargar lista de asesores para el select
         let asesoresOptions = '';
         try {
-            const asesores = await fetchAPI('/api/usuarios/asesores');
-            if (asesores && asesores.asesores) {
-                asesores.asesores.forEach(asesor => {
+            const asesores = await obtenerAsesoresCacheados('asesores', '/api/usuarios/asesores');
+            if (asesores.length > 0) {
+                asesores.forEach(asesor => {
                     asesoresOptions += `<option value="${asesor._id}">${escapeHTML(etiquetaAsesor(asesor))}</option>`;
                 });
             }
@@ -6741,6 +6814,8 @@ Fecha de firma: {{FECHA}}`;
 
         const { value: formValues } = await Swal.fire({
             title: 'Registrar Nueva Póliza',
+            width: 'min(920px, 95vw)',
+            customClass: { popup: 'poliza-swal-popup' },
             html: `
                 <div class="text-start">
                     <input type="hidden" id="poliza-cliente-id" value="${clienteId || ''}">
@@ -7259,7 +7334,7 @@ Fecha de firma: {{FECHA}}`;
         if (filtroAsesor.options.length > 1) return;
         
         try {
-            const usuarios = await fetchAPI('/api/usuarios', { silent: silencioso });
+            const usuarios = await obtenerAsesoresCacheados('usuarios', '/api/usuarios');
             if (usuarios && usuarios.length > 0) {
                 usuarios.forEach(usuario => {
                     const option = document.createElement('option');
@@ -7628,9 +7703,9 @@ Fecha de firma: {{FECHA}}`;
             // Cargar lista de asesores para el select de reasignación
             let asesoresOptions = '<option value="">Mantener asesor actual</option>';
             try {
-                const asesores = await fetchAPI('/api/usuarios/asesores');
-                if (asesores && asesores.asesores) {
-                    asesores.asesores.forEach(asesor => {
+                const asesores = await obtenerAsesoresCacheados('asesores', '/api/usuarios/asesores');
+                if (asesores.length > 0) {
+                    asesores.forEach(asesor => {
                         asesoresOptions += `<option value="${asesor._id}">${escapeHTML(etiquetaAsesor(asesor))}</option>`;
                     });
                 }
@@ -7663,6 +7738,7 @@ Fecha de firma: {{FECHA}}`;
             const { value: formValues } = await Swal.fire({
                 title: 'Editar Póliza',
                 width: 'min(920px, 96vw)',
+                customClass: { popup: 'poliza-swal-popup' },
                 html: `
                     <div class="text-start">
                         <div class="row g-3">
@@ -9558,7 +9634,16 @@ Fecha de firma: {{FECHA}}`;
         if (token) {
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
+                const tokenExpiraEn = Number(payload.exp) * 1000;
+                const tokenVigente = Number.isFinite(tokenExpiraEn) && tokenExpiraEn > Date.now();
+                if (!navigator.onLine && !tokenVigente) return showLogin();
                 if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin();
+
+                if (!navigator.onLine && tokenVigente && (path === '/' || path === '/index.html')) {
+                    const rutaDashboard = `/dashboard${window.location.search}${window.location.hash}`;
+                    window.location.replace(rutaDashboard);
+                    return;
+                }
                 
                 // FASE 5: Carga SECUENCIAL al refrescar
                 // PASO 1: Token ya verificado arriba
