@@ -108,6 +108,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONFIG_TIMESTAMP_KEY = 'fia_config_timestamp';
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
     let isApplyingIdentity = false; // LOCK para evitar ejecuciones simultáneas
+
+    function obtenerConfigEmpresaOffline(empresaId) {
+        if (!empresaId) return null;
+        try {
+            const config = JSON.parse(localStorage.getItem(`empresa_config_${empresaId}`) || 'null');
+            return config?.empresaId === empresaId ? config : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function guardarConfigEmpresaOffline(empresaId, config, permisos = null) {
+        if (!empresaId || !config) return;
+        try {
+            let permisosUsuario = permisos;
+            if (!Array.isArray(permisosUsuario)) {
+                const usuario = JSON.parse(localStorage.getItem('user') || '{}');
+                permisosUsuario = Array.isArray(usuario.permisos) ? usuario.permisos : null;
+            }
+            if (!Array.isArray(permisosUsuario)) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const payload = token ? JSON.parse(atob(token.split('.')[1])) : {};
+                    permisosUsuario = Array.isArray(payload.permisos) ? payload.permisos : [];
+                } catch (error) {
+                    permisosUsuario = [];
+                }
+            }
+
+            const moduloSeguros = config.moduloSeguros === true;
+            localStorage.setItem(`empresa_config_${empresaId}`, JSON.stringify({
+                empresaId,
+                moduloSeguros,
+                permisos: permisosUsuario,
+                tipoDashboard: config.tipoDashboard || (moduloSeguros ? 'seguros' : 'estandar')
+            }));
+        } catch (error) {
+            console.warn('[Empresa] No se pudo guardar configuración offline:', error);
+        }
+    }
+
+    function persistirEmpresaActiva(empresaId) {
+        if (!empresaId) return;
+        localStorage.setItem('empresaActiva', empresaId);
+        try {
+            const usuario = JSON.parse(localStorage.getItem('user') || '{}');
+            localStorage.setItem('user', JSON.stringify({ ...usuario, empresaId }));
+        } catch (error) {
+            console.warn('[Empresa] No se pudo actualizar empresa en usuario local:', error);
+        }
+    }
     
     /**
      * Obtiene el ID de empresa con lógica de prioridad:
@@ -581,6 +632,14 @@ let proyectoIdEnEdicion = null;
                 finalEmpresaId = 'all';
             }
 
+            if (!navigator.onLine) {
+                const configOffline = obtenerConfigEmpresaOffline(finalEmpresaId);
+                if (configOffline) {
+                    configCache = configOffline;
+                    return configCache;
+                }
+            }
+
             if (!forzarRecarga) {
                 const cacheStr = localStorage.getItem(CONFIG_CACHE_KEY);
                 const cacheTimestamp = localStorage.getItem(CONFIG_TIMESTAMP_KEY);
@@ -589,6 +648,7 @@ let proyectoIdEnEdicion = null;
                     const cache = JSON.parse(cacheStr);
                     if (edadCache < CACHE_DURATION_MS && cache.empresaId === finalEmpresaId && cache.config) {
                         configCache = cache.config;
+                        guardarConfigEmpresaOffline(finalEmpresaId, cache.config);
                         if (configCache.logoBase64) logoBase64 = configCache.logoBase64;
                         setTimeout(() => {
                             loadInitialConfig(finalEmpresaId, true).catch((err) => {
@@ -607,6 +667,7 @@ let proyectoIdEnEdicion = null;
             if (config) { 
                 configCache = config; 
                 if(config.logoBase64) logoBase64 = config.logoBase64;
+                guardarConfigEmpresaOffline(finalEmpresaId, config);
 
                 localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
                     empresaId: finalEmpresaId,
@@ -635,6 +696,15 @@ let proyectoIdEnEdicion = null;
             return configCache;
         } catch (e) { 
             console.error('[loadInitialConfig] Error cargando config:', e);
+            const empresaIdFallback = empresaId
+                || localStorage.getItem('selected_empresa_id')
+                || localStorage.getItem('empresaActiva')
+                || 'all';
+            const configOffline = obtenerConfigEmpresaOffline(empresaIdFallback);
+            if (configOffline) {
+                configCache = configOffline;
+                return configCache;
+            }
             configCache = null; 
             return null;
         }
@@ -2778,9 +2848,20 @@ let proyectoIdEnEdicion = null;
         const esCliente = (userInfo.role === 'cliente');
 
         // CANDADO DE EMPRESA PARA MÓDULO DE SEGUROS (DINÁMICO)
-        // Verificar si la empresa actual tiene el módulo de Seguros activado
-        const esEmpresaSeguros = configCache && configCache.moduloSeguros === true;
-        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+        const empresaIdActiva = localStorage.getItem('selected_empresa_id')
+            || localStorage.getItem('empresaActiva')
+            || userInfo.empresaId
+            || 'all';
+        const configOffline = !navigator.onLine
+            ? obtenerConfigEmpresaOffline(empresaIdActiva)
+            : null;
+        if (configOffline) configCache = { ...(configCache || {}), ...configOffline };
+        const esEmpresaSeguros = navigator.onLine
+            ? configCache?.moduloSeguros === true
+            : configOffline?.moduloSeguros === true;
+        const tipoDashboard = !navigator.onLine
+            ? configOffline?.tipoDashboard || 'estandar'
+            : configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
         const seccionesSeguros = ['polizas', 'config-correos', 'clientes-crm', 'cobranza-diaria'];
@@ -4223,15 +4304,19 @@ Fecha de firma: {{FECHA}}`;
                 const payload = JSON.parse(atob(accessToken.split('.')[1]));
                 // PASO 1: Guardar tokens, usuario y empresaId
                 localStorage.setItem('token', accessToken); // 'token' mantiene compatibilidad con el resto de la app
-                if (data.user) {
-                    localStorage.setItem('user', JSON.stringify(data.user));
-                    }
                 if (refreshToken) {
                     localStorage.setItem('refreshToken', refreshToken);
-                    }
-                if (payload.empresaId) {
-                    localStorage.setItem('empresaActiva', payload.empresaId);
-                    }
+                }
+                const empresaActiva = payload.isSuperAdmin
+                    ? localStorage.getItem('selected_empresa_id') || payload.empresaId || 'all'
+                    : payload.empresaId || data.user?.empresaId;
+                if (empresaActiva) persistirEmpresaActiva(empresaActiva);
+                if (data.user) {
+                    localStorage.setItem('user', JSON.stringify({
+                        ...data.user,
+                        empresaId: empresaActiva || data.user.empresaId
+                    }));
+                }
                 
                 // showApp carga config + logo; evitar fetch duplicado antes del login
                 await showApp(payload);
@@ -9653,14 +9738,14 @@ Fecha de firma: {{FECHA}}`;
                     const selectedEmpresa = localStorage.getItem('selected_empresa_id');
                     if (selectedEmpresa && selectedEmpresa !== '' && selectedEmpresa !== 'all') {
                         // Super Admin tiene empresa específica seleccionada - mantenerla
-                        localStorage.setItem('empresaActiva', selectedEmpresa);
+                        persistirEmpresaActiva(selectedEmpresa);
                     } else {
                         // Super Admin en vista global
-                        localStorage.setItem('empresaActiva', 'all');
+                        persistirEmpresaActiva('all');
                     }
                 } else if (payload.empresaId) {
                     // Usuario normal - sincronizar desde token
-                    localStorage.setItem('empresaActiva', payload.empresaId);
+                    persistirEmpresaActiva(payload.empresaId);
                 }
                 // PASO 3: Identidad visual desde caché (validación en segundo plano)
                 await aplicarIdentidadVisual(false);
