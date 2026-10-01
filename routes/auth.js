@@ -271,9 +271,6 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         // 1. PRIORIDAD MÁXIMA: Vínculo Manual en el Usuario (lo que agregamos en models/Usuario.js)
         if (user.artistaId) {
             artistaVinculado = await Artista.findById(user.artistaId);
-            if (artistaVinculado) {
-                console.log(`>> Login: Usando vínculo MANUAL: Usuario ${user.username} -> Artista ${artistaVinculado.nombre}`);
-            }
         }
 
         // 2. Si no hay vínculo manual, buscamos si el Artista tiene guardado el usuarioId (Legacy)
@@ -285,7 +282,6 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         if (!artistaVinculado && user.email) {
             artistaVinculado = await Artista.findOne({ correo: user.email });
             if (artistaVinculado) {
-                console.log(`>> Login: Auto-vinculando por CORREO.`);
                 // Guardamos la relación en AMBOS lados para el futuro
                 artistaVinculado.usuarioId = user._id;
                 await artistaVinculado.save();
@@ -300,7 +296,6 @@ router.post('/login', validate(loginSchema), async (req, res) => {
                 nombre: { $regex: new RegExp(`^${user.username}$`, 'i') } 
              });
              if (artistaVinculado) {
-                 console.log(`>> Login: Auto-vinculando por NOMBRE.`);
                  artistaVinculado.usuarioId = user._id;
                  await artistaVinculado.save();
                  user.artistaId = artistaVinculado._id;

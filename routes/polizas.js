@@ -38,8 +38,18 @@ const upload = multer({
 // ==========================================
 // RUTAS DE PÓLIZAS
 // ==========================================
+router.post('/importar-excel', auth, applyTenantFilter, upload.single('archivo'), polizaController.importarPolizasExcel);
 router.post('/', auth, applyTenantFilter, polizaController.crearPoliza);
 router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
+
+// ==========================================
+// RUTAS ESPECÍFICAS - DEBEN IR ANTES DE /:id
+// ==========================================
+router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
+router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
+router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
+router.put('/cobranza-diaria/:polizaId/resolver', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
+
 router.get('/agenda/eventos', auth, polizaController.obtenerEventosAgenda);
 router.get('/migrar-fechas-agenda', auth, polizaController.migrarFechasAgenda);
 router.get('/migrar-asesor-historico', auth, async (req, res) => {
@@ -98,10 +108,10 @@ router.get('/migrar-asesor-historico', auth, async (req, res) => {
 // ==========================================
 // FASE 9: COBRANZA DIARIA (DEBE ESTAR ANTES DE /:id)
 // ==========================================
-router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
-router.put('/cobranza-diaria/:polizaId/resolver', auth, applyTenantFilter, polizaController.marcarCobranzaResuelta);
 router.put('/:id/enlace-pago', auth, applyTenantFilter, polizaController.actualizarEnlacePago);
 
+router.put('/:id/recalcular', auth, applyTenantFilter, polizaController.recalcularRecibos);
+router.put('/:id/cancelar', auth, applyTenantFilter, polizaController.cancelarPoliza);
 router.get('/:id', auth, applyTenantFilter, polizaController.obtenerPolizaPorId);
 router.put('/:id', auth, applyTenantFilter, polizaController.actualizarPoliza);
 router.delete('/:id', auth, applyTenantFilter, polizaController.eliminarPoliza);

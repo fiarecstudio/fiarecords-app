@@ -69,9 +69,6 @@ module.exports = async (socket, next) => {
             return next(new Error('Authentication error: Usuario no válido'));
         }
         
-        // Log de conexión exitosa
-        console.log(`[Socket Auth] ✅ Usuario autenticado: ${socket.user.username} (${socket.user.id}) - Empresa: ${socket.user.empresaId}`);
-        
         next();
         
     } catch (error) {

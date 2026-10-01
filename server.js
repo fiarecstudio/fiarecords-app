@@ -15,7 +15,6 @@ let limiters = {};
 try {
   limiters = require('./middleware/rateLimit');
 } catch (error) {
-  console.log('⚠️ Aviso: No se encontró middleware de Rate Limit.');
 }
 
 const app = express();
@@ -193,28 +192,6 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
     
-    // --- ELIMINAR ÍNDICE FANTASMA singletonId_1 ---
-    mongoose.connection.once('open', async () => {
-      try {
-        await mongoose.connection.db.collection('configuracions').dropIndex('singletonId_1');
-        console.log('✅ Índice fantasma "singletonId_1" eliminado con éxito de la base de datos.');
-      } catch (error) {
-        // Si el índice ya no existe o ya fue borrado, ignoramos el error de forma segura
-        console.log('ℹ️ El índice "singletonId_1" no existía o ya había sido eliminado.');
-      }
-      
-      // --- SINCRONIZAR ÍNDICES CON EL SCHEMA ACTUAL ---
-      try {
-        const Configuracion = require('./models/Configuracion');
-        await Configuracion.syncIndexes();
-        console.log('✅ Índices de Configuracion sincronizados con el schema actual.');
-      } catch (syncError) {
-        console.warn('⚠️ Error al sincronizar índices:', syncError.message);
-      }
-      // ------------------------------------------------
-    });
-    // ---------------------------------------------
-    
     // --- ACTIVAR BACKUP AUTOMÁTICO ---
     const { iniciarCronJob } = require('./utils/backupDatabase');
     iniciarCronJob();
@@ -240,8 +217,6 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
 
 // --- 7. Graceful Shutdown para Render ---
 const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} recibido. Cerrando servidor gracefulmente...`);
-  
   // Forzar cierre después de 10 segundos si algo se queda colgado
   const forceExit = setTimeout(() => {
     console.error('❌ Forzando cierre después de timeout...');
@@ -253,12 +228,8 @@ const gracefulShutdown = async (signal) => {
     const { getIO } = require('./socket');
     try {
       const io = getIO();
-      console.log('[Shutdown] Desconectando sockets...');
       io.disconnectSockets(true); // true = forzar cierre
-      console.log('✅ Sockets desconectados');
     } catch (e) {
-      // Socket.io podría no estar inicializado
-      console.log('[Shutdown] Socket.io no estaba inicializado');
     }
     
     // 2. Cerrar servidor Socket.io
@@ -266,7 +237,6 @@ const gracefulShutdown = async (signal) => {
       const io = getIO();
       await new Promise((resolve) => {
         io.close(() => {
-          console.log('✅ Servidor Socket.io cerrado');
           resolve();
         });
       });
@@ -278,7 +248,6 @@ const gracefulShutdown = async (signal) => {
     if (server) {
       await new Promise((resolve) => {
         server.close(() => {
-          console.log('✅ Servidor HTTP cerrado');
           resolve();
         });
       });
@@ -286,10 +255,8 @@ const gracefulShutdown = async (signal) => {
     
     // 4. Cerrar conexión MongoDB
     await mongoose.connection.close(false);
-    console.log('✅ Conexión MongoDB cerrada');
     
     clearTimeout(forceExit);
-    console.log('✅ Shutdown completado exitosamente');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error durante graceful shutdown:', error.message);

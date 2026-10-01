@@ -56,8 +56,6 @@ const initializeSocket = (httpServer) => {
         
         // Handler principal de conexiones
         chatNamespace.on('connection', (socket) => {
-            console.log(`🔌 Nueva conexión Socket: ${socket.user.username} (${socket.id})`);
-            
             // FASE 2: Handlers base
             require('./handlers/connection')(socket, chatNamespace);
             require('./handlers/rooms')(socket, chatNamespace);
@@ -79,8 +77,6 @@ const initializeSocket = (httpServer) => {
         const supportNamespace = io.of('/support');
         
         supportNamespace.on('connection', async (socket) => {
-            console.log(`🔌 Visitante conectado a soporte: ${socket.id}`);
-
             const { ticketId, empresaId, visitorName, visitorEmail, token } = socket.handshake.auth;
             let authenticatedUser = null;
             let resolvedEmpresaId = empresaId;
@@ -103,12 +99,11 @@ const initializeSocket = (httpServer) => {
                             empresaId: user.empresaId,
                             email: user.email || null
                         };
-                        console.log(`[Support] Usuario autenticado en /support: ${socket.user.username} (${socket.user.id})`);
                     } else {
-                        console.warn('[Support] Token válido pero usuario no encontrado:', decoded.id || decoded._id);
+                        console.error('[Support] Token válido pero usuario no encontrado:', decoded.id || decoded._id);
                     }
                 } catch (error) {
-                    console.warn('[Support] Token inválido en /support:', error.message);
+                    console.error('[Support] Token inválido en /support:', error.message);
                 }
             }
 
@@ -119,7 +114,6 @@ const initializeSocket = (httpServer) => {
                 socket.visitorName = authenticatedUser.username || authenticatedUser.nombre || visitorName || 'Cliente';
                 socket.visitorEmail = authenticatedUser.email || visitorEmail || '';
                 socket.visitorId = authenticatedUser._id;
-                console.log(`[Support] Sesión autenticada asignada a socket: ${socket.visitorId}`);
             } else {
                 // Visitante anónimo
                 const visitorId = new mongoose.Types.ObjectId();
@@ -128,14 +122,12 @@ const initializeSocket = (httpServer) => {
                 socket.empresaId = resolvedEmpresaId;
                 socket.visitorName = visitorName;
                 socket.visitorEmail = visitorEmail;
-                console.log(`[Support] Visitante asignado ID: ${visitorId}`);
             }
 
             // Unir a la sala de la conversación si tiene ticketId
             if (socket.ticketId) {
                 const roomName = `conversation:${socket.ticketId}`;
                 socket.join(roomName);
-                console.log(`[Support] ${authenticatedUser ? 'Usuario' : 'Visitante'} unido a sala: ${roomName}`);
 
                 supportNamespace.to(roomName).emit('visitor:online', {
                     ticketId: socket.ticketId,
@@ -148,7 +140,6 @@ const initializeSocket = (httpServer) => {
             if (ticketId) {
                 const roomName = `conversation:${ticketId}`;
                 socket.join(roomName);
-                console.log(`[Support] Visitante unido a sala: ${roomName}`);
                 
                 // Notificar a la sala que el visitante está online
                 supportNamespace.to(roomName).emit('visitor:online', {
@@ -177,8 +168,6 @@ const initializeSocket = (httpServer) => {
 
                     // Si no existe conversación y el usuario está autenticado, crear conversación directa
                     if (!conversation && isAuthenticated) {
-                        console.log(`[Support] Usuario autenticado ${socket.user.username} enviando mensaje sin conversación, creando conversación directa...`);
-
                         // Buscar agentes disponibles para la conversación
                         const agents = await Usuario.find({
                             empresaId: socket.empresaId,
@@ -223,8 +212,6 @@ const initializeSocket = (httpServer) => {
                         // Unir al socket a la sala
                         const roomName = `conversation:${conversation._id}`;
                         socket.join(roomName);
-
-                        console.log(`[Support] Conversación directa creada: ${conversation._id} para usuario ${socket.user.username}`);
                     } else if (!conversation) {
                         // Visitante anónimo sin ticket
                         socket.emit('error', { message: 'Ticket no encontrado' });
@@ -291,8 +278,6 @@ const initializeSocket = (httpServer) => {
                         unreadIncrement: 1
                     });
 
-                    console.log(`[Support] Mensaje enviado por ${isAuthenticated ? socket.user.username : socket.visitorName} a conversación ${conversation._id}`);
-
                 } catch (error) {
                     console.error('[Support] Error enviando mensaje:', error);
                     socket.emit('error', { message: 'Error enviando mensaje' });
@@ -306,13 +291,11 @@ const initializeSocket = (httpServer) => {
                     const roomName = `conversation:${ticketId}`;
                     socket.join(roomName);
                     socket.ticketId = ticketId;
-                    console.log(`[Support] Visitante unido manualmente a: ${roomName}`);
                     socket.emit('ticket:joined', { ticketId, success: true });
                 }
             });
             
             socket.on('disconnect', () => {
-                console.log(`🔌 Visitante desconectado de soporte: ${socket.id}`);
                 if (socket.ticketId) {
                     supportNamespace.to(`conversation:${socket.ticketId}`).emit('visitor:offline', {
                         ticketId: socket.ticketId,

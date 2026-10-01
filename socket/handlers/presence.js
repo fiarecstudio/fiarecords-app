@@ -284,5 +284,4 @@ module.exports = function(socket, io) {
         });
     });
     
-    console.log(`[Presence] Handlers registrados para: ${socket.user.username}`);
 };

@@ -18,6 +18,10 @@ const clienteSchema = new mongoose.Schema({
         required: [true, 'El nombre del cliente es obligatorio'],
         trim: true
     },
+    origen: {
+        type: String,
+        trim: true
+    },
     rfc: {
         type: String,
         trim: true,

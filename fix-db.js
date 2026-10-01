@@ -115,7 +115,6 @@ async function fixDatabase() {
             console.log('   1. Reinicia el servidor Node.js: npm start');
             console.log('   2. Recarga el navegador: Ctrl+Shift+R');
             console.log('   3. Abre DevTools (F12) y revisa la Console');
-            console.log('   4. Busca logs [Config] para ver que tipoDashboard: "seguros" está siendo enviado');
             console.log('');
         } else {
             throw new Error('❌ FALLO EN VERIFICACIÓN: Los datos no fueron actualizados correctamente');

@@ -17,6 +17,40 @@ async function procesarNotificacionesDiarias() {
             const polizas = await Poliza.find({ empresaId, deletedAt: null });
 
             for (const poliza of polizas) {
+                // FASE 4: NOTIFICACIONES DE RECIBOS PENDIENTES (Regla de 3 días)
+                if (poliza.recibos && poliza.recibos.length > 0) {
+                    for (const recibo of poliza.recibos) {
+                        if (recibo.estadoRecibo === 'pendiente' && recibo.fechaVencimientoRecibo) {
+                            const fVencimientoRecibo = new Date(recibo.fechaVencimientoRecibo);
+                            fVencimientoRecibo.setHours(0, 0, 0, 0);
+                            const diasParaRecibo = Math.ceil((fVencimientoRecibo - hoy) / (1000 * 60 * 60 * 24));
+
+                            // Regla de 3 días: enviar notificación exactamente 3 días antes
+                            if (diasParaRecibo === 3) {
+                                // Verificar si ya se envió notificación hoy para este recibo
+                                const yaNotificadoHoy = poliza.historialNotificaciones && poliza.historialNotificaciones.some(notif => {
+                                    const notifDate = new Date(notif.fecha);
+                                    notifDate.setHours(0, 0, 0, 0);
+                                    return notif.tipo === 'pago_pendiente' && 
+                                           notif.numeroRecibo === recibo.numeroRecibo &&
+                                           notifDate.getTime() === hoy.getTime();
+                                });
+
+                                if (!yaNotificadoHoy) {
+                                    await generarYEnviarNotificacion({
+                                        empresaId,
+                                        poliza,
+                                        tipo: 'pago_pendiente',
+                                        mensaje: `Estimado(a) ${poliza.cliente}, tiene un recibo pendiente (${recibo.numeroRecibo} - ${recibo.periodoCobertura}) por $${recibo.montoRecibo?.toFixed(2)} con fecha límite el ${fVencimientoRecibo.toLocaleDateString()}.`,
+                                        diasRestantes: diasParaRecibo,
+                                        numeroRecibo: recibo.numeroRecibo
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // NOTIFICACIONES DE VENCIMIENTO DE PÓLIZA
                 if (poliza.fechas && poliza.fechas.vencimiento) {
                     const fVenc = new Date(poliza.fechas.vencimiento);
@@ -48,63 +82,17 @@ async function procesarNotificacionesDiarias() {
                     }
                 }
 
-                // NOTIFICACIONES DE PAGOS PENDIENTES - CORREGIDO PARA FRECUENCIA DE PAGO
-                if (poliza.proximoPago) {
-                    const fPago = new Date(poliza.proximoPago);
-                    fPago.setHours(0, 0, 0, 0);
-                    const diasParaPago = Math.ceil((fPago - hoy) / (1000 * 60 * 60 * 24));
-
-                    // Verificar si está en el ciclo de pago correcto según tipoPago
-                    let debeCobrarHoy = false;
-                    const hoyMes = hoy.getMonth();
-                    const hoyAnio = hoy.getFullYear();
-                    const pagoMes = fPago.getMonth();
-                    const pagoAnio = fPago.getFullYear();
-
-                    switch (poliza.tipoPago) {
-                        case 'mensual':
-                            // Cobrar cada mes si el mes coincide
-                            debeCobrarHoy = (pagoMes === hoyMes && pagoAnio === hoyAnio);
-                            break;
-                        case 'trimestral':
-                            // Cobrar cada 3 meses
-                            const mesesDiferencia = (hoyAnio - pagoAnio) * 12 + (hoyMes - pagoMes);
-                            debeCobrarHoy = (mesesDiferencia % 3 === 0 && mesesDiferencia >= 0);
-                            break;
-                        case 'semestral':
-                            // Cobrar cada 6 meses
-                            const mesesDiferenciaSem = (hoyAnio - pagoAnio) * 12 + (hoyMes - pagoMes);
-                            debeCobrarHoy = (mesesDiferenciaSem % 6 === 0 && mesesDiferenciaSem >= 0);
-                            break;
-                        case 'anual':
-                        default:
-                            // Cobrar cada año
-                            debeCobrarHoy = (pagoAnio === hoyAnio);
-                            break;
-                    }
-
-                    // Usar configuración dinámica de recordatoriosPago para pagos
-                    const recordatorios = poliza.recordatoriosPago || [7, 3, 1, 0];
-
-                    // Enviar notificación si está en el ciclo correcto y coincide con recordatorios
-                    if (debeCobrarHoy && recordatorios.includes(diasParaPago) && diasParaPago >= 0) {
-                        // Verificar si ya se envió notificación hoy para este día específico
-                        const yaNotificadoHoy = poliza.historialNotificaciones && poliza.historialNotificaciones.some(notif => {
-                            const notifDate = new Date(notif.fecha);
-                            notifDate.setHours(0, 0, 0, 0);
-                            return notif.tipo === 'pago_pendiente' && 
-                                   notifDate.getTime() === hoy.getTime() &&
-                                   notif.diasRestantes === diasParaPago;
-                        });
-
-                        if (!yaNotificadoHoy) {
-                            await generarYEnviarNotificacion({
-                                empresaId,
-                                poliza,
-                                tipo: 'pago_pendiente',
-                                mensaje: `Estimado(a) ${poliza.cliente}, tiene un pago pendiente por su póliza No. ${poliza.numeroPoliza} con fecha límite el ${fPago.toLocaleDateString()}.`,
-                                diasRestantes: diasParaPago
-                            });
+                // FASE 4: CANCELACIÓN POR EXPIRACIÓN DE PERIODO DE GRACIA
+                if (poliza.fechas?.vencimiento && poliza.fechaLimiteRenovacion) {
+                    const fLimite = new Date(poliza.fechaLimiteRenovacion);
+                    fLimite.setHours(0, 0, 0, 0);
+                    
+                    // Si la fecha actual pasó el límite de renovación
+                    if (hoy > fLimite) {
+                        if (poliza.estado !== 'Cancelada') {
+                            console.log(`[Cron Notificaciones] Cancelando póliza ${poliza.numeroPoliza} - periodo de gracia expirado`);
+                            poliza.estado = 'Cancelada';
+                            await poliza.save();
                         }
                     }
                 }
@@ -180,8 +168,8 @@ async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje, di
 }
 
 function iniciarCronNotificaciones() {
-    cron.schedule('0 8 * * *', () => { procesarNotificacionesDiarias(); });
-    console.log('✅ Cron de Notificaciones programado a las 8:00 AM');
+    cron.schedule('0 9 * * *', () => { procesarNotificacionesDiarias(); });
+    console.log('✅ Cron de Notificaciones programado a las 9:00 AM');
 }
 
 module.exports = { iniciarCronNotificaciones, procesarNotificacionesDiarias };

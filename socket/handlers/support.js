@@ -126,8 +126,6 @@ module.exports = function(socket, io) {
                 });
             }
             
-            console.log(`[Support] Ticket creado: ${conversation._id} por ${socket.user.username}`);
-            
         } catch (error) {
             console.error('[Support] Error creando ticket:', error);
             if (typeof callback === 'function') {
@@ -243,8 +241,6 @@ module.exports = function(socket, io) {
                 });
             }
             
-            console.log(`[Support] Ticket ${ticketId} asignado a ${newAgent.username}`);
-            
         } catch (error) {
             console.error('[Support] Error asignando agente:', error);
             if (typeof callback === 'function') {
@@ -353,8 +349,6 @@ module.exports = function(socket, io) {
                 });
             }
             
-            console.log(`[Support] Ticket ${ticketId} -> ${status} por ${socket.user.username}`);
-            
         } catch (error) {
             console.error('[Support] Error actualizando estado:', error);
             if (typeof callback === 'function') {
@@ -434,5 +428,4 @@ module.exports = function(socket, io) {
         }
     });
     
-    console.log(`[Support] Handlers registrados para: ${socket.user.username}`);
 };

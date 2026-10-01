@@ -26,10 +26,7 @@ router.get('/public/logo', async (req, res) => {
         // Si no hay empresaId válido, usar fallback automático a empresa principal
         if (!empresaId) {
             empresaId = await getEmpresaPrincipalId();
-            console.log(`[Logo] ID no válido o no proporcionado. Usando fallback automático: ${empresaId}`);
         }
-        
-        console.log(`[Logo] Procesando petición para empresaId: ${empresaId || 'FALLBACK FINAL'}`);
         
         let config = null;
         let configPrincipal = null;
@@ -49,18 +46,15 @@ router.get('/public/logo', async (req, res) => {
             });
             // Si la empresa no tiene logo, usar el de la principal (fallback)
             if (!config || !config.logoBase64) {
-                console.log(`[Logo] Empresa ${empresaId} no tiene logo propio, aplicando fallback de FIA RECORDS`);
                 config = configPrincipal;
             }
         } else {
             // Usar empresa principal directamente
-            console.log('[Logo] Sirviendo logo de empresa principal (FIA RECORDS)');
             config = configPrincipal;
         }
         
         // ÚLTIMO RESGUARDO: Si aún no hay config, buscar CUALQUIER configuración
         if (!config) {
-            console.warn('[Logo] No se encontró config principal, buscando cualquier configuración disponible');
             config = await Configuracion.findOne({ logoBase64: { $exists: true, $ne: null } });
         }
         
@@ -70,8 +64,6 @@ router.get('/public/logo', async (req, res) => {
             faviconBase64: config && config.faviconBase64 ? config.faviconBase64 : null,
             empresaId: empresaId || empresaPrincipalId || null
         };
-        
-        console.log(`[Logo] Respuesta enviada: logo=${respuesta.logoBase64 ? 'SÍ' : 'NO'}, favicon=${respuesta.faviconBase64 ? 'SÍ' : 'NO'}`);
         
         res.json(respuesta);
     } catch (err) { 
@@ -98,16 +90,6 @@ const isAdmin = (req, res, next) => {
 // FASE 3: Helper para obtener/crear config de la empresa del usuario
 const getOrCreateConfig = async (empresaId) => {
     try {
-        console.log('[Config] getOrCreateConfig llamado con empresaId:', empresaId);
-        
-        // 🔥 FUERZA BRUTA: Eliminar índice fantasma singletonId_1
-        try {
-            await Configuracion.collection.dropIndex('singletonId_1');
-            console.log('🔥 Índice singletonId_1 destruido en caliente (getOrCreateConfig).');
-        } catch (e) {
-            // Se ignora silenciosamente si no existe
-        }
-        
         // Validar que sea un ObjectId válido
         if (!mongoose.Types.ObjectId.isValid(empresaId)) {
             console.error('[Config] empresaId inválido:', empresaId);
@@ -120,7 +102,6 @@ const getOrCreateConfig = async (empresaId) => {
             { new: true, upsert: true, setDefaultsOnInsert: true }
         );
         
-        console.log('[Config] Configuración obtenida/creada:', config ? 'SÍ' : 'NO');
         return config;
     } catch (err) {
         console.error('[Config] Error en getOrCreateConfig:', err);
@@ -130,9 +111,6 @@ const getOrCreateConfig = async (empresaId) => {
 
 router.get('/', async (req, res) => {
     try {
-        console.log('[Config] GET / llamado');
-        console.log('[Config] req.user:', req.user);
-        
         // FASE 4: Identidad Automática - Priorizar header o usar empresa del usuario
         const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
 
@@ -144,25 +122,19 @@ router.get('/', async (req, res) => {
             finalEmpresaId = req.user.empresaId;
         }
 
-        console.log('[Config] Usuario:', req.user?.username, '| Rol:', req.user?.role, '| Header:', headerId, '| Empresa Final:', finalEmpresaId);
-
         if (!finalEmpresaId) {
             console.error('[Config] No se pudo determinar la empresa');
             return res.status(400).json({ error: 'No se pudo determinar la empresa' });
         }
-
-        console.log('[Config] Llamando a getOrCreateConfig con:', finalEmpresaId);
         let config = await getOrCreateConfig(finalEmpresaId);
 
         // FASE 4: Fallback de logo - Si la empresa no tiene logo, usar el de FIA RECORDS
         if (!config || !config.logoBase64) {
-            console.log(`[Config] Empresa ${finalEmpresaId} no tiene logo, buscando fallback de FIA RECORDS`);
             try {
                 const empresaPrincipal = await Empresa.findOne({ isDefault: true });
                 if (empresaPrincipal) {
                     const configPrincipal = await Configuracion.findOne({ empresaId: empresaPrincipal._id });
                     if (configPrincipal && configPrincipal.logoBase64) {
-                        console.log('[Config] Aplicando logo de FIA RECORDS como fallback');
                         if (!config) {
                             // Si config es null, crear un objeto por defecto con el empresaId
                             config = { empresaId: finalEmpresaId };
@@ -189,11 +161,6 @@ router.get('/', async (req, res) => {
         try {
             const empresa = await Empresa.findById(finalEmpresaId);
             if (empresa) {
-                console.log('[Config] ✅ Empresa encontrada por ID:', finalEmpresaId);
-                console.log('[Config] empresa.moduloSeguros:', empresa.moduloSeguros);
-                console.log('[Config] empresa.tipoDashboard (RAW):', empresa.tipoDashboard);
-                console.log('[Config] Tipo de empresa.tipoDashboard:', typeof empresa.tipoDashboard);
-                
                 if (config.toObject) {
                     config = config.toObject();
                 }
@@ -214,17 +181,12 @@ router.get('/', async (req, res) => {
                     };
                 }
                 
-                // LOG DE CONFIRMACIÓN
-                console.log('[Config] Después de asignación, config.tipoDashboard:', config.tipoDashboard);
-                console.log('[Config] Después de asignación, config.moduloSeguros:', config.moduloSeguros);
             } else {
-                console.warn('[Config] ❌ Empresa NO encontrada para ID:', finalEmpresaId);
                 if (config.toObject) {
                     config = config.toObject();
                 }
                 config.moduloSeguros = false;
                 config.tipoDashboard = 'estandar';
-                console.log('[Config] Asignados defaults: tipoDashboard=estandar, moduloSeguros=false');
             }
         } catch (empresaError) {
             console.error('[Config] 🔥 ERROR al obtener empresa:', empresaError);
@@ -233,7 +195,6 @@ router.get('/', async (req, res) => {
             }
             config.moduloSeguros = false;
             config.tipoDashboard = 'estandar';
-            console.log('[Config] POR ERROR: Asignados defaults: tipoDashboard=estandar, moduloSeguros=false');
         }
 
         // Logs eliminados para evitar spam en terminal del servidor

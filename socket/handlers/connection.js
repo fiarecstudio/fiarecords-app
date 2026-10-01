@@ -8,9 +8,6 @@ const Conversation = require('../../models/Conversation');
  */
 
 module.exports = (socket, io) => {
-    console.log('[Connection] Handler connection ejecutado');
-    console.log(`[Connection] Handler cargado para: ${socket.user?.username || 'unknown'}`);
-    
     // ============================================================
     // CONEXIÓN INICIAL
     // ============================================================
@@ -19,7 +16,6 @@ module.exports = (socket, io) => {
     // Formato: user:{userId}
     const userRoom = `user:${socket.user.id}`;
     socket.join(userRoom);
-    console.log(`[Connection] ${socket.user.username} unido a sala personal: ${userRoom}`);
     
     // Notificar a la empresa que el usuario está online
     // Todos los usuarios de la misma empresa reciben la notificación
@@ -41,16 +37,7 @@ module.exports = (socket, io) => {
     // ============================================================
     
     socket.on('user:getConversations', async (data, callback) => {
-        console.log('[Connection] ===========================================');
-        console.log('[Connection] EVENTO user:getConversations RECIBIDO');
-        console.log('[Connection] Usuario:', socket.user?.username);
-        console.log('[Connection] Data:', data);
-        console.log('[Connection] Callback es funcion:', typeof callback === 'function');
-        
         try {
-            console.log('[Connection] EmpresaId:', socket.user.empresaId);
-            console.log('[Connection] UserId:', socket.user.id);
-            
             // REGLA DE ORO: Filtrar por empresaId
             const conversations = await Conversation.find({
                 empresaId: socket.user.empresaId,
@@ -66,8 +53,6 @@ module.exports = (socket, io) => {
             conversations.forEach(conv => {
                 socket.join(`conversation:${conv._id}`);
             });
-
-            console.log(`[Connection] ${socket.user.username} unido a ${conversations.length} conversaciones`);
 
             const response = {
                 success: true,
@@ -85,16 +70,11 @@ module.exports = (socket, io) => {
                     )?.unreadCount || 0
                 }))
             };
-
-            console.log('[Connection] Enviando respuesta con', response.conversations.length, 'conversaciones');
-            console.log('[Connection] DEBUG - Primera conversación:', JSON.stringify(response.conversations[0], null, 2));
             
             // SIEMPRE ejecutar el callback si es función
             if (typeof callback === 'function') {
                 callback(response);
-                console.log('[Connection] ✅ Callback ejecutado correctamente');
             } else {
-                console.log('[Connection] ⚠️ No hay callback, enviando evento broadcast');
                 socket.emit('user:conversationsLoaded', response);
             }
             
@@ -112,8 +92,6 @@ module.exports = (socket, io) => {
                 socket.emit('user:conversationsError', errorResponse);
             }
         }
-        
-        console.log('[Connection] ===========================================');
     });
     
     // ============================================================
@@ -121,8 +99,6 @@ module.exports = (socket, io) => {
     // ============================================================
     
     socket.on('disconnect', async (reason) => {
-        console.log(`[Connection] Desconexión: ${socket.user.username} - Razón: ${reason}`);
-        
         // Notificar offline a la empresa
         if (socket.user.empresaId) {
             const empresaRoom = `empresa:${socket.user.empresaId}`;

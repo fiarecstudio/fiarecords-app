@@ -1,5 +1,130 @@
 const mongoose = require('mongoose');
 
+// ==========================================
+// SUBDOCUMENTO: RECIBO (FASE 1 - NUEVO)
+// ==========================================
+const reciboSchema = new mongoose.Schema({
+    numeroRecibo: {
+        type: String
+    },
+    periodoCobertura: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    montoRecibo: {
+        type: Number,
+        required: true,
+        min: [0, 'El monto del recibo debe ser mayor o igual a 0']
+    },
+    fechaEmision: {
+        type: Date,
+        default: Date.now
+    },
+    fechaVencimientoRecibo: {
+        type: Date,
+        required: true
+    },
+    fechaPago: {
+        type: Date,
+        default: null
+    },
+    estadoRecibo: {
+        type: String,
+        enum: ['pendiente', 'pagado', 'atrasado', 'cancelado'],
+        default: 'pendiente'
+    },
+    metodoPago: {
+        type: String,
+        trim: true
+    },
+    reciboUrl: {
+        type: String,
+        trim: true
+    },
+    enlacePago: {
+        type: String,
+        trim: true,
+        default: null
+    },
+    historialNotificaciones: [{
+        fecha: {
+            type: Date,
+            default: Date.now
+        },
+        tipo: {
+            type: String,
+            enum: ['vencimiento_recibo', 'pago_pendiente', 'recordatorio_manual'],
+            required: true
+        },
+        canal: {
+            type: String,
+            enum: ['email', 'whatsapp', 'sms'],
+            required: true
+        },
+        mensaje: {
+            type: String,
+            required: true
+        },
+        estado: {
+            type: String,
+            enum: ['enviada', 'fallida'],
+            default: 'enviada'
+        },
+        diasRestantes: {
+            type: Number,
+            default: 0
+        },
+        enviadoManualmente: {
+            type: Boolean,
+            default: false
+        }
+    }]
+}, { _id: true });
+
+// ==========================================
+// SUBDOCUMENTO: RENOVACION (FASE 1 - NUEVO)
+// ==========================================
+const renovacionSchema = new mongoose.Schema({
+    anioRenovacion: {
+        type: Number,
+        required: true
+    },
+    fechaRenovacion: {
+        type: Date,
+        default: Date.now
+    },
+    primaAnterior: {
+        type: Number,
+        required: true
+    },
+    primaNueva: {
+        type: Number,
+        required: true
+    },
+    documentoDriveId: {
+        type: String,
+        trim: true
+    },
+    motivoRenovacion: {
+        type: String,
+        enum: ['renovacion_normal', 'cambio_cobertura', 'cambio_aseguradora', 'cambio_prima'],
+        default: 'renovacion_normal'
+    },
+    notas: {
+        type: String,
+        trim: true
+    },
+    estadoRenovacion: {
+        type: String,
+        enum: ['pendiente', 'en_proceso', 'completada', 'cancelada'],
+        default: 'pendiente'
+    }
+}, { _id: true });
+
+// ==========================================
+// ESQUEMA PRINCIPAL: POLIZA
+// ==========================================
 const polizaSchema = new mongoose.Schema({
     empresaId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -13,10 +138,20 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'El ID de asesor es obligatorio'],
         index: true
     },
+    asesorNombre: {
+        type: String,
+        trim: true,
+        default: 'General'
+    },
     clienteId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Cliente',
         index: true
+    },
+    polizaAnteriorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Poliza',
+        default: null
     },
     numeroPoliza: {
         type: String,
@@ -41,7 +176,7 @@ const polizaSchema = new mongoose.Schema({
     },
     tipoPago: {
         type: String,
-        enum: ['anual', 'trimestral', 'mensual'],
+        enum: ['anual', 'trimestral', 'semestral', 'mensual'],
         default: 'anual'
     },
     tipoSeguro: {
@@ -81,13 +216,29 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'La prima total es obligatoria'],
         min: [0, 'La prima total debe ser mayor o igual a 0']
     },
+    primaNeta: {
+        type: Number,
+        default: 0
+    },
     estado: {
         type: String,
         enum: {
-            values: ['Activa', 'Por Vencer', 'Vencida', 'Cancelada', 'Renovada'],
+            values: ['Activa', 'Por Vencer', 'Vencida', 'Cancelada', 'Renovada', 'PendienteRenovacion'],
             message: '{VALUE} no es un estado válido'
         },
         default: 'Activa'
+    },
+    // FASE 1: PERIODO DE GRACIA Y RENOVACION
+    diasGracia: {
+        type: Number,
+        default: 30,
+        min: [0, 'Los días de gracia deben ser mayores o iguales a 0'],
+        comment: 'Días permitidos después del vencimiento antes de cancelar la póliza'
+    },
+    fechaLimiteRenovacion: {
+        type: Date,
+        default: null,
+        comment: 'Fecha límite para renovar antes de la cancelación (vencimiento + diasGracia)'
     },
     documentoDriveId: {
         type: String,
@@ -101,6 +252,7 @@ const polizaSchema = new mongoose.Schema({
     pagos: [{
         fechaPago: { type: Date },
         monto: { type: Number, required: true },
+        reciboId: { type: mongoose.Schema.Types.ObjectId, default: null },
         estado: {
             type: String,
             enum: ['pagado', 'pendiente', 'atrasado'],
@@ -200,6 +352,17 @@ const polizaSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: null
+    },
+    // FASE 1: SUBDOCUMENTOS (NUEVOS - COMPATIBLES CON PAGOS[] EXISTENTE)
+    recibos: {
+        type: [reciboSchema],
+        default: [],
+        comment: 'Array de recibos estructurados (FASE 1 - nuevo, coexiste con pagos[])'
+    },
+    renovaciones: {
+        type: [renovacionSchema],
+        default: [],
+        comment: 'Array de historial de renovaciones anuales (FASE 1 - nuevo)'
     }
 }, {
     timestamps: true
@@ -213,6 +376,9 @@ polizaSchema.index({ empresaId: 1, deletedAt: 1 });
 // Índices optimizados para cobranza diaria
 polizaSchema.index({ empresaId: 1, 'fechas.vencimiento': 1 }, { partialFilterExpression: { deletedAt: null } });
 polizaSchema.index({ empresaId: 1, proximoPago: 1 }, { partialFilterExpression: { deletedAt: null } });
+// FASE 1: Índices para nuevos campos
+polizaSchema.index({ empresaId: 1, fechaLimiteRenovacion: 1 }, { partialFilterExpression: { deletedAt: null } });
+polizaSchema.index({ empresaId: 1, estado: 1, 'recibos.estadoRecibo': 1 }, { partialFilterExpression: { deletedAt: null } });
 
 // Middleware pre-save para limitar el tamaño de historialNotificaciones
 polizaSchema.pre('save', function(next) {

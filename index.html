@@ -131,12 +131,12 @@
           <img id="app-logo" class="logo-dinamico" src="https://placehold.co/180x80?text=FiaRecords" alt="Logotipo">
       </div>
       
-      <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" href="#" onclick="app.mostrarSeccion('registrar-proyecto')">
-        <i class="bi bi-plus-circle me-2"></i>
-        <span>Nuevo Proyecto</span>
-      </a>
-      
       <div class="sidebar-nav" id="sidebar-nav-container"></div>
+
+            <a id="btn-nuevo-proyecto-sidebar" class="nav-link nav-link-sidebar" href="#" onclick="app.mostrarSeccion('registrar-proyecto')">
+                <i class="bi bi-plus-circle me-2"></i>
+                <span>Nuevo Proyecto</span>
+            </a>
       
       <div class="sidebar-footer mt-auto">
         <div class="theme-toggle-container mb-3 px-2">
@@ -391,6 +391,7 @@
                                     <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
                                 </tbody>
                             </table>
+                            <div id="paginacionGestionPagos" class="d-flex justify-content-between align-items-center mt-3 p-2 rounded paginacion-container"></div>
                         </div>
                     </div>
                     <div id="vista-pagos-pendientes">
@@ -1229,6 +1230,18 @@
                         </div>
                     </div>
                     <div class="card-body pt-3">
+                        <div class="row g-2 align-items-end mb-3">
+                            <div class="col-12 col-lg-6">
+                                <label for="archivoImportacionPolizas" class="form-label fw-semibold">Importar Excel de Cobranza</label>
+                                <input id="archivoImportacionPolizas" class="form-control" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                            </div>
+                            <div class="col-12 col-lg-auto">
+                                <button class="btn btn-outline-success" type="button" onclick="app.importarPolizasExcel()">
+                                    <i class="bi bi-cloud-arrow-up"></i> Subir y Sincronizar
+                                </button>
+                            </div>
+                            <div id="resultadoImportacionPolizas" class="col-12 small" role="status" aria-live="polite"></div>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
@@ -1237,16 +1250,18 @@
                                         <th>Cliente</th>
                                         <th>Aseguradora</th>
                                         <th>Vencimiento</th>
+                                        <th>Próximo Pago</th>
                                         <th>Estado</th>
                                         <th>Notificaciones</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaPolizasBody">
-                                    <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
+                                    <tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">Cargando...</td></tr>
                                 </tbody>
                             </table>
                         </div>
+                        <div id="paginacionPolizas" class="d-flex justify-content-between align-items-center mt-3 p-2 rounded shadow-sm paginacion-container"></div>
                     </div>
                 </div>
             </section>
@@ -1304,6 +1319,7 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div id="paginacionCobranza" class="d-flex justify-content-between align-items-center mt-3 p-2 rounded shadow-sm paginacion-container"></div>
                         <div id="sin-cobranza" class="text-center text-muted py-4" style="display:none;">
                             <i class="bi bi-check-circle fs-1 text-success"></i>
                             <p class="mt-2">No hay pólizas que requieran gestión hoy.</p>
@@ -1379,6 +1395,7 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div id="paginacionClientes" class="d-flex justify-content-between align-items-center mt-3 p-2 rounded shadow-sm paginacion-container"></div>
                     </div>
                 </div>
             </section>
