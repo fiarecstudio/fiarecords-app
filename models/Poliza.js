@@ -220,6 +220,11 @@ const polizaSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    gastosExpedicion: {
+        type: Number,
+        default: 0,
+        min: [0, 'Los gastos de expedición deben ser mayores o iguales a 0']
+    },
     estado: {
         type: String,
         enum: {

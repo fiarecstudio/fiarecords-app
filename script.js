@@ -2711,7 +2711,7 @@ let proyectoIdEnEdicion = null;
             showCancelButton: true, 
             confirmButtonText: 'Sí, Agendar', 
             cancelButtonText: 'Cancelar',
-            preConfirm: () => {
+            preConfirm: async () => {
                 const fecha = document.getElementById('swal-fecha').value;
                 const hora = document.getElementById('swal-hora').value;
                 if (!fecha || !hora) {
@@ -6951,7 +6951,7 @@ Fecha de firma: {{FECHA}}`;
         });
 
         if (result.isDenied) {
-            await mostrarFormularioPoliza({});
+            await abrirModalPoliza();
             return;
         }
 
@@ -6999,7 +6999,7 @@ Fecha de firma: {{FECHA}}`;
         });
 
         if (pdfResult.isConfirmed && pdfResult.value) {
-            await mostrarFormularioPoliza(pdfResult.value);
+            await abrirModalPoliza(null, pdfResult.value);
         }
     }
 
@@ -7011,7 +7011,8 @@ Fecha de firma: {{FECHA}}`;
             'poliza-inciso': datos.inciso || '1',
             'poliza-paquete': datos.paquete || datos.tipoSeguro || '',
             'poliza-prima': datos.primaTotal || '',
-            'poliza-prima-neta': datos.primaNeta || ''
+            'poliza-prima-neta': datos.primaNeta || '',
+            'gastosExpedicion': datos.gastosExpedicion || ''
         };
 
         // NO sobrescribir el campo de cliente si ya tiene un valor (viene del CRM)
@@ -7085,6 +7086,104 @@ Fecha de firma: {{FECHA}}`;
             document.getElementById(id)?.addEventListener('input', calcularAbono);
         });
         }
+
+    function configurarVisibilidadCamposPago() {
+        const frecuencia = document.getElementById('poliza-tipo-pago');
+        const camposPago = document.getElementById('poliza-payment-fields');
+        if (!frecuencia || !camposPago) return;
+
+        const actualizarVisibilidad = () => {
+            camposPago.style.display = frecuencia.value === 'anual' ? 'none' : 'grid';
+        };
+        frecuencia.addEventListener('change', actualizarVisibilidad);
+        frecuencia.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function calcularPlanRecibosVistaPrevia(poliza, {
+        costoTotal,
+        primaNeta,
+        pagoInicial,
+        gastosExpedicion,
+        tipoPago,
+        fechaInicio
+    }) {
+        const cuotasPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
+        const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+        const totalCuotas = cuotasPorTipo[tipoPago] || 1;
+        const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
+        const distribuirSaldo = (saldo, cantidad) => {
+            if (cantidad <= 0) return [];
+            const montos = [];
+            let asignado = 0;
+            for (let indice = 0; indice < cantidad; indice++) {
+                const monto = indice === cantidad - 1
+                    ? redondearCentavos(saldo - asignado)
+                    : redondearCentavos(saldo / cantidad);
+                montos.push(monto);
+                asignado = redondearCentavos(asignado + monto);
+            }
+            return montos;
+        };
+
+        const costoInicial = redondearCentavos(Math.max(0, costoTotal));
+        const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
+            ? Math.min(costoInicial, redondearCentavos(pagoInicial))
+            : null;
+        const montosPlan = montoCuotaInicial === null
+            ? distribuirSaldo(costoInicial, totalCuotas)
+            : [montoCuotaInicial, ...distribuirSaldo(
+                redondearCentavos(costoInicial - montoCuotaInicial),
+                totalCuotas - 1
+            )];
+        const gastosTotales = costoTotal / 1.16 - primaNeta;
+        const gastosPorRecibo = !Number.isNaN(gastosExpedicion) && gastosExpedicion > 0
+            ? gastosExpedicion
+            : gastosTotales / totalCuotas;
+        const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
+        const fechaBase = new Date(`${fechaInicio}T00:00:00`);
+        const recibosActuales = Array.isArray(poliza?.recibos) ? poliza.recibos : [];
+        const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
+            const reciboActual = recibosActuales.find(recibo => {
+                const numero = Number(String(recibo.numeroRecibo || '').match(/\d+/)?.[0]);
+                const periodo = Number(String(recibo.periodoCobertura || '').match(/^(\d+)/)?.[1]);
+                return (Number.isFinite(numero) && numero > 0 && numero - 1 === indicePlan)
+                    || (!Number.isFinite(numero) && Number.isFinite(periodo) && periodo > 0 && periodo - 1 === indicePlan);
+            }) || recibosActuales[indicePlan];
+            const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
+            const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
+            const mes = mesObjetivo % 12;
+            const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+            const montoRecibo = montosPlan[indicePlan];
+            return {
+                ...(reciboActual || {}),
+                numeroRecibo: `REC-${indicePlan + 1}`,
+                periodoCobertura: `${indicePlan + 1}/${totalCuotas}`,
+                montoRecibo,
+                montoPagoNeto: Math.round((montoRecibo / 1.16 - gastosPorRecibo) * 100) / 100,
+                fechaVencimientoRecibo: reciboActual?.fechaVencimientoRecibo
+                    || reciboActual?.fechaVencimiento
+                    || new Date(anio, mes, Math.min(fechaBase.getDate(), ultimoDia)),
+                estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
+            };
+        });
+        const recibosPagados = recibos.filter(recibo =>
+            String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
+        );
+        const recibosPendientes = recibos.filter(recibo =>
+            String(recibo.estadoRecibo || '').toLowerCase() === 'pendiente'
+        );
+
+        return {
+            recibos,
+            sumaPagados: redondearCentavos(recibosPagados.reduce(
+                (total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0
+            )),
+            saldoRestante: redondearCentavos(recibosPendientes.reduce(
+                (total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0
+            )),
+            cuotasPendientes: recibosPendientes.length
+        };
+    }
 
     function obtenerClaveBackupAsesores() {
         const userInfo = getUserRoleAndId();
@@ -7167,7 +7266,15 @@ Fecha de firma: {{FECHA}}`;
         return usuario.role === 'admin' ? `${nombre} (Admin)` : nombre;
     }
 
-    async function mostrarFormularioPoliza(datosPrellenados = {}) {
+    async function abrirModalPoliza(poliza = null, datosIniciales = {}) {
+        const editando = Boolean(poliza?._id);
+        const datosPrellenados = editando ? {
+            ...poliza,
+            fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
+            fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
+            gastosExpedicion: poliza.gastosExpedicion || 0,
+            clienteId: poliza.clienteId?._id || poliza.clienteId || null
+        } : datosIniciales;
         const clienteId = datosPrellenados.clienteId || null;
 
         // Cargar lista de asesores para el select
@@ -7183,12 +7290,13 @@ Fecha de firma: {{FECHA}}`;
             console.warn('[mostrarFormularioPoliza] No se pudieron cargar asesores:', error);
         }
 
+        let recibosRecalculados = false;
         const { value: formValues } = await Swal.fire({
-            title: 'Registrar Nueva Póliza',
+            title: editando ? 'Editar Póliza' : 'Registrar Nueva Póliza',
             width: 'min(920px, 95vw)',
             customClass: { popup: 'poliza-swal-popup' },
             html: `
-                <div class="text-start">
+                <div class="text-start poliza-form-grid">
                     <input type="hidden" id="poliza-cliente-id" value="${clienteId || ''}">
                     <div class="mb-3">
                         <label class="form-label">Número de Póliza *</label>
@@ -7257,7 +7365,11 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label">Prima Neta</label>
                         <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta || ''}" placeholder="0.00">
                     </div>
-                    <div class="row">
+                    <div class="mb-3">
+                        <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
+                        <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion || ''}" placeholder="66.58">
+                    </div>
+                    <div id="poliza-payment-fields" class="row poliza-payment-fields">
                         <div class="col-6 mb-3">
                             <label class="form-label">Monto de Abono</label>
                             <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono || ''}" placeholder="0.00">
@@ -7280,15 +7392,30 @@ Fecha de firma: {{FECHA}}`;
                     <div class="mb-3">
                         <label class="form-label">Asesor</label>
                         <select id="poliza-asesor" class="swal2-input">
-                            <option value="">Seleccionar asesor...</option>
+                            <option value="">${editando ? 'Mantener asesor actual' : 'Seleccionar asesor...'}</option>
                             ${asesoresOptions}
                         </select>
                     </div>
+                    ${editando ? `
+                    <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mt-3 p-3 bg-light rounded border">
+                        <button type="button" id="btnRecalcularRecibos" class="btn btn-warning">Recalcular Recibos</button>
+                        <button type="button" id="btnCancelarPoliza" class="btn btn-danger btn-sm">Cancelar Póliza</button>
+                    </div>
+                    <div id="vistaPreviaRecibos" class="mt-3" hidden>
+                        <h6 class="text-uppercase text-secondary small fw-bold">Vista previa del calendario</h6>
+                        <p id="resumenVistaPreviaRecibos" class="small mb-2"></p>
+                        <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead><tr><th>Recibo</th><th>Periodo</th><th>Monto</th><th>Pago Neto</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+                                <tbody id="tablaVistaPreviaRecibos"></tbody>
+                            </table>
+                        </div>
+                    </div>` : ''}
                 </div>
             `,
             focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: 'Guardar',
+            confirmButtonText: editando ? 'Actualizar' : 'Guardar',
             cancelButtonText: 'Cancelar',
             didOpen: () => {
                 // Mapear datos después de que el modal se abre
@@ -7296,8 +7423,62 @@ Fecha de firma: {{FECHA}}`;
                     mapearDatosAFormulario(datosPrellenados);
                 }
                 configurarAutoCalculoPrima();
+                configurarVisibilidadCamposPago();
+                if (!editando) return;
+
+                document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
+                    if (!confirm('¿Seguro que deseas cancelar esta póliza? Los recibos pendientes se anularán.')) return;
+                    event.currentTarget.disabled = true;
+                    try {
+                        const respuesta = await ejecutarOEncolar(`/api/polizas/${poliza._id}/cancelar`, { method: 'PUT' });
+                        Swal.close();
+                        await Swal.fire('Póliza cancelada', respuesta.message || 'La póliza se canceló correctamente.', 'success');
+                        await cargarPolizas(true);
+                    } catch (error) {
+                        event.currentTarget.disabled = false;
+                        Swal.fire('Error', error.message || 'No se pudo cancelar la póliza.', 'error');
+                    }
+                });
+
+                document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
+                    event.preventDefault();
+                    const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
+                    const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
+                    const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
+                    const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
+                    const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
+                    const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
+                    if (nuevoCostoTotal <= 0 || !nuevaFechaInicio) {
+                        Swal.showValidationMessage('Captura un costo total y una fecha de inicio válidos.');
+                        return;
+                    }
+
+                    const resultadoPreview = calcularPlanRecibosVistaPrevia(poliza, {
+                        costoTotal: nuevoCostoTotal,
+                        primaNeta: nuevaPrimaNeta,
+                        pagoInicial: nuevoPagoInicial,
+                        gastosExpedicion: nuevoGastosExpedicion,
+                        tipoPago: nuevoTipoPago,
+                        fechaInicio: nuevaFechaInicio
+                    });
+                    planRecibosCambio = resultadoPreview.recibos;
+                    poliza.recibos = planRecibosCambio;
+                    recibosRecalculados = true;
+                    document.getElementById('tablaVistaPreviaRecibos').innerHTML = planRecibosCambio.map(recibo => `
+                        <tr>
+                            <td>${escapeHTML(recibo.numeroRecibo)}</td>
+                            <td>${escapeHTML(recibo.periodoCobertura)}</td>
+                            <td>$${Number(recibo.montoRecibo).toFixed(2)}</td>
+                            <td>$${Number(recibo.montoPagoNeto).toFixed(2)}</td>
+                            <td>${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()}</td>
+                            <td>${escapeHTML(recibo.estadoRecibo)}</td>
+                        </tr>`).join('');
+                    document.getElementById('resumenVistaPreviaRecibos').textContent =
+                        `Pagado corregido: $${resultadoPreview.sumaPagados.toFixed(2)} · Saldo: $${resultadoPreview.saldoRestante.toFixed(2)}`;
+                    document.getElementById('vistaPreviaRecibos').hidden = false;
+                });
             },
-            preConfirm: () => {
+            preConfirm: async () => {
                 const numero = document.getElementById('poliza-numero').value.trim();
                 const cliente = document.getElementById('poliza-cliente').value.trim();
                 const clienteEmail = document.getElementById('poliza-email').value.trim();
@@ -7311,6 +7492,7 @@ Fecha de firma: {{FECHA}}`;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                 const primaTotal = document.getElementById('poliza-prima').value;
                 const primaNeta = document.getElementById('poliza-prima-neta').value;
+                const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
                 const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
@@ -7323,7 +7505,25 @@ Fecha de firma: {{FECHA}}`;
                     return;
                 }
 
+                if (editando && asesorId) {
+                    try {
+                        await ejecutarOEncolar(`/api/polizas/${poliza._id}/asignar-asesor`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ nuevoAsesorId: asesorId })
+                        });
+                    } catch (error) {
+                        Swal.showValidationMessage('Error al reasignar asesor: ' + error.message);
+                        return;
+                    }
+                }
+
                 return {
+                    ...(editando ? {
+                        recalcularRecibos: recibosRecalculados,
+                        recibos: recibosRecalculados
+                            ? planRecibosCambio.map(({ _indicePlan, ...recibo }) => recibo)
+                            : undefined
+                    } : {}),
                     numeroPoliza: numero,
                     cliente,
                     clienteEmail,
@@ -7339,11 +7539,12 @@ Fecha de firma: {{FECHA}}`;
                     },
                     primaTotal: parseFloat(primaTotal),
                     primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
+                    gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                     primerPago: primerPago ? parseFloat(primerPago) : null,
                     diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3,
                     diasGracia: diasGracia ? parseInt(diasGracia) : 30,
-                    asesorId: asesorId || null,
+                    ...(!editando ? { asesorId: asesorId || null } : {}),
                     clienteId: clienteIdValue
                 };
             }
@@ -7356,6 +7557,16 @@ Fecha de firma: {{FECHA}}`;
         }
 
         try {
+            if (editando) {
+                await ejecutarOEncolar(`/api/polizas/${poliza._id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(formValues)
+                });
+                await Swal.fire('Éxito', 'Póliza actualizada correctamente', 'success');
+                await cargarPolizas(true);
+                return;
+            }
+
             let url = '/api/polizas';
             let method = 'POST';
 
@@ -8109,7 +8320,7 @@ Fecha de firma: {{FECHA}}`;
     }
 
     // Función para editar póliza
-    async function editarPoliza(id) {
+    async function editarPolizaModalLegacy(id) {
         try {
             // Obtener datos de la póliza
             const poliza = await fetchAPI(`/api/polizas/${id}`);
@@ -8141,7 +8352,8 @@ Fecha de firma: {{FECHA}}`;
                 fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
                 fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
                 primaTotal: poliza.primaTotal || 0,
-                                primaNeta: poliza.primaNeta || 0,
+                primaNeta: poliza.primaNeta || 0,
+                gastosExpedicion: poliza.gastosExpedicion || 0,
                 montoAbono: poliza.montoAbono || 0,
                 primerPago: poliza.primerPago || 0,
                 diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3,
@@ -8149,7 +8361,7 @@ Fecha de firma: {{FECHA}}`;
                 enlacePago: poliza.enlacePago || ''
             };
 
-            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoTipoPago, nuevaFechaInicio }) => {
+            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoGastosExpedicion, nuevoTipoPago, nuevaFechaInicio }) => {
                 const costoTotal = nuevoCostoTotal;
                 const primaNeta = nuevaPrimaNeta;
                 const pagoInicial = nuevoPagoInicial;
@@ -8162,8 +8374,15 @@ Fecha de firma: {{FECHA}}`;
                 const subtotalPoliza = costoTotal / 1.16;
                 const gastosTotales = subtotalPoliza - primaNeta;
                 const cantidadRecibos = totalCuotas;
-                const gastosPorRecibo = cantidadRecibos > 0 ? gastosTotales / cantidadRecibos : 0;
-                const calcularPagoNeto = monto => Math.round((monto / 1.16 - gastosPorRecibo) * 100) / 100;
+                const gastosManuales = nuevoGastosExpedicion;
+                const gastosPorRecibo = (!Number.isNaN(gastosManuales) && gastosManuales > 0)
+                    ? gastosManuales
+                    : cantidadRecibos > 0 ? gastosTotales / cantidadRecibos : 0;
+                const calcularPagoNeto = monto => {
+                    const subtotalRecibo = monto / 1.16;
+                    const pagoNetoExacto = subtotalRecibo - gastosPorRecibo;
+                    return Math.round(pagoNetoExacto * 100) / 100;
+                };
                 const distribuirSaldo = (saldo, cantidad) => {
                     if (cantidad <= 0) return [];
                     const montos = [];
@@ -8327,7 +8546,11 @@ Fecha de firma: {{FECHA}}`;
                                         <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta}" placeholder="0.00">
                                     </div>
                                 </div>
-                                <div class="row g-2">
+                                <div class="mb-3">
+                                    <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
+                                    <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion}" placeholder="66.58">
+                                </div>
+                                <div id="poliza-payment-fields" class="row g-2 poliza-payment-fields">
                                     <div class="col-12 col-lg-6 mb-3">
                                         <label class="form-label">Monto de Abono</label>
                                         <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.montoAbono}" placeholder="0.00">
@@ -8376,6 +8599,7 @@ Fecha de firma: {{FECHA}}`;
                 cancelButtonText: 'Cancelar',
                 didOpen: () => {
                     configurarAutoCalculoPrima();
+                    configurarVisibilidadCamposPago();
                     document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
                         if (!confirm('¿Seguro que deseas cancelar esta póliza? Los recibos pendientes se anularán.')) return;
 
@@ -8396,6 +8620,7 @@ Fecha de firma: {{FECHA}}`;
                         const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                         const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
                         const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
+                        const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
                         const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
                         const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
                         if (nuevoCostoTotal <= 0) {
@@ -8411,6 +8636,7 @@ Fecha de firma: {{FECHA}}`;
                             nuevoCostoTotal,
                             nuevaPrimaNeta,
                             nuevoPagoInicial,
+                            nuevoGastosExpedicion,
                             nuevoTipoPago,
                             nuevaFechaInicio
                         });
@@ -8461,6 +8687,7 @@ Fecha de firma: {{FECHA}}`;
                     const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                     const primaTotal = document.getElementById('poliza-prima').value;
                     const primaNeta = document.getElementById('poliza-prima-neta').value;
+                    const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
                     const primerPago = document.getElementById('poliza-primer-pago').value;
                     const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
@@ -8505,6 +8732,7 @@ Fecha de firma: {{FECHA}}`;
                         },
                         primaTotal: parseFloat(primaTotal),
                         primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
+                        gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                         primerPago: primerPago ? parseFloat(primerPago) : null,
                         diasAnticipacionAviso: parseInt(diasAnticipacionAviso) || 3,
@@ -8527,6 +8755,16 @@ Fecha de firma: {{FECHA}}`;
                     Swal.fire('Error', error.message || 'No se pudo actualizar la póliza', 'error');
                 }
             }
+        } catch (error) {
+            console.error('[editarPoliza] Error al obtener póliza:', error);
+            Swal.fire('Error', error.message || 'No se pudo cargar la póliza', 'error');
+        }
+    }
+
+    async function editarPoliza(id) {
+        try {
+            const poliza = await fetchAPI(`/api/polizas/${id}`);
+            await abrirModalPoliza(poliza);
         } catch (error) {
             console.error('[editarPoliza] Error al obtener póliza:', error);
             Swal.fire('Error', error.message || 'No se pudo cargar la póliza', 'error');
@@ -8818,8 +9056,9 @@ Fecha de firma: {{FECHA}}`;
         const recibos = poliza.recibos || [];
         const montoLegacy = Number(poliza.saldoRestante ?? poliza.primaTotal ?? 0);
         const subtotalPoliza = (Number(poliza.primaTotal) || 0) / 1.16;
+        const gastosTotales = subtotalPoliza - (Number(poliza.primaNeta) || 0);
         const gastosPorRecibo = recibos.length > 0
-            ? (subtotalPoliza - (Number(poliza.primaNeta) || 0)) / recibos.length
+            ? (Number(poliza.gastosExpedicion) > 0 ? Number(poliza.gastosExpedicion) : gastosTotales / recibos.length)
             : 0;
         const calcularPagoNeto = monto => Math.round((((Number(monto) || 0) / 1.16) - gastosPorRecibo) * 100) / 100;
         
@@ -8834,14 +9073,14 @@ Fecha de firma: {{FECHA}}`;
                 
                 return `
                     <tr>
-                        <td style="white-space: nowrap;"><strong>${r.numeroRecibo || 'N/A'}</strong></td>
-                        <td style="white-space: nowrap;">${r.periodoCobertura || 'N/A'}</td>
-                        <td style="white-space: nowrap;">$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
-                        <td style="white-space: nowrap;">$${calcularPagoNeto(r.montoRecibo).toFixed(2)}</td>
-                        <td style="white-space: nowrap;">${fechaVencimiento}</td>
-                        <td style="white-space: nowrap;">${fechaPago}</td>
-                        <td style="white-space: nowrap;"><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
-                        <td style="white-space: nowrap;">
+                        <td><strong>${r.numeroRecibo || 'N/A'}</strong></td>
+                        <td>${r.periodoCobertura || 'N/A'}</td>
+                        <td>$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
+                        <td>$${calcularPagoNeto(r.montoRecibo).toFixed(2)}</td>
+                        <td>${fechaVencimiento}</td>
+                        <td>${fechaPago}</td>
+                        <td><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
+                        <td>
                             ${estadoRecibo === 'pendiente' ? 
                                 `<button class="btn btn-sm btn-success" onclick="app.pagarRecibo('${poliza._id}', ${index})" title="Pagar Recibo"><i class="bi bi-cash"></i></button>` : 
                                 '<span class="text-muted"><i class="bi bi-check-circle"></i></span>'
@@ -8850,7 +9089,7 @@ Fecha de firma: {{FECHA}}`;
                     </tr>
                 `;
             }).join('')
-            : `<tr><td colspan="8" class="text-center text-muted" style="white-space: nowrap;">No hay recibos generados. <button class="btn btn-sm btn-outline-success ms-2" onclick="app.marcarCobranzaResuelta('${poliza._id}', ${montoLegacy})"><i class="bi bi-cash"></i> Registrar cobro legacy</button></td></tr>`;
+            : `<tr><td colspan="8" class="text-center text-muted">No hay recibos generados. <button class="btn btn-sm btn-outline-success ms-2" onclick="app.marcarCobranzaResuelta('${poliza._id}', ${montoLegacy})"><i class="bi bi-cash"></i> Registrar cobro legacy</button></td></tr>`;
 
         const proximoPagoHTML = poliza.proximoPago 
             ? `<div class="alert alert-info mb-3 d-flex justify-content-between align-items-center">
@@ -8863,22 +9102,24 @@ Fecha de firma: {{FECHA}}`;
 
         const { value: formValues } = await Swal.fire({
             title: `Recibos - Póliza ${poliza.numeroPoliza}`,
+            width: 'min(90vw, 800px)',
+            customClass: { popup: 'recibos-swal-popup' },
             html: `
                 <div class="text-start">
                     ${proximoPagoHTML}
                     <div class="mb-3">
                         <label class="form-label fw-bold">Calendario de Recibos</label>
-                        <div class="table-responsive"><table class="table table-sm table-bordered">
+                        <div class="table-responsive"><table class="table table-sm table-bordered" style="width: 100%;">
                             <thead>
                                 <tr>
-                                    <th style="white-space: nowrap;">No. Recibo</th>
-                                    <th style="white-space: nowrap;">Periodo</th>
-                                    <th style="white-space: nowrap;">Monto</th>
-                                    <th style="white-space: nowrap;">Pago Neto (Base Comisión)</th>
-                                    <th style="white-space: nowrap;">Vencimiento</th>
-                                    <th style="white-space: nowrap;">Pagado</th>
-                                    <th style="white-space: nowrap;">Estado</th>
-                                    <th style="white-space: nowrap;">Acciones</th>
+                                    <th>No. Recibo</th>
+                                    <th>Periodo</th>
+                                    <th>Monto</th>
+                                    <th>Pago Neto (Base Comisión)</th>
+                                    <th>Vencimiento</th>
+                                    <th>Pagado</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="tablaRecibos">
@@ -8897,9 +9138,8 @@ Fecha de firma: {{FECHA}}`;
                 </div>
             `,
             focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: 'Cerrar',
-            cancelButtonText: false
+            showCancelButton: false,
+            confirmButtonText: 'Cerrar'
         });
     }
 
@@ -9872,7 +10112,7 @@ Fecha de firma: {{FECHA}}`;
         });
 
         if (result.isDenied) {
-            await mostrarFormularioPoliza({ clienteId, cliente: clienteNombre, clienteEmail, clienteTelefono });
+            await abrirModalPoliza(null, { clienteId, cliente: clienteNombre, clienteEmail, clienteTelefono });
             return;
         }
 
@@ -9925,7 +10165,7 @@ Fecha de firma: {{FECHA}}`;
             pdfResult.value.cliente = clienteNombre;
             pdfResult.value.clienteEmail = clienteEmail;
             pdfResult.value.clienteTelefono = clienteTelefono;
-            await mostrarFormularioPoliza(pdfResult.value);
+            await abrirModalPoliza(null, pdfResult.value);
         }
     }
 

@@ -1413,6 +1413,112 @@ body.dark-mode .fc-theme-standard .fc-scrollgrid {
 body.dark-mode .fc-day-today {
     background-color: rgba(13, 110, 253, 0.1) !important;
 }
+
+/* Matte modal surfaces */
+.modal-content,
+.swal2-popup:not(.swal2-toast),
+body.dark-mode .modal-content,
+body.dark-mode .swal2-popup:not(.swal2-toast),
+[data-bs-theme="dark"] .modal-content {
+    background-color: #1a1a1a !important;
+    color: #f1f1f1 !important;
+    border: 1px solid #333 !important;
+    border-radius: 12px;
+}
+
+.modal-header,
+.modal-footer {
+    border-color: #333 !important;
+}
+
+.modal-title,
+.swal2-title,
+.swal2-html-container,
+.swal2-popup label,
+.swal2-popup .form-label {
+    color: #f1f1f1 !important;
+}
+
+.swal2-popup .text-muted,
+.swal2-popup .text-secondary {
+    color: #b7b7b7 !important;
+}
+
+.swal2-popup .swal2-input,
+.swal2-popup .swal2-select,
+.swal2-popup input,
+.swal2-popup select,
+.swal2-popup textarea {
+    background-color: #242424 !important;
+    color: #f1f1f1 !important;
+    border: 1px solid #3a3a3a !important;
+}
+
+.poliza-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 15px;
+}
+
+.poliza-form-grid > .row,
+.poliza-form-grid > .poliza-payment-fields {
+    grid-column: 1 / -1;
+}
+
+.poliza-payment-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.poliza-payment-fields > [class*="col-"] {
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+}
+
+.recibos-swal-popup {
+    width: min(90vw, 800px) !important;
+    max-width: 800px !important;
+}
+
+.recibos-swal-popup .table-responsive {
+    overflow-x: hidden;
+}
+
+.recibos-swal-popup #tablaRecibos {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.recibos-swal-popup #tablaRecibos th,
+.recibos-swal-popup #tablaRecibos td {
+    padding: 0.4rem 0.3rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 576px) {
+    .poliza-form-grid,
+    .poliza-payment-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .poliza-form-grid > .row,
+    .poliza-form-grid > .poliza-payment-fields {
+        grid-column: 1;
+    }
+
+    .recibos-swal-popup .table-responsive {
+        overflow-x: auto;
+    }
+
+    .recibos-swal-popup #tablaRecibos {
+        min-width: 650px;
+    }
+}
 body.dark-mode .fc-button-primary {
     background-color: #2A2A2A !important;
     border-color: #444444 !important;

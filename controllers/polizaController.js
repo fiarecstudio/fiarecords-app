@@ -190,12 +190,15 @@ const regenerarRecibosPendientes = ({ recibosActuales = [], primaTotal, fechaIni
     });
 };
 
-const calcularPagoNeto = (montoRecibo, primaNeta, primaTotal) => {
+const calcularPagoNeto = (montoRecibo, primaNeta, primaTotal, gastosExpedicion, cantidadRecibos = 1) => {
     const primaTotalNumerica = Number(primaTotal) || 0;
-    const factorRatio = primaTotalNumerica
-        ? Number(((Number(primaNeta) || 0) / primaTotalNumerica).toFixed(5))
-        : 0;
-    return Number(((Number(montoRecibo) || 0) * factorRatio).toFixed(2));
+    const subtotalPoliza = primaTotalNumerica / 1.16;
+    const gastosTotales = subtotalPoliza - (Number(primaNeta) || 0);
+    const gastosPorRecibo = Number(gastosExpedicion) > 0
+        ? Number(gastosExpedicion)
+        : gastosTotales / Math.max(1, Number(cantidadRecibos) || 1);
+    const subtotalRecibo = (Number(montoRecibo) || 0) / 1.16;
+    return Math.round((subtotalRecibo - gastosPorRecibo) * 100) / 100;
 };
 
 
@@ -261,7 +264,7 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
 
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
@@ -301,6 +304,7 @@ const crearPoliza = async (req, res) => {
             fechas: fechasNormalizadas,
             primaTotal,
             primaNeta: Number(primaNeta) || 0,
+            gastosExpedicion: Number(gastosExpedicion) || 0,
             documentoDriveId,
             inciso,
             paquete,
@@ -820,6 +824,9 @@ const actualizarPoliza = async (req, res) => {
 
         if (datosActualizacion.primaNeta !== undefined) {
             datosActualizacion.primaNeta = Number(datosActualizacion.primaNeta) || 0;
+        }
+        if (datosActualizacion.gastosExpedicion !== undefined) {
+            datosActualizacion.gastosExpedicion = Number(datosActualizacion.gastosExpedicion) || 0;
         }
 
         if (datosActualizacion.fechas) {
@@ -3181,7 +3188,9 @@ const exportarReporteExcel = async (req, res) => {
 
             // Generar filas con los recibos reales; usar pagos configurados en pólizas legacy.
             pagosExportar.forEach(pago => {
-                const montoPagoNeto = calcularPagoNeto(pago.montoPago, poliza.primaNeta, poliza.primaTotal);
+                const montoPagoNeto = calcularPagoNeto(
+                    pago.montoPago, poliza.primaNeta, poliza.primaTotal, poliza.gastosExpedicion, pagosExportar.length
+                );
                 worksheet.addRow({
                     numeroPoliza: poliza.numeroPoliza,
                     cliente: poliza.cliente,
@@ -3455,7 +3464,9 @@ const exportarReportePDF = async (req, res) => {
                 }));
 
             pagosExportar.forEach((pago) => {
-                const montoPagoNeto = calcularPagoNeto(pago.montoPago, poliza.primaNeta, poliza.primaTotal);
+                const montoPagoNeto = calcularPagoNeto(
+                    pago.montoPago, poliza.primaNeta, poliza.primaTotal, poliza.gastosExpedicion, pagosExportar.length
+                );
                 const data = [
                     poliza.numeroPoliza || '',
                     poliza.cliente || '',
