@@ -511,13 +511,15 @@ const importarPolizasExcel = async (req, res) => {
                 const numeroPolizaTrim = numeroPoliza.trim();
                 const filtroPoliza = { empresaId, numeroPoliza: numeroPolizaTrim, deletedAt: null };
                 let poliza = await Poliza.findOne(filtroPoliza);
-                const primaTotal = grupo.datos.primaTotal
-                    ?? (grupo.recibos.reduce((total, recibo) => total + recibo.montoRecibo, 0));
+                const primaTotal = Number(poliza?.primaTotal) > 0
+                    ? poliza.primaTotal
+                    : grupo.datos.primaTotal
+                        ?? (grupo.recibos.reduce((total, recibo) => total + recibo.montoRecibo, 0));
                 const fechas = {
                     inicio: grupo.datos.inicio || poliza?.fechas?.inicio,
                     vencimiento: grupo.datos.vencimiento || poliza?.fechas?.vencimiento
                 };
-                const cliente = grupo.datos.cliente || poliza?.cliente;
+                const cliente = poliza?.cliente || grupo.datos.cliente;
                 if (!cliente || !fechas.inicio || !fechas.vencimiento || primaTotal == null) {
                     throw new Error('Faltan cliente, vigencias o prima total.');
                 }
@@ -540,8 +542,8 @@ const importarPolizasExcel = async (req, res) => {
                     });
                     await clienteDoc.save();
                 } else {
-                    if (grupo.datos.telefono) clienteDoc.telefono = grupo.datos.telefono;
-                    if (grupo.datos.email) clienteDoc.email = grupo.datos.email;
+                    if (!clienteDoc.telefono && grupo.datos.telefono) clienteDoc.telefono = grupo.datos.telefono;
+                    if (!clienteDoc.email && grupo.datos.email) clienteDoc.email = grupo.datos.email;
                     if (!clienteDoc.asesorId) clienteDoc.asesorId = asesorId;
                     await clienteDoc.save();
                 }
@@ -616,23 +618,27 @@ const importarPolizasExcel = async (req, res) => {
                         recibos: []
                     });
                 } else {
-                    poliza.asesorId = asesorPolizaId;
-                    poliza.asesorNombre = socioExcel || poliza.asesorNombre || 'General';
-                    poliza.cliente = clienteDoc.nombre;
-                    poliza.clienteId = clienteDoc._id;
-                    poliza.clienteTelefono = grupo.datos.telefono || clienteDoc.telefono || poliza.clienteTelefono || '';
-                    poliza.clienteEmail = grupo.datos.email || clienteDoc.email || poliza.clienteEmail || '';
-                    poliza.aseguradora = grupo.datos.aseguradora || poliza.aseguradora;
-                    poliza.tipoPago = grupo.datos.tipoPago ? normalizarFormaPago(grupo.datos.tipoPago) : poliza.tipoPago;
-                    poliza.tipoSeguro = grupo.datos.tipoSeguro
+                    poliza.asesorId = poliza.asesorId || asesorPolizaId;
+                    poliza.asesorNombre = poliza.asesorNombre || socioExcel || 'General';
+                    poliza.cliente = poliza.cliente || clienteDoc.nombre;
+                    poliza.clienteId = poliza.clienteId || clienteDoc._id;
+                    poliza.clienteTelefono = poliza.clienteTelefono || clienteDoc.telefono || grupo.datos.telefono || '';
+                    poliza.clienteEmail = poliza.clienteEmail || clienteDoc.email || grupo.datos.email || '';
+                    poliza.aseguradora = poliza.aseguradora || grupo.datos.aseguradora || 'Sin especificar';
+                    poliza.tipoPago = poliza.tipoPago || (grupo.datos.tipoPago ? normalizarFormaPago(grupo.datos.tipoPago) : 'anual');
+                    poliza.tipoSeguro = poliza.tipoSeguro || (grupo.datos.tipoSeguro
                         ? normalizarTipoSeguro(grupo.datos.tipoSeguro)
-                        : poliza.tipoSeguro || 'Vehicular';
-                    poliza.fechas = fechas;
-                    poliza.primaTotal = primaTotal;
-                    poliza.primaNeta = grupo.datos.primaNeta ?? 0;
+                        : 'Vehicular');
+                    poliza.fechas = {
+                        inicio: poliza.fechas?.inicio || fechas.inicio,
+                        vencimiento: poliza.fechas?.vencimiento || fechas.vencimiento
+                    };
+                    poliza.primaTotal = Number(poliza.primaTotal) > 0 ? poliza.primaTotal : primaTotal;
+                    poliza.primaNeta = Number(poliza.primaNeta) > 0 ? poliza.primaNeta : grupo.datos.primaNeta ?? 0;
                 }
 
-                for (let index = 0; index < grupo.recibos.length; index++) {
+                const preservarRecibosExistentes = !esNueva && (poliza.recibos?.length || 0) > 0;
+                for (let index = 0; !preservarRecibosExistentes && index < grupo.recibos.length; index++) {
                     const importado = grupo.recibos[index];
                     const reciboExistente = poliza.recibos.find(recibo =>
                         texto(recibo.numeroRecibo).toUpperCase() === importado.numeroRecibo.toUpperCase()
@@ -695,7 +701,7 @@ const importarPolizasExcel = async (req, res) => {
                     .filter(Boolean)
                     .sort((a, b) => new Date(a) - new Date(b))[0] || null;
                 poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
-                poliza.estado = 'Activa';
+                poliza.estado = poliza.estado || 'Activa';
                 const datosUpsert = {
                     empresaId,
                     numeroPoliza: numeroPolizaTrim,
@@ -712,12 +718,14 @@ const importarPolizasExcel = async (req, res) => {
                     primaTotal: poliza.primaTotal,
                     primaNeta: poliza.primaNeta ?? 0,
                     estado: 'Activa',
-                    recibos: poliza.recibos.map(recibo => recibo.toObject ? recibo.toObject() : recibo),
-                    pagos: poliza.pagos.map(pago => pago.toObject ? pago.toObject() : pago),
                     saldoRestante: poliza.saldoRestante,
                     proximoPago: poliza.proximoPago,
                     estadoPago: poliza.estadoPago
                 };
+                if (!preservarRecibosExistentes) {
+                    datosUpsert.recibos = poliza.recibos.map(recibo => recibo.toObject ? recibo.toObject() : recibo);
+                    datosUpsert.pagos = poliza.pagos.map(pago => pago.toObject ? pago.toObject() : pago);
+                }
                 const opcionesUpsert = {
                     upsert: true,
                     new: true,
@@ -779,7 +787,7 @@ const obtenerPolizas = async (req, res) => {
         let filtro = {
             empresaId,
             deletedAt: null,
-            estado: { $nin: ['Cancelada', 'Renovada'] }
+            estado: { $ne: 'Renovada' }
         };
         
         // RBAC: Si el usuario es admin, puede ver todas las pólizas de la empresa
@@ -2204,6 +2212,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         {
                             $project: {
                                 _id: 1,
+                                asesorId: 1,
                                 numeroPoliza: 1,
                                 cliente: 1,
                                 clienteTelefono: 1,
@@ -2230,6 +2239,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         {
                             $project: {
                                 _id: 1,
+                                asesorId: 1,
                                 numeroPoliza: 1,
                                 cliente: 1,
                                 clienteTelefono: 1,
@@ -2256,6 +2266,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         {
                             $project: {
                                 _id: 1,
+                                asesorId: 1,
                                 numeroPoliza: 1,
                                 cliente: 1,
                                 clienteTelefono: 1,
@@ -2289,6 +2300,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
 
         const mapPolizaRespuesta = (poliza) => ({
             polizaId: poliza._id,
+            asesorId: poliza.asesorId,
             numeroPoliza: poliza.numeroPoliza,
             cliente: poliza.cliente || 'Sin nombre',
             telefono: poliza.clienteTelefono || '',
@@ -3070,28 +3082,23 @@ const exportarReporteExcel = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Pólizas');
 
-        // Agregar encabezados con desglose de pagos
         worksheet.columns = [
-            { header: 'Número de Póliza', key: 'numeroPoliza', width: 20 },
-            { header: 'Cliente', key: 'cliente', width: 30 },
-            { header: 'Asesor', key: 'asesor', width: 20 },
-            { header: 'Email', key: 'clienteEmail', width: 25 },
-            { header: 'Teléfono', key: 'clienteTelefono', width: 15 },
-            { header: 'Aseguradora', key: 'aseguradora', width: 20 },
-            { header: 'Tipo de Seguro', key: 'tipoSeguro', width: 15 },
-            { header: 'Tipo de Pago', key: 'tipoPago', width: 12 },
-            { header: 'Fecha Inicio', key: 'fechaInicio', width: 15 },
-            { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 15 },
-            { header: 'Prima Total / A Cobrar', key: 'primaTotal', width: 18 },
-            { header: 'Prima Neta', key: 'primaNeta', width: 15 },
-            { header: 'Primer Pago (Enganche)', key: 'primerPago', width: 22 },
-            { header: 'Monto Abono', key: 'montoAbono', width: 15 },
-            { header: 'Estado', key: 'estado', width: 12 },
-            { header: 'No. Pago', key: 'numeroPago', width: 10 },
-            { header: 'Fecha Esperada', key: 'fechaEsperada', width: 15 },
-            { header: 'Monto Pago', key: 'montoPago', width: 12 },
-            { header: 'Pago Neto (Base Comisión)', key: 'montoPagoNeto', width: 24 },
-            { header: 'Estado Pago', key: 'estadoPago', width: 12 }
+            { header: 'MES', key: 'mes', width: 14 },
+            { header: 'SOCIO (Asesor)', key: 'socio', width: 22 },
+            { header: 'VIG INICIAL', key: 'vigInicial', width: 15 },
+            { header: 'VIG FINAL', key: 'vigFinal', width: 15 },
+            { header: 'NOMBRE DEL CLIENTE', key: 'cliente', width: 28 },
+            { header: 'RECIBO (No.)', key: 'recibo', width: 16 },
+            { header: 'FECHA LIMITE DE PAGO', key: 'fechaLimite', width: 22 },
+            { header: 'MES DE PAGO', key: 'mesPago', width: 16 },
+            { header: 'AÑO', key: 'anio', width: 10 },
+            { header: 'POLIZA', key: 'poliza', width: 20 },
+            { header: 'FORMA DE PAGO', key: 'formaPago', width: 18 },
+            { header: 'ASEGURADORA', key: 'aseguradora', width: 20 },
+            { header: 'P NETA', key: 'primaNeta', width: 15 },
+            { header: 'P TOTAL', key: 'primaTotal', width: 15 },
+            { header: 'ESTATUS', key: 'estatus', width: 14 },
+            { header: 'COMISION', key: 'comision', width: 15 }
         ];
 
         // Función para calcular número de pagos según tipo
@@ -3156,8 +3163,12 @@ const exportarReporteExcel = async (req, res) => {
             return 'Pendiente';
         };
 
-        // Agregar datos con desglose de pagos
-        let totalPagoNeto = 0;
+        const formatearFechaReporte = fecha => fecha ? new Date(fecha).toLocaleDateString('es-MX') : '';
+        const obtenerMesReporte = fecha => fecha
+            ? new Date(fecha).toLocaleDateString('es-MX', { month: 'long' }).toLocaleUpperCase('es-MX')
+            : '';
+
+        // Una fila por recibo: P TOTAL es el importe a cobrar y P NETA su base de comisión.
         polizas.forEach(poliza => {
             const numPagos = getNumeroPagos(poliza.tipoPago);
             const fechasPagos = calcularFechasPagos(poliza.fechas?.inicio, poliza.tipoPago, numPagos);
@@ -3188,61 +3199,28 @@ const exportarReporteExcel = async (req, res) => {
 
             // Generar filas con los recibos reales; usar pagos configurados en pólizas legacy.
             pagosExportar.forEach(pago => {
-                const montoPagoNeto = calcularPagoNeto(
-                    pago.montoPago, poliza.primaNeta, poliza.primaTotal, poliza.gastosExpedicion, pagosExportar.length
-                );
+                const fechaLimite = pago.fechaEsperada ? new Date(pago.fechaEsperada) : null;
                 worksheet.addRow({
-                    numeroPoliza: poliza.numeroPoliza,
+                    mes: obtenerMesReporte(poliza.fechas?.inicio),
+                    socio: poliza.asesorId?.username || poliza.asesorNombre || 'General',
+                    vigInicial: formatearFechaReporte(poliza.fechas?.inicio),
+                    vigFinal: formatearFechaReporte(poliza.fechas?.vencimiento),
                     cliente: poliza.cliente,
-                    asesor: poliza.asesorId ? poliza.asesorId.username : 'Sin Asesor',
-                    clienteEmail: poliza.clienteEmail || '',
-                    clienteTelefono: poliza.clienteTelefono || '',
+                    recibo: pago.numeroPago,
+                    fechaLimite: formatearFechaReporte(pago.fechaEsperada),
+                    mesPago: obtenerMesReporte(pago.fechaEsperada),
+                    anio: fechaLimite && !Number.isNaN(fechaLimite.getTime()) ? fechaLimite.getFullYear() : '',
+                    poliza: poliza.numeroPoliza,
+                    formaPago: poliza.tipoPago,
                     aseguradora: poliza.aseguradora,
-                    tipoSeguro: poliza.tipoSeguro,
-                    tipoPago: poliza.tipoPago,
-                    fechaInicio: poliza.fechas?.inicio ? new Date(poliza.fechas.inicio).toLocaleDateString() : '',
-                    fechaVencimiento: poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : '',
-                    primaTotal: Number(poliza.primaTotal) || 0,
-                    primaNeta: Number(poliza.primaNeta) || 0,
-                    primerPago: Number(poliza.primerPago) || 0,
-                    montoAbono: Number(poliza.montoAbono) || 0,
-                    estado: poliza.estado,
-                    numeroPago: pago.numeroPago,
-                    fechaEsperada: pago.fechaEsperada ? new Date(pago.fechaEsperada).toLocaleDateString() : '',
-                    montoPago: pago.montoPago,
-                    montoPagoNeto,
-                    estadoPago: pago.estadoPago
+                    primaNeta: calcularPagoNeto(
+                        pago.montoPago, poliza.primaNeta, poliza.primaTotal, poliza.gastosExpedicion, pagosExportar.length
+                    ),
+                    primaTotal: Number(pago.montoPago) || 0,
+                    estatus: pago.estadoPago,
+                    comision: poliza.comision ?? ''
                 });
-                totalPagoNeto = Number((totalPagoNeto + montoPagoNeto).toFixed(2));
             });
-        });
-
-        const totalPrimaTotal = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaTotal) || 0), 0);
-        const totalPrimaNeta = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaNeta) || 0), 0);
-        const rowTotal = worksheet.addRow({
-            numeroPoliza: 'TOTAL GENERAL',
-            cliente: '',
-            asesor: '',
-            clienteEmail: '',
-            clienteTelefono: '',
-            aseguradora: '',
-            tipoSeguro: '',
-            tipoPago: '',
-            fechaInicio: '',
-            fechaVencimiento: '',
-            primaTotal: totalPrimaTotal,
-            primaNeta: totalPrimaNeta,
-            primerPago: '',
-            montoAbono: '',
-            estado: '',
-            numeroPago: '',
-            fechaEsperada: '',
-            montoPago: '',
-            montoPagoNeto: totalPagoNeto,
-            estadoPago: ''
-        });
-        rowTotal.eachCell((cell) => {
-            cell.font = { bold: true };
         });
 
         // Enviar archivo

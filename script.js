@@ -3192,6 +3192,8 @@ let proyectoIdEnEdicion = null;
             if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = ''; 
             if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = ''; 
             filtroGlobalPolizas = '';
+            const busquedaPolizas = document.getElementById('filtro-busqueda-polizas');
+            if (busquedaPolizas) busquedaPolizas.value = '';
             
             if(id === 'gestion-artistas') renderPaginatedList('artistas'); 
             if(id === 'gestion-servicios') renderPaginatedList('servicios'); 
@@ -4676,6 +4678,8 @@ Fecha de firma: {{FECHA}}`;
         }
         else if (sectionId === 'polizas') {
             filtroGlobalPolizas = query;
+            const busquedaPolizas = document.getElementById('filtro-busqueda-polizas');
+            if (busquedaPolizas) busquedaPolizas.value = query;
             paginaActualPolizas = 1;
             renderizarPaginaPolizas();
         }
@@ -7770,6 +7774,7 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) return;
 
+        actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
         const polizasFiltradas = obtenerPolizasFiltradas();
 
         if (polizasFiltradas.length === 0) {
@@ -7859,15 +7864,48 @@ Fecha de firma: {{FECHA}}`;
 
     function obtenerPolizasFiltradas() {
         const consulta = filtroGlobalPolizas.trim().toLocaleLowerCase('es');
-        if (!consulta) return polizasGlobales;
-        return polizasGlobales.filter(poliza => [
-            poliza.numeroPoliza,
-            poliza.cliente,
-            poliza.asesorNombre,
-            poliza.asesorId?.username,
-            poliza.aseguradora,
-            poliza.tipoSeguro
-        ].some(valor => String(valor || '').toLocaleLowerCase('es').includes(consulta)));
+        const estatusSeleccionado = document.getElementById('filtro-estatus-polizas')?.value || '';
+        const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-polizas')?.value || '';
+        return polizasGlobales.filter(poliza => {
+            const coincideTexto = !consulta || [
+                poliza.numeroPoliza,
+                poliza.cliente,
+                poliza.asesorNombre,
+                poliza.asesorId?.username,
+                poliza.aseguradora,
+                poliza.tipoSeguro
+            ].some(valor => String(valor || '').toLocaleLowerCase('es').includes(consulta));
+            const estadoActual = poliza.estado === 'Cancelada'
+                ? 'Cancelada'
+                : poliza.estado === 'Vencida' || calcularEstado(poliza.fechas?.vencimiento).texto === 'Vencida'
+                    ? 'Vencida'
+                    : 'Activa';
+            return coincideTexto
+                && (!estatusSeleccionado || estadoActual === estatusSeleccionado)
+                && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada);
+        });
+    }
+
+    function actualizarOpcionesFiltroAseguradoras(selectId, registros) {
+        const selector = document.getElementById(selectId);
+        if (!selector) return;
+        const valorAnterior = selector.value;
+        const aseguradoras = [...new Set((registros || [])
+            .map(registro => String(registro.aseguradora || '').trim())
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'es'));
+        selector.innerHTML = '<option value="">Todas</option>' + aseguradoras
+            .map(aseguradora => `<option value="${escapeHTML(aseguradora)}">${escapeHTML(aseguradora)}</option>`)
+            .join('');
+        if (aseguradoras.includes(valorAnterior)) selector.value = valorAnterior;
+    }
+
+    function filtrarPolizasUI(query) {
+        filtroGlobalPolizas = typeof query === 'string'
+            ? query.toLocaleLowerCase('es')
+            : (document.getElementById('filtro-busqueda-polizas')?.value || '').toLocaleLowerCase('es');
+        paginaActualPolizas = 1;
+        renderizarPaginaPolizas();
     }
 
     // Función para ver historial de notificaciones
@@ -7968,6 +8006,30 @@ Fecha de firma: {{FECHA}}`;
         totales: { vencidas: 0, cobrosHoy: 0, porVencer: 0 }
     };
 
+    async function cargarOpcionesAsesorCobranza() {
+        const contenedor = document.getElementById('filtro-asesor-cobranza-container');
+        const selector = document.getElementById('filtro-asesor-cobranza');
+        if (!contenedor || !selector) return;
+        if (getUserRoleAndId().role !== 'admin') {
+            contenedor.classList.add('d-none');
+            return;
+        }
+        contenedor.classList.remove('d-none');
+        if (selector.options.length > 1) return;
+        const asesores = await obtenerAsesoresCacheados('asesores', '/api/usuarios/asesores');
+        asesores.forEach(asesor => {
+            const option = document.createElement('option');
+            option.value = asesor._id || asesor.id;
+            option.textContent = etiquetaAsesor(asesor);
+            selector.appendChild(option);
+        });
+    }
+
+    function filtrarCobranzaUI() {
+        const registros = estadoCobranza[estadoCobranza.tabActiva] || [];
+        renderizarTablaCobranza(registros, estadoCobranza.tabActiva);
+    }
+
     function initEventosCobranzaDiaria() {
         if (cobranzaDiariaEventosListos) return;
 
@@ -8060,6 +8122,15 @@ Fecha de firma: {{FECHA}}`;
                     cobrosHoy: estadoCobranza.cobrosHoy.length,
                     porVencer: estadoCobranza.porVencer.length
                 };
+                const registrosCobranza = [
+                    ...estadoCobranza.vencidas,
+                    ...estadoCobranza.cobrosHoy,
+                    ...estadoCobranza.porVencer
+                ];
+                actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-cobranza', registrosCobranza);
+                cargarOpcionesAsesorCobranza().catch(error => {
+                    if (!esErrorOffline(error)) console.warn('[Cobranza] No se pudieron cargar los asesores:', error);
+                });
 
                 if (fechaBadge && estadoCobranza.fecha) {
                     const [anio, mes, dia] = estadoCobranza.fecha.split('-').map(Number);
@@ -8129,7 +8200,12 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function renderizarTablaCobranza(polizas, tabActiva) {
-        cobranzaGlobales = Array.isArray(polizas) ? polizas : [];
+        const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
+        const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
+        cobranzaGlobales = (Array.isArray(polizas) ? polizas : []).filter(poliza =>
+            (!asesorSeleccionado || String(poliza.asesorId || '') === asesorSeleccionado)
+            && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
+        );
         paginaActualCobranza = 1;
         renderizarPaginaCobranza(tabActiva);
     }
@@ -11003,7 +11079,7 @@ Fecha de firma: {{FECHA}}`;
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
         verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
-        filtrarTablas, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
+        filtrarTablas, filtrarPolizasUI, filtrarCobranzaUI, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
         abrirModalAprobarUsuario, cambiarTabUsuarios, copiarEnlaceInvitacion,
