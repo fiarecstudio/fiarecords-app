@@ -368,15 +368,15 @@ const importarPolizasExcel = async (req, res) => {
             .trim();
         const encabezadoIndex = filas.slice(0, 25).findIndex(row => {
             const headers = row.map(normalizarEncabezado);
-            return headers.some(value => value === 'POLIZA' || value.endsWith(' POLIZA'))
-                && headers.some(value => value === 'RECIBO' || value.includes('RECIBO'));
+            return headers.some(value => value === 'POLIZA' || value.endsWith(' POLIZA'));
         });
         if (encabezadoIndex < 0) {
-            return res.status(400).json({ success: false, error: 'No se encontraron las columnas POLIZA y RECIBO.' });
+            return res.status(400).json({ success: false, error: 'No se encontró la columna obligatoria POLIZA.' });
         }
 
         const encabezadosOriginales = filas[encabezadoIndex].map(value => String(value ?? ''));
         const headers = encabezadosOriginales.map(normalizarEncabezado);
+        const esCobranza = headers.some(header => header.includes('RECIBO'));
         const columnas = {
             numeroPoliza: ['POLIZA', 'NUMERO DE POLIZA', 'NO POLIZA'],
             socio: ['SOCIO', 'ASESOR', 'NOMBRE DEL ASESOR'],
@@ -405,8 +405,8 @@ const importarPolizasExcel = async (req, res) => {
             return index;
         };
         const indices = Object.fromEntries(Object.entries(columnas).map(([key, aliases]) => [key, buscarColumna(aliases)]));
-        if (indices.numeroPoliza < 0 || indices.numeroRecibo < 0) {
-            return res.status(400).json({ success: false, error: 'El Excel debe incluir POLIZA y RECIBO.' });
+        if (indices.numeroPoliza < 0) {
+            return res.status(400).json({ success: false, error: 'El Excel debe incluir la columna POLIZA.' });
         }
 
         const texto = value => value == null ? '' : String(value).trim();
@@ -486,7 +486,7 @@ const importarPolizasExcel = async (req, res) => {
 
             const numeroRecibo = texto(leer(row, 'numeroRecibo'));
             const fechaVencimientoRecibo = convertirFecha(leer(row, 'fechaLimite')) || datosFila.inicio;
-            if (numeroRecibo || fechaVencimientoRecibo || prima != null) {
+            if (esCobranza && (numeroRecibo || leer(row, 'fechaLimite') || leer(row, 'periodo'))) {
                 const estatus = normalizarEncabezado(leer(row, 'estatus'));
                 grupo.recibos.push({
                     numeroRecibo: numeroRecibo || `REC-${grupo.recibos.length + 1}`,
@@ -637,8 +637,8 @@ const importarPolizasExcel = async (req, res) => {
                     poliza.primaNeta = Number(poliza.primaNeta) > 0 ? poliza.primaNeta : grupo.datos.primaNeta ?? 0;
                 }
 
-                const preservarRecibosExistentes = !esNueva && (poliza.recibos?.length || 0) > 0;
-                for (let index = 0; !preservarRecibosExistentes && index < grupo.recibos.length; index++) {
+                const preservarDatosCobranza = !esNueva && !esCobranza;
+                for (let index = 0; !preservarDatosCobranza && index < grupo.recibos.length; index++) {
                     const importado = grupo.recibos[index];
                     const reciboExistente = poliza.recibos.find(recibo =>
                         texto(recibo.numeroRecibo).toUpperCase() === importado.numeroRecibo.toUpperCase()
@@ -694,13 +694,15 @@ const importarPolizasExcel = async (req, res) => {
                     }
                 }
 
-                const pendientes = poliza.recibos.filter(recibo => recibo.estadoRecibo === 'pendiente');
-                poliza.saldoRestante = pendientes.reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0);
-                poliza.proximoPago = pendientes
-                    .map(recibo => recibo.fechaVencimientoRecibo)
-                    .filter(Boolean)
-                    .sort((a, b) => new Date(a) - new Date(b))[0] || null;
-                poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+                if (esNueva || esCobranza) {
+                    const pendientes = poliza.recibos.filter(recibo => recibo.estadoRecibo === 'pendiente');
+                    poliza.saldoRestante = pendientes.reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0);
+                    poliza.proximoPago = pendientes
+                        .map(recibo => recibo.fechaVencimientoRecibo)
+                        .filter(Boolean)
+                        .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+                    poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+                }
                 poliza.estado = poliza.estado || 'Activa';
                 const datosUpsert = {
                     empresaId,
@@ -717,14 +719,14 @@ const importarPolizasExcel = async (req, res) => {
                     fechas: poliza.fechas,
                     primaTotal: poliza.primaTotal,
                     primaNeta: poliza.primaNeta ?? 0,
-                    estado: 'Activa',
-                    saldoRestante: poliza.saldoRestante,
-                    proximoPago: poliza.proximoPago,
-                    estadoPago: poliza.estadoPago
+                    estado: poliza.estado || 'Activa'
                 };
-                if (!preservarRecibosExistentes) {
+                if (esNueva || esCobranza) {
                     datosUpsert.recibos = poliza.recibos.map(recibo => recibo.toObject ? recibo.toObject() : recibo);
                     datosUpsert.pagos = poliza.pagos.map(pago => pago.toObject ? pago.toObject() : pago);
+                    datosUpsert.saldoRestante = poliza.saldoRestante;
+                    datosUpsert.proximoPago = poliza.proximoPago;
+                    datosUpsert.estadoPago = poliza.estadoPago;
                 }
                 const opcionesUpsert = {
                     upsert: true,
@@ -766,6 +768,7 @@ const importarPolizasExcel = async (req, res) => {
         res.json({
             success: true,
             message: 'Importación exitosa',
+            tipoArchivo: esCobranza ? 'Cobranza' : 'Emisiones',
             procesadas,
             creadas,
             actualizadas,

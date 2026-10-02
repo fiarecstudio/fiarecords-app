@@ -7646,7 +7646,8 @@ Fecha de firma: {{FECHA}}`;
             });
             if (!reporte.success) throw new Error(reporte.error || 'No se pudo completar la importación.');
 
-            const resumen = `Importación exitosa. Procesadas: ${reporte.procesadas}; creadas: ${reporte.creadas}; actualizadas: ${reporte.actualizadas}.`;
+            const tipoArchivo = reporte.tipoArchivo || 'Emisiones';
+            const resumen = `Importación ${tipoArchivo} exitosa. Procesadas: ${reporte.procesadas}; creadas: ${reporte.creadas}; actualizadas: ${reporte.actualizadas}.`;
             const fallos = reporte.errores?.length ? ` Errores: ${reporte.errores.map(item => `${item.numeroPoliza}: ${item.error}`).join(' | ')}` : '';
             if (resultadoEl) {
                 resultadoEl.className = `col-12 small ${fallos ? 'text-warning' : 'text-success'}`;
@@ -9158,7 +9159,7 @@ Fecha de firma: {{FECHA}}`;
                         <td><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
                         <td>
                             ${estadoRecibo === 'pendiente' ? 
-                                `<button class="btn btn-sm btn-success" onclick="app.pagarRecibo('${poliza._id}', ${index})" title="Pagar Recibo"><i class="bi bi-cash"></i></button>` : 
+                                `<button class="btn btn-sm btn-success" onclick="window.pagarRecibo('${poliza._id}', ${index})" title="Pagar Recibo"><i class="bi bi-cash"></i></button>` :
                                 '<span class="text-muted"><i class="bi bi-check-circle"></i></span>'
                             }
                         </td>
