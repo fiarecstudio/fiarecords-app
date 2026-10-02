@@ -141,8 +141,6 @@
         localStorage.removeItem('selected_empresa_id');
         localStorage.removeItem('fia_identity_cache');
         localStorage.removeItem('fia_identity_timestamp');
-        localStorage.removeItem('fia_logo_cache');
-
         if (window.localCache) {
             window.localCache.artistas = [];
             window.localCache.servicios = [];
@@ -164,12 +162,6 @@
                 window[key] = [];
             }
         });
-
-        if (window.localforage && typeof window.localforage.removeItem === 'function') {
-            ['cache_artistas', 'cache_servicios', 'cache_proyectos', 'cache_pagos', 'cache_deudas'].forEach((key) => {
-                window.localforage.removeItem(key).catch(() => { });
-            });
-        }
 
         if (window.Logger) Logger.debug('Auth', 'Sesión limpiada');
     }

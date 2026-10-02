@@ -169,7 +169,6 @@ async function cambiarEmpresaContexto(empresaId) {
                 try {
                     // Limpiar caché antes de recargar
                     if (window.localCache) window.localCache.proyectos = [];
-                    await localforage.removeItem('cache_proyectos');
                     
                     await window.app.recargarKanbanReactivo(empresaFinalId);
                 } catch (e) {
@@ -184,10 +183,6 @@ async function cambiarEmpresaContexto(empresaId) {
     
     // FASE 5: PASO 5 - Limpiar cachés de otros datos (en segundo plano)
     try {
-        await localforage.removeItem('cache_artistas');
-        await localforage.removeItem('cache_servicios');
-        await localforage.removeItem('cache_pagos');
-        
         if (window.localCache) {
             window.localCache.artistas = [];
             window.localCache.servicios = [];

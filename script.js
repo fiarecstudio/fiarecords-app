@@ -8,9 +8,35 @@ if (window.hasLoadedScript) {
 // Este código se ejecuta INMEDIATAMENTE, antes de que el DOM esté listo,
 // para poner el logo en caché al instante y evitar el parpadeo en blanco.
 // ==================================================================
+function obtenerEmpresaIdLogoActivo() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const empresaId = payload.isSuperAdmin
+            ? localStorage.getItem('selected_empresa_id') || null
+            : payload.empresaId || localStorage.getItem('empresaActiva');
+        return empresaId && empresaId !== 'all' ? String(empresaId) : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function obtenerLogoPersistidoInicial() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+        const empresaId = obtenerEmpresaIdLogoActivo();
+        if (!empresaId) return null;
+        return localStorage.getItem(`backup_logo_${empresaId}`) || null;
+    } catch (error) {
+        return null;
+    }
+}
+
 (function guardiaDeIdentidadInmediato() {
     // Intentar poner el logo desde caché INMEDIATAMENTE (antes de que el DOM esté listo)
-    const logoCacheado = localStorage.getItem('fia_logo_cache');
+    const logoCacheado = obtenerLogoPersistidoInicial();
     if (logoCacheado) {
         // Crear un estilo inline que se aplique inmediatamente
         const style = document.createElement('style');
@@ -42,20 +68,15 @@ window.reproducirSonidoChat = function() {
 };
 window.reproducirSonido = window.reproducirSonido || window.reproducirSonidoChat;
 
-const DEFAULT_FIA_LOGO = 'https://placehold.co/180x80?text=FiaRecords';
+const DEFAULT_FIA_LOGO = '/uploads/logo.png';
 window.FIA_LOGO_DEFAULT = window.FIA_LOGO_DEFAULT || DEFAULT_FIA_LOGO;
 
 // Estado global reactivo para el logo actual
 window.AppState = window.AppState || {
-    logoBase64: localStorage.getItem('fia_logo_cache') || window.FIA_LOGO_DEFAULT,
-    setLogo(logoBase64) {
-        this.logoBase64 = logoBase64 || window.FIA_LOGO_DEFAULT;
-        window.dispatchEvent(new CustomEvent('app-logo-changed', { detail: { logoBase64: this.logoBase64 } }));
-        if (this.logoBase64) {
-            localStorage.setItem('fia_logo_cache', this.logoBase64);
-        } else {
-            localStorage.removeItem('fia_logo_cache');
-        }
+    logoBase64: obtenerLogoPersistidoInicial() || window.FIA_LOGO_DEFAULT,
+    setLogo(logoBase64, empresaId = obtenerEmpresaIdLogoActivo()) {
+        this.logoBase64 = logoBase64 || null;
+        window.dispatchEvent(new CustomEvent('app-logo-changed', { detail: { logoBase64: this.logoBase64, empresaId } }));
     },
     resetLogo() {
         this.setLogo(window.FIA_LOGO_DEFAULT);
@@ -63,23 +84,36 @@ window.AppState = window.AppState || {
 };
 
 window.addEventListener('app-logo-changed', (event) => {
-    const logoData = event.detail?.logoBase64 || window.FIA_LOGO_DEFAULT;
+    const empresaIdActiva = obtenerEmpresaIdLogoActivo();
+    const empresaIdEvento = event.detail?.empresaId;
+    if (empresaIdActiva && empresaIdEvento !== empresaIdActiva) return;
+    const logoData = event.detail?.logoBase64 || null;
     const appLogo = document.getElementById('app-logo');
     const loginLogo = document.getElementById('login-logo');
 
-    if (appLogo) {
-        const newAppLogo = appLogo.cloneNode(true);
-        newAppLogo.src = logoData;
-        newAppLogo.dataset.logoUpdatedAt = Date.now();
-        appLogo.replaceWith(newAppLogo);
-    }
-
-    if (loginLogo) {
-        const newLoginLogo = loginLogo.cloneNode(true);
-        newLoginLogo.src = logoData;
-        newLoginLogo.dataset.logoUpdatedAt = Date.now();
-        loginLogo.replaceWith(newLoginLogo);
-    }
+    [appLogo, loginLogo].filter(Boolean).forEach(img => {
+        let fallback = img.parentElement?.querySelector('.logo-empresa-fallback');
+        if (!fallback && img.parentElement) {
+            fallback = document.createElement('span');
+            fallback.className = 'logo-empresa-fallback';
+            fallback.textContent = 'Empresa';
+            img.insertAdjacentElement('afterend', fallback);
+        }
+        if (logoData) {
+            img.src = logoData;
+            img.hidden = false;
+            if (fallback) fallback.hidden = true;
+        } else if (empresaIdActiva) {
+            img.removeAttribute('src');
+            img.hidden = true;
+            if (fallback) fallback.hidden = false;
+        } else {
+            img.src = window.FIA_LOGO_DEFAULT;
+            img.hidden = false;
+            if (fallback) fallback.hidden = true;
+        }
+        img.dataset.logoUpdatedAt = Date.now();
+    });
 });
 
 // Unlocker agresivo: fuerza la promesa de play dentro del primer click real
@@ -104,16 +138,158 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const IDENTITY_CACHE_KEY = 'fia_identity_cache';
     const IDENTITY_TIMESTAMP_KEY = 'fia_identity_timestamp';
-    const CONFIG_CACHE_KEY = 'fia_config_cache';
-    const CONFIG_TIMESTAMP_KEY = 'fia_config_timestamp';
+    const OFFLINE_CACHE_KEY = 'fia_offline_cache_v1';
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
     let isApplyingIdentity = false; // LOCK para evitar ejecuciones simultáneas
+
+    function leerCacheConsolidada() {
+        try {
+            const cache = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
+            return cache && typeof cache === 'object' && !Array.isArray(cache) ? cache : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function purgarRespaldosOffline(empresaActiva) {
+        const scopeActivo = obtenerScopeOffline();
+        const usuarioActivo = scopeActivo?.split(':').slice(1).join(':');
+        const claves = [];
+        for (let index = 0; index < localStorage.length; index++) {
+            const key = localStorage.key(index);
+            if (key) claves.push(key);
+        }
+
+        claves.forEach(key => {
+            if (key === IDENTITY_CACHE_KEY || key === IDENTITY_TIMESTAMP_KEY) {
+                localStorage.removeItem(key);
+                return;
+            }
+
+            const companyPrefix = ['backup_clientes_', 'backup_cobros_', 'backup_asesores_', 'backup_logo_', 'empresa_config_']
+                .find(prefix => key.startsWith(prefix));
+            if (companyPrefix) {
+                const empresaId = key.slice(companyPrefix.length);
+                if (empresaId !== empresaActiva) {
+                    localStorage.removeItem(key);
+                    return;
+                }
+                if (usuarioActivo && ['backup_clientes_', 'backup_cobros_', 'backup_asesores_'].some(prefix => key.startsWith(prefix))) {
+                    try {
+                        const backups = JSON.parse(localStorage.getItem(key) || '{}');
+                        Object.keys(backups).forEach(userId => {
+                            if (userId !== usuarioActivo) delete backups[userId];
+                        });
+                        localStorage.setItem(key, JSON.stringify(backups));
+                    } catch (error) {
+                        localStorage.removeItem(key);
+                    }
+                }
+                return;
+            }
+
+            if (key.startsWith('backup_')) {
+                try {
+                    const backups = JSON.parse(localStorage.getItem(key) || '{}');
+                    Object.keys(backups).forEach(scope => {
+                        if (scope !== scopeActivo) delete backups[scope];
+                        else {
+                            Object.keys(backups[scope] || {}).forEach(variante => {
+                                const entrada = backups[scope][variante];
+                                if (entrada?.actualizado && Date.now() - entrada.actualizado > 30 * 24 * 60 * 60 * 1000) {
+                                    delete backups[scope][variante];
+                                }
+                            });
+                        }
+                    });
+                    localStorage.setItem(key, JSON.stringify(backups));
+                } catch (error) {
+                    localStorage.removeItem(key);
+                }
+            }
+        });
+    }
+
+    function guardarLogoEmpresaOffline(empresaId, logoBase64) {
+        if (!empresaId || empresaId === 'all') return false;
+        const key = `backup_logo_${empresaId}`;
+        try {
+            if (logoBase64) localStorage.setItem(key, logoBase64);
+            else localStorage.removeItem(key);
+            return true;
+        } catch (error) {
+            if (error.name !== 'QuotaExceededError') {
+                console.warn('[Identidad] No se pudo guardar el logo de la empresa:', error);
+                return false;
+            }
+        }
+
+        purgarRespaldosOffline(empresaId);
+        try {
+            if (logoBase64) localStorage.setItem(key, logoBase64);
+            else localStorage.removeItem(key);
+            return true;
+        } catch (error) {
+            console.warn('[Identidad] Sin cuota para guardar el logo de la empresa:', error);
+            return false;
+        }
+    }
+
+    function guardarCacheConsolidada(empresaId, entrada) {
+        if (!empresaId) return false;
+        const cache = leerCacheConsolidada();
+        cache[empresaId] = { ...(cache[empresaId] || {}), ...entrada, actualizado: Date.now() };
+
+        const intentarGuardar = () => localStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify(cache));
+        try {
+            intentarGuardar();
+            return true;
+        } catch (error) {
+            if (error.name !== 'QuotaExceededError') {
+                console.warn('[Offline] No se pudo guardar caché consolidada:', error);
+                return false;
+            }
+        }
+
+        Object.keys(cache).forEach(empresaCacheada => {
+            if (empresaCacheada !== empresaId) delete cache[empresaCacheada];
+        });
+        purgarRespaldosOffline(empresaId);
+        try {
+            intentarGuardar();
+            return true;
+        } catch (error) {
+            const identidad = cache[empresaId]?.identity;
+            if (identidad?.faviconBase64) delete identidad.faviconBase64;
+            try {
+                intentarGuardar();
+                return true;
+            } catch (secondError) {
+                if (identidad?.logoBase64) delete identidad.logoBase64;
+                try {
+                    intentarGuardar();
+                    return true;
+                } catch (finalError) {
+                    console.warn('[Offline] Caché reducida y no se pudo persistir por cuota:', finalError);
+                    return false;
+                }
+            }
+        }
+    }
 
     function obtenerConfigEmpresaOffline(empresaId) {
         if (!empresaId) return null;
         try {
-            const config = JSON.parse(localStorage.getItem(`empresa_config_${empresaId}`) || 'null');
-            return config?.empresaId === empresaId ? config : null;
+            const cacheEmpresa = leerCacheConsolidada()[empresaId];
+            const config = cacheEmpresa?.config
+                || JSON.parse(localStorage.getItem(`empresa_config_${empresaId}`) || 'null');
+            if (config?.empresaId !== empresaId) return null;
+            if (cacheEmpresa?.config) {
+                const scope = obtenerScopeOffline();
+                const userId = scope?.split(':').slice(1).join(':') || 'anon';
+                return { ...config, permisos: cacheEmpresa.permisosPorUsuario?.[userId] || [] };
+            }
+            return config;
         } catch (error) {
             return null;
         }
@@ -138,12 +314,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const moduloSeguros = config.moduloSeguros === true;
-            localStorage.setItem(`empresa_config_${empresaId}`, JSON.stringify({
+            const configOffline = { ...config };
+            delete configOffline.logoBase64;
+            delete configOffline.faviconBase64;
+            delete configOffline.permisos;
+            if (configOffline.notificacionesEmail) {
+                configOffline.notificacionesEmail = { ...configOffline.notificacionesEmail };
+                delete configOffline.notificacionesEmail.smtpPass;
+            }
+            const scope = obtenerScopeOffline();
+            const userId = scope?.split(':').slice(1).join(':') || 'anon';
+            const cacheActual = leerCacheConsolidada()[empresaId] || {};
+            const guardado = guardarCacheConsolidada(empresaId, {
+                config: {
+                    ...configOffline,
+                    empresaId,
+                    moduloSeguros,
+                    tipoDashboard: config.tipoDashboard || (moduloSeguros ? 'seguros' : 'estandar')
+                },
+                permisosPorUsuario: { ...(cacheActual.permisosPorUsuario || {}), [userId]: permisosUsuario },
+                configUpdatedAt: Date.now(),
                 empresaId,
                 moduloSeguros,
                 permisos: permisosUsuario,
                 tipoDashboard: config.tipoDashboard || (moduloSeguros ? 'seguros' : 'estandar')
-            }));
+            });
+            if (guardado) localStorage.removeItem(`empresa_config_${empresaId}`);
+            return guardado;
         } catch (error) {
             console.warn('[Empresa] No se pudo guardar configuración offline:', error);
         }
@@ -151,8 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function persistirEmpresaActiva(empresaId) {
         if (!empresaId) return;
-        localStorage.setItem('empresaActiva', empresaId);
         try {
+            localStorage.setItem('empresaActiva', empresaId);
             const usuario = JSON.parse(localStorage.getItem('user') || '{}');
             localStorage.setItem('user', JSON.stringify({ ...usuario, empresaId }));
         } catch (error) {
@@ -234,14 +431,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 1. Aplicar Logo al Header (inmediato)
         const appLogo = document.getElementById('app-logo');
-        if (logoData && appLogo) {
-            appLogo.src = logoData;
-            appLogo.style.opacity = '1'; // Quitar transparencia de placeholder
+        if (appLogo) {
+            appLogo.src = logoData || window.FIA_LOGO_DEFAULT || '/uploads/logo.png';
+            appLogo.hidden = false;
+            appLogo.style.opacity = '1';
+        }
+
+        const loginLogo = document.getElementById('login-logo');
+        if (loginLogo) {
+            loginLogo.src = logoData || window.FIA_LOGO_DEFAULT || '/uploads/logo.png';
+            loginLogo.hidden = false;
+            loginLogo.style.opacity = '1';
         }
         
         // 2. Actualizar estado global reactivo del logo
         if (window.AppState && typeof window.AppState.setLogo === 'function') {
-            window.AppState.setLogo(logoData);
+            window.AppState.setLogo(logoData || null, config.empresaId || obtenerEmpresaIdLogoActivo());
         }
         
         // 3. Aplicar Favicon (dinámico, al head)
@@ -271,32 +476,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = await res.json();
 
-        if (actualizarDOM && (data.logoBase64 || data.faviconBase64)) {
+        data.empresaId = empresaId;
+        if (actualizarDOM) {
             aplicarIdentidadVisualAlDOM(data, true);
         }
 
         actualizarTituloEmpresa();
 
-        // Bug de memoria: Envolver en try-catch para evitar QuotaExceededError
-        try {
-            localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({
-                logoBase64: data.logoBase64,
+        const cacheGuardada = guardarCacheConsolidada(empresaId, {
+                identity: {
                 faviconBase64: data.faviconBase64,
-                empresaId: empresaId,
+                empresaId,
                 timestamp: Date.now()
-            }));
-            localStorage.setItem(IDENTITY_TIMESTAMP_KEY, Date.now().toString());
-            if (data.logoBase64) {
-                localStorage.setItem('fia_logo_cache', data.logoBase64);
             }
-        } catch (error) {
-            console.error('[aplicarIdentidadVisual] Error al guardar en localStorage:', error);
-            if (error.name === 'QuotaExceededError') {
-                localStorage.removeItem('fia_identity_cache');
-                localStorage.removeItem('fia_logo_cache');
-                localStorage.removeItem('fia_identity_timestamp');
-                console.log('[aplicarIdentidadVisual] Caché limpiada por saturación de memoria');
-            }
+        });
+        guardarLogoEmpresaOffline(empresaId, data.logoBase64 || null);
+        logoBase64 = data.logoBase64 || null;
+        if (cacheGuardada) {
+            localStorage.removeItem(IDENTITY_CACHE_KEY);
+            localStorage.removeItem(IDENTITY_TIMESTAMP_KEY);
         }
 
         return data;
@@ -315,39 +513,59 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             isApplyingIdentity = true;
 
-            const empresaId = obtenerIdEmpresaPrioridad();
-
-            if (!forzarCambio) {
-                const cacheStr = localStorage.getItem(IDENTITY_CACHE_KEY);
-                const cacheTimestamp = localStorage.getItem(IDENTITY_TIMESTAMP_KEY);
-                const ahora = Date.now();
-
-                if (cacheStr && cacheTimestamp) {
-                    const cache = JSON.parse(cacheStr);
-                    const edadCache = ahora - parseInt(cacheTimestamp, 10);
-
-                    if (edadCache < CACHE_DURATION_MS && cache.empresaId === empresaId) {
-                        aplicarIdentidadVisualAlDOM(cache, false);
-                        setTimeout(() => {
-                            validarIdentidadVisualDesdeServidor(empresaId, true).catch((err) => {
-                                console.warn('[GuardiaIdentidad] Validación en segundo plano:', err.message);
-                            });
-                        }, 0);
-                        return cache;
-                    }
-
-                    if (cache.empresaId !== empresaId) {
-                        localStorage.removeItem(IDENTITY_CACHE_KEY);
-                        localStorage.removeItem(IDENTITY_TIMESTAMP_KEY);
-                        localStorage.removeItem('fia_logo_cache');
-                        forzarCambio = true;
-                    }
+            const empresaId = obtenerEmpresaIdLogoActivo() || obtenerIdEmpresaPrioridad();
+            if (!empresaId || empresaId === 'all') {
+                logoBase64 = null;
+                const defaultLogo = window.FIA_LOGO_DEFAULT || '/uploads/logo.png';
+                const appLogo = document.getElementById('app-logo');
+                const loginLogo = document.getElementById('login-logo');
+                if (appLogo) {
+                    appLogo.src = defaultLogo;
+                    appLogo.hidden = false;
                 }
+                if (loginLogo) {
+                    loginLogo.src = defaultLogo;
+                    loginLogo.hidden = false;
+                }
+                window.AppState?.setLogo(defaultLogo, null);
+                return null;
+            }
+
+            const logoLocal = localStorage.getItem(`backup_logo_${empresaId}`) || null;
+            const cacheEmpresa = leerCacheConsolidada()[empresaId];
+            const identityCache = cacheEmpresa?.identity?.empresaId === empresaId
+                ? cacheEmpresa.identity
+                : null;
+            const cacheIdentidad = {
+                ...(identityCache || {}),
+                empresaId,
+                logoBase64: logoLocal,
+                timestamp: identityCache?.timestamp || Date.now()
+            };
+
+            logoBase64 = logoLocal;
+            aplicarIdentidadVisualAlDOM(cacheIdentidad, false);
+
+            if (!navigator.onLine) return cacheIdentidad;
+
+            if (!forzarCambio && identityCache?.timestamp
+                && Date.now() - Number(identityCache.timestamp) < CACHE_DURATION_MS) {
+                setTimeout(() => {
+                    validarIdentidadVisualDesdeServidor(empresaId, true).catch(error => {
+                        if (!esErrorOffline(error)) console.warn('[GuardiaIdentidad] Validación en segundo plano:', error.message);
+                    });
+                }, 0);
+                return cacheIdentidad;
             }
 
             return await validarIdentidadVisualDesdeServidor(empresaId, true);
         } catch (err) {
-            console.error('[GuardiaIdentidad] Error:', err);
+            const empresaId = obtenerEmpresaIdLogoActivo();
+            const logoLocal = empresaId ? localStorage.getItem(`backup_logo_${empresaId}`) : null;
+            logoBase64 = logoLocal || null;
+            if (empresaId) aplicarIdentidadVisualAlDOM({ empresaId, logoBase64: logoLocal }, false);
+            if (!esErrorOffline(err)) console.error('[GuardiaIdentidad] Error:', err);
+            return null;
         } finally {
             isApplyingIdentity = false;
         }
@@ -367,9 +585,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('empresaActiva', 'all');
             }
 
-            localStorage.removeItem(CONFIG_CACHE_KEY);
-            localStorage.removeItem(CONFIG_TIMESTAMP_KEY);
-            
             // Forzar cambio de identidad visual inmediato (sin F5)
             aplicarIdentidadVisual(true);
         }
@@ -416,6 +631,7 @@ let proyectoIdEnEdicion = null;
     let paginaActualPolizas = 1;
     const limitePolizas = 15;
     let polizasGlobales = [];
+    let planRecibosCambio = [];
     let polizasCacheCargada = false;
     let polizasCacheAsesorId = '';
     let polizasCacheScope = null;
@@ -428,6 +644,12 @@ let proyectoIdEnEdicion = null;
     let dashboardStatsCache = null;
     let dashboardCacheScope = null;
     const dashboardSegurosCache = new Map();
+    let filtroGlobalPolizas = '';
+
+    function normalizarFiltroAsesor(valor) {
+        const asesorId = String(valor || '').trim();
+        return ['todos', 'all', 'null', 'undefined'].includes(asesorId.toLowerCase()) ? '' : asesorId;
+    }
 
     function prepararCacheDashboard() {
         const scope = obtenerScopeOffline();
@@ -461,7 +683,7 @@ let proyectoIdEnEdicion = null;
     let gapiInited = false;
     let gisInited = false;
 
-    // Caché Local (Ahora se llenará de forma asíncrona desde IndexedDB)
+    // Caché local en memoria, alimentada desde fia_offline_cache_v1.
     window.localCache = {
         artistas: [],
         servicios: [],
@@ -497,31 +719,20 @@ let proyectoIdEnEdicion = null;
     const PDF_DIMENSIONS = { WIDTH: 210, HEIGHT: 297, MARGIN: 14 };
 
     // ==================================================================
-    // 2. UTILIDADES Y SISTEMA LOCAL (INDEXED-DB MIGRATION)
+    // 2. UTILIDADES Y SISTEMA LOCAL
     // ==================================================================
     
-    // Inicializar LocalForage (Base de datos local robusta)
-    localforage.config({
-        name: 'FiaRecordsApp',
-        storeName: 'fia_cache'
-    });
-
-    async function cargarCacheDesdeIndexedDB() {
-        try {
-            const artistas = await localforage.getItem('cache_artistas');
-            const servicios = await localforage.getItem('cache_servicios');
-            const proyectos = await localforage.getItem('cache_proyectos');
-            const pagos = await localforage.getItem('cache_pagos');
-            const deudas = await localforage.getItem('cache_deudas');
-
-            if(artistas) localCache.artistas = artistas;
-            if(servicios) localCache.servicios = servicios;
-            if(proyectos) localCache.proyectos = proyectos;
-            if(pagos) localCache.pagos = pagos;
-            if(deudas) localCache.deudas = deudas;
-
-            } catch (e) {
-            console.error("Error leyendo IndexedDB:", e);
+    async function cargarCacheOfflineScoped() {
+        const caches = {
+            artistas: 'cache_artistas',
+            servicios: 'cache_servicios',
+            proyectos: 'cache_proyectos',
+            pagos: 'cache_pagos',
+            deudas: 'cache_deudas'
+        };
+        for (const [coleccion, clave] of Object.entries(caches)) {
+            const datos = await leerDatoOffline(clave);
+            if (Array.isArray(datos)) localCache[coleccion] = datos;
         }
     }
 
@@ -641,23 +852,20 @@ let proyectoIdEnEdicion = null;
             }
 
             if (!forzarRecarga) {
-                const cacheStr = localStorage.getItem(CONFIG_CACHE_KEY);
-                const cacheTimestamp = localStorage.getItem(CONFIG_TIMESTAMP_KEY);
-                if (cacheStr && cacheTimestamp) {
-                    const edadCache = Date.now() - parseInt(cacheTimestamp, 10);
-                    const cache = JSON.parse(cacheStr);
-                    if (edadCache < CACHE_DURATION_MS && cache.empresaId === finalEmpresaId && cache.config) {
-                        configCache = cache.config;
-                        guardarConfigEmpresaOffline(finalEmpresaId, cache.config);
-                        if (configCache.logoBase64) logoBase64 = configCache.logoBase64;
-                        setTimeout(() => {
-                            loadInitialConfig(finalEmpresaId, true).catch((err) => {
-                                console.warn('[loadInitialConfig] Actualización en segundo plano:', err.message);
-                            });
-                        }, 0);
-                        return configCache;
-                    }
+                const cacheEmpresa = leerCacheConsolidada()[finalEmpresaId];
+                const configConsolidada = obtenerConfigEmpresaOffline(finalEmpresaId);
+                const configTimestamp = Number(cacheEmpresa?.configUpdatedAt || cacheEmpresa?.actualizado || 0);
+                if (configConsolidada && Date.now() - configTimestamp < CACHE_DURATION_MS) {
+                    configCache = configConsolidada;
+                    logoBase64 = localStorage.getItem(`backup_logo_${finalEmpresaId}`) || null;
+                    setTimeout(() => {
+                        loadInitialConfig(finalEmpresaId, true).catch((err) => {
+                            console.warn('[loadInitialConfig] Actualización en segundo plano:', err.message);
+                        });
+                    }, 0);
+                    return configCache;
                 }
+
             }
 
             const config = await fetchAPI('/api/configuracion', {
@@ -665,16 +873,12 @@ let proyectoIdEnEdicion = null;
             });
             
             if (config) { 
-                configCache = config; 
-                if(config.logoBase64) logoBase64 = config.logoBase64;
+                const configSinIdentidad = { ...config };
+                delete configSinIdentidad.logoBase64;
+                delete configSinIdentidad.faviconBase64;
+                configCache = { ...configSinIdentidad, empresaId: finalEmpresaId };
+                logoBase64 = localStorage.getItem(`backup_logo_${finalEmpresaId}`) || null;
                 guardarConfigEmpresaOffline(finalEmpresaId, config);
-
-                localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
-                    empresaId: finalEmpresaId,
-                    config,
-                    timestamp: Date.now()
-                }));
-                localStorage.setItem(CONFIG_TIMESTAMP_KEY, Date.now().toString());
                 
                 // Rellenar inputs SMTP con la configuración del backend
                 if (config.notificacionesEmail) {
@@ -695,7 +899,7 @@ let proyectoIdEnEdicion = null;
             }
             return configCache;
         } catch (e) { 
-            console.error('[loadInitialConfig] Error cargando config:', e);
+            if (!esErrorOffline(e)) console.error('[loadInitialConfig] Error cargando config:', e);
             const empresaIdFallback = empresaId
                 || localStorage.getItem('selected_empresa_id')
                 || localStorage.getItem('empresaActiva')
@@ -711,7 +915,7 @@ let proyectoIdEnEdicion = null;
     }
 
     // ==================================================================
-    // 3. OFFLINE MANAGER (AHORA CON INDEXED DB)
+    // 3. OFFLINE MANAGER (CACHE AISLADO POR EMPRESA Y USUARIO)
     // ==================================================================
     function obtenerScopeOffline() {
         const token = localStorage.getItem('token');
@@ -730,6 +934,47 @@ let proyectoIdEnEdicion = null;
             return null;
         }
     }
+
+    async function leerDatoOffline(clave) {
+        const scope = obtenerScopeOffline();
+        if (!scope) return null;
+        const empresaId = scope.split(':')[0];
+        return leerCacheConsolidada()[empresaId]?.datosOfflinePorScope?.[scope]?.[clave] ?? null;
+    }
+
+    async function guardarDatoOffline(clave, datos) {
+        const scope = obtenerScopeOffline();
+        if (!scope) throw new Error('No se pudo determinar el scope offline actual.');
+        const empresaId = scope.split(':')[0];
+        const cacheEmpresa = leerCacheConsolidada()[empresaId] || {};
+        const datosOfflinePorScope = { ...(cacheEmpresa.datosOfflinePorScope || {}) };
+        datosOfflinePorScope[scope] = {
+            ...(datosOfflinePorScope[scope] || {}),
+            [clave]: datos
+        };
+        if (!guardarCacheConsolidada(empresaId, { datosOfflinePorScope })) {
+            throw new Error('No se pudo guardar la caché offline de esta empresa.');
+        }
+        return datos;
+    }
+
+    async function eliminarDatoOffline(clave) {
+        const scope = obtenerScopeOffline();
+        if (!scope) return false;
+        const empresaId = scope.split(':')[0];
+        const cacheEmpresa = leerCacheConsolidada()[empresaId] || {};
+        const datosOfflinePorScope = { ...(cacheEmpresa.datosOfflinePorScope || {}) };
+        const datosScope = { ...(datosOfflinePorScope[scope] || {}) };
+        delete datosScope[clave];
+        datosOfflinePorScope[scope] = datosScope;
+        return guardarCacheConsolidada(empresaId, { datosOfflinePorScope });
+    }
+
+    window.FiaOfflineCache = {
+        get: leerDatoOffline,
+        set: guardarDatoOffline,
+        remove: eliminarDatoOffline
+    };
 
     function guardarRespaldoOffline(clave, datos, variante = 'default') {
         const scope = obtenerScopeOffline();
@@ -757,9 +1002,30 @@ let proyectoIdEnEdicion = null;
             return null;
         }
     }
+    function eliminarVarianteRespaldoOffline(clave, variante) {
+        const scope = obtenerScopeOffline();
+        if (!scope) return;
+        try {
+            const respaldos = JSON.parse(localStorage.getItem(clave) || '{}');
+            if (!respaldos[scope]) return;
+            delete respaldos[scope][variante];
+            if (Object.keys(respaldos[scope]).length === 0) delete respaldos[scope];
+            if (Object.keys(respaldos).length > 0) localStorage.setItem(clave, JSON.stringify(respaldos));
+            else localStorage.removeItem(clave);
+        } catch (error) {
+            console.warn(`[Offline] No se pudo podar ${clave}:`, error);
+        }
+    }
 
     function notificarDatosOffline() {
         showToast('Estás en Modo Offline. Mostrando datos guardados.', 'info');
+    }
+
+    function esErrorOffline(error) {
+        return !navigator.onLine
+            || error?.offline === true
+            || error instanceof TypeError
+            || /failed to fetch|networkerror|load failed|fetch failed/i.test(error?.message || '');
     }
 
     function notificarGuardadoOffline() {
@@ -771,7 +1037,7 @@ let proyectoIdEnEdicion = null;
         isSyncing: false,
         
         getQueue: async () => {
-            const queue = await localforage.getItem(OfflineManager.QUEUE_KEY);
+            const queue = await leerDatoOffline(OfflineManager.QUEUE_KEY);
             return queue || [];
         },
 
@@ -784,7 +1050,7 @@ let proyectoIdEnEdicion = null;
                 if (header.toLowerCase() === 'authorization') delete safeOptions.headers[header];
             });
             queue.push({ url, options: safeOptions, timestamp: Date.now(), tempId, scope });
-            await localforage.setItem(OfflineManager.QUEUE_KEY, queue);
+            await guardarDatoOffline(OfflineManager.QUEUE_KEY, queue);
             OfflineManager.updateIndicator();
         },
 
@@ -843,7 +1109,7 @@ let proyectoIdEnEdicion = null;
                     }
                 }
 
-                await localforage.setItem(OfflineManager.QUEUE_KEY, newQueue);
+                await guardarDatoOffline(OfflineManager.QUEUE_KEY, newQueue);
 
                 if (newQueue.length === 0) {
                     showToast('Sincronización completada', 'success');
@@ -1084,7 +1350,7 @@ let proyectoIdEnEdicion = null;
                     const indexCache = localCache.proyectos.findIndex(p => p._id === projectId);
                     if (indexCache !== -1) {
                         localCache.proyectos[indexCache].archivos = response.archivos;
-                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                        await guardarDatoOffline('cache_proyectos', localCache.proyectos);
                     }
                 }
                 
@@ -1124,7 +1390,7 @@ let proyectoIdEnEdicion = null;
             } else {
                 localCache.proyectos.push(proyectoActualizado);
             }
-            await localforage.setItem('cache_proyectos', localCache.proyectos);
+            await guardarDatoOffline('cache_proyectos', localCache.proyectos);
         }
         
         // Actualizar historial cacheado también
@@ -1353,6 +1619,7 @@ let proyectoIdEnEdicion = null;
                 if (navigator.onLine) {
                     fetchAPI('/api/dashboard/stats', { silent: true })
                         .then(statsFrescos => {
+                            if (statsFrescos?.offline) return;
                             dashboardStatsCache = statsFrescos;
                             guardarRespaldoOffline('backup_dashboard', statsFrescos);
                             renderizar(statsFrescos);
@@ -1363,10 +1630,16 @@ let proyectoIdEnEdicion = null;
             }
 
             const stats = await fetchAPI('/api/dashboard/stats');
+            if (stats?.offline) {
+                showToast('Modo Offline: No hay métricas locales disponibles.', 'info');
+                return;
+            }
             dashboardStatsCache = stats;
             guardarRespaldoOffline('backup_dashboard', stats);
             renderizar(stats);
-        } catch (e) { console.error("Error cargando dashboard:", e); } 
+        } catch (e) {
+            if (!esErrorOffline(e)) console.error('Error cargando dashboard:', e);
+        }
     }
 
     // FASE 6: DASHBOARD DE SEGUROS
@@ -1387,6 +1660,10 @@ let proyectoIdEnEdicion = null;
                 tieneCache = Boolean(response);
             }
             if (!response) response = await fetchAPI(urlMetricas);
+            if (response?.offline) {
+                showToast('Modo Offline: No hay métricas locales disponibles.', 'info');
+                return;
+            }
             dashboardSegurosCache.set(filtroSeleccionado, response);
             guardarRespaldoOffline('backup_dashboard_seguros', response, filtroSeleccionado);
             const data = response.metricas || {};
@@ -1612,7 +1889,7 @@ let proyectoIdEnEdicion = null;
             }
 
         } catch (error) {
-            console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
+            if (!esErrorOffline(error)) console.error('[cargarDashboardSeguros] Error cargando dashboard de seguros:', error);
         }
     }
 
@@ -1753,7 +2030,7 @@ let proyectoIdEnEdicion = null;
             return localCache.proyectos;
         }
         try {
-            const stored = await localforage.getItem('cache_proyectos');
+            const stored = await leerDatoOffline('cache_proyectos');
             if (Array.isArray(stored) && stored.length > 0) {
                 localCache.proyectos = stored;
                 return stored;
@@ -1781,9 +2058,7 @@ let proyectoIdEnEdicion = null;
                     };
                 }
                 window.localCache.proyectos = proyectos;
-                if (window.localforage && typeof window.localforage.setItem === 'function') {
-                    window.localforage.setItem('cache_proyectos', proyectos).catch(() => { });
-                }
+                guardarDatoOffline('cache_proyectos', proyectos).catch(() => { });
                 return proyectos;
             }
         } catch (e) {
@@ -2422,7 +2697,7 @@ let proyectoIdEnEdicion = null;
             console.error('[cargarAgenda] Error:', error);
         } 
     }
-    async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto[campo] = valor; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    async function cambiarAtributo(id, campo, valor) { try { await fetchAPI(`/api/proyectos/${id}/${campo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto[campo] = valor; await guardarDatoOffline('cache_proyectos', localCache.proyectos); } if (document.getElementById('flujo-trabajo').classList.contains('active')) { const filtroActual = document.querySelector('#filtrosFlujo button.active').textContent.trim(); filtrarFlujo(filtroActual); } } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
 
     async function aprobarCotizacion(id) { 
         Swal.fire({ 
@@ -2464,7 +2739,7 @@ let proyectoIdEnEdicion = null;
                         localCache.proyectos[proyectoIndex].fecha = fechaFinal.toISOString();
                         localCache.proyectos[proyectoIndex].proceso = 'Agendado';
                         localCache.proyectos[proyectoIndex].estatus = 'Pendiente de Pago'; // El backend también cambia estatus
-                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                        await guardarDatoOffline('cache_proyectos', localCache.proyectos);
                     }
                     
                     showToast('¡Cotización aprobada y agendada con éxito!', 'success'); 
@@ -2500,7 +2775,7 @@ let proyectoIdEnEdicion = null;
                     if (proyectoIndex !== -1) {
                         localCache.proyectos[proyectoIndex].proceso = 'Aceptado';
                         localCache.proyectos[proyectoIndex].estatus = 'Aceptado';
-                        await localforage.setItem('cache_proyectos', localCache.proyectos);
+                        await guardarDatoOffline('cache_proyectos', localCache.proyectos);
                     }
                     
                     showToast('¡Cotización aceptada con éxito!', 'success');
@@ -2544,7 +2819,6 @@ let proyectoIdEnEdicion = null;
         
         // Limpiar caché de proyectos para forzar recarga desde servidor
         localCache.proyectos = [];
-        await localforage.removeItem('cache_proyectos');
         
         // Recargar el Kanban con el nuevo contexto (el overlay ya está visible)
         await cargarFlujoDeTrabajo('Todos', true); // true = forzar recarga
@@ -2792,7 +3066,7 @@ let proyectoIdEnEdicion = null;
                 colEl.appendChild(card); 
             });
     }
-    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await localforage.setItem('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
+    async function cambiarProceso(id, proceso) { try { const data = { proceso }; if (proceso === 'Completo') { const proyecto = localCache.proyectos.find(p => p._id === id); const restante = proyecto.total - (proyecto.montoPagado || 0); if (restante > 0) { const result = await Swal.fire({ title: 'Proyecto con Saldo Pendiente', text: `Este proyecto aún debe $${restante.toFixed(2)}. ¿Deseas completarlo?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, completar', cancelButtonText: 'Cancelar' }); if (!result.isConfirmed) { cargarFlujoDeTrabajo(); return; } } } await fetchAPI(`/api/proyectos/${id}/proceso`, { method: 'PUT', body: JSON.stringify(data) }); const proyecto = localCache.proyectos.find(p => p._id === id); if (proyecto) { proyecto.proceso = proceso; await guardarDatoOffline('cache_proyectos', localCache.proyectos); } if (proceso === 'Completo') { showToast('¡Proyecto completado y movido a historial!', 'success'); } const filtroActual = document.querySelector('#filtrosFlujo button.active')?.textContent.trim() || 'Todos'; filtrarFlujo(filtroActual); } catch (e) { showToast(`Error: ${e.message}`, 'error'); } }
     
     // ==============================================================
 
@@ -2917,6 +3191,7 @@ let proyectoIdEnEdicion = null;
             
             if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = ''; 
             if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = ''; 
+            filtroGlobalPolizas = '';
             
             if(id === 'gestion-artistas') renderPaginatedList('artistas'); 
             if(id === 'gestion-servicios') renderPaginatedList('servicios'); 
@@ -4152,8 +4427,6 @@ Fecha de firma: {{FECHA}}`;
         localStorage.removeItem('selected_empresa_id');  // Crítico: limpiar selección de Super Admin
         localStorage.removeItem('fia_identity_cache');   // Limpiar caché de identidad
         localStorage.removeItem('fia_identity_timestamp');
-        localStorage.removeItem('fia_logo_cache');         // Limpiar caché de logo
-
         configCache = null;
         logoBase64 = null;
 
@@ -4179,10 +4452,15 @@ Fecha de firma: {{FECHA}}`;
             }
         });
 
-        if (window.localforage && typeof window.localforage.removeItem === 'function') {
-            ['cache_artistas', 'cache_servicios', 'cache_proyectos', 'cache_pagos', 'cache_deudas'].forEach((key) => {
-                window.localforage.removeItem(key).catch(() => { });
-            });
+        const loginLogo = document.getElementById('login-logo');
+        if (loginLogo) {
+            loginLogo.src = window.FIA_LOGO_DEFAULT || '/uploads/logo.png';
+            loginLogo.hidden = false;
+        }
+        const appLogo = document.getElementById('app-logo');
+        if (appLogo) {
+            appLogo.src = window.FIA_LOGO_DEFAULT || '/uploads/logo.png';
+            appLogo.hidden = false;
         }
         
         history.pushState("", document.title, window.location.pathname);
@@ -4219,21 +4497,16 @@ Fecha de firma: {{FECHA}}`;
         // FASE 5: Carga centralizada de configuración con empresaId correcto
         // Para usuarios normales: usa empresaId de su payload
         // Para Super Admin: usa empresaActiva del localStorage o su empresaId
-        const empresaId = localStorage.getItem('empresaActiva') || 
-                          localStorage.getItem('selected_empresa_id') || 
-                          payload.empresaId || 
-                          'all';
+        const empresaId = payload.isSuperAdmin
+            ? localStorage.getItem('selected_empresa_id') || 'all'
+            : payload.empresaId || localStorage.getItem('empresaActiva') || 'all';
+        persistirEmpresaActiva(empresaId);
+        await cargarCacheOfflineScoped();
 
-        const empresaCambio = configCache && configCache.empresaId && payload.empresaId && configCache.empresaId !== payload.empresaId;
-        if (!configCache || empresaCambio) {
+        if (!configCache || configCache.empresaId !== empresaId) {
             await loadInitialConfig(empresaId);
         }
-        
-        // FASE 5: Aplicar identidad visual desde la configuración cargada
-        // Esto asegura que logo y favicon se sincronicen inmediatamente
-        if (configCache && (configCache.logoBase64 || configCache.faviconBase64)) {
-            aplicarIdentidadVisualAlDOM(configCache, true);
-            }
+        await aplicarIdentidadVisual(false);
         
         // FASE 6: Renderizar sidebar DESPUÉS de cargar configuración
         // Esto asegura que configCache tenga moduloSeguros disponible
@@ -4253,8 +4526,12 @@ Fecha de firma: {{FECHA}}`;
         setupCustomization(payload);
 
         // FASE 4: Inicializar selector de empresa si es Super Admin
-        if (window.empresasApp && window.empresasApp.inicializarSelectorEmpresa) {
-            await window.empresasApp.inicializarSelectorEmpresa();
+        if (navigator.onLine && window.empresasApp && window.empresasApp.inicializarSelectorEmpresa) {
+            try {
+                await window.empresasApp.inicializarSelectorEmpresa();
+            } catch (error) {
+                if (!esErrorOffline(error)) console.warn('[Empresa] No se pudo inicializar selector:', error);
+            }
         }
         actualizarVisibilidadBotonInvitacion();
 
@@ -4397,6 +4674,11 @@ Fecha de firma: {{FECHA}}`;
                 window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
             }
         }
+        else if (sectionId === 'polizas') {
+            filtroGlobalPolizas = query;
+            paginaActualPolizas = 1;
+            renderizarPaginaPolizas();
+        }
         
         // 3. Vistas Especiales (DOM Genérico)
         else if (sectionId === 'flujo-trabajo') {
@@ -4471,12 +4753,7 @@ Fecha de firma: {{FECHA}}`;
             // EL CAMBIO: Creamos una variable segura por si sigue siendo null
             const configSegura = configCache || {};
             
-            // FASE 4: Actualizar logo del header si cambió
-            if (configSegura.logoBase64) {
-                const appLogo = document.getElementById('app-logo');
-                if (appLogo) appLogo.src = configSegura.logoBase64;
-                logoBase64 = configSegura.logoBase64;
-            }
+            await aplicarIdentidadVisual(false);
             
             const firmaPreview = document.getElementById('firma-preview-img');
             let firmaSrc = 'https://placehold.co/150x60?text=Sin+Firma';
@@ -5174,7 +5451,7 @@ Fecha de firma: {{FECHA}}`;
         if (navigator.onLine && filterText === null) {
             try { 
                 localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); 
-                await localforage.setItem(`cache_${endpoint}`, localCache[endpoint]);
+                await guardarDatoOffline(`cache_${endpoint}`, localCache[endpoint]);
             } catch(e) { console.error("Error fetching " + endpoint); }
         } else if (!localCache[endpoint] || localCache[endpoint].length === 0) {
             try { localCache[endpoint] = await fetchAPI(`/api/${endpoint}`); } catch(e) {}
@@ -5984,18 +6261,21 @@ Fecha de firma: {{FECHA}}`;
 
         try {
             const polizas = await fetchAPI('/api/polizas', { silent: tieneCache });
+            if (polizas?.offline) {
+                tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                return;
+            }
             vistaPagosGlobales = Array.isArray(polizas) ? polizas : [];
             guardarBackupCobros(vistaPagosGlobales);
-            guardarRespaldoOffline('backup_pagos', vistaPagosGlobales, 'seguros');
             paginaActualVistaPagos = 1;
             renderizarPaginaGestionPagos();
         } catch (error) {
-            console.error('[cargarPagosSeguros] Error al cargar pagos:', error);
+            if (!esErrorOffline(error)) console.error('[cargarPagosSeguros] Error al cargar pagos:', error);
             if (tieneCache) return;
             vistaPagosGlobales = [];
             paginaActualVistaPagos = 1;
             renderizarPaginaGestionPagos();
-            tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar pagos</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
         }
     }
     
@@ -6044,12 +6324,16 @@ Fecha de firma: {{FECHA}}`;
         }
 
         try {
-            await fetchAPI('/api/proyectos', { silent: tieneCache });
+            const proyectos = await fetchAPI('/api/proyectos', { silent: tieneCache });
+            if (proyectos?.offline) {
+                if (!tieneCache && tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                return;
+            }
             renderizar(localCache.proyectos);
         } catch (error) {
             if (tieneCache) return;
-            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar pagos pendientes.</td></tr>';
-            console.error('[cargarPagosPendientes] Error:', error);
+            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+            if (!esErrorOffline(error)) console.error('[cargarPagosPendientes] Error:', error);
         }
     }
 
@@ -6076,6 +6360,10 @@ Fecha de firma: {{FECHA}}`;
             if (isClient) url += `?artistaId=${userInfo.artistaId}`;
 
             const pagos = await fetchAPI(url, { silent: tieneCache });
+            if (pagos?.offline) {
+                if (tablaBody) tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                return;
+            }
             pagosHistorialCacheados = pagos.map(p => ({
                 fecha: p.fecha || new Date().toISOString(),
                 artista: p.artista || 'N/A',
@@ -6091,12 +6379,12 @@ Fecha de firma: {{FECHA}}`;
                 window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
             }
         } catch (e) {
-            console.error('[cargarHistorialPagos] Error:', e);
+            if (!esErrorOffline(e)) console.error('[cargarHistorialPagos] Error:', e);
             if (tieneCache) return;
             if (tablaBody) {
-                tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error al cargar el historial de pagos.</td></tr>`;
+                tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>`;
             }
-            showToast('Error al cargar historial de pagos', 'error');
+            if (error?.offline || !navigator.onLine) showToast('Modo Offline: No hay historial local disponible.', 'info');
         }
     }
 
@@ -6468,17 +6756,11 @@ Fecha de firma: {{FECHA}}`;
                         showToast('Logo actualizado!', 'success'); 
                         
                         if(res && res.logoBase64) { 
-                            appLogo.src = res.logoBase64; 
-                            if (document.getElementById('login-logo')) document.getElementById('login-logo').src = res.logoBase64;
+                            guardarLogoEmpresaOffline(empresaId, res.logoBase64);
                             logoBase64 = res.logoBase64;
-                            await localforage.setItem('cached_logo_path', res.logoBase64);
+                            aplicarIdentidadVisualAlDOM({ empresaId, logoBase64: res.logoBase64 }, true);
                         } else {
-                            await loadInitialConfig(); 
-                            if(configCache && configCache.logoBase64) { 
-                                appLogo.src = configCache.logoBase64; 
-                                if (document.getElementById('login-logo')) document.getElementById('login-logo').src = configCache.logoBase64;
-                                logoBase64 = configCache.logoBase64;
-                            } 
+                            await aplicarIdentidadVisual(true);
                         }
                     } catch (e) { 
                         showToast(`Error al subir logo`, 'error'); 
@@ -6522,7 +6804,6 @@ Fecha de firma: {{FECHA}}`;
                                 document.head.appendChild(link);
                             }
                             link.href = faviconUrl;
-                            await localforage.setItem('cached_favicon_path', faviconUrl);
                         }
                     } catch (e) {
                         showToast(`Error al subir favicon`, 'error');
@@ -6871,9 +7152,14 @@ Fecha de firma: {{FECHA}}`;
             const respaldos = JSON.parse(localStorage.getItem(backupKey) || '{}');
             respaldos[userId] = data;
             localStorage.setItem(backupKey, JSON.stringify(respaldos));
+            return true;
         } catch (error) {
             console.warn('[Cobros] No se pudo guardar el respaldo local:', error);
+            return false;
         }
+                if (guardarBackupCobros(vistaPagosGlobales)) {
+                    eliminarVarianteRespaldoOffline('backup_pagos', 'seguros');
+                }
     }
 
     function etiquetaAsesor(usuario) {
@@ -7181,11 +7467,11 @@ Fecha de firma: {{FECHA}}`;
         }
 
         const obtenerCachePolizas = asesorId => {
-            const cacheAsesorId = user.role === 'admin' ? asesorId : '';
+            const cacheAsesorId = user.role === 'admin' ? normalizarFiltroAsesor(asesorId) : '';
             if (polizasCacheCargada && polizasCacheScope === scopeOffline && polizasCacheAsesorId === cacheAsesorId) return polizasGlobales;
             return leerRespaldoOffline('backup_polizas', cacheAsesorId || 'todos');
         };
-        let asesorSeleccionado = document.getElementById('filtro-asesor')?.value || '';
+        let asesorSeleccionado = normalizarFiltroAsesor(document.getElementById('filtro-asesor')?.value);
         let filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
         let polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
         let tieneCache = Array.isArray(polizasCacheadas);
@@ -7213,7 +7499,7 @@ Fecha de firma: {{FECHA}}`;
             }
         }
 
-        asesorSeleccionado = document.getElementById('filtro-asesor')?.value || '';
+        asesorSeleccionado = normalizarFiltroAsesor(document.getElementById('filtro-asesor')?.value);
         filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
         if (!tieneCache || polizasCacheAsesorId !== filtroAsesorCache) {
             polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
@@ -7240,6 +7526,10 @@ Fecha de firma: {{FECHA}}`;
             }
 
             const polizas = await fetchAPI(url, { silent: tieneCache });
+            if (polizas?.offline) {
+                tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                return;
+            }
             polizasGlobales = Array.isArray(polizas) ? polizas : [];
             guardarRespaldoOffline('backup_polizas', polizasGlobales, filtroAsesorCache || 'todos');
             polizasCacheAsesorId = filtroAsesorCache;
@@ -7249,7 +7539,7 @@ Fecha de firma: {{FECHA}}`;
             renderizarPaginaPolizas();
         } catch (error) {
             polizasCacheCargada = false;
-            console.error('[cargarPolizas] Error al cargar pólizas:', error);
+            if (!esErrorOffline(error)) console.error('[cargarPolizas] Error al cargar pólizas:', error);
             if (tieneCache) return;
             const respaldo = leerRespaldoOffline('backup_polizas', filtroAsesorCache || 'todos');
             if (Array.isArray(respaldo)) {
@@ -7259,7 +7549,7 @@ Fecha de firma: {{FECHA}}`;
                 notificarDatosOffline();
                 return;
             }
-            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-danger">Error al cargar pólizas</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
         }
@@ -7269,18 +7559,21 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) return;
 
-        if (polizasGlobales.length === 0) {
-            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+        const polizasFiltradas = obtenerPolizasFiltradas();
+
+        if (polizasFiltradas.length === 0) {
+            const mensaje = polizasGlobales.length === 0 ? 'No hay pólizas registradas' : 'No hay resultados para esta búsqueda';
+            tabla.innerHTML = `<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">${mensaje}</td></tr>`;
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
             return;
         }
 
-        const totalPaginas = Math.ceil(polizasGlobales.length / limitePolizas);
+        const totalPaginas = Math.ceil(polizasFiltradas.length / limitePolizas);
         paginaActualPolizas = Math.min(Math.max(paginaActualPolizas, 1), totalPaginas);
         const inicio = (paginaActualPolizas - 1) * limitePolizas;
         const fin = inicio + limitePolizas;
-        const polizasPagina = polizasGlobales.slice(inicio, fin);
+        const polizasPagina = polizasFiltradas.slice(inicio, fin);
 
         tabla.innerHTML = polizasPagina.map(p => {
             const fechaVencimiento = p.fechas?.vencimiento
@@ -7327,7 +7620,8 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('paginacionPolizas');
         if (!contenedor) return;
 
-        const totalPaginas = Math.ceil(polizasGlobales.length / limitePolizas);
+        const cantidadPolizas = obtenerPolizasFiltradas().length;
+        const totalPaginas = Math.ceil(cantidadPolizas / limitePolizas);
         if (totalPaginas === 0) {
             contenedor.innerHTML = '';
             return;
@@ -7347,9 +7641,22 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaPolizas(delta) {
-        const totalPaginas = Math.ceil(polizasGlobales.length / limitePolizas);
+        const totalPaginas = Math.ceil(obtenerPolizasFiltradas().length / limitePolizas);
         paginaActualPolizas = Math.min(Math.max(paginaActualPolizas + delta, 1), totalPaginas);
         renderizarPaginaPolizas();
+    }
+
+    function obtenerPolizasFiltradas() {
+        const consulta = filtroGlobalPolizas.trim().toLocaleLowerCase('es');
+        if (!consulta) return polizasGlobales;
+        return polizasGlobales.filter(poliza => [
+            poliza.numeroPoliza,
+            poliza.cliente,
+            poliza.asesorNombre,
+            poliza.asesorId?.username,
+            poliza.aseguradora,
+            poliza.tipoSeguro
+        ].some(valor => String(valor || '').toLocaleLowerCase('es').includes(consulta)));
     }
 
     // Función para ver historial de notificaciones
@@ -7429,7 +7736,7 @@ Fecha de firma: {{FECHA}}`;
                 });
             }
         } catch (error) {
-            console.error('[cargarListaAsesores] Error al cargar asesores:', error);
+            if (!esErrorOffline(error)) console.warn('[cargarListaAsesores] Error al cargar asesores:', error);
         }
     }
 
@@ -7531,17 +7838,8 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
-            tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando datos de cobranza...</td></tr>';
-            cobranzaGlobales = [];
-            paginaActualCobranza = 1;
             const paginacion = document.getElementById('paginacionCobranza');
-            if (paginacion) paginacion.innerHTML = '';
-
-            if (sinCobranza) sinCobranza.style.display = 'none';
-
-            try {
-                const datos = await fetchAPI('/api/polizas/cobranza-diaria');
-
+            const renderizar = datos => {
                 estadoCobranza.vencidas = datos.vencidas || [];
                 estadoCobranza.cobrosHoy = datos.cobrosHoy || datos.polizas || [];
                 estadoCobranza.porVencer = datos.porVencer || [];
@@ -7563,14 +7861,45 @@ Fecha de firma: {{FECHA}}`;
                 actualizarContadoresCobranza(estadoCobranza.totales);
                 actualizarTabsActivasCobranza();
                 renderizarTablaCobranza(estadoCobranza[estadoCobranza.tabActiva] || [], estadoCobranza.tabActiva);
-
                 const kpiCobranzaHoy = document.getElementById('kpi-cobranza-hoy');
-                if (kpiCobranzaHoy) {
-                    kpiCobranzaHoy.textContent = estadoCobranza.totales.cobrosHoy || 0;
+                if (kpiCobranzaHoy) kpiCobranzaHoy.textContent = estadoCobranza.totales.cobrosHoy || 0;
+            };
+
+            const datosCacheados = leerRespaldoOffline('backup_cobranza_diaria');
+            const tieneCache = datosCacheados && typeof datosCacheados === 'object';
+            if (tieneCache) {
+                renderizar(datosCacheados);
+            } else {
+                tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando datos de cobranza...</td></tr>';
+                cobranzaGlobales = [];
+                paginaActualCobranza = 1;
+                if (paginacion) paginacion.innerHTML = '';
+                if (sinCobranza) sinCobranza.style.display = 'none';
+            }
+
+            if (!navigator.onLine) {
+                if (!tieneCache) {
+                    tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                } else {
+                    showToast('Modo Offline: Mostrando cobranza guardada.', 'info');
                 }
+                return;
+            }
+
+            try {
+                const datos = await fetchAPI('/api/polizas/cobranza-diaria', { silent: tieneCache });
+                if (datos?.offline) {
+                    tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                    return;
+                }
+                guardarRespaldoOffline('backup_cobranza_diaria', datos);
+                renderizar(datos);
             } catch (error) {
-                console.error('[cargarCobranzaDiaria] Error al cargar cobranza diaria:', error);
-                tabla.innerHTML = '<tr><td colspan="7" class="text-danger">Error al cargar datos de cobranza</td></tr>';
+                if (tieneCache) {
+                    showToast('Modo Offline: Mostrando cobranza guardada.', 'info');
+                    return;
+                }
+                tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 cobranzaGlobales = [];
                 paginaActualCobranza = 1;
                 if (paginacion) paginacion.innerHTML = '';
@@ -7819,6 +8148,95 @@ Fecha de firma: {{FECHA}}`;
                 diasGracia: poliza.diasGracia || 30,
                 enlacePago: poliza.enlacePago || ''
             };
+
+            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoTipoPago, nuevaFechaInicio }) => {
+                const costoTotal = nuevoCostoTotal;
+                const primaNeta = nuevaPrimaNeta;
+                const pagoInicial = nuevoPagoInicial;
+                const tipoPago = nuevoTipoPago || 'anual';
+                const fechaInicio = nuevaFechaInicio;
+                const cuotasPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
+                const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+                const totalCuotas = cuotasPorTipo[tipoPago] || 1;
+                const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
+                const subtotalPoliza = costoTotal / 1.16;
+                const gastosTotales = subtotalPoliza - primaNeta;
+                const cantidadRecibos = totalCuotas;
+                const gastosPorRecibo = cantidadRecibos > 0 ? gastosTotales / cantidadRecibos : 0;
+                const calcularPagoNeto = monto => Math.round((monto / 1.16 - gastosPorRecibo) * 100) / 100;
+                const distribuirSaldo = (saldo, cantidad) => {
+                    if (cantidad <= 0) return [];
+                    const montos = [];
+                    let asignado = 0;
+                    for (let indice = 0; indice < cantidad; indice++) {
+                        const monto = indice === cantidad - 1
+                            ? redondearCentavos(saldo - asignado)
+                            : redondearCentavos(saldo / cantidad);
+                        montos.push(monto);
+                        asignado = redondearCentavos(asignado + monto);
+                    }
+                    return montos;
+                };
+                const costoInicial = redondearCentavos(Math.max(0, costoTotal));
+                const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
+                    ? Math.min(costoInicial, redondearCentavos(pagoInicial))
+                    : null;
+                const montosPlan = montoCuotaInicial === null
+                    ? distribuirSaldo(costoInicial, totalCuotas)
+                    : [montoCuotaInicial, ...distribuirSaldo(
+                        redondearCentavos(costoInicial - montoCuotaInicial),
+                        totalCuotas - 1
+                    )];
+                const fechaBase = new Date(`${fechaInicio}T00:00:00`);
+                const diaBase = fechaBase.getDate();
+                const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
+                const recibosActuales = Array.isArray(poliza.recibos) ? poliza.recibos : [];
+                const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
+                    const reciboActual = recibosActuales.find(recibo => {
+                        const numero = Number(String(recibo.numeroRecibo || '').match(/\d+/)?.[0]);
+                        const periodo = Number(String(recibo.periodoCobertura || '').match(/^(\d+)/)?.[1]);
+                        return (Number.isFinite(numero) && numero > 0 && numero - 1 === indicePlan)
+                            || (!Number.isFinite(numero) && Number.isFinite(periodo) && periodo > 0 && periodo - 1 === indicePlan);
+                    }) || recibosActuales[indicePlan];
+                    const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
+                    const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
+                    const mes = mesObjetivo % 12;
+                    const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+                    const fechaVencimiento = reciboActual?.fechaVencimientoRecibo
+                        || reciboActual?.fechaVencimiento
+                        || new Date(anio, mes, Math.min(diaBase, ultimoDia));
+                    const montoRecibo = montosPlan[indicePlan];
+                    return {
+                        ...(reciboActual || {}),
+                        numeroRecibo: `REC-${indicePlan + 1}`,
+                        periodoCobertura: `${indicePlan + 1}/${totalCuotas}`,
+                        montoRecibo,
+                        montoPagoNeto: calcularPagoNeto(montoRecibo),
+                        fechaVencimientoRecibo: fechaVencimiento,
+                        estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
+                    };
+                });
+
+                const recibosPagados = recibos.filter(recibo =>
+                    String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
+                );
+                const recibosPendientes = recibos.filter(recibo =>
+                    String(recibo.estadoRecibo || '').toLowerCase() === 'pendiente'
+                );
+                const sumaPagados = redondearCentavos(recibosPagados.reduce(
+                    (total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0
+                ));
+                const saldoRestante = redondearCentavos(recibosPendientes.reduce(
+                    (total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0
+                ));
+                return {
+                    recibos,
+                    sumaPagados,
+                    saldoRestante,
+                    cuotasPendientes: recibosPendientes.length
+                };
+            };
+            let recibosRecalculados = false;
             
             const { value: formValues } = await Swal.fire({
                 title: 'Editar Póliza',
@@ -7940,6 +8358,16 @@ Fecha de firma: {{FECHA}}`;
                             <button type="button" id="btnRecalcularRecibos" class="btn btn-warning">🔄 Recalcular Recibos con estos montos</button>
                             <button type="button" id="btnCancelarPoliza" class="btn btn-danger btn-sm">🚫 Cancelar Póliza</button>
                         </div>
+                        <div id="vistaPreviaRecibos" class="mt-3" hidden>
+                            <h6 class="text-uppercase text-secondary small fw-bold">Vista previa del calendario</h6>
+                            <p id="resumenVistaPreviaRecibos" class="small mb-2"></p>
+                            <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead><tr><th>Recibo</th><th>Periodo</th><th>Monto</th><th>Pago Neto</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+                                    <tbody id="tablaVistaPreviaRecibos"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 `,
                 focusConfirm: false,
@@ -7963,28 +8391,60 @@ Fecha de firma: {{FECHA}}`;
                             Swal.fire('Error', error.message || 'No se pudo cancelar la póliza.', 'error');
                         }
                     });
-                    document.getElementById('btnRecalcularRecibos')?.addEventListener('click', async event => {
-                        const boton = event.currentTarget;
-                        boton.disabled = true;
-                        try {
-                            await ejecutarOEncolar(`/api/polizas/${id}/recalcular`, {
-                                method: 'PUT',
-                                body: JSON.stringify({
-                                    primaTotal: parseFloat(document.getElementById('poliza-prima').value) || 0,
-                                    primaNeta: parseFloat(document.getElementById('poliza-prima-neta').value) || 0,
-                                    primerPago: parseFloat(document.getElementById('poliza-primer-pago').value) || 0,
-                                    montoAbono: parseFloat(document.getElementById('poliza-monto-abono').value) || 0,
-                                    formaPago: document.getElementById('poliza-tipo-pago').value,
-                                    tipoPago: document.getElementById('poliza-tipo-pago').value,
-                                    fechaInicio: document.getElementById('poliza-inicio').value
-                                })
-                            });
-                            await Swal.fire('Éxito', 'Recibos recalculados correctamente', 'success');
-                            cargarPolizas(true);
-                        } catch (error) {
-                            boton.disabled = false;
-                            Swal.fire('Error', error.message || 'No se pudieron recalcular los recibos', 'error');
+                    document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
+                        event.preventDefault();
+                        const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
+                        const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
+                        const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
+                        const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
+                        const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
+                        if (nuevoCostoTotal <= 0) {
+                            Swal.showValidationMessage('El costo total debe ser mayor que cero.');
+                            return;
                         }
+                        if (!nuevaFechaInicio) {
+                            Swal.showValidationMessage('La fecha de inicio es obligatoria para calcular los recibos.');
+                            return;
+                        }
+
+                        const resultadoPreview = calcularRecibosVistaPrevia({
+                            nuevoCostoTotal,
+                            nuevaPrimaNeta,
+                            nuevoPagoInicial,
+                            nuevoTipoPago,
+                            nuevaFechaInicio
+                        });
+                        planRecibosCambio = resultadoPreview.recibos;
+                        poliza.recibos = planRecibosCambio;
+                        recibosRecalculados = true;
+                        const tablaVistaPrevia = document.getElementById('tablaVistaPreviaRecibos');
+                        const recibosPagados = poliza.recibos.filter(recibo =>
+                            String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
+                        ).length;
+                        const recibosPendientes = poliza.recibos.filter(recibo =>
+                            String(recibo.estadoRecibo || '').toLowerCase() !== 'pagado'
+                        ).length;
+                        tablaVistaPrevia.innerHTML = poliza.recibos.map(recibo => {
+                            const montoRecibo = Number(recibo.montoRecibo) || 0;
+                            const pagoNeto = Number(recibo.montoPagoNeto) || 0;
+                            const fechaVencimiento = recibo.fechaVencimientoRecibo
+                                ? new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()
+                                : 'N/A';
+                            return `<tr>
+                                <td>${escapeHTML(recibo.numeroRecibo || 'N/A')}</td>
+                                <td>${escapeHTML(recibo.periodoCobertura || 'N/A')}</td>
+                                <td>$${montoRecibo.toFixed(2)}</td>
+                                <td>$${pagoNeto.toFixed(2)}</td>
+                                <td>${fechaVencimiento}</td>
+                                <td>${escapeHTML(recibo.estadoRecibo || 'pendiente')}</td>
+                            </tr>`;
+                        }).join('');
+                        document.getElementById('resumenVistaPreviaRecibos').textContent =
+                            `Costo: $${nuevoCostoTotal.toFixed(2)} · Pagado: $${resultadoPreview.sumaPagados.toFixed(2)} · `
+                            + `Saldo restante: $${resultadoPreview.saldoRestante.toFixed(2)} · `
+                            + `${recibosPagados} pagados · ${resultadoPreview.cuotasPendientes} cuotas pendientes · `
+                            + `${recibosPendientes} recibos generados`;
+                        document.getElementById('vistaPreviaRecibos').hidden = false;
                     });
                 },
                 preConfirm: async () => {
@@ -8007,7 +8467,6 @@ Fecha de firma: {{FECHA}}`;
                     const diasGracia = document.getElementById('poliza-dias-gracia').value;
                     const enlacePago = document.getElementById('poliza-enlace-pago').value.trim();
                     const nuevoAsesorId = document.getElementById('poliza-asesor').value;
-
                     if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                         Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
                         return;
@@ -8027,6 +8486,10 @@ Fecha de firma: {{FECHA}}`;
                     }
 
                     return {
+                        recalcularRecibos: recibosRecalculados,
+                        recibos: recibosRecalculados
+                            ? planRecibosCambio.map(({ _indicePlan, ...recibo }) => recibo)
+                            : undefined,
                         numeroPoliza: numero,
                         cliente,
                         clienteEmail,
@@ -8075,7 +8538,7 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     function obtenerFiltroAsesorExportacion() {
         const selector = document.getElementById('filtro-asesor');
-        const asesorId = selector?.value || '';
+        const asesorId = normalizarFiltroAsesor(selector?.value);
         const asesorNombre = selector?.selectedOptions?.[0]?.textContent?.trim() || '';
         const nombreArchivo = asesorId && asesorNombre
             ? `_${asesorNombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
@@ -8353,8 +8816,12 @@ Fecha de firma: {{FECHA}}`;
         
         // FASE 3: Usar recibos[] en lugar de pagos[]
         const recibos = poliza.recibos || [];
-        const pagos = poliza.pagos || [];
         const montoLegacy = Number(poliza.saldoRestante ?? poliza.primaTotal ?? 0);
+        const subtotalPoliza = (Number(poliza.primaTotal) || 0) / 1.16;
+        const gastosPorRecibo = recibos.length > 0
+            ? (subtotalPoliza - (Number(poliza.primaNeta) || 0)) / recibos.length
+            : 0;
+        const calcularPagoNeto = monto => Math.round((((Number(monto) || 0) / 1.16) - gastosPorRecibo) * 100) / 100;
         
         // Generar tabla de recibos
         const recibosHTML = recibos.length > 0 
@@ -8370,6 +8837,7 @@ Fecha de firma: {{FECHA}}`;
                         <td style="white-space: nowrap;"><strong>${r.numeroRecibo || 'N/A'}</strong></td>
                         <td style="white-space: nowrap;">${r.periodoCobertura || 'N/A'}</td>
                         <td style="white-space: nowrap;">$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
+                        <td style="white-space: nowrap;">$${calcularPagoNeto(r.montoRecibo).toFixed(2)}</td>
                         <td style="white-space: nowrap;">${fechaVencimiento}</td>
                         <td style="white-space: nowrap;">${fechaPago}</td>
                         <td style="white-space: nowrap;"><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
@@ -8382,22 +8850,7 @@ Fecha de firma: {{FECHA}}`;
                     </tr>
                 `;
             }).join('')
-            : `<tr><td colspan="7" class="text-center text-muted" style="white-space: nowrap;">No hay recibos generados. <button class="btn btn-sm btn-outline-success ms-2" onclick="app.marcarCobranzaResuelta('${poliza._id}', ${montoLegacy})"><i class="bi bi-cash"></i> Registrar cobro legacy</button></td></tr>`;
-
-        // Fallback: Mostrar pagos[] si no hay recibos (compatibilidad)
-        const pagosHTML = pagos.length > 0 
-            ? pagos.map((p, index) => `
-                <tr>
-                    <td>${p.fechaPago ? new Date(p.fechaPago).toLocaleDateString() : 'N/A'}</td>
-                    <td>$${p.monto?.toFixed(2) || '0.00'}</td>
-                    <td>${escapeHTML(p.metodoPago || 'N/A')}</td>
-                    <td><span class="badge bg-${p.estado === 'pagado' ? 'success' : 'warning'}">${p.estado || 'N/A'}</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPago('${poliza._id}', ${index})" title="Eliminar Pago"><i class="bi bi-trash"></i></button>
-                    </td>
-                </tr>
-            `).join('')
-            : '';
+            : `<tr><td colspan="8" class="text-center text-muted" style="white-space: nowrap;">No hay recibos generados. <button class="btn btn-sm btn-outline-success ms-2" onclick="app.marcarCobranzaResuelta('${poliza._id}', ${montoLegacy})"><i class="bi bi-cash"></i> Registrar cobro legacy</button></td></tr>`;
 
         const proximoPagoHTML = poliza.proximoPago 
             ? `<div class="alert alert-info mb-3 d-flex justify-content-between align-items-center">
@@ -8421,6 +8874,7 @@ Fecha de firma: {{FECHA}}`;
                                     <th style="white-space: nowrap;">No. Recibo</th>
                                     <th style="white-space: nowrap;">Periodo</th>
                                     <th style="white-space: nowrap;">Monto</th>
+                                    <th style="white-space: nowrap;">Pago Neto (Base Comisión)</th>
                                     <th style="white-space: nowrap;">Vencimiento</th>
                                     <th style="white-space: nowrap;">Pagado</th>
                                     <th style="white-space: nowrap;">Estado</th>
@@ -8432,26 +8886,6 @@ Fecha de firma: {{FECHA}}`;
                             </tbody>
                         </table></div>
                     </div>
-                    ${pagos.length > 0 ? `
-                    <hr>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Historial de Pagos (Legacy)</label>
-                        <table class="table table-sm table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Monto</th>
-                                    <th>Método</th>
-                                    <th>Estado</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${pagosHTML}
-                            </tbody>
-                        </table>
-                    </div>
-                    ` : ''}
                     <hr>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Recordatorios</label>
@@ -8558,37 +8992,6 @@ Fecha de firma: {{FECHA}}`;
         } catch (error) {
             console.error('[guardarPago] Error al registrar pago:', error);
             Swal.fire('Error', error.message || 'No se pudo registrar el pago', 'error');
-        }
-    }
-
-    async function eliminarPago(polizaId, pagoIndex) {
-        const result = await Swal.fire({
-            title: '¿Eliminar pago?',
-            text: 'Esta acción no se puede deshacer',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        });
-
-        if (!result.isConfirmed) return;
-
-        try {
-            await ejecutarOEncolar(`/api/polizas/${polizaId}/pagos/${pagoIndex}`, {
-                method: 'DELETE'
-            });
-
-            await Swal.fire('Éxito', 'Pago eliminado correctamente', 'success');
-            
-            // Actualizar la vista activa
-            const seccionActiva = document.querySelector('main > section.active');
-            await cargarPolizas(true);
-            if (seccionActiva && seccionActiva.id === 'pagos') {
-                cargarPagos(); // Recargar tabla de pagos
-            }
-        } catch (error) {
-            console.error('[eliminarPago] Error al eliminar pago:', error);
-            Swal.fire('Error', error.message || 'No se pudo eliminar el pago', 'error');
         }
     }
 
@@ -8951,6 +9354,34 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaClientesBody');
         if (!tabla) return;
         const scopeOffline = obtenerScopeOffline();
+        const userInfo = getUserRoleAndId();
+        const empresaId = localStorage.getItem('selected_empresa_id')
+            || localStorage.getItem('empresaActiva')
+            || 'all';
+        const backupKey = `backup_clientes_${empresaId}`;
+        const leerBackupEmpresa = () => {
+            try {
+                const backups = JSON.parse(localStorage.getItem(backupKey) || '{}');
+                return backups[String(userInfo.id || 'anon')]?.data || null;
+            } catch (error) {
+                return null;
+            }
+        };
+        const guardarBackupEmpresa = data => {
+            try {
+                const backups = JSON.parse(localStorage.getItem(backupKey) || '{}');
+                backups[String(userInfo.id || 'anon')] = { data, actualizado: Date.now() };
+                localStorage.setItem(backupKey, JSON.stringify(backups));
+                return true;
+            } catch (error) {
+                console.warn('[cargarClientesCrm] No se pudo guardar backup local:', error);
+                return false;
+                        if (guardarBackupEmpresa(data)) {
+                            eliminarVarianteRespaldoOffline('backup_clientes', 'default');
+                        }
+            }
+        };
+
         if (forzarRecarga) {
             clientesCacheCargada = false;
             clientesCacheScope = null;
@@ -8961,16 +9392,16 @@ Fecha de firma: {{FECHA}}`;
         }
 
         let clientesCacheados = null;
-        if (!forzarRecarga) {
-            clientesCacheados = clientesCacheCargada && clientesCacheScope === scopeOffline
-                ? clientesGlobales
+        const backupEmpresa = leerBackupEmpresa();
+        clientesCacheados = clientesCacheCargada && clientesCacheScope === scopeOffline
+            ? clientesGlobales
+            : Array.isArray(backupEmpresa?.clientes)
+                ? backupEmpresa.clientes
                 : leerRespaldoOffline('backup_clientes');
-        }
         const tieneCache = Array.isArray(clientesCacheados);
         if (tieneCache) {
             clientesGlobales = clientesCacheados;
             clientesCacheScope = scopeOffline;
-        if (tieneCache && !navigator.onLine) return;
             paginaActualClientes = 1;
             renderizarPaginaClientes();
         }
@@ -8979,30 +9410,48 @@ Fecha de firma: {{FECHA}}`;
             tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">Cargando...</td></tr>';
         }
         const paginacion = document.getElementById('paginacionClientes');
-        if (paginacion) paginacion.innerHTML = '';
+        if (!tieneCache && paginacion) paginacion.innerHTML = '';
+
+        if (!navigator.onLine) {
+            if (tieneCache) {
+                showToast('Modo Offline: Mostrando clientes guardados localmente.', 'info');
+            } else {
+                tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">No hay datos offline disponibles para esta empresa.</td></tr>';
+            }
+            return;
+        }
 
         try {
             const data = await fetchAPI('/api/clientes', { silent: tieneCache });
+            if (data?.offline) {
+                tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">No hay datos locales disponibles para esta empresa.</td></tr>';
+                return;
+            }
             clientesGlobales = Array.isArray(data.clientes) ? data.clientes : [];
-            guardarRespaldoOffline('backup_clientes', clientesGlobales);
+            guardarBackupEmpresa(data);
             clientesCacheCargada = true;
             clientesCacheScope = scopeOffline;
             paginaActualClientes = 1;
             renderizarPaginaClientes();
         } catch (error) {
             clientesCacheCargada = false;
-            console.error('[cargarClientesCrm] Error:', error);
-            if (tieneCache) return;
-            const respaldo = leerRespaldoOffline('backup_clientes');
+            if (tieneCache) {
+                showToast('Modo Offline: Mostrando clientes guardados localmente.', 'info');
+                return;
+            }
+            const backupEmpresa = leerBackupEmpresa();
+            const respaldo = Array.isArray(backupEmpresa?.clientes)
+                ? backupEmpresa.clientes
+                : leerRespaldoOffline('backup_clientes');
             if (Array.isArray(respaldo)) {
                 clientesGlobales = respaldo;
                 clientesCacheScope = scopeOffline;
                 paginaActualClientes = 1;
                 renderizarPaginaClientes();
-                notificarDatosOffline();
+                showToast('Modo Offline: Mostrando clientes guardados localmente.', 'info');
                 return;
             }
-            tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-danger">Error al cargar clientes</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">No hay datos offline disponibles para esta empresa.</td></tr>';
             const paginacion = document.getElementById('paginacionClientes');
             if (paginacion) paginacion.innerHTML = '';
         }
@@ -9671,26 +10120,9 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     (async function init() {
         // 1. CARGAR DB LOCAL PRIMERO
-        await cargarCacheDesdeIndexedDB();
+        await cargarCacheOfflineScoped();
 
-        // 2. CARGAR ASSETS LOCALES
-        const cachedLogo = await localforage.getItem('cached_logo_path');
-        if(cachedLogo) {
-            if(DOMElements.appLogo) DOMElements.appLogo.src = cachedLogo; 
-            if(DOMElements.loginLogo) DOMElements.loginLogo.src = cachedLogo;
-            logoBase64 = cachedLogo;
-        }
-
-        const cachedFavicon = await localforage.getItem('cached_favicon_path');
-        if (cachedFavicon) {
-            let link = document.querySelector("link[rel~='icon']");
-            if (!link) {
-                link = document.createElement('link');
-                link.rel = 'icon';
-                document.head.appendChild(link);
-            }
-            link.href = cachedFavicon;
-        }
+        // Los assets de identidad se cargan después de resolver el tenant activo.
 
         setupFooterYear();
 
@@ -9717,18 +10149,18 @@ Fecha de firma: {{FECHA}}`;
 
         const token = localStorage.getItem('token');
         if (token) {
+            let payload = null;
             try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
+                payload = JSON.parse(atob(token.split('.')[1]));
                 const tokenExpiraEn = Number(payload.exp) * 1000;
                 const tokenVigente = Number.isFinite(tokenExpiraEn) && tokenExpiraEn > Date.now();
-                if (!navigator.onLine && !tokenVigente) return showLogin();
-                if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin();
-
-                if (!navigator.onLine && tokenVigente && (path === '/' || path === '/index.html')) {
-                    const rutaDashboard = `/dashboard${window.location.search}${window.location.hash}`;
-                    window.location.replace(rutaDashboard);
+                if (!navigator.onLine && !tokenVigente) {
+                    showLogin();
+                    const loginError = document.getElementById('login-error');
+                    if (loginError) loginError.textContent = 'Se requiere conexión a internet para validar esta sesión.';
                     return;
                 }
+                if (navigator.onLine && payload.exp * 1000 < Date.now()) return showLogin();
                 
                 // FASE 5: Carga SECUENCIAL al refrescar
                 // PASO 1: Token ya verificado arriba
@@ -9757,13 +10189,42 @@ Fecha de firma: {{FECHA}}`;
                     setTimeout(() => window.chatInit.autoInit(), 500);
                 }
             } catch (e) { 
+                let jwtVigenteOffline = false;
+                try {
+                    const tokenGuardado = localStorage.getItem('token');
+                    const payloadGuardado = tokenGuardado ? JSON.parse(atob(tokenGuardado.split('.')[1])) : {};
+                    jwtVigenteOffline = Number(payloadGuardado.exp) * 1000 > Date.now();
+                } catch (error) { /* Token corrupto: no permitir el fallback offline. */ }
+                if (esErrorOffline(e) && jwtVigenteOffline) {
+                    document.body.classList.remove('auth-visible');
+                    if (payload) {
+                        try {
+                            await showApp(payload);
+                            return;
+                        } catch (showAppError) {
+                            console.warn('[Init] Se continúa con el shell offline:', showAppError.message);
+                        }
+                    }
+                    DOMElements.loginContainer.style.display = 'none';
+                    DOMElements.appWrapper.style.display = 'flex';
+                    document.body.style.opacity = '1';
+                    return;
+                }
                 console.error('[Init] Error en inicialización:', e);
-                showLogin(); 
+                showLogin();
+                if (!navigator.onLine) {
+                    const loginError = document.getElementById('login-error');
+                    if (loginError) loginError.textContent = 'No fue posible validar esta sesión sin conexión. Conéctate para iniciar sesión.';
+                }
             }
         } else { 
             // Sin sesión: cargar identidad visual de FIA para el login (anti-flicker)
             await aplicarIdentidadVisual(false);
             showLogin(); 
+            if (!navigator.onLine) {
+                const loginError = document.getElementById('login-error');
+                if (loginError) loginError.textContent = 'Se requiere conexión a internet para iniciar sesión por primera vez.';
+            }
         }
     })();
 
@@ -10326,7 +10787,7 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
-        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, eliminarPago, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         guardarYProbarSMTP, enviarCorreoPrueba,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,

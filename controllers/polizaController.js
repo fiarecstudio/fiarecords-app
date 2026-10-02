@@ -61,25 +61,46 @@ function calcularProximoPago(fechaBase, tipoPago) {
     return proximoPago;
 }
 
-const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago, montoAbono) => {
+const obtenerNumeroRecibosPorTipo = tipoPago => ({
+    mensual: 12,
+    trimestral: 4,
+    semestral: 2,
+    anual: 1
+}[String(tipoPago || '').toLowerCase()] || 1);
+
+const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago, montoAbono, opciones = {}) => {
     const recibos = [];
-    let numRecibos = 1, mesesIntervalo = 12;
+    const totalRecibos = obtenerNumeroRecibosPorTipo(tipoPago);
+    let mesesIntervalo = 12;
     const tipo = (tipoPago || '').toLowerCase();
-    if (tipo === 'mensual') { numRecibos = 12; mesesIntervalo = 1; }
-    else if (tipo === 'trimestral') { numRecibos = 4; mesesIntervalo = 3; }
-    else if (tipo === 'semestral') { numRecibos = 2; mesesIntervalo = 6; }
+    if (tipo === 'mensual') mesesIntervalo = 1;
+    else if (tipo === 'trimestral') mesesIntervalo = 3;
+    else if (tipo === 'semestral') mesesIntervalo = 6;
+
+    const indiceInicial = Math.max(0, Number(opciones.indiceInicial) || 0);
+    const indicesRecibos = Array.isArray(opciones.indices)
+        ? opciones.indices
+        : Array.from({ length: Number.isInteger(opciones.cantidadRecibos)
+            ? Math.min(totalRecibos, Math.max(0, opciones.cantidadRecibos))
+            : totalRecibos }, (_, index) => indiceInicial + index);
+    const cantidadRecibos = indicesRecibos.length;
     
-    const montoBase = parseFloat((primaTotal / numRecibos).toFixed(2));
+    const montoBase = cantidadRecibos > 0
+        ? parseFloat((primaTotal / cantidadRecibos).toFixed(2))
+        : 0;
     const fechaBase = new Date(fechaInicio);
     const diaOriginal = fechaBase.getDate();
     
-    for (let i = 0; i < numRecibos; i++) {
+    for (let i = 0; i < cantidadRecibos; i++) {
+        const indicePlan = indicesRecibos[i];
         let montoDelMes = montoBase;
-        if (primerPago && montoAbono) {
-            montoDelMes = i === 0 ? parseFloat(primerPago) : parseFloat(montoAbono);
+        if (Array.isArray(opciones.montos)) {
+            montoDelMes = Number(opciones.montos[i]) || 0;
+        } else if (primerPago && montoAbono) {
+            montoDelMes = indicePlan === 0 ? parseFloat(primerPago) : parseFloat(montoAbono);
         }
 
-        const mesObjetivo = fechaBase.getMonth() + (i * mesesIntervalo);
+        const mesObjetivo = fechaBase.getMonth() + (indicePlan * mesesIntervalo);
         let fechaRecibo = new Date(fechaBase.getFullYear(), mesObjetivo, diaOriginal);
         const mesEsperado = mesObjetivo % 12;
         if (fechaRecibo.getMonth() !== mesEsperado) {
@@ -87,14 +108,94 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
         }
 
         recibos.push({
-            numeroRecibo: `REC-${i + 1}`,
+            numeroRecibo: `REC-${indicePlan + 1}`,
             montoRecibo: montoDelMes,
             fechaVencimientoRecibo: fechaRecibo,
             estadoRecibo: 'pendiente',
-            periodoCobertura: `${i+1}/${numRecibos}`
+            periodoCobertura: `${indicePlan + 1}/${totalRecibos}`
         });
     }
     return recibos;
+};
+
+const esReciboPagado = recibo =>
+    String(recibo?.estadoRecibo || recibo?.estado || '').toLowerCase() === 'pagado';
+
+const regenerarRecibosPendientes = ({ recibosActuales = [], primaTotal, fechaInicio, tipoPago, primerPago, montoAbono }) => {
+    const cantidadTotal = obtenerNumeroRecibosPorTipo(tipoPago);
+    const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
+    const costoTotal = redondearCentavos(Math.max(0, Number(primaTotal) || 0));
+    const distribuirSaldo = (saldo, cantidad) => {
+        if (cantidad <= 0) return [];
+        const montos = [];
+        let asignado = 0;
+        for (let indice = 0; indice < cantidad; indice++) {
+            const monto = indice === cantidad - 1
+                ? redondearCentavos(saldo - asignado)
+                : redondearCentavos(saldo / cantidad);
+            montos.push(monto);
+            asignado = redondearCentavos(asignado + monto);
+        }
+        return montos;
+    };
+    const montoCuotaInicial = cantidadTotal > 1 && Number(primerPago) > 0
+        ? Math.min(costoTotal, redondearCentavos(primerPago))
+        : null;
+    const montosPlan = montoCuotaInicial === null
+        ? distribuirSaldo(costoTotal, cantidadTotal)
+        : [montoCuotaInicial, ...distribuirSaldo(
+            redondearCentavos(costoTotal - montoCuotaInicial),
+            cantidadTotal - 1
+        )];
+    const recibosPorIndice = new Map();
+
+    recibosActuales.forEach((recibo, indiceOriginal) => {
+        const numeroRecibo = Number(String(recibo.numeroRecibo || '').match(/\d+/)?.[0]);
+        const numeroPeriodo = Number(String(recibo.periodoCobertura || '').match(/^(\d+)/)?.[1]);
+        let indicePlan = Number.isFinite(numeroRecibo) && numeroRecibo > 0
+            ? numeroRecibo - 1
+            : Number.isFinite(numeroPeriodo) && numeroPeriodo > 0
+                ? numeroPeriodo - 1
+                : indiceOriginal;
+        if (indicePlan < 0 || indicePlan >= cantidadTotal || recibosPorIndice.has(indicePlan)) {
+            indicePlan = Array.from({ length: cantidadTotal }, (_, indice) => indice)
+                .find(indice => !recibosPorIndice.has(indice));
+        }
+        if (indicePlan !== undefined) {
+            recibosPorIndice.set(indicePlan, recibo.toObject ? recibo.toObject() : { ...recibo });
+        }
+    });
+
+    const fechaBase = new Date(fechaInicio);
+    const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+    const mesesIntervalo = mesesPorTipo[String(tipoPago || '').toLowerCase()] || 12;
+    const diaBase = fechaBase.getDate();
+    return Array.from({ length: cantidadTotal }, (_, indicePlan) => {
+        const reciboActual = recibosPorIndice.get(indicePlan) || {};
+        const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
+        const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
+        const mes = mesObjetivo % 12;
+        const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+        const fechaVencimiento = reciboActual.fechaVencimientoRecibo
+            || reciboActual.fechaVencimiento
+            || new Date(anio, mes, Math.min(diaBase, ultimoDia));
+        return {
+            ...reciboActual,
+            numeroRecibo: reciboActual.numeroRecibo || `REC-${indicePlan + 1}`,
+            periodoCobertura: reciboActual.periodoCobertura || `${indicePlan + 1}/${cantidadTotal}`,
+            montoRecibo: montosPlan[indicePlan],
+            fechaVencimientoRecibo: fechaVencimiento,
+            estadoRecibo: reciboActual.estadoRecibo || reciboActual.estado || 'pendiente'
+        };
+    });
+};
+
+const calcularPagoNeto = (montoRecibo, primaNeta, primaTotal) => {
+    const primaTotalNumerica = Number(primaTotal) || 0;
+    const factorRatio = primaTotalNumerica
+        ? Number(((Number(primaNeta) || 0) / primaTotalNumerica).toFixed(5))
+        : 0;
+    return Number(((Number(montoRecibo) || 0) * factorRatio).toFixed(2));
 };
 
 
@@ -680,17 +781,25 @@ const obtenerPolizas = async (req, res) => {
         // RBAC: Si el usuario es admin, puede ver todas las pólizas de la empresa
         // Si viene un query param asesorId, filtra por ese asesor específico
         if (userRole === 'admin') {
-            if (req.query.asesorId) {
-                filtro.asesorId = req.query.asesorId;
+            const asesorSolicitado = String(req.query.asesorId || '').trim();
+            if (asesorSolicitado && !['todos', 'all', 'null', 'undefined'].includes(asesorSolicitado.toLowerCase())) {
+                filtro.asesorId = asesorSolicitado;
             }
         } else {
             // Si no es admin, SOLO puede ver sus propias pólizas
             filtro.asesorId = userId;
         }
         
-        const polizas = await Poliza.find(filtro).lean();
+        const polizas = await Poliza.find(filtro).populate('asesorId', 'username').lean();
         
-        res.json(polizas);
+        res.json(polizas.map(poliza => {
+            const asesor = poliza.asesorId;
+            return {
+                ...poliza,
+                asesorNombre: asesor?.username || poliza.asesorNombre || '',
+                asesorId: asesor?._id || asesor
+            };
+        }));
     } catch (error) {
         console.error('Error al obtener pólizas:', error);
         res.status(500).json({ error: 'Error al obtener las pólizas', details: error.message });
@@ -725,6 +834,16 @@ const actualizarPoliza = async (req, res) => {
         );
         const tipoPagoCambio = datosActualizacion.tipoPago && datosActualizacion.tipoPago !== polizaExistente.tipoPago;
         const sinPagosRegistrados = !polizaExistente.pagos || polizaExistente.pagos.length === 0;
+        const cambioImportePlan = ['primaTotal', 'primerPago', 'montoAbono'].some(campo =>
+            datosActualizacion[campo] !== undefined
+            && (Number(datosActualizacion[campo]) || 0) !== (Number(polizaExistente[campo]) || 0)
+        );
+        const planRecibosCambio = Boolean(
+            fechasCambiaron
+            || tipoPagoCambio
+            || cambioImportePlan
+            || req.body.recalcularRecibos === true
+        );
 
         if (fechasCambiaron || tipoPagoCambio) {
             const inicioBase = datosActualizacion.fechas?.inicio || polizaExistente.fechas?.inicio;
@@ -766,11 +885,30 @@ const actualizarPoliza = async (req, res) => {
             }
         }
 
-        const poliza = await Poliza.findOneAndUpdate(
-            { _id: id, empresaId, deletedAt: null },
-            datosActualizacion,
-            { new: true, runValidators: true }
-        );
+        if (planRecibosCambio) {
+            const primaTotal = Number(datosActualizacion.primaTotal ?? polizaExistente.primaTotal) || 0;
+            const primerPago = Number(datosActualizacion.primerPago ?? polizaExistente.primerPago) || 0;
+            const montoAbono = Number(datosActualizacion.montoAbono ?? polizaExistente.montoAbono) || 0;
+            const tipoPago = datosActualizacion.tipoPago || polizaExistente.tipoPago || 'anual';
+            const fechaInicio = datosActualizacion.fechas?.inicio || polizaExistente.fechas?.inicio;
+            datosActualizacion.recibos = regenerarRecibosPendientes({
+                recibosActuales: polizaExistente.recibos || [],
+                primaTotal,
+                fechaInicio,
+                tipoPago,
+                primerPago,
+                montoAbono
+            });
+            const recibosPendientes = datosActualizacion.recibos.filter(recibo => !esReciboPagado(recibo));
+            datosActualizacion.saldoRestante = Number(recibosPendientes
+                .reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0)
+                .toFixed(2));
+            datosActualizacion.estadoPago = datosActualizacion.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+            datosActualizacion.proximoPago = recibosPendientes[0]?.fechaVencimientoRecibo || null;
+        }
+
+        polizaExistente.set(datosActualizacion);
+        const poliza = await polizaExistente.save();
 
         res.json(poliza);
     } catch (error) {
@@ -791,8 +929,8 @@ const recalcularRecibos = async (req, res) => {
             const importe = Number(valor);
             return Number.isFinite(importe) ? importe : null;
         };
-        const primaTotal = obtenerImporte(req.body.primaTotal, poliza.primaTotal);
-        const primerPago = obtenerImporte(req.body.primerPago, poliza.primerPago);
+        const primaTotal = obtenerImporte(req.body.costoTotal ?? req.body.primaTotal, poliza.primaTotal);
+        const primerPago = obtenerImporte(req.body.pagoInicial ?? req.body.primerPago, poliza.primerPago);
         const montoAbono = obtenerImporte(req.body.montoAbono, poliza.montoAbono);
         if ([primaTotal, primerPago, montoAbono].includes(null)) {
             return res.status(400).json({ error: 'Los montos deben ser valores numéricos válidos' });
@@ -804,33 +942,13 @@ const recalcularRecibos = async (req, res) => {
             return res.status(400).json({ error: 'La fecha de inicio no es válida' });
         }
         const tipoPago = String(req.body.formaPago || req.body.tipoPago || poliza.tipoPago || 'anual').toLowerCase();
-        const recibosNuevos = generarCalendarioRecibos(primaTotal, fechaInicioDate, tipoPago, primerPago, montoAbono);
-        const recibosActuales = poliza.recibos || [];
-
-        poliza.recibos = recibosNuevos.map(reciboNuevo => {
-            const fechaNueva = new Date(reciboNuevo.fechaVencimientoRecibo).toDateString();
-            const reciboActual = recibosActuales.find(recibo =>
-                recibo.numeroRecibo && recibo.numeroRecibo === reciboNuevo.numeroRecibo
-            ) || recibosActuales.find(recibo =>
-                recibo.periodoCobertura === reciboNuevo.periodoCobertura
-                && recibo.fechaVencimientoRecibo
-                && new Date(recibo.fechaVencimientoRecibo).toDateString() === fechaNueva
-            ) || recibosActuales.find(recibo =>
-                recibo.fechaVencimientoRecibo
-                && new Date(recibo.fechaVencimientoRecibo).toDateString() === fechaNueva
-            );
-
-            if (!reciboActual) return reciboNuevo;
-            const reciboGuardado = reciboActual.toObject ? reciboActual.toObject() : { ...reciboActual };
-            const estabaPagado = String(reciboActual.estadoRecibo || '').toLowerCase() === 'pagado'
-                || String(reciboActual.estado || '').toLowerCase() === 'pagado';
-            return {
-                ...reciboGuardado,
-                ...reciboNuevo,
-                _id: reciboActual._id,
-                estadoRecibo: estabaPagado ? 'pagado' : reciboNuevo.estadoRecibo,
-                fechaPago: estabaPagado ? reciboActual.fechaPago || null : reciboNuevo.fechaPago || null
-            };
+        poliza.recibos = regenerarRecibosPendientes({
+            recibosActuales: poliza.recibos || [],
+            primaTotal,
+            fechaInicio: fechaInicioDate,
+            tipoPago,
+            primerPago,
+            montoAbono
         });
 
         poliza.primaTotal = primaTotal;
@@ -2957,7 +3075,7 @@ const exportarReporteExcel = async (req, res) => {
             { header: 'Tipo de Pago', key: 'tipoPago', width: 12 },
             { header: 'Fecha Inicio', key: 'fechaInicio', width: 15 },
             { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 15 },
-            { header: 'Prima Total', key: 'primaTotal', width: 15 },
+            { header: 'Prima Total / A Cobrar', key: 'primaTotal', width: 18 },
             { header: 'Prima Neta', key: 'primaNeta', width: 15 },
             { header: 'Primer Pago (Enganche)', key: 'primerPago', width: 22 },
             { header: 'Monto Abono', key: 'montoAbono', width: 15 },
@@ -2965,6 +3083,7 @@ const exportarReporteExcel = async (req, res) => {
             { header: 'No. Pago', key: 'numeroPago', width: 10 },
             { header: 'Fecha Esperada', key: 'fechaEsperada', width: 15 },
             { header: 'Monto Pago', key: 'montoPago', width: 12 },
+            { header: 'Pago Neto (Base Comisión)', key: 'montoPagoNeto', width: 24 },
             { header: 'Estado Pago', key: 'estadoPago', width: 12 }
         ];
 
@@ -3031,6 +3150,7 @@ const exportarReporteExcel = async (req, res) => {
         };
 
         // Agregar datos con desglose de pagos
+        let totalPagoNeto = 0;
         polizas.forEach(poliza => {
             const numPagos = getNumeroPagos(poliza.tipoPago);
             const fechasPagos = calcularFechasPagos(poliza.fechas?.inicio, poliza.tipoPago, numPagos);
@@ -3061,6 +3181,7 @@ const exportarReporteExcel = async (req, res) => {
 
             // Generar filas con los recibos reales; usar pagos configurados en pólizas legacy.
             pagosExportar.forEach(pago => {
+                const montoPagoNeto = calcularPagoNeto(pago.montoPago, poliza.primaNeta, poliza.primaTotal);
                 worksheet.addRow({
                     numeroPoliza: poliza.numeroPoliza,
                     cliente: poliza.cliente,
@@ -3080,9 +3201,39 @@ const exportarReporteExcel = async (req, res) => {
                     numeroPago: pago.numeroPago,
                     fechaEsperada: pago.fechaEsperada ? new Date(pago.fechaEsperada).toLocaleDateString() : '',
                     montoPago: pago.montoPago,
+                    montoPagoNeto,
                     estadoPago: pago.estadoPago
                 });
+                totalPagoNeto = Number((totalPagoNeto + montoPagoNeto).toFixed(2));
             });
+        });
+
+        const totalPrimaTotal = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaTotal) || 0), 0);
+        const totalPrimaNeta = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaNeta) || 0), 0);
+        const rowTotal = worksheet.addRow({
+            numeroPoliza: 'TOTAL GENERAL',
+            cliente: '',
+            asesor: '',
+            clienteEmail: '',
+            clienteTelefono: '',
+            aseguradora: '',
+            tipoSeguro: '',
+            tipoPago: '',
+            fechaInicio: '',
+            fechaVencimiento: '',
+            primaTotal: totalPrimaTotal,
+            primaNeta: totalPrimaNeta,
+            primerPago: '',
+            montoAbono: '',
+            estado: '',
+            numeroPago: '',
+            fechaEsperada: '',
+            montoPago: '',
+            montoPagoNeto: totalPagoNeto,
+            estadoPago: ''
+        });
+        rowTotal.eachCell((cell) => {
+            cell.font = { bold: true };
         });
 
         // Enviar archivo
@@ -3172,14 +3323,14 @@ const exportarReportePDF = async (req, res) => {
         const tableTop = 100;
         const tableLeft = 20;
         const tableWidth = doc.page.width - (tableLeft * 2);
-        const columnRatios = [0.075, 0.13, 0.055, 0.06, 0.06, 0.075, 0.085, 0.075, 0.075, 0.045, 0.075, 0.065, 0.065, 0.06];
+        const columnRatios = [0.07, 0.115, 0.05, 0.055, 0.06, 0.065, 0.075, 0.06, 0.07, 0.045, 0.07, 0.06, 0.075, 0.06, 0.07];
         const columnWidths = columnRatios.map(ratio => tableWidth * ratio);
         const headers = [
             'Número', 'Cliente', 'Tipo Pago', 'Inicio', 'Vencimiento',
-            'Prima Neta', 'Primer Pago / Enganche', 'Monto Abono', 'Prima Total',
-            'No. Pago', 'Fecha Esperada', 'Monto Pago', 'Estado Pago', 'Asesor'
+            'Prima Neta', 'Primer Pago / Enganche', 'Monto Abono', 'Prima Total / A Cobrar',
+            'No. Pago', 'Fecha Esperada', 'Monto Pago', 'Pago Neto (Base Comisión)', 'Estado Pago', 'Asesor'
         ];
-        const headerHeight = 30;
+        const headerHeight = 36;
         const cellPadding = 3;
 
         // Funciones auxiliares (mismas que en Excel)
@@ -3248,6 +3399,9 @@ const exportarReportePDF = async (req, res) => {
 
         const formatearMonto = monto => '$' + (Number(monto) || 0).toFixed(2);
         const formatearFecha = fecha => fecha ? new Date(fecha).toLocaleDateString() : '';
+        let totalPagoNeto = 0;
+        const totalPrimaTotal = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaTotal) || 0), 0);
+        const totalPrimaNeta = polizas.reduce((sum, poliza) => sum + (Number(poliza.primaNeta) || 0), 0);
 
         // Encabezados
         const drawHeaders = (yPos) => {
@@ -3301,6 +3455,7 @@ const exportarReportePDF = async (req, res) => {
                 }));
 
             pagosExportar.forEach((pago) => {
+                const montoPagoNeto = calcularPagoNeto(pago.montoPago, poliza.primaNeta, poliza.primaTotal);
                 const data = [
                     poliza.numeroPoliza || '',
                     poliza.cliente || '',
@@ -3314,9 +3469,11 @@ const exportarReportePDF = async (req, res) => {
                     pago.numeroPago,
                     formatearFecha(pago.fechaEsperada),
                     formatearMonto(pago.montoPago),
+                    formatearMonto(montoPagoNeto),
                     pago.estadoPago,
                     poliza.asesorId?.username || ''
                 ].map(value => String(value ?? ''));
+                totalPagoNeto = Number((totalPagoNeto + montoPagoNeto).toFixed(2));
 
                 doc.fontSize(8).font('Helvetica');
                 const alturasTexto = data.map((text, index) => doc.heightOfString(text, {
@@ -3343,7 +3500,7 @@ const exportarReportePDF = async (req, res) => {
                         : pago.estadoPago === 'Atrasado'
                             ? '#DC3545'
                             : '#111111';
-                    doc.fontSize(8).font('Helvetica').fillColor(columnIndex === 12 ? colorEstado : '#111111');
+                    doc.fontSize(8).font('Helvetica').fillColor(columnIndex === 13 ? colorEstado : '#111111');
                     doc.text(text, x + cellPadding, y + cellPadding, {
                         width: columnWidth - (cellPadding * 2),
                         height: rowHeight - (cellPadding * 2),
@@ -3356,6 +3513,31 @@ const exportarReportePDF = async (req, res) => {
                 y += rowHeight;
                 rowIndex++;
             });
+        });
+
+        const totalRow = [
+            'TOTAL GENERAL', '', '', '', '',
+            formatearMonto(totalPrimaNeta), '', '', formatearMonto(totalPrimaTotal),
+            '', '', '', formatearMonto(totalPagoNeto), '', ''
+        ];
+
+        doc.font('Helvetica-Bold').fillColor('#111111');
+        let x = tableLeft;
+        const totalRowHeight = 24;
+        if (y + totalRowHeight > doc.page.height - 40) {
+            doc.addPage();
+            y = 20;
+        }
+        totalRow.forEach((text, columnIndex) => {
+            const columnWidth = columnWidths[columnIndex];
+            doc.rect(x, y, columnWidth, totalRowHeight).fillAndStroke('#EAF7EA', '#8BCF8A');
+            doc.text(String(text), x + cellPadding, y + cellPadding, {
+                width: columnWidth - (cellPadding * 2),
+                height: totalRowHeight - (cellPadding * 2),
+                align: 'center',
+                valign: 'center'
+            });
+            x += columnWidth;
         });
 
         // Pie de página (Numeración)
@@ -3487,6 +3669,7 @@ module.exports = {
     obtenerPolizaPorId,
     actualizarPoliza,
     recalcularRecibos,
+    regenerarRecibosPendientes,
     cancelarPoliza,
     eliminarPoliza,
     obtenerPapelera,

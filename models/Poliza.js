@@ -382,6 +382,22 @@ polizaSchema.index({ empresaId: 1, estado: 1, 'recibos.estadoRecibo': 1 }, { par
 
 // Middleware pre-save para limitar el tamaño de historialNotificaciones
 polizaSchema.pre('save', function(next) {
+    const cantidadPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
+    const cantidadEsperada = cantidadPorTipo[String(this.tipoPago || 'anual').toLowerCase()] || 1;
+    if (this.recibos && this.recibos.length > cantidadEsperada) {
+        const recibosPagados = this.recibos.filter(recibo =>
+            String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'
+        );
+        const recibosRestantes = this.recibos.filter(recibo =>
+            String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() !== 'pagado'
+        );
+        const cupoRestante = Math.max(0, cantidadEsperada - recibosPagados.length);
+        this.recibos = [
+            ...recibosPagados.map(recibo => recibo.toObject()),
+            ...recibosRestantes.slice(0, cupoRestante).map(recibo => recibo.toObject())
+        ];
+    }
+
     if (this.historialNotificaciones && this.historialNotificaciones.length > 50) {
         this.historialNotificaciones = this.historialNotificaciones.slice(-50);
     }

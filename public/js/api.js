@@ -39,6 +39,128 @@
         return window.OfflineManager;
     }
 
+    function getOfflineIdentity(empresaOverride = null) {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = payload.id || payload.userId || payload.sub;
+            if (!userId) return null;
+            const empresaId = empresaOverride
+                || localStorage.getItem('selected_empresa_id')
+                || localStorage.getItem('empresaActiva')
+                || payload.empresaId
+                || 'all';
+            return { empresaId: String(empresaId), userId: String(userId), scope: `${empresaId}:${userId}` };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function readScopedBackup(key, variante = 'default', identity = getOfflineIdentity()) {
+        if (!identity) return null;
+        try {
+            const stored = JSON.parse(localStorage.getItem(key) || '{}');
+            return stored[identity.scope]?.[variante]?.datos ?? null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function readOfflineApiFallback(url, localCache, empresaOverride = null) {
+        const identity = getOfflineIdentity(empresaOverride);
+        if (!identity) return { found: false, data: null };
+
+        const path = url.split('?')[0];
+        const query = new URLSearchParams(url.split('?')[1] || '');
+        let data = null;
+
+        if (path === '/api/clientes') {
+            try {
+                const stored = JSON.parse(localStorage.getItem(`backup_clientes_${identity.empresaId}`) || '{}');
+                data = stored[identity.userId]?.data || null;
+            } catch (error) { /* Ignore malformed cache and try the scoped backup. */ }
+            if (!data) {
+                const clientes = readScopedBackup('backup_clientes', 'default', identity);
+                if (Array.isArray(clientes)) data = { success: true, clientes };
+            }
+        } else if (path === '/api/polizas') {
+            const asesorId = query.get('asesorId') || 'todos';
+            data = readScopedBackup('backup_polizas', asesorId, identity)
+                || readScopedBackup('backup_pagos', 'seguros', identity);
+            if (!data && asesorId === 'todos') {
+                try {
+                    const stored = JSON.parse(localStorage.getItem(`backup_cobros_${identity.empresaId}`) || '{}');
+                    data = stored[identity.userId] || null;
+                } catch (error) { /* Ignore malformed cache. */ }
+            }
+        } else if (path === '/api/polizas/cobranza-diaria') {
+            data = readScopedBackup('backup_cobranza_diaria', 'default', identity);
+        } else if (path === '/api/polizas/metricas-seguros') {
+            data = readScopedBackup('backup_dashboard_seguros', query.get('filtroTiempo') || 'mensual', identity);
+        } else if (path === '/api/dashboard/stats') {
+            data = readScopedBackup('backup_dashboard', 'default', identity);
+        } else if (path === '/api/usuarios/asesores') {
+            try {
+                const stored = JSON.parse(localStorage.getItem(`backup_asesores_${identity.empresaId}`) || '{}');
+                const asesores = stored[identity.userId]?.asesores;
+                if (Array.isArray(asesores)) data = { asesores };
+            } catch (error) { /* Ignore malformed cache. */ }
+        } else if (path === '/api/usuarios') {
+            try {
+                const stored = JSON.parse(localStorage.getItem(`backup_asesores_${identity.empresaId}`) || '{}');
+                data = stored[identity.userId]?.usuarios || null;
+            } catch (error) { /* Ignore malformed cache. */ }
+            if (!data && Array.isArray(localCache.usuarios) && localCache.usuarios.length) data = localCache.usuarios;
+        } else if (path === '/api/proyectos/pagos/todos') {
+            data = readScopedBackup('backup_pagos', 'historial', identity);
+        } else if (path.startsWith('/api/proyectos')) {
+            if (path.includes('pagos/todos')) {
+                data = readScopedBackup('backup_pagos', 'historial', identity) || localCache.pagos;
+            } else if (Array.isArray(localCache.proyectos) && localCache.proyectos.length) {
+                if (path.includes('cotizaciones')) data = localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
+                else if (path.includes('completos')) data = localCache.proyectos.filter(p => (p.proceso === 'Completo' || p.estatus === 'Cancelado') && !p.deleted);
+                else if (path.includes('papelera')) data = localCache.proyectos.filter(p => p.deleted === true);
+                else data = localCache.proyectos.filter(p => !p.deleted);
+            }
+        } else if (path === '/api/artistas') data = localCache.artistas;
+        else if (path === '/api/servicios') data = localCache.servicios;
+        else if (path === '/api/deudas') data = localCache.deudas;
+        else if (path === '/api/pagos/todos') data = localCache.pagos;
+
+        return data === null || data === undefined
+            ? { found: false, data: null }
+            : { found: true, data };
+    }
+
+    function createEmptyOfflineResponse(url) {
+        const path = url.split('?')[0];
+        const emptyList = () => Object.assign([], { offline: true });
+
+        if (path === '/api/clientes') return { found: true, data: { success: false, offline: true, clientes: [] } };
+        if (path === '/api/usuarios/asesores') return { found: true, data: { success: false, offline: true, asesores: [] } };
+        if (path === '/api/polizas/cobranza-diaria') {
+            return { found: true, data: { success: false, offline: true, vencidas: [], cobrosHoy: [], porVencer: [], totales: { vencidas: 0, cobrosHoy: 0, porVencer: 0 } } };
+        }
+        if (path === '/api/polizas/metricas-seguros') {
+            return { found: true, data: { offline: true, metricas: {}, graficas: {}, detalles: {} } };
+        }
+        if (path === '/api/dashboard/stats') {
+            return { found: true, data: { offline: true, showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] } };
+        }
+        if (path === '/api/polizas' || path === '/api/clientes/papelera'
+            || path === '/api/polizas/papelera/recuperar' || path === '/api/proyectos'
+            || path === '/api/proyectos/cotizaciones' || path === '/api/proyectos/completos'
+            || path === '/api/proyectos/agenda' || path === '/api/proyectos/pagos/todos'
+            || path === '/api/artistas' || path === '/api/servicios' || path === '/api/usuarios'
+            || path === '/api/deudas' || path === '/api/pagos/todos'
+            || path === '/api/empresas' || path === '/api/backups' || path === '/api/backups/drive'
+            || /\/(papelera|papelera\/all|papelera\/recuperar|notificaciones|agenda\/eventos|pagos\/todos)$/.test(path)) {
+            return { found: true, data: emptyList() };
+        }
+        return { found: false, data: null };
+    }
+
     function getShowLoader() {
         return window.showLoader || (() => {});
     }
@@ -82,22 +204,13 @@
         // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
-                if (url === '/api/artistas') return localCache.artistas;
-                if (url === '/api/servicios') return localCache.servicios;
-                if (url === '/api/usuarios') return localCache.usuarios;
-                if (url === '/api/deudas') return localCache.deudas;
-                if (url.includes('/proyectos/pagos/todos')) {
-                    throw new Error('El historial de pagos no está disponible en la caché temporal.');
-                }
-                if (url.includes('/proyectos')) {
-                    if (url.includes('cotizaciones')) return localCache.proyectos.filter(p => p.estatus === 'Cotizacion' && !p.deleted);
-                    if (url.includes('completos')) return localCache.proyectos.filter(p => (p.proceso === 'Completo' || p.estatus === 'Cancelado') && !p.deleted);
-                    if (url.includes('agenda')) return localCache.proyectos.filter(p => p.estatus !== 'Cancelado' && !p.deleted).map(p => ({ id: p._id, title: p.nombreProyecto || (p.artista ? p.artista.nombre : 'Proyecto'), start: p.fecha, allDay: false, extendedProps: { ...p, servicios: p.items.map(i => i.nombre).join('\n') } }));
-                    if (url.includes('papelera')) return localCache.proyectos.filter(p => p.deleted === true);
-                    return localCache.proyectos.filter(p => !p.deleted);
-                }
-                if (url === '/api/pagos/todos') return localCache.pagos;
-                if (url === '/api/dashboard/stats') return { showFinancials: false, ingresosMes: 0, proyectosActivos: 0, proyectosPorCobrar: 0, monthlyIncome: [] };
+                const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
+                if (fallback.found) return fallback.data;
+                const neutral = createEmptyOfflineResponse(url);
+                if (neutral.found) return neutral.data;
+                const offlineError = new Error('Sin datos locales disponibles para esta solicitud.');
+                offlineError.offline = true;
+                throw offlineError;
             }
         }
 
@@ -219,34 +332,56 @@
             if (res.status === 204) return { ok: true };
 
             const data = await res.json();
+            if (!res.ok && data?.offline === true) {
+                const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
+                if (fallback.found) return fallback.data;
+                const neutral = createEmptyOfflineResponse(url);
+                if (neutral.found) return neutral.data;
+                const offlineError = new Error(data.message || 'Sin datos locales disponibles para esta solicitud.');
+                offlineError.offline = true;
+                throw offlineError;
+            }
             if (!res.ok) throw new Error(data.error || 'Error del servidor');
 
             // --- ACTUALIZAR CACHÉ INDEXED-DB SI HAY INTERNET ---
             if (!options.method || options.method === 'GET') {
                 if (url === '/api/artistas') {
                     localCache.artistas = Array.isArray(data) ? data : [];
-                    if (window.localforage) window.localforage.setItem('cache_artistas', localCache.artistas);
+                    window.FiaOfflineCache?.set('cache_artistas', localCache.artistas).catch(() => { });
                 }
                 if (url === '/api/servicios') {
                     localCache.servicios = data;
-                    if (window.localforage) window.localforage.setItem('cache_servicios', data);
+                    window.FiaOfflineCache?.set('cache_servicios', data).catch(() => { });
                 }
                 if (url === '/api/usuarios') { localCache.usuarios = data; }
                 if (url === '/api/proyectos') {
                     localCache.proyectos = data;
-                    if (window.localforage) window.localforage.setItem('cache_proyectos', data);
+                    window.FiaOfflineCache?.set('cache_proyectos', data).catch(() => { });
                 }
                 if (url === '/api/pagos/todos') {
                     localCache.pagos = data;
-                    if (window.localforage) window.localforage.setItem('cache_pagos', data);
+                    window.FiaOfflineCache?.set('cache_pagos', data).catch(() => { });
                 }
                 if (url === '/api/deudas') {
                     localCache.deudas = data;
-                    if (window.localforage) window.localforage.setItem('cache_deudas', data);
+                    window.FiaOfflineCache?.set('cache_deudas', data).catch(() => { });
                 }
             }
             return data;
-        } catch (e) { throw e; } finally {
+        } catch (e) {
+            const esFalloRed = e instanceof TypeError
+                || /failed to fetch|networkerror|load failed|fetch failed/i.test(e.message || '');
+            if ((!options.method || options.method === 'GET') && (e.offline || esFalloRed || !navigator.onLine)) {
+                const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
+                if (fallback.found) return fallback.data;
+                const neutral = createEmptyOfflineResponse(url);
+                if (neutral.found) return neutral.data;
+                const offlineError = new Error('Sin datos locales disponibles para esta solicitud.');
+                offlineError.offline = true;
+                throw offlineError;
+            }
+            throw e;
+        } finally {
             if (!silent) getHideLoader()();
         }
     }

@@ -632,9 +632,7 @@
                     if (archivosUpload) {
                         window.localCache.proyectos[indexCache].archivos = archivosUpload;
                     }
-                    if (typeof localforage !== 'undefined') {
-                        localforage.setItem('cache_proyectos', window.localCache.proyectos);
-                    }
+                    window.FiaOfflineCache?.set('cache_proyectos', window.localCache.proyectos).catch(() => { });
                 }
             }
 
