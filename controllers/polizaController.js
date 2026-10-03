@@ -44,6 +44,25 @@ function normalizarFechasPoliza(fechas) {
     };
 }
 
+function sumarMesesSeguro(fechaBaseStr, mesesASumar) {
+    let fecha;
+    if (fechaBaseStr instanceof Date) {
+        fecha = new Date(fechaBaseStr);
+    } else {
+        fecha = normalizarFechaLocal(fechaBaseStr) || new Date(fechaBaseStr);
+        if (Number.isNaN(fecha.getTime())) {
+            fecha = new Date(`${String(fechaBaseStr)}T12:00:00`);
+        }
+    }
+
+    const diaOriginal = fecha.getDate();
+    fecha.setDate(1);
+    fecha.setMonth(fecha.getMonth() + mesesASumar);
+    const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0).getDate();
+    fecha.setDate(Math.min(diaOriginal, ultimoDia));
+    return fecha;
+}
+
 function calcularProximoPago(fechaBase, tipoPago) {
     const proximoPago = new Date(fechaBase);
     switch (tipoPago) {
@@ -83,16 +102,14 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
         : Array.from({ length: Number.isInteger(opciones.cantidadRecibos)
             ? Math.min(totalRecibos, Math.max(0, opciones.cantidadRecibos))
             : totalRecibos }, (_, index) => indiceInicial + index);
-    const cantidadRecibos = indicesRecibos.length;
     
-    const montoBase = cantidadRecibos > 0
-        ? parseFloat((primaTotal / cantidadRecibos).toFixed(2))
+    const montoBase = totalRecibos > 0
+        ? parseFloat((primaTotal / totalRecibos).toFixed(2))
         : 0;
-    const fechaBase = new Date(fechaInicio);
-    const diaOriginal = fechaBase.getDate();
+    const fechaBase = normalizarFechaLocal(fechaInicio) || new Date(`${String(fechaInicio).slice(0, 10)}T12:00:00`);
     
-    for (let i = 0; i < cantidadRecibos; i++) {
-        const indicePlan = indicesRecibos[i];
+    for (let i = 0; i < totalRecibos; i++) {
+        const indicePlan = indicesRecibos[i] ?? i;
         let montoDelMes = montoBase;
         if (Array.isArray(opciones.montos)) {
             montoDelMes = Number(opciones.montos[i]) || 0;
@@ -100,19 +117,19 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
             montoDelMes = indicePlan === 0 ? parseFloat(primerPago) : parseFloat(montoAbono);
         }
 
-        const mesObjetivo = fechaBase.getMonth() + (indicePlan * mesesIntervalo);
-        let fechaRecibo = new Date(fechaBase.getFullYear(), mesObjetivo, diaOriginal);
-        const mesEsperado = mesObjetivo % 12;
-        if (fechaRecibo.getMonth() !== mesEsperado) {
-            fechaRecibo = new Date(fechaBase.getFullYear(), mesObjetivo + 1, 0);
+        let fechaVencimiento;
+        if (i === 0) {
+            fechaVencimiento = new Date(fechaBase);
+        } else {
+            fechaVencimiento = sumarMesesSeguro(fechaBase, i * mesesIntervalo);
         }
 
         recibos.push({
             numeroRecibo: `REC-${indicePlan + 1}`,
             montoRecibo: montoDelMes,
-            fechaVencimientoRecibo: fechaRecibo,
+            fechaVencimientoRecibo: fechaVencimiento,
             estadoRecibo: 'pendiente',
-            periodoCobertura: `${indicePlan + 1}/${totalRecibos}`
+            periodoCobertura: `${i + 1}/${totalRecibos}`
         });
     }
     return recibos;
@@ -166,23 +183,16 @@ const regenerarRecibosPendientes = ({ recibosActuales = [], primaTotal, fechaIni
         }
     });
 
-    const fechaBase = new Date(fechaInicio);
+    const fechaBase = normalizarFechaLocal(fechaInicio) || new Date(fechaInicio);
     const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
     const mesesIntervalo = mesesPorTipo[String(tipoPago || '').toLowerCase()] || 12;
-    const diaBase = fechaBase.getDate();
     return Array.from({ length: cantidadTotal }, (_, indicePlan) => {
         const reciboActual = recibosPorIndice.get(indicePlan) || {};
-        const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
-        const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
-        const mes = mesObjetivo % 12;
-        const ultimoDia = new Date(anio, mes + 1, 0).getDate();
-        const fechaVencimiento = reciboActual.fechaVencimientoRecibo
-            || reciboActual.fechaVencimiento
-            || new Date(anio, mes, Math.min(diaBase, ultimoDia));
+        const fechaVencimiento = sumarMesesSeguro(fechaBase, indicePlan * mesesIntervalo);
         return {
             ...reciboActual,
             numeroRecibo: reciboActual.numeroRecibo || `REC-${indicePlan + 1}`,
-            periodoCobertura: reciboActual.periodoCobertura || `${indicePlan + 1}/${cantidadTotal}`,
+            periodoCobertura: `${indicePlan + 1}/${cantidadTotal}`,
             montoRecibo: montosPlan[indicePlan],
             fechaVencimientoRecibo: fechaVencimiento,
             estadoRecibo: reciboActual.estadoRecibo || reciboActual.estado || 'pendiente'
@@ -955,7 +965,7 @@ const recalcularRecibos = async (req, res) => {
         }
 
         const fechaInicio = req.body.fechaInicio || req.body.fechas?.inicio || poliza.fechas?.inicio;
-        const fechaInicioDate = new Date(fechaInicio);
+        const fechaInicioDate = normalizarFechaLocal(fechaInicio) || new Date(`${String(fechaInicio).slice(0, 10)}T12:00:00`);
         if (!fechaInicio || Number.isNaN(fechaInicioDate.getTime())) {
             return res.status(400).json({ error: 'La fecha de inicio no es válida' });
         }
@@ -1794,18 +1804,41 @@ const eliminarPago = async (req, res) => {
         const pagoABorrar = poliza.pagos[indicePago];
         const montoRevertir = Number(pagoABorrar?.monto) || 0;
         poliza.saldoRestante = (Number(poliza.saldoRestante) || 0) + montoRevertir;
+        const indiceRecibo = req.body?.reciboIndex === undefined ? null : Number(req.body.reciboIndex);
+
+        if (indiceRecibo !== null) {
+            const reciboSolicitado = poliza.recibos?.[indiceRecibo];
+            if (!Number.isInteger(indiceRecibo) || !reciboSolicitado) {
+                return res.status(404).json({ error: 'Recibo no encontrado' });
+            }
+            if (String(reciboSolicitado.estadoRecibo || reciboSolicitado.estado || '').toLowerCase() !== 'pagado') {
+                return res.status(409).json({ error: 'El recibo ya no está pagado' });
+            }
+            if (Math.abs((Number(reciboSolicitado.montoRecibo) || 0) - montoRevertir) > 0.01) {
+                return res.status(409).json({ error: 'El pago no corresponde al recibo seleccionado' });
+            }
+        }
 
         if (poliza.recibos?.length) {
             const recibosPagados = poliza.recibos.filter(recibo =>
-                recibo.estadoRecibo?.toLowerCase() === 'pagado' || recibo.estado?.toLowerCase() === 'pagado'
+                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'
             );
-            const ultimoPagado = recibosPagados[recibosPagados.length - 1];
-            if (ultimoPagado) {
-                if (ultimoPagado.estadoRecibo) ultimoPagado.estadoRecibo = 'pendiente';
-                if (ultimoPagado.estado) ultimoPagado.estado = 'pendiente';
-                poliza.proximoPago = ultimoPagado.fechaVencimientoRecibo || ultimoPagado.fechaVencimiento;
+            const reciboRevertido = indiceRecibo === null
+                ? recibosPagados[recibosPagados.length - 1]
+                : poliza.recibos[indiceRecibo];
+            if (reciboRevertido) {
+                reciboRevertido.estadoRecibo = 'pendiente';
+                if (reciboRevertido.estado) reciboRevertido.estado = 'pendiente';
+                reciboRevertido.fechaPago = null;
+                reciboRevertido.metodoPago = null;
             }
-            poliza.estadoPago = 'pendiente';
+            const recibosPendientes = poliza.recibos
+                .filter(recibo => String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pendiente')
+                .sort((a, b) => new Date(a.fechaVencimientoRecibo || a.fechaVencimiento) - new Date(b.fechaVencimientoRecibo || b.fechaVencimiento));
+            poliza.proximoPago = recibosPendientes[0]?.fechaVencimientoRecibo || recibosPendientes[0]?.fechaVencimiento || null;
+            poliza.estadoPago = poliza.recibos.some(recibo =>
+                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'
+            ) ? 'al_corriente' : 'pendiente';
         } else {
             if (poliza.proximoPago) {
                 const proximoPago = new Date(poliza.proximoPago);
@@ -1819,7 +1852,7 @@ const eliminarPago = async (req, res) => {
         poliza.pagos.splice(indicePago, 1);
         await poliza.save();
         
-        res.json({ success: true, message: 'Pago eliminado correctamente' });
+        res.json({ success: true, message: 'Pago eliminado correctamente', poliza });
     } catch (error) {
         console.error('[eliminarPago] Error:', error);
         res.status(500).json({ error: 'Error al eliminar pago', details: error.message });
@@ -3632,6 +3665,7 @@ const resolverCobranzaConPago = async (req, res) => {
         const fechaPago = fechaSolicitada && !Number.isNaN(fechaSolicitada.getTime()) ? fechaSolicitada : new Date();
         const metodoPago = req.body?.metodoPago || 'efectivo';
         recibo.estadoRecibo = 'pagado';
+        recibo.fechaPago = fechaPago;
         recibo.metodoPago = metodoPago;
         poliza.pagos.push({ fechaPago, monto: montoPagado, estado: 'pagado', metodoPago });
 

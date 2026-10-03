@@ -2,6 +2,11 @@ if (window.hasLoadedScript) {
     console.warn('[Security] script.js ya cargado, abortando ejecución duplicada.');
 } else {
     window.hasLoadedScript = true;
+    window.pagosPendientesList = [];
+    window.paginaPendientes = 1;
+    window.pagosHistorialList = [];
+    window.paginaHistorial = 1;
+    window.itemsPorPagina = 10;
 
     // ==================================================================
 // FASE 5: GUARDIA DE IDENTIDAD VISUAL - SISTEMA ANTI-FLICKER
@@ -4448,11 +4453,13 @@ Fecha de firma: {{FECHA}}`;
             };
         }
 
-        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados'].forEach((key) => {
+        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados', 'pagosPendientesList', 'pagosHistorialList'].forEach((key) => {
             if (window[key]) {
                 window[key] = [];
             }
         });
+        window.paginaPendientes = 1;
+        window.paginaHistorial = 1;
 
         const loginLogo = document.getElementById('login-logo');
         if (loginLogo) {
@@ -4666,7 +4673,12 @@ Fecha de firma: {{FECHA}}`;
             window.UIManager.renderCotizacionesTable(cotizacionesCacheadas, tablePagination.cotizaciones);
         }
         else if (sectionId === 'pagos') {
-            if (document.getElementById('vista-pagos-pendientes').style.display !== 'none') {
+            const vistaSeguros = document.getElementById('vista-pagos-seguros');
+            if (vistaSeguros && vistaSeguros.style.display !== 'none') {
+                filtroPagosSeguros = query;
+                paginaActualVistaPagos = 1;
+                renderizarPaginaGestionPagos();
+            } else if (document.getElementById('vista-pagos-pendientes').style.display !== 'none') {
                 tablePagination.pagosPendientes.filter = query;
                 tablePagination.pagosPendientes.page = 1;
                 window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
@@ -6119,61 +6131,88 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function cargarPagos() {
-        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
-        document.querySelector('#pagos .btn-group button.active')?.classList.remove('active');
         const btnPendientes = document.querySelector('#pagos .btn-group button');
+        const vistaSeguros = document.getElementById('vista-pagos-seguros');
+        const vistaPendientes = document.getElementById('vista-pagos-pendientes');
+        const vistaHistorial = document.getElementById('vista-pagos-historial');
+
+        document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active'));
         if (btnPendientes) btnPendientes.classList.add('active');
-        
-        if (tipoDashboard === 'seguros') {
-            // Para seguros, mostrar vista de seguros y cargar datos
-            document.getElementById('vista-pagos-seguros').style.display = 'block';
-            document.getElementById('vista-pagos-pendientes').style.display = 'none';
-            document.getElementById('vista-pagos-historial').style.display = 'none';
-            cargarPagosSeguros();
-        } else {
-            mostrarSeccionPagos('pendientes', btnPendientes);
+
+        if (vistaSeguros) vistaSeguros.style.display = 'none';
+        if (vistaPendientes) vistaPendientes.style.display = 'block';
+        if (vistaHistorial) vistaHistorial.style.display = 'none';
+
+        if (document.getElementById('tablaPendientesBody')) {
+            document.getElementById('tablaPendientesBody').innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
         }
+
+        await mostrarSeccionPagos('pendientes', btnPendientes);
     }
     
-    function mostrarSeccionPagos(vista, btn) {
-        const tipoDashboard = configCache?.tipoDashboard || 'estandar';
+    async function mostrarSeccionPagos(vista, btn) {
         document.querySelectorAll('#pagos .btn-group button').forEach(b => b.classList.remove('active'));
         if (btn) btn.classList.add('active');
-        
-        if (tipoDashboard === 'seguros') {
-            // Para seguros, siempre mostrar la vista de seguros
-            document.getElementById('vista-pagos-seguros').style.display = 'block';
-            document.getElementById('vista-pagos-pendientes').style.display = 'none';
-            document.getElementById('vista-pagos-historial').style.display = 'none';
-            cargarPagosSeguros();
+
+        const vistaSeguros = document.getElementById('vista-pagos-seguros');
+        const vistaPendientes = document.getElementById('vista-pagos-pendientes');
+        const vistaHistorial = document.getElementById('vista-pagos-historial');
+        if (vistaSeguros) vistaSeguros.style.display = 'none';
+
+        if (vista === 'pendientes') {
+            vistaPendientes.style.display = 'block';
+            vistaHistorial.style.display = 'none';
+            const tabla = document.getElementById('tablaPendientesBody');
+            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+            await cargarPagosPendientes();
         } else {
-            // Para estudio, mostrar la vista estándar
-            if (vista === 'pendientes') {
-                document.getElementById('vista-pagos-pendientes').style.display = 'block';
-                document.getElementById('vista-pagos-historial').style.display = 'none';
-                cargarPagosPendientes();
-            } else {
-                document.getElementById('vista-pagos-pendientes').style.display = 'none';
-                document.getElementById('vista-pagos-historial').style.display = 'block';
-                cargarHistorialPagos();
-            }
+            vistaPendientes.style.display = 'none';
+            vistaHistorial.style.display = 'block';
+            const tabla = document.getElementById('tablaPagosBody');
+            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+            await cargarHistorialPagos();
         }
     }
     
     let vistaPagosGlobales = [];
     let paginaActualVistaPagos = 1;
+    let filtroPagosSeguros = '';
     const limiteVistaPagos = 15;
+
+    function obtenerPagosSegurosFiltrados() {
+        const query = filtroPagosSeguros.trim().toLowerCase();
+        if (!query) return vistaPagosGlobales;
+
+        return vistaPagosGlobales.filter(poliza => {
+            const montoPagado = poliza.pagos?.reduce((total, pago) => total + (pago.monto || 0), 0) || 0;
+            const primaTotal = poliza.primaTotal || 0;
+            const saldoRestante = poliza.saldoRestante !== undefined ? poliza.saldoRestante : primaTotal - montoPagado;
+            const valores = [
+                poliza.cliente,
+                poliza.numeroPoliza,
+                poliza.aseguradora,
+                primaTotal,
+                montoPagado,
+                saldoRestante,
+                `$${primaTotal.toFixed(2)}`,
+                `$${montoPagado.toFixed(2)}`,
+                `$${saldoRestante.toFixed(2)}`
+            ];
+            return valores.some(valor => String(valor ?? '').toLowerCase().includes(query));
+        });
+    }
 
     function renderizarControlesGestionPagos() {
         const contenedor = document.getElementById('paginacionGestionPagos');
         if (!contenedor) return;
 
-        if (vistaPagosGlobales.length === 0) {
+        const polizasFiltradas = obtenerPagosSegurosFiltrados();
+        if (polizasFiltradas.length === 0) {
             contenedor.innerHTML = '';
             return;
         }
 
-        const totalPaginas = Math.ceil(vistaPagosGlobales.length / limiteVistaPagos);
+        const totalPaginas = Math.ceil(polizasFiltradas.length / limiteVistaPagos);
         contenedor.innerHTML = `
             <span class="small text-muted">Página ${paginaActualVistaPagos} de ${totalPaginas}</span>
             <div class="btn-group" role="group" aria-label="Paginación de gestión de pagos">
@@ -6188,9 +6227,10 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaGestionPagos(delta) {
-        if (!vistaPagosGlobales.length) return;
+        const polizasFiltradas = obtenerPagosSegurosFiltrados();
+        if (!polizasFiltradas.length) return;
 
-        const totalPaginas = Math.ceil(vistaPagosGlobales.length / limiteVistaPagos);
+        const totalPaginas = Math.ceil(polizasFiltradas.length / limiteVistaPagos);
         paginaActualVistaPagos = Math.min(Math.max(paginaActualVistaPagos + delta, 1), totalPaginas);
         renderizarPaginaGestionPagos();
     }
@@ -6199,18 +6239,20 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPagosSegurosBody');
         if (!tabla) return;
 
-        if (vistaPagosGlobales.length === 0) {
-            tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pólizas registradas</td></tr>';
+        const polizasFiltradas = obtenerPagosSegurosFiltrados();
+        if (polizasFiltradas.length === 0) {
+            const mensaje = filtroPagosSeguros ? 'No hay pólizas que coincidan con la búsqueda' : 'No hay pólizas registradas';
+            tabla.innerHTML = `<tr><td colspan="7" class="text-center text-muted">${mensaje}</td></tr>`;
             renderizarControlesGestionPagos();
             return;
         }
 
-        const totalPaginas = Math.ceil(vistaPagosGlobales.length / limiteVistaPagos);
+        const totalPaginas = Math.ceil(polizasFiltradas.length / limiteVistaPagos);
         paginaActualVistaPagos = Math.min(Math.max(paginaActualVistaPagos, 1), totalPaginas);
 
         const inicio = (paginaActualVistaPagos - 1) * limiteVistaPagos;
         const fin = inicio + limiteVistaPagos;
-        const polizasPagina = vistaPagosGlobales.slice(inicio, fin);
+        const polizasPagina = polizasFiltradas.slice(inicio, fin);
 
         tabla.innerHTML = polizasPagina.map(p => {
             const fechaProximoPago = p.proximoPago 
@@ -6301,94 +6343,205 @@ Fecha de firma: {{FECHA}}`;
         }
     }
     
-    async function cargarPagosPendientes() {
+    window.renderizarPendientes = function() {
         const tabla = document.getElementById('tablaPendientesBody');
-        const userInfo = getUserRoleAndId();
-        const isClient = userInfo.role === 'cliente';
-        const renderizar = proyectos => {
-            pagosPendientesCacheados = proyectos.filter(p => {
-                if (isClient && (!p.artista || p.artista._id !== userInfo.artistaId)) return false;
-                const pagado = p.montoPagado || 0;
-                return (p.total > pagado) && p.estatus !== 'Cancelado' && p.estatus !== 'Cotizacion' && !p.deleted;
-            });
-            guardarRespaldoOffline('backup_pagos', pagosPendientesCacheados, 'pendientes');
-            tablePagination.pagosPendientes.page = 1;
-            window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
-        };
+        const contenedor = document.getElementById('pagosPendientesControls');
+        if (!tabla) return;
 
-        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'pendientes');
-        const tieneCache = Array.isArray(pagosCacheados);
-        if (tieneCache) {
-            pagosPendientesCacheados = pagosCacheados;
-            tablePagination.pagosPendientes.page = 1;
-            window.UIManager.renderPagosPendientesTable(pagosPendientesCacheados, tablePagination.pagosPendientes);
-            if (!navigator.onLine) return;
-        } else if (tabla) {
-            tabla.innerHTML = '<tr><td colspan="5">Calculando saldos pendientes...</td></tr>';
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosPendientesList.length / window.itemsPorPagina));
+        window.paginaPendientes = Math.min(Math.max(window.paginaPendientes, 1), totalPaginas);
+        const inicio = (window.paginaPendientes - 1) * window.itemsPorPagina;
+        const pedidos = window.pagosPendientesList.slice(inicio, inicio + window.itemsPorPagina);
+
+        if (!window.pagosPendientesList.length) {
+            tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pagos pendientes.</td></tr>';
+        } else {
+            tabla.innerHTML = pedidos.map(item => `
+            <tr>
+                <td>
+                    <div class="fw-bold">${escapeHTML(item.cliente)}</div>
+                    <small class="text-muted">${escapeHTML(item.numeroPoliza)}</small>
+                </td>
+                <td>$${safeMoney(item.total)}</td>
+                <td>$${safeMoney(item.montoPagado || 0)}</td>
+                <td class="text-danger fw-bold">$${safeMoney((item.total || 0) - (item.montoPagado || 0))}</td>
+                <td>
+                    <button class="btn btn-sm btn-success me-2" onclick="app.registrarPago('${item.polizaId}')">Cobrar</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalPagos(${JSON.stringify(item.poliza).replace(/"/g, '&quot;')})"><i class="bi bi-clock-history"></i> Ver Recibos</button>
+                </td>
+            </tr>`).join('');
         }
 
+        if (contenedor) {
+            contenedor.innerHTML = window.pagosPendientesList.length > window.itemsPorPagina ? `
+                <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaPendientes <= 1 ? 'disabled' : ''} onclick="window.cambiarPaginaPendientes(-1)">
+                    <i class="bi bi-chevron-left"></i> Anterior
+                </button>
+                <span class="small text-muted">Página ${window.paginaPendientes} de ${totalPaginas}</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaPendientes >= totalPaginas ? 'disabled' : ''} onclick="window.cambiarPaginaPendientes(1)">
+                    Siguiente <i class="bi bi-chevron-right"></i>
+                </button>
+            ` : '';
+        }
+    };
+
+    window.cambiarPaginaPendientes = function(delta) {
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosPendientesList.length / window.itemsPorPagina));
+        window.paginaPendientes = Math.min(Math.max(window.paginaPendientes + delta, 1), totalPaginas);
+        window.renderizarPendientes();
+    };
+
+    window.renderizarHistorial = function() {
+        const tablaBody = document.getElementById('tablaPagosBody');
+        if (!tablaBody) return;
+
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosHistorialList.length / window.itemsPorPagina));
+        window.paginaHistorial = Math.min(Math.max(window.paginaHistorial, 1), totalPaginas);
+        const inicio = (window.paginaHistorial - 1) * window.itemsPorPagina;
+        const pagosPagina = window.pagosHistorialList.slice(inicio, inicio + window.itemsPorPagina);
+
+        if (!window.pagosHistorialList.length) {
+            tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pagos registrados.</td></tr>';
+        } else {
+            tablaBody.innerHTML = pagosPagina.map(item => `
+                <tr>
+                    <td>${safeDate(item.fecha)}</td>
+                    <td>${escapeHTML(`${item.cliente} / ${item.numeroPoliza}`)}</td>
+                    <td>$${safeMoney(item.monto || 0)}</td>
+                    <td><span class="badge bg-success">${escapeHTML(item.metodo || 'N/A')}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalPagos(${JSON.stringify(item.poliza).replace(/"/g, '&quot;')})"><i class="bi bi-clock-history"></i> Ver Recibos</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        const contenedor = document.getElementById('pagosHistorialControls');
+        if (contenedor) {
+            contenedor.innerHTML = window.pagosHistorialList.length > window.itemsPorPagina ? `
+                <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaHistorial <= 1 ? 'disabled' : ''} onclick="window.cambiarPaginaHistorial(-1)">
+                    <i class="bi bi-chevron-left"></i> Anterior
+                </button>
+                <span class="small text-muted">Página ${window.paginaHistorial} de ${totalPaginas}</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaHistorial >= totalPaginas ? 'disabled' : ''} onclick="window.cambiarPaginaHistorial(1)">
+                    Siguiente <i class="bi bi-chevron-right"></i>
+                </button>
+            ` : '';
+        }
+    };
+
+    window.cambiarPaginaHistorial = function(delta) {
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosHistorialList.length / window.itemsPorPagina));
+        window.paginaHistorial = Math.min(Math.max(window.paginaHistorial + delta, 1), totalPaginas);
+        window.renderizarHistorial();
+    };
+
+    function obtenerRecibosParaVistaPagos(poliza) {
+        const recibos = Array.isArray(poliza.recibos) ? poliza.recibos : [];
+        if (recibos.length) return recibos;
+
+        const pagosLegacy = Array.isArray(poliza.pagos) ? poliza.pagos : [];
+        return pagosLegacy.map(pago => ({
+            ...pago,
+            estadoRecibo: pago.estadoRecibo || pago.estado || '',
+            montoRecibo: pago.montoRecibo ?? pago.monto,
+            fechaVencimientoRecibo: pago.fechaVencimientoRecibo || pago.fechaPago,
+            metodoPago: pago.metodoPago || pago.metodo
+        }));
+    }
+
+    async function cargarPagosPendientes() {
+        const tabla = document.getElementById('tablaPendientesBody');
+        if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+        window.paginaPendientes = 1;
+
         try {
-            const proyectos = await fetchAPI('/api/proyectos', { silent: tieneCache });
-            if (proyectos?.offline) {
-                if (!tieneCache && tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
-                return;
-            }
-            renderizar(localCache.proyectos);
+            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            const lista = Array.isArray(polizas) ? polizas : [];
+            const pendientes = [];
+
+            lista.forEach(poliza => {
+                const recibos = obtenerRecibosParaVistaPagos(poliza);
+                const total = Number(poliza.primaTotal || 0);
+                const montoPagado = recibos
+                    .filter(recibo => String(recibo?.estadoRecibo || recibo?.estado || '').toLowerCase() === 'pagado')
+                    .reduce((sum, recibo) => sum + (Number(recibo.montoRecibo) || 0), 0);
+
+                recibos.forEach((recibo, index) => {
+                    const estado = String(recibo?.estadoRecibo || recibo?.estado || '').toLowerCase();
+                    if (estado !== 'pendiente') return;
+                    pendientes.push({
+                        _id: poliza._id,
+                        cliente: poliza.cliente || 'Cliente sin nombre',
+                        numeroPoliza: poliza.numeroPoliza || `P-${index + 1}`,
+                        total: total || Number(recibo.montoRecibo) || 0,
+                        montoPagado: montoPagado,
+                        fecha: recibo.fechaVencimientoRecibo || poliza.fechas?.inicio || new Date(),
+                        monto: Number(recibo.montoRecibo) || 0,
+                        metodo: recibo.metodoPago || 'N/A',
+                        reciboIndex: index,
+                        polizaId: poliza._id,
+                        poliza: { ...poliza, recibos }
+                    });
+                });
+            });
+
+            window.pagosPendientesList = [...pendientes].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+            pagosPendientesCacheados = window.pagosPendientesList;
+            window.pagosPendientesCacheados = pagosPendientesCacheados;
+            guardarRespaldoOffline('backup_pagos', pendientes, 'pendientes');
+
+            window.renderizarPendientes();
         } catch (error) {
-            if (tieneCache) return;
-            if (tabla) tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
-            if (!esErrorOffline(error)) console.error('[cargarPagosPendientes] Error:', error);
+            console.error('[cargarPagosPendientes] Error:', error);
+            if (tabla) {
+                tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos disponibles.</td></tr>';
+                const controles = document.getElementById('pagosPendientesControls');
+                if (controles) controles.innerHTML = '';
+            }
         }
     }
 
     async function cargarHistorialPagos() {
         const tablaBody = document.getElementById('tablaPagosBody');
-        const pagosCacheados = leerRespaldoOffline('backup_pagos', 'historial');
-        const tieneCache = Array.isArray(pagosCacheados);
-        if (tieneCache) {
-            pagosHistorialCacheados = pagosCacheados;
-            tablePagination.pagosHistorial.page = 1;
-            if (window.UIManager) {
-                window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
-            }
-        } else if (tablaBody) {
-            tablaBody.innerHTML = '<tr><td colspan="5">Cargando historial...</td></tr>';
-        }
-        if (tieneCache && !navigator.onLine) return;
+        if (tablaBody) tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+        window.paginaHistorial = 1;
 
         try {
-            const userInfo = getUserRoleAndId();
-            const isClient = userInfo.role === 'cliente';
+            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            const lista = Array.isArray(polizas) ? polizas : [];
+            const historial = [];
 
-            let url = '/api/proyectos/pagos/todos';
-            if (isClient) url += `?artistaId=${userInfo.artistaId}`;
+            lista.forEach(poliza => {
+                const recibos = obtenerRecibosParaVistaPagos(poliza);
+                recibos.forEach((recibo, index) => {
+                    const estado = String(recibo?.estadoRecibo || recibo?.estado || '').toLowerCase();
+                    if (estado !== 'pagado') return;
+                    historial.push({
+                        fecha: recibo.fechaPago || recibo.fechaVencimientoRecibo || poliza.fechas?.inicio || new Date(),
+                        cliente: poliza.cliente || 'Cliente sin nombre',
+                        numeroPoliza: poliza.numeroPoliza || `P-${index + 1}`,
+                        monto: Number(recibo.montoRecibo) || 0,
+                        metodo: recibo.metodoPago || 'N/A',
+                        proyectoId: poliza._id,
+                        pagoId: recibo._id || `${poliza._id}-${index}`,
+                        poliza: { ...poliza, recibos }
+                    });
+                });
+            });
 
-            const pagos = await fetchAPI(url, { silent: tieneCache });
-            if (pagos?.offline) {
-                if (tablaBody) tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
-                return;
-            }
-            pagosHistorialCacheados = pagos.map(p => ({
-                fecha: p.fecha || new Date().toISOString(),
-                artista: p.artista || 'N/A',
-                monto: p.monto || 0,
-                metodo: p.metodo || 'N/A',
-                proyectoId: p.proyectoId,
-                pagoId: p.pagoId
-            }));
-            guardarRespaldoOffline('backup_pagos', pagosHistorialCacheados, 'historial');
+            window.pagosHistorialList = [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            pagosHistorialCacheados = window.pagosHistorialList;
+            window.pagosHistorialCacheados = pagosHistorialCacheados;
+            guardarRespaldoOffline('backup_pagos', historial, 'historial');
 
-            tablePagination.pagosHistorial.page = 1;
-            if (window.UIManager) {
-                window.UIManager.renderPagosHistorialTable(pagosHistorialCacheados, tablePagination.pagosHistorial);
-            }
-        } catch (e) {
-            if (!esErrorOffline(e)) console.error('[cargarHistorialPagos] Error:', e);
-            if (tieneCache) return;
+            window.renderizarHistorial();
+        } catch (error) {
+            console.error('[cargarHistorialPagos] Error:', error);
             if (tablaBody) {
-                tablaBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No hay datos locales disponibles.</td></tr>`;
+                tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos disponibles.</td></tr>';
+                const controles = document.getElementById('pagosHistorialControls');
+                if (controles) controles.innerHTML = '';
             }
-            if (error?.offline || !navigator.onLine) showToast('Modo Offline: No hay historial local disponible.', 'info');
         }
     }
 
@@ -6404,14 +6557,31 @@ Fecha de firma: {{FECHA}}`;
         try {
             const proyecto = await fetchAPI(`/api/proyectos/${proyectoId}`);
             const pago = proyecto.pagos.find(p => p._id === pagoId);
-            if (!pago) return alert('Pago no encontrado.');
+            if (!pago) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Pago no encontrado',
+                    text: 'No se encontró el pago asociado a este recibo.',
+                    background: '#1f1f1f',
+                    color: '#fff',
+                    confirmButtonColor: '#d33'
+                });
+                return;
+            }
             
             const saldoRestante = proyecto.total - (proyecto.montoPagado || 0);
             const mensaje = `Hola, hemos registrado exitosamente tu pago para el proyecto ${proyecto.nombreProyecto || 'General'}. Tu saldo pendiente es de $${safeMoney(saldoRestante)}. ¡Gracias por tu confianza!`;
             
             window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
         } catch (e) {
-            alert('Error al abrir WhatsApp.');
+            await Swal.fire({
+                icon: 'error',
+                title: 'No se pudo abrir WhatsApp',
+                text: 'Error al abrir la ventana de WhatsApp.',
+                background: '#1f1f1f',
+                color: '#fff',
+                confirmButtonColor: '#d33'
+            });
         }
     }
     
@@ -7103,6 +7273,29 @@ Fecha de firma: {{FECHA}}`;
         frecuencia.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    function sumarMesesSeguro(fechaBaseStr, mesesASumar) {
+        let fecha;
+        if (fechaBaseStr instanceof Date) {
+            fecha = new Date(fechaBaseStr);
+        } else {
+            const texto = String(fechaBaseStr);
+            const fechaLocal = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            fecha = fechaLocal
+                ? new Date(Number(fechaLocal[1]), Number(fechaLocal[2]) - 1, Number(fechaLocal[3]), 12)
+                : new Date(fechaBaseStr);
+            if (Number.isNaN(fecha.getTime())) {
+                fecha = new Date(`${texto}T12:00:00`);
+            }
+        }
+
+        const diaOriginal = fecha.getDate();
+        fecha.setDate(1);
+        fecha.setMonth(fecha.getMonth() + mesesASumar);
+        const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0).getDate();
+        fecha.setDate(Math.min(diaOriginal, ultimoDia));
+        return fecha;
+    }
+
     function calcularPlanRecibosVistaPrevia(poliza, {
         costoTotal,
         primaNeta,
@@ -7144,7 +7337,6 @@ Fecha de firma: {{FECHA}}`;
             ? gastosExpedicion
             : gastosTotales / totalCuotas;
         const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
-        const fechaBase = new Date(`${fechaInicio}T00:00:00`);
         const recibosActuales = Array.isArray(poliza?.recibos) ? poliza.recibos : [];
         const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
             const reciboActual = recibosActuales.find(recibo => {
@@ -7153,20 +7345,15 @@ Fecha de firma: {{FECHA}}`;
                 return (Number.isFinite(numero) && numero > 0 && numero - 1 === indicePlan)
                     || (!Number.isFinite(numero) && Number.isFinite(periodo) && periodo > 0 && periodo - 1 === indicePlan);
             }) || recibosActuales[indicePlan];
-            const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
-            const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
-            const mes = mesObjetivo % 12;
-            const ultimoDia = new Date(anio, mes + 1, 0).getDate();
             const montoRecibo = montosPlan[indicePlan];
+            const numeroPeriodo = indicePlan + 1;
             return {
                 ...(reciboActual || {}),
-                numeroRecibo: `REC-${indicePlan + 1}`,
-                periodoCobertura: `${indicePlan + 1}/${totalCuotas}`,
+                numeroRecibo: `REC-${numeroPeriodo}`,
+                periodoCobertura: `${numeroPeriodo}/${totalCuotas}`,
                 montoRecibo,
                 montoPagoNeto: Math.round((montoRecibo / 1.16 - gastosPorRecibo) * 100) / 100,
-                fechaVencimientoRecibo: reciboActual?.fechaVencimientoRecibo
-                    || reciboActual?.fechaVencimiento
-                    || new Date(anio, mes, Math.min(fechaBase.getDate(), ultimoDia)),
+                fechaVencimientoRecibo: sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo),
                 estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
             };
         });
@@ -7431,16 +7618,42 @@ Fecha de firma: {{FECHA}}`;
                 if (!editando) return;
 
                 document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
-                    if (!confirm('¿Seguro que deseas cancelar esta póliza? Los recibos pendientes se anularán.')) return;
+                    const { isConfirmed } = await Swal.fire({
+                        title: '¿Cancelar póliza?',
+                        text: 'Los recibos pendientes se anularán. Esta acción no se puede deshacer.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, cancelar',
+                        cancelButtonText: 'Mantener',
+                        confirmButtonColor: '#d33',
+                        background: '#1f1f1f',
+                        color: '#fff'
+                    });
+                    if (!isConfirmed) return;
+
                     event.currentTarget.disabled = true;
                     try {
                         const respuesta = await ejecutarOEncolar(`/api/polizas/${poliza._id}/cancelar`, { method: 'PUT' });
                         Swal.close();
-                        await Swal.fire('Póliza cancelada', respuesta.message || 'La póliza se canceló correctamente.', 'success');
+                        await Swal.fire({
+                            title: 'Póliza cancelada',
+                            text: respuesta.message || 'La póliza se canceló correctamente.',
+                            icon: 'success',
+                            background: '#1f1f1f',
+                            color: '#fff',
+                            confirmButtonColor: '#28a745'
+                        });
                         await cargarPolizas(true);
                     } catch (error) {
                         event.currentTarget.disabled = false;
-                        Swal.fire('Error', error.message || 'No se pudo cancelar la póliza.', 'error');
+                        Swal.fire({
+                            title: 'Error',
+                            text: error.message || 'No se pudo cancelar la póliza.',
+                            icon: 'error',
+                            background: '#1f1f1f',
+                            color: '#fff',
+                            confirmButtonColor: '#d33'
+                        });
                     }
                 });
 
@@ -8483,8 +8696,6 @@ Fecha de firma: {{FECHA}}`;
                         redondearCentavos(costoInicial - montoCuotaInicial),
                         totalCuotas - 1
                     )];
-                const fechaBase = new Date(`${fechaInicio}T00:00:00`);
-                const diaBase = fechaBase.getDate();
                 const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
                 const recibosActuales = Array.isArray(poliza.recibos) ? poliza.recibos : [];
                 const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
@@ -8494,21 +8705,15 @@ Fecha de firma: {{FECHA}}`;
                         return (Number.isFinite(numero) && numero > 0 && numero - 1 === indicePlan)
                             || (!Number.isFinite(numero) && Number.isFinite(periodo) && periodo > 0 && periodo - 1 === indicePlan);
                     }) || recibosActuales[indicePlan];
-                    const mesObjetivo = fechaBase.getMonth() + indicePlan * mesesIntervalo;
-                    const anio = fechaBase.getFullYear() + Math.floor(mesObjetivo / 12);
-                    const mes = mesObjetivo % 12;
-                    const ultimoDia = new Date(anio, mes + 1, 0).getDate();
-                    const fechaVencimiento = reciboActual?.fechaVencimientoRecibo
-                        || reciboActual?.fechaVencimiento
-                        || new Date(anio, mes, Math.min(diaBase, ultimoDia));
                     const montoRecibo = montosPlan[indicePlan];
+                    const numeroPeriodo = indicePlan + 1;
                     return {
                         ...(reciboActual || {}),
-                        numeroRecibo: `REC-${indicePlan + 1}`,
-                        periodoCobertura: `${indicePlan + 1}/${totalCuotas}`,
+                        numeroRecibo: `REC-${numeroPeriodo}`,
+                        periodoCobertura: `${numeroPeriodo}/${totalCuotas}`,
                         montoRecibo,
                         montoPagoNeto: calcularPagoNeto(montoRecibo),
-                        fechaVencimientoRecibo: fechaVencimiento,
+                        fechaVencimientoRecibo: sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo),
                         estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
                     };
                 });
@@ -8678,18 +8883,43 @@ Fecha de firma: {{FECHA}}`;
                     configurarAutoCalculoPrima();
                     configurarVisibilidadCamposPago();
                     document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
-                        if (!confirm('¿Seguro que deseas cancelar esta póliza? Los recibos pendientes se anularán.')) return;
+                        const { isConfirmed } = await Swal.fire({
+                            title: '¿Cancelar póliza?',
+                            text: 'Los recibos pendientes se anularán. Esta acción no se puede deshacer.',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, cancelar',
+                            cancelButtonText: 'Mantener',
+                            confirmButtonColor: '#d33',
+                            background: '#1f1f1f',
+                            color: '#fff'
+                        });
+                        if (!isConfirmed) return;
 
                         const boton = event.currentTarget;
                         boton.disabled = true;
                         try {
                             const respuesta = await ejecutarOEncolar(`/api/polizas/${id}/cancelar`, { method: 'PUT' });
                             Swal.close();
-                            await Swal.fire('Póliza cancelada', respuesta.message || 'La póliza se canceló correctamente.', 'success');
+                            await Swal.fire({
+                                title: 'Póliza cancelada',
+                                text: respuesta.message || 'La póliza se canceló correctamente.',
+                                icon: 'success',
+                                background: '#1f1f1f',
+                                color: '#fff',
+                                confirmButtonColor: '#28a745'
+                            });
                             await cargarPolizas(true);
                         } catch (error) {
                             boton.disabled = false;
-                            Swal.fire('Error', error.message || 'No se pudo cancelar la póliza.', 'error');
+                            Swal.fire({
+                                title: 'Error',
+                                text: error.message || 'No se pudo cancelar la póliza.',
+                                icon: 'error',
+                                background: '#1f1f1f',
+                                color: '#fff',
+                                confirmButtonColor: '#d33'
+                            });
                         }
                     });
                     document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
@@ -9131,6 +9361,15 @@ Fecha de firma: {{FECHA}}`;
         
         // FASE 3: Usar recibos[] en lugar de pagos[]
         const recibos = poliza.recibos || [];
+        const recibosOrdenados = recibos
+            .map((recibo, indiceOriginal) => ({ recibo, indiceOriginal }))
+            .sort((a, b) => {
+                const numeroA = Number(String(a.recibo.numeroRecibo || '').match(/\d+/)?.[0]);
+                const numeroB = Number(String(b.recibo.numeroRecibo || '').match(/\d+/)?.[0]);
+                const ordenA = Number.isFinite(numeroA) && numeroA > 0 ? numeroA : a.indiceOriginal + 1;
+                const ordenB = Number.isFinite(numeroB) && numeroB > 0 ? numeroB : b.indiceOriginal + 1;
+                return ordenA - ordenB;
+            });
         const montoLegacy = Number(poliza.saldoRestante ?? poliza.primaTotal ?? 0);
         const subtotalPoliza = (Number(poliza.primaTotal) || 0) / 1.16;
         const gastosTotales = subtotalPoliza - (Number(poliza.primaNeta) || 0);
@@ -9141,7 +9380,7 @@ Fecha de firma: {{FECHA}}`;
         
         // Generar tabla de recibos
         const recibosHTML = recibos.length > 0 
-            ? recibos.map((r, index) => {
+            ? recibosOrdenados.map(({ recibo: r, indiceOriginal: index }, indiceVista) => {
                 const estadoRecibo = (r.estadoRecibo || '').toLowerCase();
                 const estadoClass = estadoRecibo === 'pagado' ? 'success' : 
                                    estadoRecibo === 'atrasado' ? 'danger' : 'warning';
@@ -9151,7 +9390,7 @@ Fecha de firma: {{FECHA}}`;
                 return `
                     <tr>
                         <td><strong>${r.numeroRecibo || 'N/A'}</strong></td>
-                        <td>${r.periodoCobertura || 'N/A'}</td>
+                        <td>${indiceVista + 1}/${recibosOrdenados.length}</td>
                         <td>$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
                         <td>$${calcularPagoNeto(r.montoRecibo).toFixed(2)}</td>
                         <td>${fechaVencimiento}</td>
@@ -9160,7 +9399,9 @@ Fecha de firma: {{FECHA}}`;
                         <td>
                             ${estadoRecibo === 'pendiente' ? 
                                 `<button class="btn btn-sm btn-success" onclick="window.pagarRecibo('${poliza._id}', ${index})" title="Pagar Recibo"><i class="bi bi-cash"></i></button>` :
-                                '<span class="text-muted"><i class="bi bi-check-circle"></i></span>'
+                                estadoRecibo === 'pagado' ?
+                                    `<span class="text-muted"><i class="bi bi-check-circle"></i></span> <button class="btn btn-sm btn-danger ms-1" onclick="window.revertirPago('${poliza._id}', ${index})" title="Revertir Pago"><i class="bi bi-trash"></i></button>` :
+                                    '<span class="text-muted">-</span>'
                             }
                         </td>
                     </tr>
@@ -9279,6 +9520,68 @@ Fecha de firma: {{FECHA}}`;
             }
         }
     }
+
+    window.revertirPago = async function(polizaId, reciboIndex) {
+        const poliza = polizaActualPagos;
+        const recibo = poliza?.recibos?.[reciboIndex];
+        if (!recibo || String(recibo.estadoRecibo || '').toLowerCase() !== 'pagado') {
+            await Swal.fire('Error', 'El recibo seleccionado no está pagado', 'error');
+            return;
+        }
+
+        const { isConfirmed } = await Swal.fire({
+            title: '¿Revertir pago?',
+            text: `El recibo ${recibo.numeroRecibo || ''} volverá a pendiente.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Revertir pago',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        });
+        if (!isConfirmed) return;
+
+        const pagosPagados = (poliza.pagos || []).map((pago, index) => ({ pago, index }))
+            .filter(({ pago }) => String(pago.estado || '').toLowerCase() === 'pagado');
+        const recibosPagados = (poliza.recibos || []).map((pagoRecibo, index) => ({ pagoRecibo, index }))
+            .filter(({ pagoRecibo }) => String(pagoRecibo.estadoRecibo || '').toLowerCase() === 'pagado');
+        const montoRecibo = Number(recibo.montoRecibo) || 0;
+        const coincideMonto = pago => Math.abs((Number(pago.monto) || 0) - montoRecibo) <= 0.01;
+        const fechaRecibo = Date.parse(recibo.fechaPago);
+        let pagoSeleccionado = Number.isNaN(fechaRecibo)
+            ? null
+            : pagosPagados.find(({ pago }) => coincideMonto(pago) && Date.parse(pago.fechaPago) === fechaRecibo);
+
+        if (!pagoSeleccionado) {
+            const posicionRecibo = recibosPagados.findIndex(({ index }) => index === Number(reciboIndex));
+            const pagoEnPosicion = pagosPagados[posicionRecibo];
+            if (pagosPagados.length === recibosPagados.length && pagoEnPosicion && coincideMonto(pagoEnPosicion.pago)) {
+                pagoSeleccionado = pagoEnPosicion;
+            } else {
+                const pagosCoincidentes = pagosPagados.filter(({ pago }) => coincideMonto(pago));
+                if (pagosCoincidentes.length === 1) pagoSeleccionado = pagosCoincidentes[0];
+            }
+        }
+
+        if (!pagoSeleccionado) {
+            await Swal.fire('Error', 'No se pudo asociar este recibo con un pago único. No se realizaron cambios.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetchAPI(`/api/polizas/${polizaId}/pagos/${pagoSeleccionado.index}`, {
+                method: 'DELETE',
+                body: JSON.stringify({ reciboIndex: Number(reciboIndex) })
+            });
+            if (!response?.success) throw new Error(response?.error || 'No se pudo revertir el pago');
+
+            await cargarPolizas(true);
+            await Swal.fire('Éxito', 'El recibo volvió a estado pendiente', 'success');
+            if (response.poliza) await abrirModalPagos(response.poliza);
+        } catch (error) {
+            console.error('[revertirPago] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo revertir el pago', 'error');
+        }
+    };
 
     async function guardarPago(pagoData) {
         if (!polizaActualPagos) {
@@ -11074,7 +11377,7 @@ Fecha de firma: {{FECHA}}`;
     }
 
     // --- EXPORTS ---
-    window.app = {
+    window.app = Object.assign(window.app || {}, {
         eliminarItem, restaurarItem, eliminarPermanente, cambiarProceso, filtrarFlujo, eliminarProyecto,
         quitarDeProyecto, agregarAProyecto, agregarServicioManual, cambiarAtributo, aprobarCotizacion, aceptarCotizacion, generarCotizacionPDF,
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
@@ -11126,7 +11429,7 @@ Fecha de firma: {{FECHA}}`;
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         cerrarPrintPreview, ejecutarImpresion
-    };
+    });
     // Cableado: funciones usadas en onclick/HTML pero fuera del objeto window.app
     window.app.toggleTheme = toggleTheme;
     window.app.compartirDatosBancariosWhatsApp = compartirDatosBancariosWhatsApp;

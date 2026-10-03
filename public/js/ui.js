@@ -178,17 +178,16 @@
         }
 
         tabla.innerHTML = paginatedItems.map(p => {
-            const artistaNombre = p.artista ? (p.artista.nombreArtistico || p.artista.nombre) : 'N/A';
+            const clientePoliza = [p.cliente || p.artista || 'N/A', p.numeroPoliza || 'Sin póliza'].filter(Boolean).join(' / ');
             const restante = p.total - (p.montoPagado || 0);
             const proyectoInfo = `
-                <div class="fw-bold">${escapeHTML(p.nombreProyecto || 'Sin nombre')}</div>
-                <small class="text-muted">${escapeHTML(artistaNombre)}</small><br>
+                <div class="fw-bold">${escapeHTML(clientePoliza)}</div>
                 <small class="text-muted">${safeDate(p.fecha)}</small>
             `;
 
             return `
             <tr>
-                <td data-label="Proyecto">${proyectoInfo}</td>
+                <td data-label="Cliente / Póliza">${proyectoInfo}</td>
                 <td data-label="Total">$${safeMoney(p.total)}</td>
                 <td data-label="Pagado">$${safeMoney(p.montoPagado || 0)}</td>
                 <td data-label="Restante" class="text-danger fw-bold">$${safeMoney(restante)}</td>
@@ -223,13 +222,13 @@
         }
 
         tablaBody.innerHTML = paginatedItems.map(p => {
-            const displayName = p.artista || 'N/A';
+            const displayName = [p.cliente || p.artista || 'N/A', p.numeroPoliza || p.poliza || 'Sin póliza'].filter(Boolean).join(' / ');
 
             return `
             <tr>
                 <td data-label="Fecha">${safeDate(p.fecha)}</td>
-                <td data-label="Proyecto/Artista">${escapeHTML(displayName)}</td>
-                <td data-label="Monto Pagado">$${safeMoney(p.monto || 0)}</td>
+                <td data-label="Cliente / Póliza">${escapeHTML(displayName)}</td>
+                <td data-label="Monto">$${safeMoney(p.monto || 0)}</td>
                 <td data-label="Método">
                     <span class="badge bg-${getMetodoBadgeColor(p.metodo)}">${p.metodo || 'N/A'}</span>
                 </td>
