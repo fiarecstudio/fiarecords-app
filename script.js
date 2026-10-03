@@ -7664,44 +7664,9 @@ Fecha de firma: {{FECHA}}`;
                 configurarVisibilidadCamposPago();
                 if (!editando) return;
 
-                document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
-                    const { isConfirmed } = await Swal.fire({
-                        title: '¿Cancelar póliza?',
-                        text: 'Los recibos pendientes se anularán. Esta acción no se puede deshacer.',
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonText: 'Sí, cancelar',
-                        cancelButtonText: 'Mantener',
-                        confirmButtonColor: '#d33',
-                        background: '#1f1f1f',
-                        color: '#fff'
-                    });
-                    if (!isConfirmed) return;
-
-                    event.currentTarget.disabled = true;
-                    try {
-                        const respuesta = await ejecutarOEncolar(`/api/polizas/${poliza._id}/cancelar`, { method: 'PUT' });
-                        Swal.close();
-                        await Swal.fire({
-                            title: 'Póliza cancelada',
-                            text: respuesta.message || 'La póliza se canceló correctamente.',
-                            icon: 'success',
-                            background: '#1f1f1f',
-                            color: '#fff',
-                            confirmButtonColor: '#28a745'
-                        });
-                        await cargarPolizas(true);
-                    } catch (error) {
-                        event.currentTarget.disabled = false;
-                        Swal.fire({
-                            title: 'Error',
-                            text: error.message || 'No se pudo cancelar la póliza.',
-                            icon: 'error',
-                            background: '#1f1f1f',
-                            color: '#fff',
-                            confirmButtonColor: '#d33'
-                        });
-                    }
+                document.getElementById('btnCancelarPoliza')?.addEventListener('click', event => {
+                    event.preventDefault();
+                    window.cancelarPoliza(poliza._id, event.currentTarget);
                 });
 
                 document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
@@ -8660,6 +8625,38 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
+    window.cancelarPoliza = async function(id, boton) {
+        const result = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: 'Esta acción marcará la póliza como Cancelada.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, cancelar póliza',
+            cancelButtonText: 'Cerrar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        if (boton) boton.disabled = true;
+        try {
+            const respuesta = await ejecutarOEncolar(`/api/polizas/${id}/cancelar`, {
+                method: 'PUT'
+            });
+            await Swal.fire(
+                '¡Cancelada!',
+                respuesta.message || 'La póliza ha sido cancelada correctamente.',
+                'success'
+            );
+            await cargarPolizas(true);
+        } catch (error) {
+            console.error('[cancelarPoliza] Error:', error);
+            if (boton) boton.disabled = false;
+            await Swal.fire('Error', error.message || 'Hubo un problema al cancelar la póliza.', 'error');
+        }
+    };
+
     // Función para editar póliza
     async function editarPolizaModalLegacy(id) {
         try {
@@ -8933,45 +8930,9 @@ Fecha de firma: {{FECHA}}`;
                 didOpen: () => {
                     configurarAutoCalculoPrima();
                     configurarVisibilidadCamposPago();
-                    document.getElementById('btnCancelarPoliza')?.addEventListener('click', async event => {
-                        const { isConfirmed } = await Swal.fire({
-                            title: '¿Cancelar póliza?',
-                            text: 'Los recibos pendientes se anularán. Esta acción no se puede deshacer.',
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonText: 'Sí, cancelar',
-                            cancelButtonText: 'Mantener',
-                            confirmButtonColor: '#d33',
-                            background: '#1f1f1f',
-                            color: '#fff'
-                        });
-                        if (!isConfirmed) return;
-
-                        const boton = event.currentTarget;
-                        boton.disabled = true;
-                        try {
-                            const respuesta = await ejecutarOEncolar(`/api/polizas/${id}/cancelar`, { method: 'PUT' });
-                            Swal.close();
-                            await Swal.fire({
-                                title: 'Póliza cancelada',
-                                text: respuesta.message || 'La póliza se canceló correctamente.',
-                                icon: 'success',
-                                background: '#1f1f1f',
-                                color: '#fff',
-                                confirmButtonColor: '#28a745'
-                            });
-                            await cargarPolizas(true);
-                        } catch (error) {
-                            boton.disabled = false;
-                            Swal.fire({
-                                title: 'Error',
-                                text: error.message || 'No se pudo cancelar la póliza.',
-                                icon: 'error',
-                                background: '#1f1f1f',
-                                color: '#fff',
-                                confirmButtonColor: '#d33'
-                            });
-                        }
+                    document.getElementById('btnCancelarPoliza')?.addEventListener('click', event => {
+                        event.preventDefault();
+                        window.cancelarPoliza(id, event.currentTarget);
                     });
                     document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
                         event.preventDefault();
