@@ -197,19 +197,6 @@
                 </div>
             </div>
 
-            <div class="search-box search-box-desktop w-100">
-                <div class="input-group input-group-sm header-search-group">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" id="globalSearchPC" class="form-control" placeholder="Buscar cliente, póliza o aseguradora..." onkeyup="app.filtrarTablas(this.value)">
-                </div>
-            </div>
-
-            <div class="search-box-mobile search-box-mobile-alt w-100">
-                <div class="input-group input-group-sm header-search-group">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" id="globalSearchMobile" class="form-control" placeholder="Buscar cliente, póliza o aseguradora..." onkeyup="app.filtrarTablas(this.value)">
-                </div>
-            </div>
         </header>
 
         <main class="p-3 p-md-4">
@@ -371,6 +358,26 @@
                 </div>
                 
                 <div class="card-body">
+                    <div class="row g-2 align-items-end mb-3" id="filtrosPagosLocal">
+                        <div class="col-12 col-md-4">
+                            <label for="buscadorPagosLocal" class="form-label small mb-1">Buscar pagos</label>
+                            <input id="buscadorPagosLocal" class="form-control form-control-sm" type="search" placeholder="Buscar cliente o póliza..." oninput="window.filtrarPagosLocal()">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="filtroEstatusPagos" class="form-label small mb-1">Estatus</label>
+                            <select id="filtroEstatusPagos" class="form-select form-select-sm" onchange="window.filtrarPagosLocal()">
+                                <option value="">Todos</option>
+                                <option value="pendiente">Pendientes</option>
+                                <option value="pagado">Pagados</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="filtroAseguradoraPagos" class="form-label small mb-1">Aseguradora</label>
+                            <select id="filtroAseguradoraPagos" class="form-select form-select-sm" onchange="window.filtrarPagosLocal()">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                    </div>
                     <!-- VISTA: PAGOS DE SEGUROS -->
                     <div id="vista-pagos-seguros" style="display:none;">
                         <h4 class="text-success"><i class="bi bi-shield-check"></i> Pagos de Pólizas</h4>
@@ -1334,6 +1341,10 @@
                                 <select id="filtro-aseguradora-cobranza" class="form-select form-select-sm" onchange="app.filtrarCobranzaUI()">
                                     <option value="">Todas</option>
                                 </select>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="buscadorCobranzaDiaria" class="form-label small mb-1">Buscar cobranza</label>
+                                <input id="buscadorCobranzaDiaria" class="form-control form-control-sm" type="search" placeholder="Buscar cliente o póliza..." oninput="app.filtrarCobranzaUI()">
                             </div>
                         </div>
                         

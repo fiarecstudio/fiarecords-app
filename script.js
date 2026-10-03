@@ -3,8 +3,10 @@ if (window.hasLoadedScript) {
 } else {
     window.hasLoadedScript = true;
     window.pagosPendientesList = [];
+    window.pagosPendientesFiltrados = [];
     window.paginaPendientes = 1;
     window.pagosHistorialList = [];
+    window.pagosHistorialFiltrados = [];
     window.paginaHistorial = 1;
     window.itemsPorPagina = 10;
 
@@ -3194,8 +3196,6 @@ let proyectoIdEnEdicion = null;
             if(linkActivo) linkActivo.classList.add('active'); 
             if (updateHistory && `#${id}` !== window.location.hash) { history.pushState(null, null, `#${id}`); } 
             
-            if(document.getElementById('globalSearchPC')) document.getElementById('globalSearchPC').value = ''; 
-            if(document.getElementById('globalSearchMobile')) document.getElementById('globalSearchMobile').value = ''; 
             filtroGlobalPolizas = '';
             const busquedaPolizas = document.getElementById('filtro-busqueda-polizas');
             if (busquedaPolizas) busquedaPolizas.value = '';
@@ -4453,7 +4453,7 @@ Fecha de firma: {{FECHA}}`;
             };
         }
 
-        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados', 'pagosPendientesList', 'pagosHistorialList'].forEach((key) => {
+        ['historialCacheados', 'cotizacionesCacheadas', 'pagosPendientesCacheados', 'pagosHistorialCacheados', 'pagosPendientesList', 'pagosPendientesFiltrados', 'pagosHistorialList', 'pagosHistorialFiltrados'].forEach((key) => {
             if (window[key]) {
                 window[key] = [];
             }
@@ -4647,11 +4647,6 @@ Fecha de firma: {{FECHA}}`;
 
     function filtrarTablas(query) { 
         query = query.toLowerCase(); 
-        const inputPC = document.getElementById('globalSearchPC'); 
-        const inputMobile = document.getElementById('globalSearchMobile'); 
-        if(document.activeElement === inputPC && inputMobile) inputMobile.value = query; 
-        if(document.activeElement === inputMobile && inputPC) inputPC.value = query; 
-
         const activeSection = document.querySelector('section.active');
         if (!activeSection) return;
         const sectionId = activeSection.id;
@@ -6348,12 +6343,13 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('pagosPendientesControls');
         if (!tabla) return;
 
-        const totalPaginas = Math.max(1, Math.ceil(window.pagosPendientesList.length / window.itemsPorPagina));
+        const pagosFiltrados = window.pagosPendientesFiltrados;
+        const totalPaginas = Math.max(1, Math.ceil(pagosFiltrados.length / window.itemsPorPagina));
         window.paginaPendientes = Math.min(Math.max(window.paginaPendientes, 1), totalPaginas);
         const inicio = (window.paginaPendientes - 1) * window.itemsPorPagina;
-        const pedidos = window.pagosPendientesList.slice(inicio, inicio + window.itemsPorPagina);
+        const pedidos = pagosFiltrados.slice(inicio, inicio + window.itemsPorPagina);
 
-        if (!window.pagosPendientesList.length) {
+        if (!pagosFiltrados.length) {
             tabla.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pagos pendientes.</td></tr>';
         } else {
             tabla.innerHTML = pedidos.map(item => `
@@ -6373,7 +6369,7 @@ Fecha de firma: {{FECHA}}`;
         }
 
         if (contenedor) {
-            contenedor.innerHTML = window.pagosPendientesList.length > window.itemsPorPagina ? `
+            contenedor.innerHTML = pagosFiltrados.length > window.itemsPorPagina ? `
                 <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaPendientes <= 1 ? 'disabled' : ''} onclick="window.cambiarPaginaPendientes(-1)">
                     <i class="bi bi-chevron-left"></i> Anterior
                 </button>
@@ -6386,7 +6382,7 @@ Fecha de firma: {{FECHA}}`;
     };
 
     window.cambiarPaginaPendientes = function(delta) {
-        const totalPaginas = Math.max(1, Math.ceil(window.pagosPendientesList.length / window.itemsPorPagina));
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosPendientesFiltrados.length / window.itemsPorPagina));
         window.paginaPendientes = Math.min(Math.max(window.paginaPendientes + delta, 1), totalPaginas);
         window.renderizarPendientes();
     };
@@ -6395,12 +6391,13 @@ Fecha de firma: {{FECHA}}`;
         const tablaBody = document.getElementById('tablaPagosBody');
         if (!tablaBody) return;
 
-        const totalPaginas = Math.max(1, Math.ceil(window.pagosHistorialList.length / window.itemsPorPagina));
+        const pagosFiltrados = window.pagosHistorialFiltrados;
+        const totalPaginas = Math.max(1, Math.ceil(pagosFiltrados.length / window.itemsPorPagina));
         window.paginaHistorial = Math.min(Math.max(window.paginaHistorial, 1), totalPaginas);
         const inicio = (window.paginaHistorial - 1) * window.itemsPorPagina;
-        const pagosPagina = window.pagosHistorialList.slice(inicio, inicio + window.itemsPorPagina);
+        const pagosPagina = pagosFiltrados.slice(inicio, inicio + window.itemsPorPagina);
 
-        if (!window.pagosHistorialList.length) {
+        if (!pagosFiltrados.length) {
             tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay pagos registrados.</td></tr>';
         } else {
             tablaBody.innerHTML = pagosPagina.map(item => `
@@ -6417,7 +6414,7 @@ Fecha de firma: {{FECHA}}`;
 
         const contenedor = document.getElementById('pagosHistorialControls');
         if (contenedor) {
-            contenedor.innerHTML = window.pagosHistorialList.length > window.itemsPorPagina ? `
+            contenedor.innerHTML = pagosFiltrados.length > window.itemsPorPagina ? `
                 <button type="button" class="btn btn-sm btn-outline-secondary" ${window.paginaHistorial <= 1 ? 'disabled' : ''} onclick="window.cambiarPaginaHistorial(-1)">
                     <i class="bi bi-chevron-left"></i> Anterior
                 </button>
@@ -6430,8 +6427,50 @@ Fecha de firma: {{FECHA}}`;
     };
 
     window.cambiarPaginaHistorial = function(delta) {
-        const totalPaginas = Math.max(1, Math.ceil(window.pagosHistorialList.length / window.itemsPorPagina));
+        const totalPaginas = Math.max(1, Math.ceil(window.pagosHistorialFiltrados.length / window.itemsPorPagina));
         window.paginaHistorial = Math.min(Math.max(window.paginaHistorial + delta, 1), totalPaginas);
+        window.renderizarHistorial();
+    };
+
+    function actualizarOpcionesAseguradoraPagos() {
+        const selector = document.getElementById('filtroAseguradoraPagos');
+        if (!selector) return;
+
+        const valorSeleccionado = selector.value;
+        const aseguradoras = [...new Set([
+            ...window.pagosPendientesList,
+            ...window.pagosHistorialList
+        ].map(item => item.poliza?.aseguradora).filter(Boolean))]
+            .sort((a, b) => String(a).localeCompare(String(b)));
+
+        selector.innerHTML = '<option value="">Todas</option>';
+        aseguradoras.forEach(aseguradora => {
+            const opcion = document.createElement('option');
+            opcion.value = aseguradora;
+            opcion.textContent = aseguradora;
+            selector.appendChild(opcion);
+        });
+        if (aseguradoras.includes(valorSeleccionado)) selector.value = valorSeleccionado;
+    }
+
+    window.filtrarPagosLocal = function() {
+        const texto = (document.getElementById('buscadorPagosLocal')?.value || '').trim().toLowerCase();
+        const estatus = (document.getElementById('filtroEstatusPagos')?.value || '').toLowerCase();
+        const aseguradora = document.getElementById('filtroAseguradoraPagos')?.value || '';
+        const coincide = item => {
+            const textoCoincide = !texto
+                || String(item.cliente || '').toLowerCase().includes(texto)
+                || String(item.numeroPoliza || '').toLowerCase().includes(texto);
+            return textoCoincide
+                && (!estatus || String(item.estatus || '').toLowerCase() === estatus)
+                && (!aseguradora || item.poliza?.aseguradora === aseguradora);
+        };
+
+        window.pagosPendientesFiltrados = window.pagosPendientesList.filter(coincide);
+        window.pagosHistorialFiltrados = window.pagosHistorialList.filter(coincide);
+        window.paginaPendientes = 1;
+        window.paginaHistorial = 1;
+        window.renderizarPendientes();
         window.renderizarHistorial();
     };
 
@@ -6478,6 +6517,7 @@ Fecha de firma: {{FECHA}}`;
                         fecha: recibo.fechaVencimientoRecibo || poliza.fechas?.inicio || new Date(),
                         monto: Number(recibo.montoRecibo) || 0,
                         metodo: recibo.metodoPago || 'N/A',
+                        estatus: 'pendiente',
                         reciboIndex: index,
                         polizaId: poliza._id,
                         poliza: { ...poliza, recibos }
@@ -6486,10 +6526,13 @@ Fecha de firma: {{FECHA}}`;
             });
 
             window.pagosPendientesList = [...pendientes].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+            window.pagosPendientesFiltrados = [...window.pagosPendientesList];
             pagosPendientesCacheados = window.pagosPendientesList;
             window.pagosPendientesCacheados = pagosPendientesCacheados;
             guardarRespaldoOffline('backup_pagos', pendientes, 'pendientes');
 
+            actualizarOpcionesAseguradoraPagos();
+            window.filtrarPagosLocal();
             window.renderizarPendientes();
         } catch (error) {
             console.error('[cargarPagosPendientes] Error:', error);
@@ -6522,6 +6565,7 @@ Fecha de firma: {{FECHA}}`;
                         numeroPoliza: poliza.numeroPoliza || `P-${index + 1}`,
                         monto: Number(recibo.montoRecibo) || 0,
                         metodo: recibo.metodoPago || 'N/A',
+                        estatus: 'pagado',
                         proyectoId: poliza._id,
                         pagoId: recibo._id || `${poliza._id}-${index}`,
                         poliza: { ...poliza, recibos }
@@ -6530,10 +6574,13 @@ Fecha de firma: {{FECHA}}`;
             });
 
             window.pagosHistorialList = [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            window.pagosHistorialFiltrados = [...window.pagosHistorialList];
             pagosHistorialCacheados = window.pagosHistorialList;
             window.pagosHistorialCacheados = pagosHistorialCacheados;
             guardarRespaldoOffline('backup_pagos', historial, 'historial');
 
+            actualizarOpcionesAseguradoraPagos();
+            window.filtrarPagosLocal();
             window.renderizarHistorial();
         } catch (error) {
             console.error('[cargarHistorialPagos] Error:', error);
@@ -8416,9 +8463,13 @@ Fecha de firma: {{FECHA}}`;
     function renderizarTablaCobranza(polizas, tabActiva) {
         const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
+        const textoBusqueda = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim().toLowerCase();
         cobranzaGlobales = (Array.isArray(polizas) ? polizas : []).filter(poliza =>
             (!asesorSeleccionado || String(poliza.asesorId || '') === asesorSeleccionado)
             && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
+            && (!textoBusqueda
+                || String(poliza.cliente || '').toLowerCase().includes(textoBusqueda)
+                || String(poliza.numeroPoliza || '').toLowerCase().includes(textoBusqueda))
         );
         paginaActualCobranza = 1;
         renderizarPaginaCobranza(tabActiva);
