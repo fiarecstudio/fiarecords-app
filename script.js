@@ -651,7 +651,10 @@ let proyectoIdEnEdicion = null;
     let dashboardStatsCache = null;
     let dashboardCacheScope = null;
     const dashboardSegurosCache = new Map();
+    let dashboardPolizasCache = null;
+    let dashboardAnoDefaultAsignado = false;
     let filtroGlobalPolizas = '';
+    let ordenPendientesAscendente = true;
 
     function normalizarFiltroAsesor(valor) {
         const asesorId = String(valor || '').trim();
@@ -664,6 +667,7 @@ let proyectoIdEnEdicion = null;
             dashboardCacheScope = scope;
             dashboardStatsCache = null;
             dashboardSegurosCache.clear();
+            dashboardPolizasCache = null;
         }
         return scope;
     }
@@ -705,6 +709,9 @@ let proyectoIdEnEdicion = null;
     let currentCalendar = null;
     let configCache = null;
     let chartInstance = null;
+    window.instanciaChartCobrado = null;
+    window.instanciaChartPolizas = null;
+    window.instanciaChartVentas = null;
     
     // Arrays temporales para tablas paginadas
     let historialCacheados = [];
@@ -1583,6 +1590,9 @@ let proyectoIdEnEdicion = null;
                 await cargarDashboardSeguros(undefined, forzarRecarga);
                 return;
             }
+            document.getElementById('filtrosDashboardVentas')?.classList.add('d-none');
+            document.getElementById('filtrosDashboardVentas')?.classList.remove('d-flex');
+            document.getElementById('graficasDashboardSeguros')?.classList.add('d-none');
 
             const renderizar = stats => {
                 const kpiIngresos = document.getElementById('kpi-ingresos-mes');
@@ -1649,16 +1659,195 @@ let proyectoIdEnEdicion = null;
         }
     }
 
+    function obtenerNombreAsesorDashboard(poliza) {
+        const asesor = poliza.asesor;
+        if (typeof asesor === 'string' && asesor.trim()) return asesor.trim();
+        if (asesor && typeof asesor === 'object') {
+            const nombre = asesor.nombre || asesor.username || asesor.name || asesor.email;
+            if (nombre) return String(nombre).trim();
+        }
+        if (poliza.asesorNombre) return String(poliza.asesorNombre).trim();
+        if (poliza.asesorId && typeof poliza.asesorId === 'object') {
+            const nombre = poliza.asesorId.nombre || poliza.asesorId.username
+                || poliza.asesorId.name || poliza.asesorId.email;
+            if (nombre) return String(nombre).trim();
+        }
+        return '';
+    }
+
+    async function obtenerPolizasDashboard() {
+        if (dashboardPolizasCache !== null) return dashboardPolizasCache;
+        const respaldo = leerRespaldoOffline('backup_polizas', 'todos');
+        if (!navigator.onLine) {
+            if (Array.isArray(respaldo)) return respaldo;
+            console.warn('[obtenerPolizasDashboard] Sin pólizas locales; los filtros de asesor y año no estarán disponibles offline.');
+            return null;
+        }
+
+        try {
+            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            if (polizas?.offline) {
+                if (Array.isArray(respaldo)) return respaldo;
+                console.warn('[obtenerPolizasDashboard] La API no entregó pólizas y no hay respaldo local para aplicar los filtros.');
+                return null;
+            }
+            dashboardPolizasCache = Array.isArray(polizas) ? polizas : [];
+            guardarRespaldoOffline('backup_polizas', dashboardPolizasCache, 'todos');
+            return dashboardPolizasCache;
+        } catch (error) {
+            console.warn('[obtenerPolizasDashboard] No se pudieron cargar las pólizas para los filtros:', error);
+            return Array.isArray(respaldo) ? respaldo : null;
+        }
+    }
+
+    function actualizarFiltroAsesorDashboard(polizas) {
+        const selector = document.getElementById('filtroAsesorDashboard');
+        if (!selector) return;
+        const valorAnterior = selector.value;
+        const asesores = [...new Set(polizas.map(obtenerNombreAsesorDashboard).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'es'));
+        selector.innerHTML = '<option value="">Todos los asesores</option>' + asesores
+            .map(asesor => `<option value="${escapeHTML(asesor)}">${escapeHTML(asesor)}</option>`)
+            .join('');
+        if (asesores.includes(valorAnterior)) selector.value = valorAnterior;
+    }
+
+    function filtrarPolizasDashboard(polizas) {
+        const asesorSeleccionado = document.getElementById('filtroAsesorDashboard')?.value || '';
+        const anoSeleccionado = document.getElementById('filtroAnoDashboard')?.value || '';
+        return polizas.filter(poliza => {
+            const coincideAsesor = !asesorSeleccionado
+                || obtenerNombreAsesorDashboard(poliza) === asesorSeleccionado;
+            const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : null;
+            const coincideAno = !anoSeleccionado
+                || (fechaInicio && !Number.isNaN(fechaInicio.getTime())
+                    && String(fechaInicio.getFullYear()) === anoSeleccionado);
+            return coincideAsesor && coincideAno;
+        });
+    }
+
+    function calcularGraficasDashboardPolizas(polizas, filtroTiempo, labels) {
+        const cobrado = Array(labels.length).fill(0);
+        const pendiente = Array(labels.length).fill(0);
+        const polizasPeriodo = Array(labels.length).fill(0);
+        const ventasPorAsesor = new Map();
+        const fechaActual = new Date();
+        const anoSeleccionado = Number(document.getElementById('filtroAnoDashboard')?.value) || null;
+        const mesGrafica = fechaActual.getMonth();
+        const semanaActual = Math.min(Math.ceil(fechaActual.getDate() / 7) - 1, 4);
+        const periodIndex = value => {
+            if (!value) return -1;
+            const fecha = new Date(value);
+            if (Number.isNaN(fecha.getTime())) return -1;
+            if (filtroTiempo === 'mensual') {
+                if (anoSeleccionado && fecha.getFullYear() !== anoSeleccionado) return -1;
+                return fecha.getMonth();
+            }
+            if ((anoSeleccionado && fecha.getFullYear() !== anoSeleccionado)
+                || fecha.getMonth() !== mesGrafica) return -1;
+            if (filtroTiempo === 'semanal') return Math.min(Math.ceil(fecha.getDate() / 7) - 1, 4);
+            if (filtroTiempo === 'diario') return fecha.getDate() - 1;
+            return -1;
+        };
+        const numeroPagosPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
+
+        polizas.forEach(poliza => {
+            if (poliza.estado === 'Cancelada') return;
+            const fechaInicio = poliza.fechas?.inicio;
+            const indiceVenta = periodIndex(fechaInicio);
+            if (indiceVenta >= 0) {
+                polizasPeriodo[indiceVenta] += 1;
+                const fechaVenta = new Date(fechaInicio);
+                const perteneceAlPeriodoDeAsesor = filtroTiempo === 'mensual'
+                    ? fechaVenta.getMonth() === mesGrafica
+                    : filtroTiempo === 'semanal'
+                        ? fechaVenta.getMonth() === mesGrafica && indiceVenta === semanaActual
+                        : filtroTiempo === 'diario'
+                            ? fechaVenta.getMonth() === mesGrafica && fechaVenta.getDate() === fechaActual.getDate()
+                            : false;
+                if (perteneceAlPeriodoDeAsesor) {
+                    const asesor = obtenerNombreAsesorDashboard(poliza) || 'Sin Asesor';
+                    ventasPorAsesor.set(asesor, (ventasPorAsesor.get(asesor) || 0) + 1);
+                }
+            }
+
+            const recibos = Array.isArray(poliza.recibos) ? poliza.recibos : [];
+            if (recibos.length) {
+                recibos.forEach((recibo, index) => {
+                    const estado = String(recibo.estadoRecibo || recibo.estado || '').toLowerCase();
+                    if (estado !== 'pagado' && estado !== 'pendiente') return;
+                    const indice = periodIndex(
+                        recibo.fechaVencimientoRecibo || recibo.fechaVencimiento || recibo.fechaPago
+                    );
+                    if (indice < 0) return;
+                    const cantidadPagos = numeroPagosPorTipo[poliza.tipoPago] || 1;
+                    const montoConfigurado = index === 0
+                        ? Number(poliza.primerPago) || 0
+                        : Number(poliza.montoAbono) || 0;
+                    const monto = Number(recibo.montoRecibo) > 0
+                        ? Number(recibo.montoRecibo)
+                        : montoConfigurado || (Number(poliza.primaTotal) || 0) / cantidadPagos;
+                    if (estado === 'pagado') cobrado[indice] += monto;
+                    else pendiente[indice] += monto;
+                });
+                return;
+            }
+
+            (poliza.pagos || []).forEach(pago => {
+                if (String(pago.estado || '').toLowerCase() !== 'pagado') return;
+                const indice = periodIndex(pago.fechaPago);
+                if (indice >= 0) cobrado[indice] += Number(pago.monto) || 0;
+            });
+            const indicePendiente = periodIndex(poliza.proximoPago);
+            if (indicePendiente >= 0) {
+                const cantidadPagos = numeroPagosPorTipo[poliza.tipoPago] || 1;
+                pendiente[indicePendiente] += Number(poliza.montoAbono)
+                    || Number(poliza.saldoRestante)
+                    || (Number(poliza.primaTotal) || 0) / cantidadPagos;
+            }
+        });
+
+        return {
+            cobrado,
+            pendiente,
+            polizasPeriodo,
+            ventasPorAsesor: [...ventasPorAsesor.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'))
+        };
+    }
+
+    function filtrarDashboardSeguros() {
+        const filtroTiempo = document.getElementById('filtroTiempoGraficas')?.value || 'mensual';
+        const respuestaCacheada = dashboardSegurosCache.get(filtroTiempo)
+            || leerRespaldoOffline('backup_dashboard_seguros', filtroTiempo);
+        cargarDashboardSeguros(filtroTiempo, false, respuestaCacheada || null);
+    }
+
+    function establecerAnoActualDashboardPorDefecto() {
+        const selector = document.getElementById('filtroAnoDashboard');
+        if (!selector || dashboardAnoDefaultAsignado) return;
+
+        const anoActual = new Date().getFullYear().toString();
+        if (![...selector.options].some(opcion => opcion.value === anoActual)) {
+            selector.add(new Option(anoActual, anoActual));
+        }
+        selector.value = anoActual;
+        dashboardAnoDefaultAsignado = true;
+    }
+
     // FASE 6: DASHBOARD DE SEGUROS
     async function cargarDashboardSeguros(filtroTiempo, forzarRecarga = false, respuestaActualizada = null) {
         try {
+            establecerAnoActualDashboardPorDefecto();
             prepararCacheDashboard();
             // FASE 3: Cargar métricas enterprise con renovaciones y recibos
             const filtroSeleccionado = filtroTiempo
                 || document.getElementById('filtroTiempoGraficas')?.value
                 || 'mensual';
             const urlMetricas = `/api/polizas/metricas-seguros?filtroTiempo=${encodeURIComponent(filtroSeleccionado)}`;
-            if (forzarRecarga) dashboardSegurosCache.delete(filtroSeleccionado);
+            if (forzarRecarga) {
+                dashboardSegurosCache.delete(filtroSeleccionado);
+                dashboardPolizasCache = null;
+            }
             let response = respuestaActualizada;
             let tieneCache = Boolean(respuestaActualizada);
             if (!respuestaActualizada && !forzarRecarga) {
@@ -1676,6 +1865,16 @@ let proyectoIdEnEdicion = null;
             const data = response.metricas || {};
             const datosGraficas = response.graficas || {};
             const detalles = response.detalles || {};
+            const polizasDashboard = await obtenerPolizasDashboard();
+            if (polizasDashboard) actualizarFiltroAsesorDashboard(polizasDashboard);
+            const polizasFiltradasDashboard = polizasDashboard
+                ? filtrarPolizasDashboard(polizasDashboard)
+                : null;
+            const asesorSeleccionado = document.getElementById('filtroAsesorDashboard')?.value || '';
+            const polizasActivasDashboard = polizasDashboard
+                ? polizasDashboard.filter(poliza => poliza.estado === 'Activa'
+                    && (!asesorSeleccionado || obtenerNombreAsesorDashboard(poliza) === asesorSeleccionado)).length
+                : Number(data.activas) || 0;
 
             // Ocultar tarjetas estándar
             const cardIngresos = document.getElementById('kpi-ingresos-mes')?.closest('.card');
@@ -1697,10 +1896,12 @@ let proyectoIdEnEdicion = null;
             // Mostrar tarjetas de seguros
             const dashboardContainer = document.getElementById('dashboard');
             if (!dashboardContainer) return;
-
-            // FASE 3: Tarjetas Enterprise con métricas clave
-            if (window.chartCobro) window.chartCobro.destroy();
-            if (window.chartPolizas) window.chartPolizas.destroy();
+            const filtrosDashboardVentas = document.getElementById('filtrosDashboardVentas');
+            filtrosDashboardVentas?.classList.remove('d-none');
+            filtrosDashboardVentas?.classList.add('d-flex');
+            document.getElementById('graficasDashboardSeguros')?.classList.remove('d-none');
+            const filtroTiempoGraficas = document.getElementById('filtroTiempoGraficas');
+            if (filtroTiempoGraficas) filtroTiempoGraficas.value = filtroSeleccionado;
 
             const tarjetasSegurosHTML = `
                 <div class="row mb-4">
@@ -1710,7 +1911,7 @@ let proyectoIdEnEdicion = null;
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <h6 class="card-title mb-0">Pólizas Activas</h6>
-                                        <h3 class="mb-0">${data.activas || 0}</h3>
+                                        <h3 class="mb-0">${polizasActivasDashboard}</h3>
                                     </div>
                                     <i class="bi bi-shield-check insurance-kpi-icon" aria-hidden="true"></i>
                                 </div>
@@ -1759,30 +1960,9 @@ let proyectoIdEnEdicion = null;
                         </div>
                     </div>
                 </div>
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <select id="filtroTiempoGraficas" class="form-select w-auto mb-3">
-                            <option value="mensual" ${filtroSeleccionado === 'mensual' ? 'selected' : ''}>Mensual (Año actual)</option>
-                            <option value="semanal" ${filtroSeleccionado === 'semanal' ? 'selected' : ''}>Semanal (Mes actual)</option>
-                            <option value="diario" ${filtroSeleccionado === 'diario' ? 'selected' : ''}>Diario (Mes actual)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card shadow-sm h-100"><div class="card-body">
-                            <h5 class="card-title">Cobrado vs Pendiente</h5>
-                            <canvas id="graficaCobranza"></canvas>
-                        </div></div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="card shadow-sm h-100"><div class="card-body">
-                            <h5 class="card-title">Pólizas por Periodo</h5>
-                            <canvas id="graficaPolizas"></canvas>
-                        </div></div>
-                    </div>
-                </div>
             `;
 
-            // Insertar las tarjetas de seguros
+            // Insertar las tarjetas después de los filtros, sin alterar el diseño existente.
             const existingTarjetas = document.getElementById('tarjetas-seguros');
             if (existingTarjetas) {
                 existingTarjetas.innerHTML = tarjetasSegurosHTML;
@@ -1790,43 +1970,113 @@ let proyectoIdEnEdicion = null;
                 const tarjetasDiv = document.createElement('div');
                 tarjetasDiv.id = 'tarjetas-seguros';
                 tarjetasDiv.innerHTML = tarjetasSegurosHTML;
-                dashboardContainer.insertBefore(tarjetasDiv, dashboardContainer.firstChild);
+                const filtrosDashboard = document.getElementById('filtrosDashboardVentas');
+                dashboardContainer.insertBefore(tarjetasDiv, filtrosDashboard?.nextSibling || dashboardContainer.firstChild);
             }
 
-            const labelsGraficas = datosGraficas.labels || ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const canvasCobranza = document.getElementById('graficaCobranza');
-            const canvasPolizas = document.getElementById('graficaPolizas');
-            if (typeof Chart !== 'undefined' && canvasCobranza && canvasPolizas) {
-                window.chartCobro = new Chart(canvasCobranza, {
-                    type: 'bar',
-                    data: {
-                        labels: labelsGraficas,
-                        datasets: [
-                            { label: 'Cobrado', data: datosGraficas.cobrado || Array(12).fill(0), backgroundColor: '#28a745' },
-                            { label: 'Pendiente', data: datosGraficas.pendiente || Array(12).fill(0), backgroundColor: '#ffc107' }
-                        ]
-                    },
-                    options: { responsive: true }
-                });
+            const labelsGraficas = Array.isArray(datosGraficas.labels)
+                ? datosGraficas.labels
+                : ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const graficasPolizas = polizasFiltradasDashboard
+                ? calcularGraficasDashboardPolizas(polizasFiltradasDashboard, filtroSeleccionado, labelsGraficas)
+                : (datosGraficas && typeof datosGraficas === 'object' ? datosGraficas : {});
+            const canvasCobrado = document.getElementById('chartCobradoPendiente');
+            const canvasPolizasPeriodo = document.getElementById('chartPolizasPeriodo');
+            const canvasVentasAsesor = document.getElementById('chartVentasAsesor');
+            const ctxCobrado = canvasCobrado?.getContext('2d');
+            const ctxPolizasPeriodo = canvasPolizasPeriodo?.getContext('2d');
+            const ctxVentasAsesor = canvasVentasAsesor?.getContext('2d');
 
-                window.chartPolizas = new Chart(canvasPolizas, {
-                    type: 'line',
-                    data: {
-                        labels: labelsGraficas,
-                        datasets: [{
-                            label: 'Pólizas',
-                            data: datosGraficas.polizasMes || Array(12).fill(0),
-                            borderColor: '#0d6efd',
-                            tension: 0.1
-                        }]
-                    },
-                    options: { responsive: true }
-                });
+            if (!canvasCobrado) console.error('Falta canvas chartCobradoPendiente');
+            if (!canvasPolizasPeriodo) console.error('Falta canvas chartPolizasPeriodo');
+            if (!canvasVentasAsesor) console.error('Falta canvas chartVentasAsesor');
+            if (canvasCobrado && !ctxCobrado) console.error('No se pudo obtener el contexto 2D de chartCobradoPendiente');
+            if (canvasPolizasPeriodo && !ctxPolizasPeriodo) console.error('No se pudo obtener el contexto 2D de chartPolizasPeriodo');
+            if (canvasVentasAsesor && !ctxVentasAsesor) console.error('No se pudo obtener el contexto 2D de chartVentasAsesor');
+            if (typeof Chart === 'undefined') {
+                console.error('[cargarDashboardSeguros] Chart.js no está disponible; no se pueden renderizar las gráficas.');
+            } else if (ctxCobrado && ctxPolizasPeriodo && ctxVentasAsesor) {
+                try {
+                    [window.instanciaChartCobrado, window.instanciaChartPolizas, window.instanciaChartVentas]
+                        .forEach(chart => {
+                            if (chart) chart.destroy();
+                        });
+                    window.instanciaChartCobrado = null;
+                    window.instanciaChartPolizas = null;
+                    window.instanciaChartVentas = null;
+
+                    const labels = Array.isArray(labelsGraficas) ? labelsGraficas : [];
+                    const normalizarSerie = serie => labels.map((_, index) => {
+                        const valor = Array.isArray(serie) ? Number(serie[index]) : 0;
+                        return Number.isFinite(valor) ? valor : 0;
+                    });
+                    const ventasPorAsesor = Array.isArray(graficasPolizas.ventasPorAsesor)
+                        ? graficasPolizas.ventasPorAsesor.filter(item =>
+                            Array.isArray(item) && typeof item[0] === 'string' && Number.isFinite(Number(item[1]))
+                        )
+                        : [];
+
+                    window.instanciaChartCobrado = new Chart(ctxCobrado, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [
+                                { label: 'Cobrado', data: normalizarSerie(graficasPolizas.cobrado), backgroundColor: '#28a745' },
+                                { label: 'Pendiente', data: normalizarSerie(graficasPolizas.pendiente), backgroundColor: '#ffc107' }
+                            ]
+                        },
+                        options: { responsive: true }
+                    });
+
+                    window.instanciaChartPolizas = new Chart(ctxPolizasPeriodo, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: 'Cantidad de Pólizas',
+                                data: normalizarSerie(graficasPolizas.polizasPeriodo || graficasPolizas.polizasMes),
+                                borderColor: '#0d6efd',
+                                tension: 0.1
+                            }]
+                        },
+                        options: { responsive: true }
+                    });
+
+                    window.instanciaChartVentas = new Chart(ctxVentasAsesor, {
+                        type: 'bar',
+                        data: {
+                            labels: ventasPorAsesor.map(([asesor]) => asesor),
+                            datasets: [{
+                                label: 'Cantidad de Pólizas',
+                                data: ventasPorAsesor.map(([, cantidad]) => Number(cantidad)),
+                                backgroundColor: '#0d6efd'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 } }
+                            }
+                        }
+                    });
+
+                    window.chartCobro = window.instanciaChartCobrado;
+                    window.chartPolizas = window.instanciaChartPolizas;
+                    window.chartVentasAsesor = window.instanciaChartVentas;
+                } catch (error) {
+                    console.error('[cargarDashboardSeguros] Error al renderizar las gráficas del dashboard:', error);
+                    [window.instanciaChartCobrado, window.instanciaChartPolizas, window.instanciaChartVentas]
+                        .forEach(chart => {
+                            if (chart) chart.destroy();
+                        });
+                    window.instanciaChartCobrado = null;
+                    window.instanciaChartPolizas = null;
+                    window.instanciaChartVentas = null;
+                    window.chartCobro = null;
+                    window.chartPolizas = null;
+                    window.chartVentasAsesor = null;
+                }
             }
-
-            document.getElementById('filtroTiempoGraficas')?.addEventListener('change', event => {
-                cargarDashboardSeguros(event.target.value);
-            });
 
             // Mostrar renovaciones y pagos vencidos
             const renovacionesContainer = document.getElementById('renovaciones-urgentes');
@@ -2440,7 +2690,7 @@ let proyectoIdEnEdicion = null;
 
         if (esPlanMensual) {
             const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
-            const duracionMeses = parseInt(document.getElementById('duracionMeses')?.value) || 1;
+            const duracionMeses = parseInt(document.getElementById('duracionPlanMensualMeses')?.value) || 1;
 
             // Lógica para mostrar desglose...
             const subtotalMensual = subtotal * serviciosPorMes;
@@ -2510,7 +2760,7 @@ let proyectoIdEnEdicion = null;
         // --- LÓGICA DE PLAN MENSUAL ---
         const esPlanMensual = document.getElementById('esPlanMensual')?.checked || false;
         const serviciosPorMes = parseInt(document.getElementById('serviciosPorMes')?.value) || 1;
-        const duracionMeses = parseInt(document.getElementById('duracionMeses')?.value) || 1;
+        const duracionMeses = parseInt(document.getElementById('duracionPlanMensualMeses')?.value) || 1;
         
         // CÁLCULO LOGICO: (Subtotal * Servicios al mes * Meses) - Descuento
         const subtotalBase = items.reduce((sum, item) => sum + (item.precioUnitario * item.unidades), 0);
@@ -6343,7 +6593,11 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('pagosPendientesControls');
         if (!tabla) return;
 
-        const pagosFiltrados = window.pagosPendientesFiltrados;
+        const pagosFiltrados = ordenarPorFecha(
+            window.pagosPendientesFiltrados,
+            item => item.fecha || item.proximoPago || item.poliza?.proximoPago,
+            ordenPendientesAscendente
+        );
         const totalPaginas = Math.max(1, Math.ceil(pagosFiltrados.length / window.itemsPorPagina));
         window.paginaPendientes = Math.min(Math.max(window.paginaPendientes, 1), totalPaginas);
         const inicio = (window.paginaPendientes - 1) * window.itemsPorPagina;
@@ -6814,7 +7068,7 @@ Fecha de firma: {{FECHA}}`;
         const esPlanMensualCheckbox = document.getElementById('esPlanMensual');
         const camposPlanMensual = document.getElementById('camposPlanMensual');
         const serviciosPorMesInput = document.getElementById('serviciosPorMes');
-        const duracionMesesInput = document.getElementById('duracionMeses');
+        const duracionMesesInput = document.getElementById('duracionPlanMensualMeses');
         
         if (esPlanMensualCheckbox && camposPlanMensual) {
             esPlanMensualCheckbox.addEventListener('change', (e) => {
@@ -7296,15 +7550,20 @@ Fecha de firma: {{FECHA}}`;
             const total = parseFloat(document.getElementById('poliza-prima')?.value) || 0;
             const primero = parseFloat(document.getElementById('poliza-primer-pago')?.value) || 0;
             const tipo = document.getElementById('poliza-tipo-pago')?.value;
-            const divisor = tipo === 'mensual' ? 11 : tipo === 'trimestral' ? 3 : tipo === 'semestral' ? 1 : 0;
+            const duracionMeses = Math.max(1, parseInt(document.getElementById('duracionMeses')?.value, 10) || 12);
+            const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+            const intervaloMeses = mesesPorTipo[tipo] || 12;
+            const divisor = Math.max(0, Math.ceil(duracionMeses / intervaloMeses) - 1);
             const campoAbono = document.getElementById('poliza-monto-abono');
             if (divisor > 0 && total > primero && campoAbono) {
                 campoAbono.value = ((total - primero) / divisor).toFixed(2);
             }
         };
 
-        ['poliza-primer-pago', 'poliza-prima', 'poliza-tipo-pago'].forEach(id => {
-            document.getElementById(id)?.addEventListener('input', calcularAbono);
+        ['poliza-primer-pago', 'poliza-prima', 'poliza-tipo-pago', 'duracionMeses'].forEach(id => {
+            const input = document.getElementById(id);
+            input?.addEventListener('input', calcularAbono);
+            input?.addEventListener('change', calcularAbono);
         });
         }
 
@@ -7349,11 +7608,13 @@ Fecha de firma: {{FECHA}}`;
         pagoInicial,
         gastosExpedicion,
         tipoPago,
+        duracionMeses,
         fechaInicio
     }) {
-        const cuotasPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
         const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
-        const totalCuotas = cuotasPorTipo[tipoPago] || 1;
+        const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
+        const duracionNormalizada = Math.max(1, parseInt(duracionMeses, 10) || 12);
+        const totalCuotas = Math.ceil(duracionNormalizada / mesesIntervalo);
         const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
         const distribuirSaldo = (saldo, cantidad) => {
             if (cantidad <= 0) return [];
@@ -7383,7 +7644,6 @@ Fecha de firma: {{FECHA}}`;
         const gastosPorRecibo = !Number.isNaN(gastosExpedicion) && gastosExpedicion > 0
             ? gastosExpedicion
             : gastosTotales / totalCuotas;
-        const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
         const recibosActuales = Array.isArray(poliza?.recibos) ? poliza.recibos : [];
         const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
             const reciboActual = recibosActuales.find(recibo => {
@@ -7511,6 +7771,7 @@ Fecha de firma: {{FECHA}}`;
             fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
             fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
             gastosExpedicion: poliza.gastosExpedicion || 0,
+            duracionMeses: poliza.duracionMeses || 12,
             clienteId: poliza.clienteId?._id || poliza.clienteId || null
         } : datosIniciales;
         const clienteId = datosPrellenados.clienteId || null;
@@ -7562,6 +7823,10 @@ Fecha de firma: {{FECHA}}`;
                             <option value="semestral" ${datosPrellenados.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
                             <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="duracionMeses">Duración (Meses)</label>
+                        <input type="number" id="duracionMeses" class="form-control" value="${datosPrellenados.duracionMeses || 12}" min="1" step="1" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Aseguradora *</label>
@@ -7676,9 +7941,11 @@ Fecha de firma: {{FECHA}}`;
                     const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
                     const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
                     const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
+                    const nuevaDuracionMeses = parseInt(document.getElementById('duracionMeses').value, 10);
                     const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
-                    if (nuevoCostoTotal <= 0 || !nuevaFechaInicio) {
-                        Swal.showValidationMessage('Captura un costo total y una fecha de inicio válidos.');
+                    if (nuevoCostoTotal <= 0 || !nuevaFechaInicio
+                        || !Number.isInteger(nuevaDuracionMeses) || nuevaDuracionMeses < 1) {
+                        Swal.showValidationMessage('Captura un costo total, una duración válida y una fecha de inicio.');
                         return;
                     }
 
@@ -7688,6 +7955,7 @@ Fecha de firma: {{FECHA}}`;
                         pagoInicial: nuevoPagoInicial,
                         gastosExpedicion: nuevoGastosExpedicion,
                         tipoPago: nuevoTipoPago,
+                        duracionMeses: nuevaDuracionMeses,
                         fechaInicio: nuevaFechaInicio
                     });
                     planRecibosCambio = resultadoPreview.recibos;
@@ -7713,6 +7981,7 @@ Fecha de firma: {{FECHA}}`;
                 const clienteEmail = document.getElementById('poliza-email').value.trim();
                 const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
                 const tipoPago = document.getElementById('poliza-tipo-pago').value;
+                const duracionMeses = Number(document.getElementById('duracionMeses').value);
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
                 const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
                 const paquete = document.getElementById('poliza-paquete').value.trim();
@@ -7731,6 +8000,10 @@ Fecha de firma: {{FECHA}}`;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                     Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
+                    return;
+                }
+                if (!Number.isInteger(duracionMeses) || duracionMeses < 1) {
+                    Swal.showValidationMessage('La duración debe ser un número entero de meses igual o mayor a 1.');
                     return;
                 }
 
@@ -7758,6 +8031,7 @@ Fecha de firma: {{FECHA}}`;
                     clienteEmail,
                     clienteTelefono,
                     tipoPago,
+                    duracionMeses,
                     aseguradora,
                     inciso,
                     paquete,
@@ -7905,6 +8179,7 @@ Fecha de firma: {{FECHA}}`;
             clientesCacheScope = null;
             dashboardStatsCache = null;
             dashboardSegurosCache.clear();
+            dashboardPolizasCache = null;
         }
 
         const obtenerCachePolizas = asesorId => {
@@ -7955,7 +8230,7 @@ Fecha de firma: {{FECHA}}`;
         }
 
         if (!tieneCache) {
-            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center">Cargando...</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center">Cargando...</td></tr>';
         }
         if (tieneCache && !navigator.onLine) return;
 
@@ -7968,7 +8243,7 @@ Fecha de firma: {{FECHA}}`;
 
             const polizas = await fetchAPI(url, { silent: tieneCache });
             if (polizas?.offline) {
-                tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 return;
             }
             polizasGlobales = Array.isArray(polizas) ? polizas : [];
@@ -7990,7 +8265,7 @@ Fecha de firma: {{FECHA}}`;
                 notificarDatosOffline();
                 return;
             }
-            tabla.innerHTML = '<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
         }
@@ -8001,11 +8276,12 @@ Fecha de firma: {{FECHA}}`;
         if (!tabla) return;
 
         actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
+        actualizarOpcionesFiltroAsesores(polizasGlobales);
         const polizasFiltradas = obtenerPolizasFiltradas();
 
         if (polizasFiltradas.length === 0) {
             const mensaje = polizasGlobales.length === 0 ? 'No hay pólizas registradas' : 'No hay resultados para esta búsqueda';
-            tabla.innerHTML = `<tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">${mensaje}</td></tr>`;
+            tabla.innerHTML = `<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">${mensaje}</td></tr>`;
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
             return;
@@ -8037,6 +8313,7 @@ Fecha de firma: {{FECHA}}`;
                 <tr>
                     <td data-label="Número">${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                     <td data-label="Cliente">${escapeHTML(p.cliente || 'N/A')}</td>
+                    <td data-label="Asesor">${escapeHTML(obtenerNombreAsesorPoliza(p) || 'Sin Asesor')}</td>
                     <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
                     <td data-label="Vencimiento">${fechaVencimiento}</td>
                     <td data-label="Próximo pago">${fechaProximoPago}</td>
@@ -8092,12 +8369,19 @@ Fecha de firma: {{FECHA}}`;
         const consulta = filtroGlobalPolizas.trim().toLocaleLowerCase('es');
         const estatusSeleccionado = document.getElementById('filtro-estatus-polizas')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-polizas')?.value || '';
+        const asesorSeleccionado = document.getElementById('filtroAsesorPolizas')?.value || '';
+        const fechaDesde = document.getElementById('filtroFechaDesde')?.value || '';
+        const fechaHasta = document.getElementById('filtroFechaHasta')?.value || '';
         return polizasGlobales.filter(poliza => {
+            const nombreAsesor = obtenerNombreAsesorPoliza(poliza);
+            const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : null;
+            const fechaInicioISO = fechaInicio && !Number.isNaN(fechaInicio.getTime())
+                ? fechaInicio.toISOString().slice(0, 10)
+                : '';
             const coincideTexto = !consulta || [
                 poliza.numeroPoliza,
                 poliza.cliente,
-                poliza.asesorNombre,
-                poliza.asesorId?.username,
+                nombreAsesor,
                 poliza.aseguradora,
                 poliza.tipoSeguro
             ].some(valor => String(valor || '').toLocaleLowerCase('es').includes(consulta));
@@ -8108,8 +8392,71 @@ Fecha de firma: {{FECHA}}`;
                     : 'Activa';
             return coincideTexto
                 && (!estatusSeleccionado || estadoActual === estatusSeleccionado)
-                && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada);
+                && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
+                && (!asesorSeleccionado
+                    || (asesorSeleccionado === '__sin_asesor__' ? !nombreAsesor : nombreAsesor === asesorSeleccionado))
+                && (!fechaDesde || (fechaInicioISO && fechaInicioISO >= fechaDesde))
+                && (!fechaHasta || (fechaInicioISO && fechaInicioISO <= fechaHasta));
         });
+    }
+
+    function obtenerNombreAsesorPoliza(poliza) {
+        const asesor = poliza.asesor;
+        if (typeof asesor === 'string' && asesor.trim()) return asesor.trim();
+        if (asesor && typeof asesor === 'object') {
+            const nombre = asesor.nombre || asesor.username || asesor.name || asesor.email;
+            if (nombre) return String(nombre).trim();
+        }
+        if (poliza.asesorNombre) return String(poliza.asesorNombre).trim();
+        if (poliza.asesorId && typeof poliza.asesorId === 'object') {
+            const nombre = poliza.asesorId.nombre || poliza.asesorId.username
+                || poliza.asesorId.name || poliza.asesorId.email;
+            if (nombre) return String(nombre).trim();
+        }
+        return '';
+    }
+
+    function actualizarOpcionesFiltroAsesores(registros) {
+        const selector = document.getElementById('filtroAsesorPolizas');
+        if (!selector) return;
+        const valorAnterior = selector.value;
+        const asesores = [...new Set((registros || [])
+            .map(obtenerNombreAsesorPoliza)
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'es'));
+        selector.innerHTML = '<option value="">Todos los asesores</option>' + asesores
+            .map(asesor => `<option value="${escapeHTML(asesor)}">${escapeHTML(asesor)}</option>`)
+            .join('');
+        if ((registros || []).some(poliza => !obtenerNombreAsesorPoliza(poliza))) {
+            selector.insertAdjacentHTML('beforeend', '<option value="__sin_asesor__">Sin Asesor</option>');
+        }
+        if (asesores.includes(valorAnterior) || (valorAnterior === '__sin_asesor__'
+            && (registros || []).some(poliza => !obtenerNombreAsesorPoliza(poliza)))) {
+            selector.value = valorAnterior;
+        }
+    }
+
+    function ordenarPorFecha(registros, obtenerFecha, ascendente = true) {
+        return [...registros].sort((a, b) => {
+            const fechaA = new Date(obtenerFecha(a) || '').getTime();
+            const fechaB = new Date(obtenerFecha(b) || '').getTime();
+            const fechaAValida = Number.isFinite(fechaA);
+            const fechaBValida = Number.isFinite(fechaB);
+            if (!fechaAValida && !fechaBValida) return 0;
+            if (!fechaAValida) return 1;
+            if (!fechaBValida) return -1;
+            return ascendente ? fechaA - fechaB : fechaB - fechaA;
+        });
+    }
+
+    function cambiarOrdenPendientes() {
+        ordenPendientesAscendente = !ordenPendientesAscendente;
+        const boton = document.getElementById('btnOrdenFechasPendientes');
+        if (boton) {
+            boton.textContent = `Ordenar: Más ${ordenPendientesAscendente ? 'antiguos' : 'recientes'} primero`;
+            boton.setAttribute('aria-pressed', String(ordenPendientesAscendente));
+        }
+        if (typeof window.renderizarPendientes === 'function') window.renderizarPendientes();
     }
 
     function actualizarOpcionesFiltroAseguradoras(selectId, registros) {
@@ -8429,15 +8776,28 @@ Fecha de firma: {{FECHA}}`;
         const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
         const textoBusqueda = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim().toLowerCase();
-        cobranzaGlobales = (Array.isArray(polizas) ? polizas : []).filter(poliza =>
+        const ordenAscendente = document.getElementById('ordenVencimientoCobranza')?.value !== 'desc';
+        const filtradas = (Array.isArray(polizas) ? polizas : []).filter(poliza =>
             (!asesorSeleccionado || String(poliza.asesorId || '') === asesorSeleccionado)
             && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
             && (!textoBusqueda
                 || String(poliza.cliente || '').toLowerCase().includes(textoBusqueda)
                 || String(poliza.numeroPoliza || '').toLowerCase().includes(textoBusqueda))
         );
+        cobranzaGlobales = ordenarPorFecha(filtradas, poliza =>
+            poliza.tipoGestion === 'vencimiento_poliza'
+                ? poliza.vencimiento
+                : poliza.reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago || poliza.vencimiento,
+        ordenAscendente);
         paginaActualCobranza = 1;
         renderizarPaginaCobranza(tabActiva);
+    }
+
+    function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, fecha, periodo, enlacePago }) {
+        const detallePeriodo = periodo ? ` correspondiente al periodo ${periodo}` : '';
+        let mensaje = `Hola ${cliente}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${tipoSeguro} por la cantidad de $${Number(monto || 0).toFixed(2)}${detallePeriodo} con fecha límite el ${fecha}. Cualquier duda estamos a tus órdenes.`;
+        if (enlacePago) mensaje += ` Puedes realizar tu pago de forma segura aquí: ${enlacePago}`;
+        return mensaje;
     }
 
     function renderizarPaginaCobranza(tabActiva = estadoCobranza.tabActiva) {
@@ -8456,10 +8816,13 @@ Fecha de firma: {{FECHA}}`;
         if (polizasPagina.length > 0) {
             tabla.innerHTML = polizasPagina.map(p => {
                 const polizaIdAttr = escapeHTML(String(p.polizaId || ''));
-                const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString() : 'N/A';
-                const fechaProximoPago = p.proximoPago ? new Date(p.proximoPago).toLocaleDateString() : 'N/A';
+                const reciboPendiente = p.reciboPendiente || null;
+                const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString('es-MX') : 'N/A';
+                const fechaProximoPagoValor = reciboPendiente?.fechaVencimientoRecibo || p.proximoPago;
+                const fechaProximoPago = fechaProximoPagoValor ? new Date(fechaProximoPagoValor).toLocaleDateString('es-MX') : 'N/A';
                 const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
-                const montoFormateado = '$' + Number(p.montoPagar || 0).toFixed(2);
+                const montoPagar = reciboPendiente?.montoRecibo ?? p.montoPagar ?? 0;
+                const montoFormateado = '$' + Number(montoPagar).toFixed(2);
 
                 let estadoClase = 'bg-secondary';
                 if (p.estado === 'Activa') estadoClase = 'bg-success';
@@ -8491,10 +8854,14 @@ Fecha de firma: {{FECHA}}`;
                 const telefonoValido = telefonoLimpio.length === 10 && /^\d+$/.test(telefonoLimpio);
 
                 // Construir mensaje de WhatsApp con enlace de pago si existe
-                let mensajeWhatsAppBase = 'Hola ' + p.cliente + ', te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ' + p.tipoSeguro + ' por la cantidad de ' + montoFormateado + ' con fecha límite el ' + fechaMostrar + '. Cualquier duda estamos a tus órdenes.';
-                if (p.enlacePago) {
-                    mensajeWhatsAppBase += ' Puedes realizar tu pago de forma segura aquí: ' + p.enlacePago;
-                }
+                const mensajeWhatsAppBase = crearMensajeCobranzaDiaria({
+                    cliente: p.cliente || 'Asegurado',
+                    tipoSeguro: p.tipoSeguro || 'seguro',
+                    monto: montoPagar,
+                    fecha: fechaMostrar,
+                    periodo: reciboPendiente?.periodoCobertura,
+                    enlacePago: p.enlacePago
+                });
                 const mensajeWhatsApp = encodeURIComponent(mensajeWhatsAppBase);
 
                 const whatsappUrl = telefonoValido ? 'https://wa.me/52' + telefonoLimpio + '?text=' + mensajeWhatsApp : '#';
@@ -9670,7 +10037,9 @@ Fecha de firma: {{FECHA}}`;
             let telefono;
             if (poliza.clienteId) {
                 try {
-                    const cliente = await fetchAPI(`/api/clientes/${poliza.clienteId}`);
+                    const cliente = typeof poliza.clienteId === 'object'
+                        ? poliza.clienteId
+                        : await fetchAPI(`/api/clientes/${poliza.clienteId}`);
                     telefono = cliente.telefono?.replace(/\s/g, '') || poliza.clienteTelefono?.replace(/\s/g, '') || '';
                 } catch (error) {
                     telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
@@ -9679,45 +10048,31 @@ Fecha de firma: {{FECHA}}`;
                 telefono = poliza.clienteTelefono?.replace(/\s/g, '') || '';
             }
 
-            const cliente = poliza.cliente || 'Cliente';
-            const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
-
-            // Verificar si ya hay pagos registrados
-            const tienePagos = poliza.pagos && poliza.pagos.length > 0;
-
-            // Si no hay pagos y existe primerPago, usar primerPago
-            // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
-            let montoAbono;
-            if (!tienePagos && poliza.primerPago && poliza.primerPago > 0) {
-                montoAbono = poliza.primerPago;
-            } else {
-                montoAbono = poliza.montoAbono || 0;
-                if (!montoAbono || montoAbono === 0) {
-                    const primaTotal = poliza.primaTotal || 0;
-                    switch (poliza.tipoPago) {
-                        case 'mensual':
-                            montoAbono = primaTotal / 12;
-                            break;
-                        case 'trimestral':
-                            montoAbono = primaTotal / 4;
-                            break;
-                        case 'semestral':
-                            montoAbono = primaTotal / 2;
-                            break;
-                        case 'anual':
-                        default:
-                            montoAbono = primaTotal;
-                            break;
-                    }
-                }
-            }
+            const cliente = poliza.cliente || 'Asegurado';
+            const reciboPendiente = poliza.recibos?.find(recibo =>
+                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pendiente'
+            );
+            const montoPendiente = reciboPendiente?.montoRecibo
+                ?? reciboPendiente?.pagoNeto
+                ?? reciboPendiente?.monto
+                ?? poliza.montoAbono
+                ?? 0;
+            const fechaPago = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
+            const fechaMostrar = fechaPago ? new Date(fechaPago).toLocaleDateString('es-MX') : 'N/A';
 
             if (!telefono) {
                 Swal.fire('Error', 'La póliza no tiene número de teléfono registrado', 'error');
                 return;
             }
 
-            const mensaje = `Hola ${cliente}, te recordamos que tu próximo pago de la póliza es el ${proximoPago} por un monto de $${montoAbono.toFixed(2)}.`;
+            const mensaje = crearMensajeCobranzaDiaria({
+                cliente,
+                tipoSeguro: poliza.tipoSeguro || 'seguro',
+                monto: montoPendiente,
+                fecha: fechaMostrar,
+                periodo: reciboPendiente?.periodoCobertura,
+                enlacePago: poliza.enlacePago
+            });
             const mensajeCodificado = encodeURIComponent(mensaje);
             const whatsappUrl = `https://wa.me/52${telefono}?text=${mensajeCodificado}`;
 
@@ -9736,7 +10091,9 @@ Fecha de firma: {{FECHA}}`;
             let email;
             if (poliza.clienteId) {
                 try {
-                    const cliente = await fetchAPI(`/api/clientes/${poliza.clienteId}`);
+                    const cliente = typeof poliza.clienteId === 'object'
+                        ? poliza.clienteId
+                        : await fetchAPI(`/api/clientes/${poliza.clienteId}`);
                     email = cliente.email || poliza.clienteEmail || '';
                 } catch (error) {
                     email = poliza.clienteEmail || '';
@@ -9745,51 +10102,16 @@ Fecha de firma: {{FECHA}}`;
                 email = poliza.clienteEmail || '';
             }
 
-            const cliente = poliza.cliente || 'Cliente';
-            const proximoPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString() : 'N/A';
-
-            // Verificar si ya hay pagos registrados
-            const tienePagos = poliza.pagos && poliza.pagos.length > 0;
-
-            // Si no hay pagos y existe primerPago, usar primerPago
-            // Si hay pagos o no existe primerPago, usar montoAbono o calcular según tipo de pago
-            let montoAbono;
-            if (!tienePagos && poliza.primerPago && poliza.primerPago > 0) {
-                montoAbono = poliza.primerPago;
-            } else {
-                montoAbono = poliza.montoAbono || 0;
-                if (!montoAbono || montoAbono === 0) {
-                    const primaTotal = poliza.primaTotal || 0;
-                    switch (poliza.tipoPago) {
-                        case 'mensual':
-                            montoAbono = primaTotal / 12;
-                            break;
-                        case 'trimestral':
-                            montoAbono = primaTotal / 4;
-                            break;
-                        case 'semestral':
-                            montoAbono = primaTotal / 2;
-                            break;
-                        case 'anual':
-                        default:
-                            montoAbono = primaTotal;
-                            break;
-                    }
-                }
-            }
-
             if (!email) {
                 Swal.fire('Error', 'La póliza no tiene correo electrónico registrado', 'error');
                 return;
             }
 
-            await fetchAPI('/api/polizas/enviar-recordatorio', {
+            await fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    polizaId,
-                    destinatario: email,
-                    asunto: 'Recordatorio de Pago - Póliza',
-                    mensaje: `Hola ${cliente}, te recordamos que tu próximo pago de la póliza es el ${proximoPago} por un monto de $${montoAbono.toFixed(2)}.`
+                    canal: 'email',
+                    tipo: 'pago_pendiente'
                 })
             });
 
@@ -9841,15 +10163,30 @@ Fecha de firma: {{FECHA}}`;
 
                 const clienteNombre = poliza.cliente || 'Asegurado';
                 const numeroPolizaClean = poliza.numeroPoliza || 'N/A';
-                const montoFormateado = poliza.primaTotal ? parseFloat(poliza.primaTotal).toFixed(2) : '0.00';
+                const reciboPendiente = Array.isArray(poliza.recibos)
+                    ? poliza.recibos.find(recibo => String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pendiente')
+                    : null;
+                const montoPendiente = reciboPendiente?.montoRecibo
+                    ?? reciboPendiente?.pagoNeto
+                    ?? reciboPendiente?.monto
+                    ?? poliza.montoAbono
+                    ?? 0;
                 const fechaVenc = poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-MX') : 'N/A';
-                const fechaPago = poliza.proximoPago ? new Date(poliza.proximoPago).toLocaleDateString('es-MX') : 'N/A';
+                const fechaPagoValor = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
+                const fechaPago = fechaPagoValor ? new Date(fechaPagoValor).toLocaleDateString('es-MX') : 'N/A';
 
                 let texto = '';
                 if (tipoSeleccionado === 'vencimiento_poliza') {
                     texto = `Hola ${clienteNombre}, te recordamos que tu póliza No. ${numeroPolizaClean} con la aseguradora ${poliza.aseguradora || 'N/A'} está próxima a vencer el ${fechaVenc}.`;
                 } else {
-                    texto = `Hola ${clienteNombre}, tienes un pago pendiente en tu póliza No. ${numeroPolizaClean} por un monto de $${montoFormateado}. Próxima fecha de pago: ${fechaPago}.`;
+                    texto = crearMensajeCobranzaDiaria({
+                        cliente: clienteNombre,
+                        tipoSeguro: poliza.tipoSeguro || 'seguro',
+                        monto: montoPendiente,
+                        fecha: fechaPago,
+                        periodo: reciboPendiente?.periodoCobertura,
+                        enlacePago: poliza.enlacePago
+                    });
                 }
 
                 // Obtener teléfono del cliente asociado (prioridad: clienteId.telefono > poliza.clienteTelefono > default)
@@ -10021,6 +10358,7 @@ Fecha de firma: {{FECHA}}`;
             polizasCacheScope = null;
             dashboardStatsCache = null;
             dashboardSegurosCache.clear();
+            dashboardPolizasCache = null;
         }
 
         let clientesCacheados = null;
@@ -11201,7 +11539,7 @@ Fecha de firma: {{FECHA}}`;
             checkPlan.checked = proyecto.esPlanMensual || false;
             document.getElementById('camposPlanMensual').style.display = checkPlan.checked ? 'block' : 'none';
             document.getElementById('serviciosPorMes').value = proyecto.serviciosPorMes || 1;
-            document.getElementById('duracionMeses').value = proyecto.duracionMeses || 1;
+            document.getElementById('duracionPlanMensualMeses').value = proyecto.duracionMeses || 1;
         }
 
         // 7. Cambiar texto de botones para modo edición
@@ -11395,7 +11733,7 @@ Fecha de firma: {{FECHA}}`;
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
         verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
-        filtrarTablas, filtrarPolizasUI, filtrarCobranzaUI, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
+        filtrarTablas, filtrarPolizasUI, filtrarCobranzaUI, cambiarOrdenPendientes, filtrarDashboardSeguros, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
         abrirModalAprobarUsuario, cambiarTabUsuarios, copiarEnlaceInvitacion,
@@ -11676,13 +12014,11 @@ Fecha de firma: {{FECHA}}`;
             
             if (!confirmar) return;
             
-            const resultado = await fetchAPI('/api/polizas/enviar-recordatorio', {
+            const resultado = await fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    polizaId,
-                    destinatario: '', // Se llenará en el backend
-                    asunto: 'Recordatorio de Cobranza - Póliza',
-                    mensaje: 'Recordatorio de cobranza desde Cobranza Diaria'
+                    canal: 'email',
+                    tipo: 'pago_pendiente'
                 })
             });
             

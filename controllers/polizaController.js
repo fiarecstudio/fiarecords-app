@@ -80,21 +80,29 @@ function calcularProximoPago(fechaBase, tipoPago) {
     return proximoPago;
 }
 
-const obtenerNumeroRecibosPorTipo = tipoPago => ({
-    mensual: 12,
-    trimestral: 4,
-    semestral: 2,
-    anual: 1
-}[String(tipoPago || '').toLowerCase()] || 1);
+const normalizarDuracionMeses = duracionMeses => {
+    if (duracionMeses === undefined || duracionMeses === null || duracionMeses === '') return 12;
+    const valor = Number(duracionMeses);
+    return Number.isInteger(valor) && valor >= 1 ? valor : null;
+};
+
+const obtenerIntervaloMeses = tipoPago => ({
+    mensual: 1,
+    trimestral: 3,
+    semestral: 6,
+    anual: 12
+}[String(tipoPago || '').toLowerCase()] || 12);
+
+const obtenerNumeroRecibosPorTipo = (tipoPago, duracionMeses = 12) => {
+    const duracion = normalizarDuracionMeses(duracionMeses) || 12;
+    return Math.ceil(duracion / obtenerIntervaloMeses(tipoPago));
+};
 
 const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago, montoAbono, opciones = {}) => {
     const recibos = [];
-    const totalRecibos = obtenerNumeroRecibosPorTipo(tipoPago);
-    let mesesIntervalo = 12;
-    const tipo = (tipoPago || '').toLowerCase();
-    if (tipo === 'mensual') mesesIntervalo = 1;
-    else if (tipo === 'trimestral') mesesIntervalo = 3;
-    else if (tipo === 'semestral') mesesIntervalo = 6;
+    const duracionMeses = normalizarDuracionMeses(opciones.duracionMeses) || 12;
+    const mesesIntervalo = obtenerIntervaloMeses(tipoPago);
+    const totalRecibos = obtenerNumeroRecibosPorTipo(tipoPago, duracionMeses);
 
     const indiceInicial = Math.max(0, Number(opciones.indiceInicial) || 0);
     const indicesRecibos = Array.isArray(opciones.indices)
@@ -138,8 +146,17 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
 const esReciboPagado = recibo =>
     String(recibo?.estadoRecibo || recibo?.estado || '').toLowerCase() === 'pagado';
 
-const regenerarRecibosPendientes = ({ recibosActuales = [], primaTotal, fechaInicio, tipoPago, primerPago, montoAbono }) => {
-    const cantidadTotal = obtenerNumeroRecibosPorTipo(tipoPago);
+const regenerarRecibosPendientes = ({
+    recibosActuales = [],
+    primaTotal,
+    fechaInicio,
+    tipoPago,
+    duracionMeses = 12,
+    primerPago,
+    montoAbono
+}) => {
+    const duracionNormalizada = normalizarDuracionMeses(duracionMeses) || 12;
+    const cantidadTotal = obtenerNumeroRecibosPorTipo(tipoPago, duracionNormalizada);
     const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
     const costoTotal = redondearCentavos(Math.max(0, Number(primaTotal) || 0));
     const distribuirSaldo = (saldo, cantidad) => {
@@ -184,8 +201,7 @@ const regenerarRecibosPendientes = ({ recibosActuales = [], primaTotal, fechaIni
     });
 
     const fechaBase = normalizarFechaLocal(fechaInicio) || new Date(fechaInicio);
-    const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
-    const mesesIntervalo = mesesPorTipo[String(tipoPago || '').toLowerCase()] || 12;
+    const mesesIntervalo = obtenerIntervaloMeses(tipoPago);
     return Array.from({ length: cantidadTotal }, (_, indicePlan) => {
         const reciboActual = recibosPorIndice.get(indicePlan) || {};
         const fechaVencimiento = sumarMesesSeguro(fechaBase, indicePlan * mesesIntervalo);
@@ -274,7 +290,11 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId } = req.body;
+        const duracionMeses = normalizarDuracionMeses(duracionMesesSolicitada);
+        if (duracionMeses === null) {
+            return res.status(400).json({ error: 'La duración debe ser un número entero de meses igual o mayor a 1.' });
+        }
 
         // Inyectar empresaId del usuario autenticado
         const empresaId = req.user.empresaId;
@@ -309,6 +329,7 @@ const crearPoliza = async (req, res) => {
             clienteEmail: clienteVinculado.email || clienteEmail || '',
             clienteTelefono: clienteVinculado.telefono || clienteTelefono || '',
             tipoPago: tipoPagoFinal,
+            duracionMeses,
             tipoSeguro,
             aseguradora,
             fechas: fechasNormalizadas,
@@ -326,13 +347,14 @@ const crearPoliza = async (req, res) => {
             clienteId: clienteVinculado.clienteId
         });
 
-        if (tipoPagoFinal !== "anual") {
+        if (tipoPagoFinal !== 'anual' || duracionMeses > 12) {
             nuevaPoliza.recibos = generarCalendarioRecibos(
                 nuevaPoliza.primaTotal,
                 fechasNormalizadas.inicio,
                 tipoPagoFinal,
                 nuevaPoliza.primerPago || primerPago,
-                nuevaPoliza.montoAbono || montoAbono
+                nuevaPoliza.montoAbono || montoAbono,
+                { duracionMeses }
             );
         }
         if (nuevaPoliza.recibos.length > 0) {
@@ -389,7 +411,8 @@ const importarPolizasExcel = async (req, res) => {
         const esCobranza = headers.some(header => header.includes('RECIBO'));
         const columnas = {
             numeroPoliza: ['POLIZA', 'NUMERO DE POLIZA', 'NO POLIZA'],
-            socio: ['SOCIO', 'ASESOR', 'NOMBRE DEL ASESOR'],
+            socio: ['AGENTE', 'SOCIO', 'ASESOR', 'NOMBRE DEL ASESOR'],
+            tipoEmision: ['N/R', 'NR'],
             cliente: ['NOMBRE DEL CLIENTE', 'CLIENTE', 'NOMBRE CLIENTE'],
             telefono: ['TELEFONO', 'TELEFONO DEL CLIENTE', 'CELULAR', 'MOVIL'],
             email: ['EMAIL', 'CORREO', 'CORREO ELECTRONICO'],
@@ -458,6 +481,21 @@ const importarPolizasExcel = async (req, res) => {
             if (tipo.includes('DANOS')) return 'Daños';
             return 'Vehicular';
         };
+        const normalizarEstadoPoliza = value => {
+            const estado = normalizarEncabezado(value);
+            const estadosValidos = {
+                ACTIVA: 'Activa',
+                'POR VENCER': 'Por Vencer',
+                VENCIDA: 'Vencida',
+                CANCELADA: 'Cancelada',
+                RENOVADA: 'Renovada',
+                'PENDIENTE RENOVACION': 'PendienteRenovacion',
+                'PENDIENTE DE RENOVACION': 'PendienteRenovacion',
+                PENDIENTERENOVACION: 'PendienteRenovacion',
+                'EN RENOVACION': 'PendienteRenovacion'
+            };
+            return estadosValidos[estado] || null;
+        };
 
         const grupos = new Map();
         for (const row of filas.slice(encabezadoIndex + 1)) {
@@ -483,7 +521,9 @@ const importarPolizasExcel = async (req, res) => {
                 inicio: convertirFecha(leer(row, 'inicio')),
                 vencimiento: convertirFecha(leer(row, 'vencimiento')),
                 tipoPago: texto(leer(row, 'tipoPago')),
+                tipoEmision: texto(leer(row, 'tipoEmision')),
                 aseguradora: texto(leer(row, 'aseguradora')),
+                estado: texto(leer(row, 'estatus')),
                 primaTotal: primaTotalExcel,
                 primaNeta: primaNetaExcel,
                 tipoSeguro: texto(leer(row, 'tipoSeguro'))
@@ -534,6 +574,19 @@ const importarPolizasExcel = async (req, res) => {
                     throw new Error('Faltan cliente, vigencias o prima total.');
                 }
 
+                const nRTieneRenovacion = normalizarEncabezado(grupo.datos.tipoEmision)
+                    .split(' ')
+                    .includes('RENOVACION');
+                const estadoExcel = normalizarEstadoPoliza(grupo.datos.estado);
+                if (!esCobranza && !nRTieneRenovacion && grupo.datos.estado && !estadoExcel) {
+                    throw new Error(`Estatus de póliza no reconocido: "${grupo.datos.estado}".`);
+                }
+                const estadoImportado = esCobranza
+                    ? null
+                    : nRTieneRenovacion
+                        ? 'PendienteRenovacion'
+                        : estadoExcel;
+
                 const nombreCliente = cliente.trim();
                 const nombreEscapado = nombreCliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let clienteDoc = await Cliente.findOne({
@@ -559,7 +612,7 @@ const importarPolizasExcel = async (req, res) => {
                 }
 
                 const socioExcel = grupo.datos.socio;
-                let asesorPolizaId = poliza?.asesorId || asesorId;
+                let asesorPolizaId = asesorId;
                 if (socioExcel) {
                     const socioEscapado = socioExcel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     const filtroSocio = {
@@ -604,13 +657,14 @@ const importarPolizasExcel = async (req, res) => {
 
                     asesorPolizaId = usuarioSocio._id;
                 }
+                const nombreAsesorFallback = req.user?.username || req.user?.nombre || 'General';
 
                 const esNueva = !poliza;
                 if (!poliza) {
                     poliza = new Poliza({
                         empresaId,
                         asesorId: asesorPolizaId,
-                        asesorNombre: socioExcel || 'General',
+                        asesorNombre: socioExcel || nombreAsesorFallback,
                         numeroPoliza: numeroPolizaTrim,
                         cliente: clienteDoc.nombre,
                         clienteId: clienteDoc._id,
@@ -622,14 +676,15 @@ const importarPolizasExcel = async (req, res) => {
                         fechas,
                         primaTotal,
                         primaNeta: grupo.datos.primaNeta ?? 0,
-                        estado: 'Activa',
+                        estado: estadoImportado || 'Activa',
                         saldoRestante: primaTotal,
                         pagos: [],
                         recibos: []
                     });
                 } else {
-                    poliza.asesorId = poliza.asesorId || asesorPolizaId;
-                    poliza.asesorNombre = poliza.asesorNombre || socioExcel || 'General';
+                    poliza.asesorId = asesorPolizaId;
+                    poliza.asesorNombre = socioExcel || nombreAsesorFallback;
+                    if (estadoImportado) poliza.estado = estadoImportado;
                     poliza.cliente = poliza.cliente || clienteDoc.nombre;
                     poliza.clienteId = poliza.clienteId || clienteDoc._id;
                     poliza.clienteTelefono = poliza.clienteTelefono || clienteDoc.telefono || grupo.datos.telefono || '';
@@ -713,7 +768,7 @@ const importarPolizasExcel = async (req, res) => {
                         .sort((a, b) => new Date(a) - new Date(b))[0] || null;
                     poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
                 }
-                poliza.estado = poliza.estado || 'Activa';
+                poliza.estado = estadoImportado || poliza.estado || 'Activa';
                 const datosUpsert = {
                     empresaId,
                     numeroPoliza: numeroPolizaTrim,
@@ -843,6 +898,12 @@ const actualizarPoliza = async (req, res) => {
 
         const datosActualizacion = { ...req.body };
 
+        if (datosActualizacion.duracionMeses !== undefined) {
+            datosActualizacion.duracionMeses = normalizarDuracionMeses(datosActualizacion.duracionMeses);
+            if (datosActualizacion.duracionMeses === null) {
+                return res.status(400).json({ error: 'La duración debe ser un número entero de meses igual o mayor a 1.' });
+            }
+        }
         if (datosActualizacion.primaNeta !== undefined) {
             datosActualizacion.primaNeta = Number(datosActualizacion.primaNeta) || 0;
         }
@@ -861,6 +922,9 @@ const actualizarPoliza = async (req, res) => {
                 new Date(datosActualizacion.fechas.vencimiento).getTime() !== new Date(polizaExistente.fechas.vencimiento).getTime())
         );
         const tipoPagoCambio = datosActualizacion.tipoPago && datosActualizacion.tipoPago !== polizaExistente.tipoPago;
+        const duracionMesesActual = normalizarDuracionMeses(polizaExistente.duracionMeses) || 12;
+        const duracionMesesNueva = datosActualizacion.duracionMeses ?? duracionMesesActual;
+        const duracionMesesCambio = duracionMesesNueva !== duracionMesesActual;
         const sinPagosRegistrados = !polizaExistente.pagos || polizaExistente.pagos.length === 0;
         const cambioImportePlan = ['primaTotal', 'primerPago', 'montoAbono'].some(campo =>
             datosActualizacion[campo] !== undefined
@@ -869,6 +933,7 @@ const actualizarPoliza = async (req, res) => {
         const planRecibosCambio = Boolean(
             fechasCambiaron
             || tipoPagoCambio
+            || duracionMesesCambio
             || cambioImportePlan
             || req.body.recalcularRecibos === true
         );
@@ -918,12 +983,14 @@ const actualizarPoliza = async (req, res) => {
             const primerPago = Number(datosActualizacion.primerPago ?? polizaExistente.primerPago) || 0;
             const montoAbono = Number(datosActualizacion.montoAbono ?? polizaExistente.montoAbono) || 0;
             const tipoPago = datosActualizacion.tipoPago || polizaExistente.tipoPago || 'anual';
+            const duracionMeses = datosActualizacion.duracionMeses ?? duracionMesesActual;
             const fechaInicio = datosActualizacion.fechas?.inicio || polizaExistente.fechas?.inicio;
             datosActualizacion.recibos = regenerarRecibosPendientes({
                 recibosActuales: polizaExistente.recibos || [],
                 primaTotal,
                 fechaInicio,
                 tipoPago,
+                duracionMeses,
                 primerPago,
                 montoAbono
             });
@@ -960,8 +1027,12 @@ const recalcularRecibos = async (req, res) => {
         const primaTotal = obtenerImporte(req.body.costoTotal ?? req.body.primaTotal, poliza.primaTotal);
         const primerPago = obtenerImporte(req.body.pagoInicial ?? req.body.primerPago, poliza.primerPago);
         const montoAbono = obtenerImporte(req.body.montoAbono, poliza.montoAbono);
+        const duracionMeses = normalizarDuracionMeses(req.body.duracionMeses ?? poliza.duracionMeses);
         if ([primaTotal, primerPago, montoAbono].includes(null)) {
             return res.status(400).json({ error: 'Los montos deben ser valores numéricos válidos' });
+        }
+        if (duracionMeses === null) {
+            return res.status(400).json({ error: 'La duración debe ser un número entero de meses igual o mayor a 1.' });
         }
 
         const fechaInicio = req.body.fechaInicio || req.body.fechas?.inicio || poliza.fechas?.inicio;
@@ -975,6 +1046,7 @@ const recalcularRecibos = async (req, res) => {
             primaTotal,
             fechaInicio: fechaInicioDate,
             tipoPago,
+            duracionMeses,
             primerPago,
             montoAbono
         });
@@ -986,6 +1058,7 @@ const recalcularRecibos = async (req, res) => {
         poliza.primerPago = primerPago;
         poliza.montoAbono = montoAbono;
         poliza.tipoPago = tipoPago;
+        poliza.duracionMeses = duracionMeses;
         poliza.fechas.inicio = fechaInicioDate;
         const primerPendiente = poliza.recibos.find(recibo =>
             recibo.estadoRecibo?.toLowerCase() === 'pendiente'
@@ -1271,9 +1344,26 @@ const enviarRecordatorioManual = async (req, res) => {
                 : (poliza.clienteTelefono || '5512345678');
         }
 
+        const reciboPendiente = Array.isArray(poliza.recibos)
+            ? poliza.recibos.find(recibo => String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pendiente')
+            : null;
+        const montoPendiente = Number(
+            reciboPendiente?.montoRecibo
+            ?? reciboPendiente?.pagoNeto
+            ?? reciboPendiente?.monto
+            ?? poliza.montoAbono
+            ?? 0
+        );
+        const fechaPagoPendiente = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
+        const periodoPendiente = reciboPendiente?.periodoCobertura
+            ? ` correspondiente al periodo ${reciboPendiente.periodoCobertura}`
+            : '';
+        const enlacePago = poliza.enlacePago
+            ? ` Puedes realizar tu pago de forma segura aquí: ${poliza.enlacePago}`
+            : '';
         let mensaje = tipo === 'vencimiento_poliza'
             ? `Hola ${poliza.cliente}, tu póliza No. ${poliza.numeroPoliza} vencerá el ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}.`
-            : `Hola ${poliza.cliente}, tienes un pago pendiente en tu póliza No. ${poliza.numeroPoliza} por $${poliza.primaTotal || 0}.`;
+            : `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${poliza.tipoSeguro || 'seguro'} por la cantidad de $${montoPendiente.toFixed(2)}${periodoPendiente} con fecha límite el ${fechaPagoPendiente ? new Date(fechaPagoPendiente).toLocaleDateString('es-MX') : 'N/A'}. Cualquier duda estamos a tus órdenes.${enlacePago}`;
 
         const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
         const Notificacion = require('../models/Notificacion');
@@ -2256,6 +2346,20 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 montoCalculado: 1,
+                                reciboPendiente: {
+                                    $arrayElemAt: [{
+                                        $filter: {
+                                            input: { $ifNull: ['$recibos', []] },
+                                            as: 'recibo',
+                                            cond: {
+                                                $eq: [
+                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
+                                                    'pendiente'
+                                                ]
+                                            }
+                                        }
+                                    }, 0]
+                                },
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -2283,6 +2387,20 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 montoCalculado: 1,
+                                reciboPendiente: {
+                                    $arrayElemAt: [{
+                                        $filter: {
+                                            input: { $ifNull: ['$recibos', []] },
+                                            as: 'recibo',
+                                            cond: {
+                                                $eq: [
+                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
+                                                    'pendiente'
+                                                ]
+                                            }
+                                        }
+                                    }, 0]
+                                },
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -2310,6 +2428,20 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 montoCalculado: 1,
+                                reciboPendiente: {
+                                    $arrayElemAt: [{
+                                        $filter: {
+                                            input: { $ifNull: ['$recibos', []] },
+                                            as: 'recibo',
+                                            cond: {
+                                                $eq: [
+                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
+                                                    'pendiente'
+                                                ]
+                                            }
+                                        }
+                                    }, 0]
+                                },
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -2334,26 +2466,34 @@ const obtenerCobranzaDiaria = async (req, res) => {
         });
         const datos = resultado[0] || { vencidas: [], cobrosHoy: [], porVencer: [] };
 
-        const mapPolizaRespuesta = (poliza) => ({
-            polizaId: poliza._id,
-            asesorId: poliza.asesorId,
-            numeroPoliza: poliza.numeroPoliza,
-            cliente: poliza.cliente || 'Sin nombre',
-            telefono: poliza.clienteTelefono || '',
-            email: poliza.clienteEmail || '',
-            tipoSeguro: poliza.tipoSeguro,
-            tipoPago: poliza.tipoPago,
-            montoPagar: poliza.montoCalculado || 0,
-            vencimiento: poliza.vencimiento,
-            proximoPago: poliza.proximoPago,
-            estado: poliza.estado,
-            estadoPago: poliza.estadoPago,
-            tipoGestion: poliza.tipoGestion,
-            diasRestantes: poliza.diasRestantes,
-            aseguradora: poliza.aseguradora,
-            enlacePago: poliza.enlacePago || null,
-            historialNotificaciones: poliza.historialNotificaciones || []
-        });
+        const mapPolizaRespuesta = (poliza) => {
+            const reciboPendiente = poliza.reciboPendiente || null;
+            return {
+                polizaId: poliza._id,
+                asesorId: poliza.asesorId,
+                numeroPoliza: poliza.numeroPoliza,
+                cliente: poliza.cliente || 'Sin nombre',
+                telefono: poliza.clienteTelefono || '',
+                email: poliza.clienteEmail || '',
+                tipoSeguro: poliza.tipoSeguro,
+                tipoPago: poliza.tipoPago,
+                montoPagar: reciboPendiente?.montoRecibo ?? poliza.montoCalculado ?? 0,
+                reciboPendiente: reciboPendiente ? {
+                    montoRecibo: reciboPendiente.montoRecibo,
+                    periodoCobertura: reciboPendiente.periodoCobertura,
+                    fechaVencimientoRecibo: reciboPendiente.fechaVencimientoRecibo
+                } : null,
+                vencimiento: poliza.vencimiento,
+                proximoPago: poliza.proximoPago,
+                estado: poliza.estado,
+                estadoPago: poliza.estadoPago,
+                tipoGestion: poliza.tipoGestion,
+                diasRestantes: poliza.diasRestantes,
+                aseguradora: poliza.aseguradora,
+                enlacePago: poliza.enlacePago || null,
+                historialNotificaciones: poliza.historialNotificaciones || []
+            };
+        };
 
         const vencidas = (datos.vencidas || []).map(mapPolizaRespuesta);
         const cobrosHoy = (datos.cobrosHoy || []).map(mapPolizaRespuesta);
@@ -2958,6 +3098,17 @@ const renovarPoliza = async (req, res) => {
             };
         }
 
+        const duracionMesesNueva = normalizarDuracionMeses(
+            req.body.duracionMeses ?? datosNuevaPoliza.duracionMeses ?? polizaAntigua.duracionMeses
+        );
+        if (duracionMesesNueva === null) {
+            throw Object.assign(
+                new Error('La duración debe ser un número entero de meses igual o mayor a 1.'),
+                { statusCode: 400 }
+            );
+        }
+        datosNuevaPoliza.duracionMeses = duracionMesesNueva;
+
         const numeroBase = String(datosNuevaPoliza.numeroPoliza || '').trim();
         let numeroNuevo = numeroBase;
         let intentoNumero = 1;
@@ -2977,17 +3128,19 @@ const renovarPoliza = async (req, res) => {
             clienteId: polizaAntigua.clienteId, // Mantener el mismo clienteId si existe
             polizaAnteriorId: polizaAntigua._id,
             ...datosNuevaPoliza,
+            duracionMeses: duracionMesesNueva,
             estado: 'Activa',
             proximoPago: datosNuevaPoliza.fechas?.inicio || new Date()
         });
 
-        if (nuevaPoliza.tipoPago !== 'anual') {
+        if (nuevaPoliza.tipoPago !== 'anual' || nuevaPoliza.duracionMeses > 12) {
             nuevaPoliza.recibos = generarCalendarioRecibos(
                 nuevaPoliza.primaTotal,
                 nuevaPoliza.fechas.inicio,
                 nuevaPoliza.tipoPago,
                 nuevaPoliza.primerPago,
-                nuevaPoliza.montoAbono
+                nuevaPoliza.montoAbono,
+                { duracionMeses: nuevaPoliza.duracionMeses }
             );
         }
         const primerReciboPendiente = nuevaPoliza.recibos.find(

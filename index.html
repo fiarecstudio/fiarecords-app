@@ -202,6 +202,23 @@
         <main class="p-3 p-md-4">
             
             <section id="dashboard" class="active section-view">
+                <div id="filtrosDashboardVentas" class="d-none d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <select id="filtroAsesorDashboard" class="form-select form-select-sm w-auto" aria-label="Filtrar ventas por asesor" onchange="app.filtrarDashboardSeguros()">
+                        <option value="">Todos los asesores</option>
+                    </select>
+                    <select id="filtroAnoDashboard" class="form-select form-select-sm w-auto" aria-label="Filtrar ventas por año" onchange="app.filtrarDashboardSeguros()">
+                        <option value="">Todos los años</option>
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                    </select>
+                    <select id="filtroTiempoGraficas" class="form-select form-select-sm w-auto" aria-label="Filtrar periodo de gráficas" onchange="app.filtrarDashboardSeguros()">
+                        <option value="mensual">Mensual</option>
+                        <option value="semanal">Semanal</option>
+                        <option value="diario">Diario</option>
+                    </select>
+                </div>
                 <div class="grid-container">
                     <!-- Tarjetas para Módulo de Seguros -->
                     <div id="dashboard-seuros" class="d-none">
@@ -310,6 +327,30 @@
                         </div>
                     </div>
                 </div>
+                <div id="graficasDashboardSeguros" class="d-none mt-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card shadow-sm h-100"><div class="card-body">
+                                <h5 class="card-title">Cobrado vs Pendiente</h5>
+                                <canvas id="chartCobradoPendiente"></canvas>
+                            </div></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card shadow-sm h-100"><div class="card-body">
+                                <h5 class="card-title">Pólizas por Periodo</h5>
+                                <canvas id="chartPolizasPeriodo"></canvas>
+                            </div></div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <div class="card shadow-sm"><div class="card-body">
+                                <h5 class="card-title">Pólizas Vendidas por Asesor</h5>
+                                <canvas id="chartVentasAsesor"></canvas>
+                            </div></div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <section id="agenda" class="section-view">
@@ -402,7 +443,12 @@
                         </div>
                     </div>
                     <div id="vista-pagos-pendientes">
-                        <h4 class="text-warning"><i class="bi bi-exclamation-circle"></i> Saldos Pendientes</h4>
+                        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                            <h4 class="text-warning mb-0"><i class="bi bi-exclamation-circle"></i> Saldos Pendientes</h4>
+                            <button id="btnOrdenFechasPendientes" type="button" class="btn btn-outline-secondary btn-sm" onclick="app.cambiarOrdenPendientes()" aria-pressed="true">
+                                Ordenar: Más antiguos primero
+                            </button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table">
                                 <thead><tr><th>Cliente / Póliza</th><th>Total</th><th>Pagado</th><th>Restante</th><th>Acciones</th></tr></thead>
@@ -558,7 +604,7 @@
                                             </div>
                                             <div class="col-6">
                                                 <label class="form-label small">Meses (Duración)</label>
-                                                <input type="number" class="form-control form-control-sm" id="duracionMeses" value="1" min="1">
+                                                <input type="number" class="form-control form-control-sm" id="duracionPlanMensualMeses" value="1" min="1">
                                             </div>
                                         </div>
                                         <small class="text-muted mt-1 d-block" style="font-size: 0.75rem;">El total se multiplicará automáticamente.</small>
@@ -1224,25 +1270,18 @@
                                     <i class="bi bi-file-earmark-pdf"></i> PDF
                                 </button>
                             </div>
-                            <!-- Filtro por Asesor (Solo visible para admins) -->
-                            <div id="filtro-asesor-container" class="d-none align-items-center gap-2">
-                                <label class="form-label mb-0 small"><i class="bi bi-person"></i> Asesor:</label>
-                                <select id="filtro-asesor" class="form-select form-select-sm" style="width: 200px;" onchange="app.filtrarPolizasPorAsesor(this.value)">
-                                    <option value="">Todos los asesores</option>
-                                </select>
-                            </div>
                             <button class="btn btn-primary" onclick="app.abrirModalNuevaPoliza()">
                                 <i class="bi bi-plus-circle"></i> Nueva Póliza
                             </button>
                         </div>
                     </div>
                     <div class="card-body pt-3">
-                        <div class="row g-2 align-items-end mb-3" id="filtrosPolizasUI">
+                        <div class="row g-2 align-items-end mb-2" id="filtrosPolizasUI">
                             <div class="col-12 col-md-4">
                                 <label for="filtro-busqueda-polizas" class="form-label small mb-1">Buscar pólizas</label>
                                 <input id="filtro-busqueda-polizas" class="form-control form-control-sm" type="search" placeholder="Cliente, número o asesor" oninput="app.filtrarPolizasUI(this.value)">
                             </div>
-                            <div class="col-6 col-md-3">
+                            <div class="col-6 col-md-2">
                                 <label for="filtro-estatus-polizas" class="form-label small mb-1">Filtro Estatus</label>
                                 <select id="filtro-estatus-polizas" class="form-select form-select-sm" onchange="app.filtrarPolizasUI()">
                                     <option value="">Todas</option>
@@ -1251,11 +1290,27 @@
                                     <option value="Cancelada">Cancelada</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-3">
+                            <div class="col-6 col-md-2">
                                 <label for="filtro-aseguradora-polizas" class="form-label small mb-1">Filtro Aseguradora</label>
                                 <select id="filtro-aseguradora-polizas" class="form-select form-select-sm" onchange="app.filtrarPolizasUI()">
                                     <option value="">Todas</option>
                                 </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label for="filtroAsesorPolizas" class="form-label small mb-1">Filtro Asesor</label>
+                                <select id="filtroAsesorPolizas" class="form-select form-select-sm" onchange="app.filtrarPolizasUI()">
+                                    <option value="">Todos los asesores</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-end mt-1 mb-3">
+                            <div class="col-6 col-md-3">
+                                <label for="filtroFechaDesde" class="form-label small mb-1">Fecha Desde</label>
+                                <input type="date" id="filtroFechaDesde" class="form-control form-control-sm" title="Fecha Desde" onchange="app.filtrarPolizasUI()" oninput="app.filtrarPolizasUI()">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label for="filtroFechaHasta" class="form-label small mb-1">Fecha Hasta</label>
+                                <input type="date" id="filtroFechaHasta" class="form-control form-control-sm" title="Fecha Hasta" onchange="app.filtrarPolizasUI()" oninput="app.filtrarPolizasUI()">
                             </div>
                         </div>
                         <div class="row g-2 align-items-end mb-3">
@@ -1276,6 +1331,7 @@
                                     <tr>
                                         <th>Número</th>
                                         <th>Cliente</th>
+                                        <th>Asesor</th>
                                         <th>Aseguradora</th>
                                         <th>Vencimiento</th>
                                         <th>Próximo Pago</th>
@@ -1285,7 +1341,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="tablaPolizasBody">
-                                    <tr><td colspan="8" data-label="Pólizas" class="text-center text-muted">Cargando...</td></tr>
+                                    <tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">Cargando...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1304,6 +1360,10 @@
                             <button type="button" id="btn-actualizar-cobranza" class="btn btn-outline-primary">
                                 <i class="bi bi-arrow-clockwise"></i> Actualizar
                             </button>
+                            <select id="ordenVencimientoCobranza" class="form-select form-select-sm" style="width: auto;" onchange="app.filtrarCobranzaUI()" aria-label="Ordenar cobranza por fecha de vencimiento">
+                                <option value="asc">Más antiguos primero</option>
+                                <option value="desc">Más recientes primero</option>
+                            </select>
                             <span class="badge bg-info" id="fecha-cobranza">Cargando fecha...</span>
                         </div>
                     </div>

@@ -179,6 +179,15 @@ const polizaSchema = new mongoose.Schema({
         enum: ['anual', 'trimestral', 'semestral', 'mensual'],
         default: 'anual'
     },
+    duracionMeses: {
+        type: Number,
+        default: 12,
+        min: [1, 'La duración debe ser de al menos un mes'],
+        validate: {
+            validator: Number.isInteger,
+            message: 'La duración debe expresarse en meses enteros'
+        }
+    },
     tipoSeguro: {
         type: String,
         required: [true, 'El tipo de seguro es obligatorio'],
