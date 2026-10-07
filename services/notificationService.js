@@ -13,6 +13,10 @@ async function obtenerTransportadorSMTP(empresaId) {
                 host: config.smtpHost,
                 port: config.smtpPort || 587,
                 secure: config.smtpPort === 465,
+                tls: { rejectUnauthorized: false },
+                connectionTimeout: 10000,
+                greetingTimeout: 10000,
+                socketTimeout: 10000,
                 auth: {
                     user: config.smtpUser,
                     pass: config.smtpPass
@@ -27,6 +31,10 @@ async function obtenerTransportadorSMTP(empresaId) {
                 host: process.env.SMTP_HOST,
                 port: process.env.SMTP_PORT || 587,
                 secure: process.env.SMTP_PORT === '465',
+                tls: { rejectUnauthorized: false },
+                connectionTimeout: 10000,
+                greetingTimeout: 10000,
+                socketTimeout: 10000,
                 auth: {
                     user: process.env.SMTP_USER,
                     pass: process.env.SMTP_PASS

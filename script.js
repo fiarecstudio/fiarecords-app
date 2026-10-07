@@ -10107,6 +10107,14 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
+            Swal.fire({
+                title: 'Enviando recordatorio...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
             await fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -12014,6 +12022,14 @@ Fecha de firma: {{FECHA}}`;
             
             if (!confirmar) return;
             
+            Swal.fire({
+                title: 'Enviando correo...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
             const resultado = await fetchAPI(`/api/polizas/${polizaId}/notificar-manual`, {
                 method: 'POST',
                 body: JSON.stringify({
