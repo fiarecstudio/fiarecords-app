@@ -61,7 +61,7 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 #app-logo[style*="cursor: pointer"]:hover { opacity: 0.8; transform: scale(1.05); }
 
 /* BOOTSTRAP OVERRIDES */
-.form-control, .form-select { display: none; background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-color-dark); border-radius: 12px; padding: 0.75rem 1rem; }
+.form-control, .form-select { display: block; background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-color-dark); border-radius: 12px; padding: 0.75rem 1rem; }
 .form-control:focus, .form-select:focus { background-color: var(--card-background); border-color: var(--primary-color); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); color: var(--text-color-dark); }
 .input-group-text { background-color: var(--secondary-button-bg); border-color: var(--border-color); color: var(--text-color-light); border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
 .form-check-input { background-color: var(--input-bg); border-color: var(--border-color); }
