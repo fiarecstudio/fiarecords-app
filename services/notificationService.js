@@ -20,22 +20,34 @@ async function obtenerTransportadorSMTP(empresaId) {
         }
 
         const config = usaConfigEmpresa ? configEmpresa : {};
-        const puertoSMTP = Number(config.smtpPort) || Number(process.env.SMTP_PORT) || 587;
+        const puertoSMTP = Number(config.smtpPort || process.env.SMTP_PORT || 465);
+        const host = config.smtpHost || process.env.SMTP_HOST;
+        const secure = puertoSMTP === 465;
+        const user = config.smtpUser || process.env.SMTP_USER;
+        const pass = config.smtpPass || process.env.SMTP_PASS;
+
+        console.log('[NotificationService Debug] Conectando a:', {
+            host,
+            port: puertoSMTP,
+            secure,
+            user,
+            hasPass: !!pass
+        });
 
         return nodemailer.createTransport({
-            host: config.smtpHost || process.env.SMTP_HOST,
+            host,
             port: puertoSMTP,
-            secure: puertoSMTP === 465,
+            secure,
             auth: {
-                user: config.smtpUser || process.env.SMTP_USER,
-                pass: config.smtpPass || process.env.SMTP_PASS
+                user,
+                pass
             },
             tls: {
                 rejectUnauthorized: false
             },
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 10000
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 15000
         });
     } catch (error) {
         console.error('[NotificationService] Error al inicializar SMTP para empresa:', empresaId, error.message);
