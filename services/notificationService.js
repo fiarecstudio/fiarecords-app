@@ -1,75 +1,51 @@
-const nodemailer = require('nodemailer');
 const Empresa = require('../models/Empresa');
 
-async function obtenerTransportadorSMTP(empresaId) {
-    try {
-        const empresa = await Empresa.findById(empresaId);
-        
-        const configEmpresa = empresa?.notificaciones?.email;
-        const usaConfigEmpresa = Boolean(configEmpresa?.enabled && configEmpresa.smtpHost);
-
-        if (!usaConfigEmpresa && !process.env.SMTP_HOST) {
-            console.warn(`[NotificationService] No hay configuración SMTP disponible para empresa ${empresaId}`);
-            return null;
-        }
-
-        if (usaConfigEmpresa) {
-            console.log(`[NotificationService] Usando configuración SMTP de empresa: ${empresa.nombre}`);
-        } else {
-            console.log(`[NotificationService] Usando configuración SMTP global (.env)`);
-        }
-
-        const config = usaConfigEmpresa ? configEmpresa : {};
-        const puertoSMTP = Number(config.smtpPort || process.env.SMTP_PORT || 465);
-        const host = config.smtpHost || process.env.SMTP_HOST;
-        const secure = puertoSMTP === 465;
-        const user = config.smtpUser || process.env.SMTP_USER;
-        const pass = config.smtpPass || process.env.SMTP_PASS;
-
-        console.log('[NotificationService Debug] Conectando a:', {
-            host,
-            port: puertoSMTP,
-            secure,
-            user,
-            hasPass: !!pass
-        });
-
-        return nodemailer.createTransport({
-            host,
-            port: puertoSMTP,
-            secure,
-            auth: {
-                user,
-                pass
-            },
-            tls: {
-                rejectUnauthorized: false
-            },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 15000
-        });
-    } catch (error) {
-        console.error('[NotificationService] Error al inicializar SMTP para empresa:', empresaId, error.message);
-        return null;
-    }
-}
-
 async function enviarEmail({ empresaId, destinatario, asunto, cuerpo }) {
-    const transporter = await obtenerTransportadorSMTP(empresaId);
-    if (!transporter) throw new Error('No se pudo configurar un servicio de correo. Configura SMTP desde el menú de configuración.');
-    
     const empresa = await Empresa.findById(empresaId);
-    const remitente = empresa?.notificaciones?.email?.smtpUser || process.env.SMTP_USER || process.env.EMAIL_USER || 'Alertas Seguros';
-    
-    const mailOptions = {
-        from: `"Alertas Seguros" <${remitente}>`,
-        to: destinatario,
+    const configEmpresa = empresa?.notificaciones?.email;
+    const config = configEmpresa?.enabled ? configEmpresa : {};
+    const apiKey = config.smtpPass || process.env.SMTP_PASS || process.env.BREVO_API_KEY;
+
+    if (!apiKey) {
+        throw new Error('No se configuró la API key de Brevo. Configúrala en las notificaciones de la empresa o en BREVO_API_KEY.');
+    }
+
+    const payload = {
+        sender: {
+            name: config.senderName || 'M Asesores',
+            email: config.smtpUser || process.env.SMTP_USER || 'cobranza@masesores.mx'
+        },
+        to: [{ email: destinatario }],
         subject: asunto,
-        html: cuerpo
+        htmlContent: cuerpo
     };
-    
-    return await transporter.sendMail(mailOptions);
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            'api-key': apiKey,
+            'content-type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        let errorBrevo;
+        try {
+            errorBrevo = await response.json();
+        } catch (error) {
+            throw new Error(`Brevo rechazó el envío (${response.status} ${response.statusText}) y no devolvió un error JSON válido.`);
+        }
+
+        const detalle = errorBrevo?.message
+            || errorBrevo?.code
+            || JSON.stringify(errorBrevo)
+            || 'respuesta sin detalle';
+        throw new Error(`Brevo rechazó el envío (${response.status}): ${detalle}`);
+    }
+
+    return response.json();
 }
 
 async function enviarWhatsApp({ empresaId, destinatario, mensaje }) {
