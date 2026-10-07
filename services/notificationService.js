@@ -5,45 +5,38 @@ async function obtenerTransportadorSMTP(empresaId) {
     try {
         const empresa = await Empresa.findById(empresaId);
         
-        // Prioridad 1: Usar configuración SMTP específica de la empresa (desde el menú de configuración)
-        if (empresa && empresa.notificaciones?.email?.enabled && empresa.notificaciones.email.smtpHost) {
-            const config = empresa.notificaciones.email;
+        const configEmpresa = empresa?.notificaciones?.email;
+        const usaConfigEmpresa = Boolean(configEmpresa?.enabled && configEmpresa.smtpHost);
+
+        if (!usaConfigEmpresa && !process.env.SMTP_HOST) {
+            console.warn(`[NotificationService] No hay configuración SMTP disponible para empresa ${empresaId}`);
+            return null;
+        }
+
+        if (usaConfigEmpresa) {
             console.log(`[NotificationService] Usando configuración SMTP de empresa: ${empresa.nombre}`);
-            return nodemailer.createTransport({
-                host: config.smtpHost,
-                port: config.smtpPort || 587,
-                secure: config.smtpPort === 465,
-                tls: { rejectUnauthorized: false },
-                connectionTimeout: 10000,
-                greetingTimeout: 10000,
-                socketTimeout: 10000,
-                auth: {
-                    user: config.smtpUser,
-                    pass: config.smtpPass
-                }
-            });
-        }
-        
-        // Prioridad 2: Usar variables de entorno globales (fallback)
-        if (process.env.SMTP_HOST) {
+        } else {
             console.log(`[NotificationService] Usando configuración SMTP global (.env)`);
-            return nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: process.env.SMTP_PORT || 587,
-                secure: process.env.SMTP_PORT === '465',
-                tls: { rejectUnauthorized: false },
-                connectionTimeout: 10000,
-                greetingTimeout: 10000,
-                socketTimeout: 10000,
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS
-                }
-            });
         }
-        
-        console.warn(`[NotificationService] No hay configuración SMTP disponible para empresa ${empresaId}`);
-        return null;
+
+        const config = usaConfigEmpresa ? configEmpresa : {};
+        const puertoSMTP = Number(config.smtpPort) || Number(process.env.SMTP_PORT) || 587;
+
+        return nodemailer.createTransport({
+            host: config.smtpHost || process.env.SMTP_HOST,
+            port: puertoSMTP,
+            secure: puertoSMTP === 465,
+            auth: {
+                user: config.smtpUser || process.env.SMTP_USER,
+                pass: config.smtpPass || process.env.SMTP_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000
+        });
     } catch (error) {
         console.error('[NotificationService] Error al inicializar SMTP para empresa:', empresaId, error.message);
         return null;
