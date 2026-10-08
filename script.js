@@ -7605,10 +7605,23 @@ Fecha de firma: {{FECHA}}`;
 
     function calcularPagoNetoRecibo({
         primaNeta,
+        primaTotal,
+        gastosExpedicion,
+        montoAbono,
+        primerPago,
+        emisionEnPrimerPago,
         cantidadRecibos,
         indiceRecibo
     }) {
-        return calcularPagosNetosDistribuidos(primaNeta, cantidadRecibos)[indiceRecibo] || 0;
+        return calcularPagosNetosConAbonosManuales({
+            primaNeta,
+            primaTotal,
+            gastosExpedicion,
+            montoAbono,
+            primerPago,
+            emisionEnPrimerPago,
+            cantidadRecibos
+        })[indiceRecibo] || 0;
     }
 
     function calcularPagosNetosDistribuidos(primaNeta, numeroPagos) {
@@ -7624,10 +7637,108 @@ Fecha de firma: {{FECHA}}`;
             : primaNetaSubsecuente);
     }
 
+    function calcularPagosNetosConAbonosManuales({
+        primaNeta,
+        primaTotal,
+        gastosExpedicion,
+        montoAbono,
+        primerPago,
+        emisionEnPrimerPago,
+        cantidadRecibos
+    }) {
+        const primaNetaNumerica = Number(primaNeta) || 0;
+        const abonoManual = Number(montoAbono) || 0;
+        const pagos = Math.max(1, Number(cantidadRecibos) || 1);
+
+        if (abonoManual > 0) {
+            const gastosTotales = Number(gastosExpedicion) || 0;
+            const gastosSubsecuente = emisionEnPrimerPago
+                ? 0
+                : gastosTotales / pagos;
+            const subtotalAbono = abonoManual / 1.16;
+            const recargos = (Number(primaTotal) || 0) / 1.16
+                - primaNetaNumerica
+                - gastosTotales;
+            const totalPrimaRecargos = primaNetaNumerica + recargos;
+            const baseImponibleSubsecuente = subtotalAbono - gastosSubsecuente;
+            const ratioPrima = totalPrimaRecargos > 0
+                ? primaNetaNumerica / totalPrimaRecargos
+                : 1;
+            const pagoNetoSubsecuente = Number((
+                baseImponibleSubsecuente * ratioPrima
+            ).toFixed(2));
+            const pagoNetoRecibo1 = Number((
+                primaNetaNumerica - (pagoNetoSubsecuente * (pagos - 1))
+            ).toFixed(2));
+
+            return Array.from({ length: pagos }, (_, indice) => indice === 0
+                ? pagoNetoRecibo1
+                : pagoNetoSubsecuente);
+        }
+
+        return calcularPagosNetosDistribuidos(primaNetaNumerica, pagos);
+    }
+
+    function distribuirMontoTotalPorRecibos(montoTotal, cantidadRecibos) {
+        const total = Number(montoTotal) || 0;
+        const cantidad = Math.max(1, Number(cantidadRecibos) || 1);
+        const montoSubsecuente = Number((total / cantidad).toFixed(2));
+        const montoPrimerRecibo = Number((
+            total - (montoSubsecuente * (cantidad - 1))
+        ).toFixed(2));
+
+        return Array.from({ length: cantidad }, (_, indice) => indice === 0
+            ? montoPrimerRecibo
+            : montoSubsecuente);
+    }
+
+    function calcularMontosRecibos({
+        primaTotal,
+        primaNeta,
+        recargos,
+        gastosExpedicion,
+        montoAbono,
+        primerPago,
+        emisionEnPrimerPago,
+        cantidadRecibos
+    }) {
+        const pagos = Math.max(1, Number(cantidadRecibos) || 1);
+        const costoInicial = Number(primaTotal) || 0;
+        const emisionTotal = Number(gastosExpedicion) || 0;
+
+        const abonoManual = Number(montoAbono) || 0;
+        if (abonoManual > 0) {
+            const primerPagoManual = Number(primerPago) || 0;
+            const montoPrimerRecibo = primerPagoManual > 0
+                ? primerPagoManual
+                : Number((costoInicial - (abonoManual * (pagos - 1))).toFixed(2));
+
+            return Array.from({ length: pagos }, (_, indice) => Number(
+                indice === 0 ? montoPrimerRecibo : abonoManual
+            ));
+        }
+
+        if (emisionEnPrimerPago !== true) {
+            return distribuirMontoTotalPorRecibos(costoInicial, pagos);
+        }
+
+        const subtotalPorRecibo = (
+            (Number(primaNeta) || 0) + (Number(recargos) || 0)
+        ) / pagos;
+        const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
+        const montos = Array.from({ length: pagos }, (_, indice) => redondearCentavos(
+            (subtotalPorRecibo + (indice === 0 ? emisionTotal : 0)) * 1.16
+        ));
+        const sumaRecibos = redondearCentavos(montos.reduce((suma, monto) => suma + monto, 0));
+        montos[0] = redondearCentavos(montos[0] + costoInicial - sumaRecibos);
+        return montos;
+    }
+
     function calcularPlanRecibosVistaPrevia(poliza, {
         costoTotal,
         primaNeta,
         pagoInicial,
+        montoAbono,
         gastosExpedicion,
         emisionEnPrimerPago = false,
         tipoPago,
@@ -7639,46 +7750,30 @@ Fecha de firma: {{FECHA}}`;
         const duracionNormalizada = Math.max(1, parseInt(duracionMeses, 10) || 12);
         const totalCuotas = Math.ceil(duracionNormalizada / mesesIntervalo);
         const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
-        const distribuirSaldo = (saldo, cantidad) => {
-            if (cantidad <= 0) return [];
-            const montos = [];
-            let asignado = 0;
-            for (let indice = 0; indice < cantidad; indice++) {
-                const monto = indice === cantidad - 1
-                    ? redondearCentavos(saldo - asignado)
-                    : redondearCentavos(saldo / cantidad);
-                montos.push(monto);
-                asignado = redondearCentavos(asignado + monto);
-            }
-            return montos;
-        };
-
         const costoInicial = redondearCentavos(Math.max(0, costoTotal));
         const primaNetaNumerica = Number(primaNeta) || 0;
         const gastosExpedicionNumericos = Number(gastosExpedicion) || 0;
         const subtotalPoliza = costoInicial / 1.16;
         const recargosTotales = subtotalPoliza - primaNetaNumerica - gastosExpedicionNumericos;
-        const pagosNetosDistribuidos = calcularPagosNetosDistribuidos(primaNetaNumerica, totalCuotas);
-        const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
-            ? Math.min(costoInicial, redondearCentavos(pagoInicial))
-            : null;
-        let montosPlan;
-        if (emisionEnPrimerPago) {
-            const subtotalBase = (primaNetaNumerica + recargosTotales) / totalCuotas;
-            montosPlan = Array.from({ length: totalCuotas }, (_, indice) => {
-                const subtotal = subtotalBase + (indice === 0 ? gastosExpedicionNumericos : 0);
-                return redondearCentavos(subtotal * 1.16);
-            });
-            const sumaRecibos = redondearCentavos(montosPlan.reduce((total, monto) => total + monto, 0));
-            montosPlan[0] = redondearCentavos(montosPlan[0] + costoInicial - sumaRecibos);
-        } else {
-            montosPlan = montoCuotaInicial === null
-                ? distribuirSaldo(costoInicial, totalCuotas)
-                : [montoCuotaInicial, ...distribuirSaldo(
-                    redondearCentavos(costoInicial - montoCuotaInicial),
-                    totalCuotas - 1
-                )];
-        }
+        const pagosNetosDistribuidos = calcularPagosNetosConAbonosManuales({
+            primaNeta: primaNetaNumerica,
+            primaTotal: costoInicial,
+            gastosExpedicion: gastosExpedicionNumericos,
+            montoAbono,
+            primerPago: pagoInicial,
+            emisionEnPrimerPago,
+            cantidadRecibos: totalCuotas
+        });
+        const montosPlan = calcularMontosRecibos({
+            primaTotal: costoInicial,
+            primaNeta: primaNetaNumerica,
+            recargos: recargosTotales,
+            gastosExpedicion: gastosExpedicionNumericos,
+            montoAbono,
+            primerPago: pagoInicial,
+            emisionEnPrimerPago,
+            cantidadRecibos: totalCuotas
+        });
         const recibosActuales = Array.isArray(poliza?.recibos) ? poliza.recibos : [];
         const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
             const reciboActual = recibosActuales.find(recibo => {
@@ -8006,6 +8101,7 @@ Fecha de firma: {{FECHA}}`;
                     const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                     const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
                     const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
+                    const nuevoMontoAbono = parseFloat(document.getElementById('poliza-monto-abono').value) || 0;
                     const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value) || 0;
                     const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
                     const nuevaDuracionMeses = parseInt(document.getElementById('duracionMeses').value, 10);
@@ -8025,6 +8121,7 @@ Fecha de firma: {{FECHA}}`;
                         costoTotal: nuevoCostoTotal,
                         primaNeta: nuevaPrimaNeta,
                         pagoInicial: nuevoPagoInicial,
+                        montoAbono: nuevoMontoAbono,
                         gastosExpedicion: nuevoGastosExpedicion,
                         emisionEnPrimerPago: document.getElementById('emisionEnPrimerPago').checked,
                         tipoPago: nuevoTipoPago,
@@ -8061,7 +8158,7 @@ Fecha de firma: {{FECHA}}`;
                     actualizarVistaPreviaRecibos({ mostrarError: true });
                 });
                 ['input', 'change'].forEach(tipoEvento => {
-                    ['poliza-prima', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio']
+                    ['poliza-prima', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio', 'poliza-monto-abono', 'poliza-primer-pago']
                         .forEach(id => document.getElementById(id)?.addEventListener(tipoEvento, () => {
                             actualizarVistaPreviaRecibos();
                         }));
@@ -9168,7 +9265,7 @@ Fecha de firma: {{FECHA}}`;
                 enlacePago: poliza.enlacePago || ''
             };
 
-            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoGastosExpedicion, emisionEnPrimerPago, nuevoTipoPago, nuevaFechaInicio }) => {
+            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoMontoAbono, nuevoGastosExpedicion, emisionEnPrimerPago, nuevoTipoPago, nuevaFechaInicio }) => {
                 const costoTotal = nuevoCostoTotal;
                 const primaNeta = nuevaPrimaNeta;
                 const pagoInicial = nuevoPagoInicial;
@@ -9186,47 +9283,26 @@ Fecha de firma: {{FECHA}}`;
                         primaNeta,
                         primaTotal: costoTotal,
                         gastosExpedicion: gastosManuales,
+                        montoAbono: nuevoMontoAbono,
+                        primerPago: pagoInicial,
                         cantidadRecibos,
                         indiceRecibo,
                         emisionEnPrimerPago
                     });
                 };
-                const distribuirSaldo = (saldo, cantidad) => {
-                    if (cantidad <= 0) return [];
-                    const montos = [];
-                    let asignado = 0;
-                    for (let indice = 0; indice < cantidad; indice++) {
-                        const monto = indice === cantidad - 1
-                            ? redondearCentavos(saldo - asignado)
-                            : redondearCentavos(saldo / cantidad);
-                        montos.push(monto);
-                        asignado = redondearCentavos(asignado + monto);
-                    }
-                    return montos;
-                };
                 const costoInicial = redondearCentavos(Math.max(0, costoTotal));
-                const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
-                    ? Math.min(costoInicial, redondearCentavos(pagoInicial))
-                    : null;
-                let montosPlan;
-                if (emisionEnPrimerPago) {
-                    const emisionTotal = Math.max(0, Number(gastosManuales) || 0);
-                    const recargos = subtotalPoliza - primaNeta - emisionTotal;
-                    const subtotalBase = (primaNeta + recargos) / totalCuotas;
-                    montosPlan = Array.from({ length: totalCuotas }, (_, indice) => {
-                        const subtotal = subtotalBase + (indice === 0 ? emisionTotal : 0);
-                        return redondearCentavos(subtotal * 1.16);
-                    });
-                    const sumaRecibos = redondearCentavos(montosPlan.reduce((total, monto) => total + monto, 0));
-                    montosPlan[0] = redondearCentavos(montosPlan[0] + costoInicial - sumaRecibos);
-                } else {
-                    montosPlan = montoCuotaInicial === null
-                        ? distribuirSaldo(costoInicial, totalCuotas)
-                        : [montoCuotaInicial, ...distribuirSaldo(
-                            redondearCentavos(costoInicial - montoCuotaInicial),
-                            totalCuotas - 1
-                        )];
-                }
+                const subtotalPoliza = costoInicial / 1.16;
+                const recargos = subtotalPoliza - primaNeta - gastosManuales;
+                const montosPlan = calcularMontosRecibos({
+                    primaTotal: costoInicial,
+                    primaNeta,
+                    recargos,
+                    gastosExpedicion: gastosManuales,
+                    montoAbono: nuevoMontoAbono,
+                    primerPago: pagoInicial,
+                    emisionEnPrimerPago,
+                    cantidadRecibos: totalCuotas
+                });
                 const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
                 const recibosActuales = Array.isArray(poliza.recibos) ? poliza.recibos : [];
                 const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
@@ -9426,6 +9502,7 @@ Fecha de firma: {{FECHA}}`;
                         const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                         const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
                         const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
+                        const nuevoMontoAbono = parseFloat(document.getElementById('poliza-monto-abono').value) || 0;
                         const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
                         const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
                         const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
@@ -9442,6 +9519,7 @@ Fecha de firma: {{FECHA}}`;
                             nuevoCostoTotal,
                             nuevaPrimaNeta,
                             nuevoPagoInicial,
+                            nuevoMontoAbono,
                             nuevoGastosExpedicion,
                             emisionEnPrimerPago: document.getElementById('emisionEnPrimerPago').checked,
                             nuevoTipoPago,
@@ -9888,6 +9966,8 @@ Fecha de firma: {{FECHA}}`;
                 primaNeta: poliza.primaNeta,
                 primaTotal: poliza.primaTotal,
                 gastosExpedicion: poliza.gastosExpedicion,
+                montoAbono: poliza.montoAbono,
+                primerPago: poliza.primerPago,
                 cantidadRecibos: recibos.length,
                 indiceRecibo,
                 emisionEnPrimerPago: poliza.emisionEnPrimerPago === true
