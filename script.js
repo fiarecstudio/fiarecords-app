@@ -646,6 +646,7 @@ let proyectoIdEnEdicion = null;
     let clientesCacheCargada = false;
     let clientesCacheScope = null;
     let paginaActualClientes = 1;
+    let filtroGlobalClientes = '';
     let cobranzaGlobales = [];
     let paginaActualCobranza = 1;
     let dashboardStatsCache = null;
@@ -7602,11 +7603,33 @@ Fecha de firma: {{FECHA}}`;
         return fecha;
     }
 
+    function calcularPagoNetoRecibo({
+        primaNeta,
+        cantidadRecibos,
+        indiceRecibo
+    }) {
+        return calcularPagosNetosDistribuidos(primaNeta, cantidadRecibos)[indiceRecibo] || 0;
+    }
+
+    function calcularPagosNetosDistribuidos(primaNeta, numeroPagos) {
+        const pagos = Math.max(1, Number(numeroPagos) || 1);
+        const primaNetaNumerica = Number(primaNeta) || 0;
+        const primaNetaSubsecuente = Math.floor((primaNetaNumerica / pagos) * 100) / 100;
+        const primaNetaRecibo1 = Number((
+            primaNetaNumerica - (primaNetaSubsecuente * (pagos - 1))
+        ).toFixed(2));
+
+        return Array.from({ length: pagos }, (_, indice) => indice === 0
+            ? primaNetaRecibo1
+            : primaNetaSubsecuente);
+    }
+
     function calcularPlanRecibosVistaPrevia(poliza, {
         costoTotal,
         primaNeta,
         pagoInicial,
         gastosExpedicion,
+        emisionEnPrimerPago = false,
         tipoPago,
         duracionMeses,
         fechaInicio
@@ -7631,19 +7654,31 @@ Fecha de firma: {{FECHA}}`;
         };
 
         const costoInicial = redondearCentavos(Math.max(0, costoTotal));
+        const primaNetaNumerica = Number(primaNeta) || 0;
+        const gastosExpedicionNumericos = Number(gastosExpedicion) || 0;
+        const subtotalPoliza = costoInicial / 1.16;
+        const recargosTotales = subtotalPoliza - primaNetaNumerica - gastosExpedicionNumericos;
+        const pagosNetosDistribuidos = calcularPagosNetosDistribuidos(primaNetaNumerica, totalCuotas);
         const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
             ? Math.min(costoInicial, redondearCentavos(pagoInicial))
             : null;
-        const montosPlan = montoCuotaInicial === null
-            ? distribuirSaldo(costoInicial, totalCuotas)
-            : [montoCuotaInicial, ...distribuirSaldo(
-                redondearCentavos(costoInicial - montoCuotaInicial),
-                totalCuotas - 1
-            )];
-        const gastosTotales = costoTotal / 1.16 - primaNeta;
-        const gastosPorRecibo = !Number.isNaN(gastosExpedicion) && gastosExpedicion > 0
-            ? gastosExpedicion
-            : gastosTotales / totalCuotas;
+        let montosPlan;
+        if (emisionEnPrimerPago) {
+            const subtotalBase = (primaNetaNumerica + recargosTotales) / totalCuotas;
+            montosPlan = Array.from({ length: totalCuotas }, (_, indice) => {
+                const subtotal = subtotalBase + (indice === 0 ? gastosExpedicionNumericos : 0);
+                return redondearCentavos(subtotal * 1.16);
+            });
+            const sumaRecibos = redondearCentavos(montosPlan.reduce((total, monto) => total + monto, 0));
+            montosPlan[0] = redondearCentavos(montosPlan[0] + costoInicial - sumaRecibos);
+        } else {
+            montosPlan = montoCuotaInicial === null
+                ? distribuirSaldo(costoInicial, totalCuotas)
+                : [montoCuotaInicial, ...distribuirSaldo(
+                    redondearCentavos(costoInicial - montoCuotaInicial),
+                    totalCuotas - 1
+                )];
+        }
         const recibosActuales = Array.isArray(poliza?.recibos) ? poliza.recibos : [];
         const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
             const reciboActual = recibosActuales.find(recibo => {
@@ -7659,7 +7694,7 @@ Fecha de firma: {{FECHA}}`;
                 numeroRecibo: `REC-${numeroPeriodo}`,
                 periodoCobertura: `${numeroPeriodo}/${totalCuotas}`,
                 montoRecibo,
-                montoPagoNeto: Math.round((montoRecibo / 1.16 - gastosPorRecibo) * 100) / 100,
+                montoPagoNeto: pagosNetosDistribuidos[indicePlan],
                 fechaVencimientoRecibo: sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo),
                 estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
             };
@@ -7673,6 +7708,13 @@ Fecha de firma: {{FECHA}}`;
 
         return {
             recibos,
+            resumenFinanciero: {
+                primaNeta: primaNetaNumerica,
+                recargos: recargosTotales,
+                emision: gastosExpedicionNumericos,
+                iva: costoInicial - subtotalPoliza,
+                total: costoInicial
+            },
             sumaPagados: redondearCentavos(recibosPagados.reduce(
                 (total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0
             )),
@@ -7768,6 +7810,8 @@ Fecha de firma: {{FECHA}}`;
         const editando = Boolean(poliza?._id);
         const datosPrellenados = editando ? {
             ...poliza,
+            estado: poliza.estado === 'Por Vencer' ? 'PendienteRenovacion' : (poliza.estado || 'Activa'),
+            emisionEnPrimerPago: poliza.emisionEnPrimerPago === true,
             fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
             fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
             gastosExpedicion: poliza.gastosExpedicion || 0,
@@ -7775,6 +7819,8 @@ Fecha de firma: {{FECHA}}`;
             clienteId: poliza.clienteId?._id || poliza.clienteId || null
         } : datosIniciales;
         const clienteId = datosPrellenados.clienteId || null;
+        const estadoFormulario = datosPrellenados.estado || 'Activa';
+        const emisionEnPrimerPago = datosPrellenados.emisionEnPrimerPago === true;
 
         // Cargar lista de asesores para el select
         let asesoresOptions = '';
@@ -7796,6 +7842,15 @@ Fecha de firma: {{FECHA}}`;
             customClass: { popup: 'poliza-swal-popup' },
             html: `
                 <div class="text-start poliza-form-grid">
+                    <div class="mb-3 poliza-status-field">
+                        <label class="form-label" for="poliza-estado">Estado</label>
+                        <select id="poliza-estado" name="estado" class="swal2-input">
+                            <option value="Activa" ${estadoFormulario === 'Activa' ? 'selected' : ''}>Activa</option>
+                            <option value="PendienteRenovacion" ${estadoFormulario === 'PendienteRenovacion' ? 'selected' : ''}>PendienteRenovacion</option>
+                            <option value="Vencida" ${estadoFormulario === 'Vencida' ? 'selected' : ''}>Vencida</option>
+                            <option value="Cancelada" ${estadoFormulario === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
+                        </select>
+                    </div>
                     <input type="hidden" id="poliza-cliente-id" value="${clienteId || ''}">
                     <div class="mb-3">
                         <label class="form-label">Número de Póliza *</label>
@@ -7860,17 +7915,30 @@ Fecha de firma: {{FECHA}}`;
                             <input id="poliza-vencimiento" type="date" class="swal2-input" value="${datosPrellenados.fechaVencimiento || ''}">
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Prima Total *</label>
-                        <input id="poliza-prima" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaTotal || ''}" placeholder="0.00">
+                    <div class="poliza-financial-fields">
+                        <div class="mb-3">
+                            <label class="form-label" for="poliza-prima">Prima Total *</label>
+                            <input id="poliza-prima" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaTotal || ''}" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="poliza-prima-neta">Prima Neta</label>
+                            <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta || ''}" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="gastosExpedicion">Gastos de Expedición / Recibo (Opc.)</label>
+                            <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion || ''}" placeholder="66.58">
+                        </div>
+                        <div class="form-check mb-3 poliza-emision-check">
+                            <input class="form-check-input" type="checkbox" id="emisionEnPrimerPago" name="emisionEnPrimerPago" ${emisionEnPrimerPago ? 'checked' : ''}>
+                            <label class="form-check-label" for="emisionEnPrimerPago">¿Cobrar Derecho/Emisión 100% en el primer pago?</label>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Prima Neta</label>
-                        <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta || ''}" placeholder="0.00">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
-                        <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion || ''}" placeholder="66.58">
+                    <div id="resumenFinancieroPoliza" class="poliza-financial-summary" hidden>
+                        <div><span>Prima Neta</span><strong id="resumenPrimaNeta">$0.00</strong></div>
+                        <div><span>Recargos</span><strong id="resumenRecargos">$0.00</strong></div>
+                        <div><span>Emisión</span><strong id="resumenEmision">$0.00</strong></div>
+                        <div><span>IVA</span><strong id="resumenIva">$0.00</strong></div>
+                        <div><span>Total</span><strong id="resumenPrimaTotal">$0.00</strong></div>
                     </div>
                     <div id="poliza-payment-fields" class="row poliza-payment-fields">
                         <div class="col-6 mb-3">
@@ -7904,6 +7972,7 @@ Fecha de firma: {{FECHA}}`;
                         <button type="button" id="btnRecalcularRecibos" class="btn btn-warning">Recalcular Recibos</button>
                         <button type="button" id="btnCancelarPoliza" class="btn btn-danger btn-sm">Cancelar Póliza</button>
                     </div>
+                    ` : ''}
                     <div id="vistaPreviaRecibos" class="mt-3" hidden>
                         <h6 class="text-uppercase text-secondary small fw-bold">Vista previa del calendario</h6>
                         <p id="resumenVistaPreviaRecibos" class="small mb-2"></p>
@@ -7913,7 +7982,7 @@ Fecha de firma: {{FECHA}}`;
                                 <tbody id="tablaVistaPreviaRecibos"></tbody>
                             </table>
                         </div>
-                    </div>` : ''}
+                    </div>
                 </div>
             `,
             focusConfirm: false,
@@ -7927,26 +7996,29 @@ Fecha de firma: {{FECHA}}`;
                 }
                 configurarAutoCalculoPrima();
                 configurarVisibilidadCamposPago();
-                if (!editando) return;
 
                 document.getElementById('btnCancelarPoliza')?.addEventListener('click', event => {
                     event.preventDefault();
                     window.cancelarPoliza(poliza._id, event.currentTarget);
                 });
 
-                document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
-                    event.preventDefault();
+                const actualizarVistaPreviaRecibos = ({ mostrarError = false } = {}) => {
                     const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                     const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
                     const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
-                    const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
+                    const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value) || 0;
                     const nuevoTipoPago = document.getElementById('poliza-tipo-pago').value || 'anual';
                     const nuevaDuracionMeses = parseInt(document.getElementById('duracionMeses').value, 10);
                     const nuevaFechaInicio = document.getElementById('poliza-inicio').value;
                     if (nuevoCostoTotal <= 0 || !nuevaFechaInicio
                         || !Number.isInteger(nuevaDuracionMeses) || nuevaDuracionMeses < 1) {
-                        Swal.showValidationMessage('Captura un costo total, una duración válida y una fecha de inicio.');
-                        return;
+                        if (mostrarError) {
+                            Swal.showValidationMessage('Captura un costo total, una duración válida y una fecha de inicio.');
+                        } else {
+                            document.getElementById('vistaPreviaRecibos').hidden = true;
+                            document.getElementById('resumenFinancieroPoliza').hidden = true;
+                        }
+                        return false;
                     }
 
                     const resultadoPreview = calcularPlanRecibosVistaPrevia(poliza, {
@@ -7954,12 +8026,13 @@ Fecha de firma: {{FECHA}}`;
                         primaNeta: nuevaPrimaNeta,
                         pagoInicial: nuevoPagoInicial,
                         gastosExpedicion: nuevoGastosExpedicion,
+                        emisionEnPrimerPago: document.getElementById('emisionEnPrimerPago').checked,
                         tipoPago: nuevoTipoPago,
                         duracionMeses: nuevaDuracionMeses,
                         fechaInicio: nuevaFechaInicio
                     });
                     planRecibosCambio = resultadoPreview.recibos;
-                    poliza.recibos = planRecibosCambio;
+                    if (editando) poliza.recibos = planRecibosCambio;
                     recibosRecalculados = true;
                     document.getElementById('tablaVistaPreviaRecibos').innerHTML = planRecibosCambio.map(recibo => `
                         <tr>
@@ -7973,7 +8046,27 @@ Fecha de firma: {{FECHA}}`;
                     document.getElementById('resumenVistaPreviaRecibos').textContent =
                         `Pagado corregido: $${resultadoPreview.sumaPagados.toFixed(2)} · Saldo: $${resultadoPreview.saldoRestante.toFixed(2)}`;
                     document.getElementById('vistaPreviaRecibos').hidden = false;
+                    const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+                    const resumen = resultadoPreview.resumenFinanciero;
+                    document.getElementById('resumenPrimaNeta').textContent = formatoMoneda.format(resumen.primaNeta);
+                    document.getElementById('resumenRecargos').textContent = formatoMoneda.format(resumen.recargos);
+                    document.getElementById('resumenEmision').textContent = formatoMoneda.format(resumen.emision);
+                    document.getElementById('resumenIva').textContent = formatoMoneda.format(resumen.iva);
+                    document.getElementById('resumenPrimaTotal').textContent = formatoMoneda.format(resumen.total);
+                    document.getElementById('resumenFinancieroPoliza').hidden = false;
+                    return true;
+                };
+                document.getElementById('btnRecalcularRecibos')?.addEventListener('click', event => {
+                    event.preventDefault();
+                    actualizarVistaPreviaRecibos({ mostrarError: true });
                 });
+                ['input', 'change'].forEach(tipoEvento => {
+                    ['poliza-prima', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio']
+                        .forEach(id => document.getElementById(id)?.addEventListener(tipoEvento, () => {
+                            actualizarVistaPreviaRecibos();
+                        }));
+                });
+                document.getElementById('emisionEnPrimerPago')?.addEventListener('change', actualizarVistaPreviaRecibos);
             },
             preConfirm: async () => {
                 const numero = document.getElementById('poliza-numero').value.trim();
@@ -7988,9 +8081,11 @@ Fecha de firma: {{FECHA}}`;
                 const tipoSeguro = document.getElementById('poliza-tipo').value;
                 const fechaInicio = document.getElementById('poliza-inicio').value;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
+                const estado = document.getElementById('poliza-estado').value;
                 const primaTotal = document.getElementById('poliza-prima').value;
                 const primaNeta = document.getElementById('poliza-prima-neta').value;
                 const gastosExpedicion = document.getElementById('gastosExpedicion').value;
+                const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
                 const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
@@ -8040,9 +8135,11 @@ Fecha de firma: {{FECHA}}`;
                         inicio: parseInputDate(fechaInicio),
                         vencimiento: parseInputDate(fechaVencimiento)
                     },
+                    estado,
                     primaTotal: parseFloat(primaTotal),
                     primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
                     gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
+                    emisionEnPrimerPago,
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                     primerPago: primerPago ? parseFloat(primerPago) : null,
                     diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3,
@@ -8300,11 +8397,17 @@ Fecha de firma: {{FECHA}}`;
             const fechaProximoPago = p.proximoPago
                 ? new Date(p.proximoPago).toLocaleDateString()
                 : 'N/A';
-            const estado = p.estado === 'Cancelada'
-                ? { texto: 'Cancelada', clase: 'danger' }
-                : calcularEstado(p.fechas?.vencimiento);
+            const estado = p.estado || 'Activa';
+            const clasesEstado = {
+                Activa: 'success',
+                PendienteRenovacion: 'warning',
+                Vencida: 'danger',
+                'Por Vencer': 'danger',
+                Cancelada: 'secondary',
+                Renovada: 'secondary'
+            };
 
-            const esPendienteRenovacion = p.estado === 'PendienteRenovacion';
+            const esPendienteRenovacion = estado === 'PendienteRenovacion';
             const btnRenovar = esPendienteRenovacion
                 ? `<button class="btn btn-sm btn-warning" onclick="abrirModalRenovacion('${p._id}')" title="Renovar Póliza"><i class="bi bi-arrow-repeat"></i> Renovar</button>`
                 : '';
@@ -8317,7 +8420,7 @@ Fecha de firma: {{FECHA}}`;
                     <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
                     <td data-label="Vencimiento">${fechaVencimiento}</td>
                     <td data-label="Próximo pago">${fechaProximoPago}</td>
-                    <td data-label="Estado"><span class="badge bg-${estado.clase}">${estado.texto}</span></td>
+                    <td data-label="Estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}">${escapeHTML(estado)}</span></td>
                     <td data-label="Notificaciones">
                         <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
                     </td>
@@ -8385,13 +8488,11 @@ Fecha de firma: {{FECHA}}`;
                 poliza.aseguradora,
                 poliza.tipoSeguro
             ].some(valor => String(valor || '').toLocaleLowerCase('es').includes(consulta));
-            const estadoActual = poliza.estado === 'Cancelada'
-                ? 'Cancelada'
-                : poliza.estado === 'Vencida' || calcularEstado(poliza.fechas?.vencimiento).texto === 'Vencida'
-                    ? 'Vencida'
-                    : 'Activa';
+            const estadoActual = poliza.estado || 'Activa';
             return coincideTexto
-                && (!estatusSeleccionado || estadoActual === estatusSeleccionado)
+                && (!estatusSeleccionado
+                    || estadoActual === estatusSeleccionado
+                    || (estatusSeleccionado === 'Vencida' && estadoActual === 'Por Vencer'))
                 && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
                 && (!asesorSeleccionado
                     || (asesorSeleccionado === '__sin_asesor__' ? !nombreAsesor : nombreAsesor === asesorSeleccionado))
@@ -9059,6 +9160,7 @@ Fecha de firma: {{FECHA}}`;
                 primaTotal: poliza.primaTotal || 0,
                 primaNeta: poliza.primaNeta || 0,
                 gastosExpedicion: poliza.gastosExpedicion || 0,
+                emisionEnPrimerPago: poliza.emisionEnPrimerPago === true,
                 montoAbono: poliza.montoAbono || 0,
                 primerPago: poliza.primerPago || 0,
                 diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3,
@@ -9066,7 +9168,7 @@ Fecha de firma: {{FECHA}}`;
                 enlacePago: poliza.enlacePago || ''
             };
 
-            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoGastosExpedicion, nuevoTipoPago, nuevaFechaInicio }) => {
+            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoGastosExpedicion, emisionEnPrimerPago, nuevoTipoPago, nuevaFechaInicio }) => {
                 const costoTotal = nuevoCostoTotal;
                 const primaNeta = nuevaPrimaNeta;
                 const pagoInicial = nuevoPagoInicial;
@@ -9076,17 +9178,18 @@ Fecha de firma: {{FECHA}}`;
                 const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
                 const totalCuotas = cuotasPorTipo[tipoPago] || 1;
                 const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
-                const subtotalPoliza = costoTotal / 1.16;
-                const gastosTotales = subtotalPoliza - primaNeta;
                 const cantidadRecibos = totalCuotas;
                 const gastosManuales = nuevoGastosExpedicion;
-                const gastosPorRecibo = (!Number.isNaN(gastosManuales) && gastosManuales > 0)
-                    ? gastosManuales
-                    : cantidadRecibos > 0 ? gastosTotales / cantidadRecibos : 0;
-                const calcularPagoNeto = monto => {
-                    const subtotalRecibo = monto / 1.16;
-                    const pagoNetoExacto = subtotalRecibo - gastosPorRecibo;
-                    return Math.round(pagoNetoExacto * 100) / 100;
+                const calcularPagoNeto = (monto, indiceRecibo) => {
+                    return calcularPagoNetoRecibo({
+                        montoRecibo: monto,
+                        primaNeta,
+                        primaTotal: costoTotal,
+                        gastosExpedicion: gastosManuales,
+                        cantidadRecibos,
+                        indiceRecibo,
+                        emisionEnPrimerPago
+                    });
                 };
                 const distribuirSaldo = (saldo, cantidad) => {
                     if (cantidad <= 0) return [];
@@ -9105,12 +9208,25 @@ Fecha de firma: {{FECHA}}`;
                 const montoCuotaInicial = totalCuotas > 1 && pagoInicial > 0
                     ? Math.min(costoInicial, redondearCentavos(pagoInicial))
                     : null;
-                const montosPlan = montoCuotaInicial === null
-                    ? distribuirSaldo(costoInicial, totalCuotas)
-                    : [montoCuotaInicial, ...distribuirSaldo(
-                        redondearCentavos(costoInicial - montoCuotaInicial),
-                        totalCuotas - 1
-                    )];
+                let montosPlan;
+                if (emisionEnPrimerPago) {
+                    const emisionTotal = Math.max(0, Number(gastosManuales) || 0);
+                    const recargos = subtotalPoliza - primaNeta - emisionTotal;
+                    const subtotalBase = (primaNeta + recargos) / totalCuotas;
+                    montosPlan = Array.from({ length: totalCuotas }, (_, indice) => {
+                        const subtotal = subtotalBase + (indice === 0 ? emisionTotal : 0);
+                        return redondearCentavos(subtotal * 1.16);
+                    });
+                    const sumaRecibos = redondearCentavos(montosPlan.reduce((total, monto) => total + monto, 0));
+                    montosPlan[0] = redondearCentavos(montosPlan[0] + costoInicial - sumaRecibos);
+                } else {
+                    montosPlan = montoCuotaInicial === null
+                        ? distribuirSaldo(costoInicial, totalCuotas)
+                        : [montoCuotaInicial, ...distribuirSaldo(
+                            redondearCentavos(costoInicial - montoCuotaInicial),
+                            totalCuotas - 1
+                        )];
+                }
                 const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
                 const recibosActuales = Array.isArray(poliza.recibos) ? poliza.recibos : [];
                 const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
@@ -9127,7 +9243,7 @@ Fecha de firma: {{FECHA}}`;
                         numeroRecibo: `REC-${numeroPeriodo}`,
                         periodoCobertura: `${numeroPeriodo}/${totalCuotas}`,
                         montoRecibo,
-                        montoPagoNeto: calcularPagoNeto(montoRecibo),
+                        montoPagoNeto: calcularPagoNeto(montoRecibo, indicePlan),
                         fechaVencimientoRecibo: sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo),
                         estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
                     };
@@ -9247,6 +9363,10 @@ Fecha de firma: {{FECHA}}`;
                                     <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
                                     <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion}" placeholder="66.58">
                                 </div>
+                                <div class="form-check mb-3 poliza-emision-check">
+                                    <input class="form-check-input" type="checkbox" id="emisionEnPrimerPago" name="emisionEnPrimerPago" ${datosPrellenados.emisionEnPrimerPago ? 'checked' : ''}>
+                                    <label class="form-check-label" for="emisionEnPrimerPago">¿Cobrar Derecho/Emisión 100% en el primer pago?</label>
+                                </div>
                                 <div id="poliza-payment-fields" class="row g-2 poliza-payment-fields">
                                     <div class="col-12 col-lg-6 mb-3">
                                         <label class="form-label">Monto de Abono</label>
@@ -9323,6 +9443,7 @@ Fecha de firma: {{FECHA}}`;
                             nuevaPrimaNeta,
                             nuevoPagoInicial,
                             nuevoGastosExpedicion,
+                            emisionEnPrimerPago: document.getElementById('emisionEnPrimerPago').checked,
                             nuevoTipoPago,
                             nuevaFechaInicio
                         });
@@ -9358,6 +9479,15 @@ Fecha de firma: {{FECHA}}`;
                             + `${recibosPendientes} recibos generados`;
                         document.getElementById('vistaPreviaRecibos').hidden = false;
                     });
+                    const recalcularSiHayDatos = () => {
+                        const total = Number(document.getElementById('poliza-prima')?.value);
+                        const fechaInicio = document.getElementById('poliza-inicio')?.value;
+                        if (total > 0 && fechaInicio) {
+                            document.getElementById('btnRecalcularRecibos')?.click();
+                        }
+                    };
+                    document.getElementById('emisionEnPrimerPago')?.addEventListener('change', recalcularSiHayDatos);
+                    document.getElementById('gastosExpedicion')?.addEventListener('input', recalcularSiHayDatos);
                 },
                 preConfirm: async () => {
                     const numero = document.getElementById('poliza-numero').value.trim();
@@ -9374,6 +9504,7 @@ Fecha de firma: {{FECHA}}`;
                     const primaTotal = document.getElementById('poliza-prima').value;
                     const primaNeta = document.getElementById('poliza-prima-neta').value;
                     const gastosExpedicion = document.getElementById('gastosExpedicion').value;
+                    const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
                     const primerPago = document.getElementById('poliza-primer-pago').value;
                     const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
@@ -9419,6 +9550,7 @@ Fecha de firma: {{FECHA}}`;
                         primaTotal: parseFloat(primaTotal),
                         primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
                         gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
+                        emisionEnPrimerPago,
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                         primerPago: primerPago ? parseFloat(primerPago) : null,
                         diasAnticipacionAviso: parseInt(diasAnticipacionAviso) || 3,
@@ -9750,12 +9882,17 @@ Fecha de firma: {{FECHA}}`;
                 return ordenA - ordenB;
             });
         const montoLegacy = Number(poliza.saldoRestante ?? poliza.primaTotal ?? 0);
-        const subtotalPoliza = (Number(poliza.primaTotal) || 0) / 1.16;
-        const gastosTotales = subtotalPoliza - (Number(poliza.primaNeta) || 0);
-        const gastosPorRecibo = recibos.length > 0
-            ? (Number(poliza.gastosExpedicion) > 0 ? Number(poliza.gastosExpedicion) : gastosTotales / recibos.length)
-            : 0;
-        const calcularPagoNeto = monto => Math.round((((Number(monto) || 0) / 1.16) - gastosPorRecibo) * 100) / 100;
+        const calcularPagoNeto = (monto, indiceRecibo) => {
+            return calcularPagoNetoRecibo({
+                montoRecibo: monto,
+                primaNeta: poliza.primaNeta,
+                primaTotal: poliza.primaTotal,
+                gastosExpedicion: poliza.gastosExpedicion,
+                cantidadRecibos: recibos.length,
+                indiceRecibo,
+                emisionEnPrimerPago: poliza.emisionEnPrimerPago === true
+            });
+        };
         
         // Generar tabla de recibos
         const recibosHTML = recibos.length > 0 
@@ -9771,7 +9908,7 @@ Fecha de firma: {{FECHA}}`;
                         <td><strong>${r.numeroRecibo || 'N/A'}</strong></td>
                         <td>${indiceVista + 1}/${recibosOrdenados.length}</td>
                         <td>$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
-                        <td>$${calcularPagoNeto(r.montoRecibo).toFixed(2)}</td>
+                        <td>$${calcularPagoNeto(r.montoRecibo, indiceVista).toFixed(2)}</td>
                         <td>${fechaVencimiento}</td>
                         <td>${fechaPago}</td>
                         <td><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
@@ -10446,10 +10583,18 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
 
-        const totalPaginas = Math.ceil(clientesGlobales.length / limitePolizas);
+        const clientesFiltrados = obtenerClientesFiltrados();
+        if (clientesFiltrados.length === 0) {
+            tabla.innerHTML = '<tr><td colspan="5" data-label="Clientes" class="text-center text-muted">No se encontraron clientes que coincidan con la búsqueda</td></tr>';
+            const paginacion = document.getElementById('paginacionClientes');
+            if (paginacion) paginacion.innerHTML = '';
+            return;
+        }
+
+        const totalPaginas = Math.ceil(clientesFiltrados.length / limitePolizas);
         paginaActualClientes = Math.min(Math.max(paginaActualClientes, 1), totalPaginas);
         const inicio = (paginaActualClientes - 1) * limitePolizas;
-        const clientesPagina = clientesGlobales.slice(inicio, inicio + limitePolizas);
+        const clientesPagina = clientesFiltrados.slice(inicio, inicio + limitePolizas);
 
         tabla.innerHTML = clientesPagina.map(cliente => {
             const polizasActivas = cliente.polizas ? cliente.polizas.filter(poliza => poliza.estado === 'Activa').length : 0;
@@ -10479,18 +10624,43 @@ Fecha de firma: {{FECHA}}`;
         renderizarControlesPaginacionClientes();
     }
 
+    function obtenerClientesFiltrados() {
+        const normalizarBusqueda = valor => String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLocaleLowerCase('es')
+            .trim();
+        const consulta = normalizarBusqueda(filtroGlobalClientes);
+        if (!consulta) return clientesGlobales;
+
+        return clientesGlobales.filter(cliente => [
+            cliente.nombre,
+            cliente.telefono,
+            cliente.email
+        ].some(valor => normalizarBusqueda(valor).includes(consulta)));
+    }
+
+    function filtrarClientesUI(query) {
+        filtroGlobalClientes = typeof query === 'string'
+            ? query
+            : (document.getElementById('filtro-busqueda-clientes')?.value || '');
+        paginaActualClientes = 1;
+        renderizarPaginaClientes();
+    }
+
     function renderizarControlesPaginacionClientes() {
         const contenedor = document.getElementById('paginacionClientes');
         if (!contenedor) return;
 
-        const totalPaginas = Math.ceil(clientesGlobales.length / limitePolizas);
+        const clientesFiltrados = obtenerClientesFiltrados();
+        const totalPaginas = Math.ceil(clientesFiltrados.length / limitePolizas);
         if (totalPaginas === 0) {
             contenedor.innerHTML = '';
             return;
         }
 
         contenedor.innerHTML = `
-            <span class="small text-muted">Página ${paginaActualClientes} de ${totalPaginas} (${clientesGlobales.length} clientes)</span>
+            <span class="small text-muted">Página ${paginaActualClientes} de ${totalPaginas} (${clientesFiltrados.length} de ${clientesGlobales.length} clientes)</span>
             <div class="btn-group" role="group" aria-label="Paginación de clientes">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaClientes(-1)" ${paginaActualClientes <= 1 ? 'disabled' : ''} aria-label="Página anterior">Anterior</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaClientes(1)" ${paginaActualClientes >= totalPaginas ? 'disabled' : ''} aria-label="Página siguiente">Siguiente</button>
@@ -10499,7 +10669,7 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaClientes(delta) {
-        const totalPaginas = Math.ceil(clientesGlobales.length / limitePolizas);
+        const totalPaginas = Math.ceil(obtenerClientesFiltrados().length / limitePolizas);
         paginaActualClientes = Math.min(Math.max(paginaActualClientes + delta, 1), totalPaginas);
         renderizarPaginaClientes();
     }
@@ -10547,7 +10717,8 @@ Fecha de firma: {{FECHA}}`;
                            </button>`
                         : '';
 
-                    const btnVerDetalles = `<button class="btn btn-sm btn-info me-1" onclick="app.verPolizaDesdeCRM(${JSON.stringify(poliza).replace(/"/g, '&quot;')})" title="Ver Detalles"><i class="bi bi-eye"></i></button>`;
+                    const btnVerDetalles = `<button class="btn btn-sm btn-outline-info me-1" onclick="app.editarPoliza('${poliza._id}')" title="Ver/Editar Póliza" aria-label="Ver o editar póliza"><i class="bi bi-eye"></i></button>`;
+                    const btnVerPagos = `<button class="btn btn-sm btn-outline-success me-1" onclick="app.verPolizaDesdeCRM(${JSON.stringify(poliza).replace(/"/g, '&quot;')})" title="Historial de Pagos" aria-label="Ver historial de pagos"><i class="bi bi-receipt"></i></button>`;
 
                     const btnNotificaciones = `<button class="btn btn-sm btn-outline-info me-1" onclick="app.verHistorialNotificaciones('${poliza._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>`;
 
@@ -10560,7 +10731,7 @@ Fecha de firma: {{FECHA}}`;
                             <td>${fechaVencimiento}</td>
                             <td><span class="badge ${estadoClass}">${poliza.estado}</span></td>
                             <td>${btnNotificaciones}</td>
-                            <td>${btnEnviarNotificacion}${btnVerDetalles}${btnRenovar}</td>
+                            <td><div class="btn-group btn-group-sm" role="group" aria-label="Acciones de póliza">${btnVerDetalles}${btnVerPagos}</div> ${btnEnviarNotificacion}${btnRenovar}</td>
                         </tr>
                     `;
                 });
@@ -11741,7 +11912,7 @@ Fecha de firma: {{FECHA}}`;
         compartirPorWhatsApp, registrarPago, reimprimirRecibo, enviarReciboWhatsApp, enviarReciboCorreo, compartirRecordatorioPago, eliminarPago,
         verDetallePago, descargarRecibo,
         mostrarVistaArtista, irAVistaArtista, guardarDatosBancarios, generarDatosBancariosPDF,
-        filtrarTablas, filtrarPolizasUI, filtrarCobranzaUI, cambiarOrdenPendientes, filtrarDashboardSeguros, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
+        filtrarTablas, filtrarPolizasUI, filtrarClientesUI, filtrarCobranzaUI, cambiarOrdenPendientes, filtrarDashboardSeguros, actualizarHorarioProyecto, cargarAgenda, cancelarCita, subirADrive,
         syncNow: OfflineManager.syncNow, mostrarSeccion, mostrarSeccionPagos, cargarPagos,
         nuevoProyectoParaArtista, abrirModalEditarArtista, abrirModalEditarServicio, abrirModalEditarUsuario,
         abrirModalAprobarUsuario, cambiarTabUsuarios, copiarEnlaceInvitacion,

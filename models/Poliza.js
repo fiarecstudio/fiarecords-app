@@ -17,6 +17,10 @@ const reciboSchema = new mongoose.Schema({
         required: true,
         min: [0, 'El monto del recibo debe ser mayor o igual a 0']
     },
+    montoPagoNeto: {
+        type: Number,
+        min: [0, 'El pago neto del recibo debe ser mayor o igual a 0']
+    },
     fechaEmision: {
         type: Date,
         default: Date.now
@@ -233,6 +237,10 @@ const polizaSchema = new mongoose.Schema({
         type: Number,
         default: 0,
         min: [0, 'Los gastos de expedición deben ser mayores o iguales a 0']
+    },
+    emisionEnPrimerPago: {
+        type: Boolean,
+        default: false
     },
     estado: {
         type: String,

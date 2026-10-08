@@ -1461,8 +1461,73 @@ body.dark-mode .swal2-popup:not(.swal2-toast),
 }
 
 .poliza-form-grid > .row,
-.poliza-form-grid > .poliza-payment-fields {
+.poliza-form-grid > .poliza-payment-fields,
+.poliza-form-grid > .poliza-status-field,
+.poliza-form-grid > .poliza-financial-fields,
+.poliza-form-grid > .poliza-financial-summary {
     grid-column: 1 / -1;
+}
+
+.poliza-swal-popup .poliza-form-grid .swal2-input {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.poliza-financial-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 15px;
+}
+
+.poliza-emision-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding-top: 0.25rem;
+}
+
+.poliza-emision-check .form-check-input {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.poliza-emision-check .form-check-label {
+    margin: 0;
+}
+
+.poliza-financial-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    background: var(--secondary-button-bg);
+}
+
+.poliza-financial-summary[hidden] {
+    display: none;
+}
+
+.poliza-financial-summary > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 0.2rem;
+}
+
+.poliza-financial-summary span {
+    color: var(--text-color-light);
+    font-size: 0.75rem;
+}
+
+.poliza-financial-summary strong {
+    overflow-wrap: anywhere;
+    color: var(--text-color-dark);
 }
 
 .poliza-payment-fields {
@@ -1502,13 +1567,21 @@ body.dark-mode .swal2-popup:not(.swal2-toast),
 
 @media (max-width: 576px) {
     .poliza-form-grid,
-    .poliza-payment-fields {
+    .poliza-payment-fields,
+    .poliza-financial-fields {
         grid-template-columns: minmax(0, 1fr);
     }
 
     .poliza-form-grid > .row,
-    .poliza-form-grid > .poliza-payment-fields {
+    .poliza-form-grid > .poliza-payment-fields,
+    .poliza-form-grid > .poliza-status-field,
+    .poliza-form-grid > .poliza-financial-fields,
+    .poliza-form-grid > .poliza-financial-summary {
         grid-column: 1;
+    }
+
+    .poliza-financial-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .recibos-swal-popup .table-responsive {
