@@ -7664,12 +7664,12 @@ Fecha de firma: {{FECHA}}`;
             const ratioPrima = totalPrimaRecargos > 0
                 ? primaNetaNumerica / totalPrimaRecargos
                 : 1;
-            const pagoNetoSubsecuente = Number((
+            const pagoNetoSubsecuente = Math.max(0, Number((
                 baseImponibleSubsecuente * ratioPrima
-            ).toFixed(2));
-            const pagoNetoRecibo1 = Number((
+            ).toFixed(2)));
+            const pagoNetoRecibo1 = Math.max(0, Number((
                 primaNetaNumerica - (pagoNetoSubsecuente * (pagos - 1))
-            ).toFixed(2));
+            ).toFixed(2)));
 
             return Array.from({ length: pagos }, (_, indice) => indice === 0
                 ? pagoNetoRecibo1
