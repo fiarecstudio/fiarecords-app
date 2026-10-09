@@ -8838,6 +8838,12 @@ Fecha de firma: {{FECHA}}`;
             else if (action === 'editar') editarPoliza(polizaId);
         });
 
+        seccion.addEventListener('dblclick', (e) => {
+            const clientePoliza = e.target.closest('[data-cobranza-poliza-id]');
+            const polizaId = clientePoliza?.getAttribute('data-cobranza-poliza-id');
+            if (polizaId) editarPoliza(polizaId);
+        });
+
         cobranzaDiariaEventosListos = true;
     }
 
@@ -9065,8 +9071,8 @@ Fecha de firma: {{FECHA}}`;
                 const whatsappUrl = telefonoValido ? 'https://wa.me/52' + telefonoLimpio + '?text=' + mensajeWhatsApp : '#';
 
                 const whatsappButton = telefonoValido
-                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success" title="Enviar WhatsApp"><i class="bi bi-whatsapp"></i> WhatsApp</a>'
-                    : '<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="' + escapeHTML(telefonoLimpio ? 'Formato de teléfono inválido (requiere 10 dígitos)' : 'Sin teléfono registrado') + '"><i class="bi bi-whatsapp"></i> WhatsApp</button>';
+                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success cobranza-icon-button" title="WhatsApp" aria-label="WhatsApp"><i class="bi bi-whatsapp" aria-hidden="true"></i></a>'
+                    : '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="' + escapeHTML(telefonoLimpio ? 'WhatsApp: formato de teléfono inválido (requiere 10 dígitos)' : 'WhatsApp: sin teléfono registrado') + '" aria-label="WhatsApp no disponible"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>';
 
                 // Verificar si ya se envió un correo recientemente (últimos 7 días)
                 const fechaLimite = new Date();
@@ -9079,15 +9085,15 @@ Fecha de firma: {{FECHA}}`;
                 
                 let botonCorreo;
                 if (tieneCorreoReciente) {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary" onclick="app.enviarCorreoCobranzaConfirmado(\'' + p.polizaId + '\')" title="Correo ya enviado (clic para reenviar)"><i class="bi bi-check-circle"></i> Enviado</button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" onclick="app.enviarCorreoCobranzaConfirmado(\'' + polizaIdAttr + '\')" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
                 } else {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-info" onclick="app.enviarCorreoCobranza(\'' + p.polizaId + '\')" title="Enviar Correo Manual"><i class="bi bi-envelope"></i> Correo</button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" onclick="app.enviarCorreoCobranza(\'' + polizaIdAttr + '\')" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
                 }
-                const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza"><i class="bi bi-pencil"></i></button>';
-                const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info" onclick="app.agregarEnlacePago(\'' + p.polizaId + '\')" title="Agregar Enlace de Pago"><i class="bi bi-link-45deg"></i></button>';
-                const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success" onclick="app.marcarCobranzaResuelta(\'' + p.polizaId + '\', ' + p.montoPagar + ')" title="Registrar Pago y Resolver"><i class="bi bi-check-circle"></i> Resolver</button>';
+                const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary cobranza-icon-button" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza" aria-label="Editar póliza"><i class="bi bi-pencil" aria-hidden="true"></i></button>';
+                const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info cobranza-icon-button" onclick="app.agregarEnlacePago(\'' + polizaIdAttr + '\')" title="Agregar Enlace de Pago" aria-label="Agregar enlace de pago"><i class="bi bi-link-45deg" aria-hidden="true"></i></button>';
+                const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success cobranza-icon-button" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Registrar Pago y Resolver" aria-label="Registrar pago y resolver"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
 
-                return '<tr><td data-label="Cliente y póliza"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento">' + escapeHTML(fechaMostrar) + '</td><td data-label="Estado"><span class="badge ' + estadoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions"><div class="btn-group" role="group">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento">' + escapeHTML(fechaMostrar) + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';

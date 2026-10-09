@@ -88,6 +88,74 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .table-actions .dropdown { position: static; }
 .table-actions .dropdown-menu { z-index: 1050; }
 
+#cobranza-diaria .table-responsive {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+#cobranza-diaria .table-responsive > table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: auto;
+}
+#cobranza-diaria .table-responsive > table th {
+    min-width: 90px;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+#cobranza-diaria .table-responsive > table td {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+#cobranza-diaria .table-responsive > table th:nth-child(1) { min-width: 140px; }
+#cobranza-diaria .table-responsive > table th:nth-child(2) { min-width: 120px; }
+#cobranza-diaria .table-responsive > table th:nth-child(3) { min-width: 115px; }
+#cobranza-diaria .table-responsive > table th:nth-child(4) { min-width: 105px; }
+#cobranza-diaria .table-responsive > table th:nth-child(5) { min-width: 110px; }
+#cobranza-diaria .table-responsive > table th:nth-child(6) { min-width: 105px; }
+#cobranza-diaria .table-responsive > table th:nth-child(7) { min-width: 200px; }
+#cobranza-diaria .cobranza-client-cell,
+#cobranza-diaria .cobranza-type-cell {
+    white-space: normal;
+    word-break: break-word;
+}
+#cobranza-diaria .table-actions .cobranza-actions-group {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-end;
+    align-items: center;
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: auto;
+}
+#cobranza-diaria .cobranza-icon-button {
+    display: inline-flex;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    margin: 0 !important;
+    border-radius: 0.5rem;
+}
+#cobranza-diaria .cobranza-icon-button i {
+    line-height: 1;
+}
+#cobranza-diaria .cobranza-status-badge {
+    display: inline-block;
+    flex-shrink: 0;
+    padding: 0.45em 0.65em;
+    white-space: nowrap;
+}
+#cobranza-diaria .cobranza-actions-cell {
+    min-width: 200px;
+}
+
 /* --- RESPONSIVE TABLES --- */
 .table-responsive { 
     border-radius: 8px; 
@@ -1073,15 +1141,32 @@ body.dark-mode .project-card:hover {
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    #cobranza-diaria .table-responsive table tbody td.table-actions .btn-group {
-        display: flex;
-        flex-wrap: wrap;
-        max-width: 100%;
+    #cobranza-diaria .table-responsive > table {
+        table-layout: fixed;
     }
-    #cobranza-diaria .table-responsive table tbody td.table-actions .btn-group > * {
+    #cobranza-diaria .table-responsive > table thead th,
+    #cobranza-diaria .table-responsive > table tbody td {
         min-width: 0;
+    }
+    #cobranza-diaria .cobranza-status-badge {
+        white-space: nowrap !important;
+    }
+    #cobranza-diaria .table-actions.cobranza-actions-cell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        justify-content: stretch;
+        gap: 0.5rem;
+    }
+    #cobranza-diaria .table-actions.cobranza-actions-cell::before {
         max-width: 100%;
         white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    #cobranza-diaria .table-actions .cobranza-actions-group {
+        width: 100%;
+        justify-content: flex-end;
+        gap: 6px;
     }
 
     .kanban-board { grid-template-columns: 1fr; }
