@@ -404,8 +404,10 @@ polizaSchema.index({ empresaId: 1, estado: 1, 'recibos.estadoRecibo': 1 }, { par
 
 // Middleware pre-save para limitar el tamaño de historialNotificaciones
 polizaSchema.pre('save', function(next) {
-    const cantidadPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
-    const cantidadEsperada = cantidadPorTipo[String(this.tipoPago || 'anual').toLowerCase()] || 1;
+    const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+    const intervaloMeses = mesesPorTipo[String(this.tipoPago || 'anual').toLowerCase()] || 12;
+    const duracionMeses = Number(this.duracionMeses) || 12;
+    const cantidadEsperada = Math.ceil(duracionMeses / intervaloMeses);
     if (this.recibos && this.recibos.length > cantidadEsperada) {
         const recibosPagados = this.recibos.filter(recibo =>
             String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'

@@ -162,6 +162,8 @@ function calcularProximoPago(fechaBase, tipoPago) {
         case 'trimestral':
             proximoPago.setMonth(proximoPago.getMonth() + 3);
             break;
+        case 'semestral':
+            return sumarMesesSeguro(proximoPago, 6);
         case 'anual':
         default:
             proximoPago.setFullYear(proximoPago.getFullYear() + 1);
@@ -1916,23 +1918,7 @@ const migrarFechasAgenda = async (req, res) => {
             if (!poliza.proximoPago && poliza.tipoPago) {
                 const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : new Date();
                 if (!isNaN(fechaInicio.getTime())) {
-                    const proximoPago = new Date(fechaInicio);
-                    
-                    // Calcular próximo pago según tipoPago
-                    switch (poliza.tipoPago) {
-                        case 'mensual':
-                            proximoPago.setMonth(proximoPago.getMonth() + 1);
-                            break;
-                        case 'trimestral':
-                            proximoPago.setMonth(proximoPago.getMonth() + 3);
-                            break;
-                        case 'anual':
-                        default:
-                            proximoPago.setFullYear(proximoPago.getFullYear() + 1);
-                            break;
-                    }
-                    
-                    poliza.proximoPago = proximoPago;
+                    poliza.proximoPago = calcularProximoPago(fechaInicio, poliza.tipoPago);
                     actualizada = true;
                 }
             }
@@ -2009,20 +1995,14 @@ const obtenerEventosAgenda = async (req, res) => {
                 let index = 0;
 
                 // Determinar incremento según tipo de pago
-                let mesesIncremento = 12; // anual por defecto
-                if (poliza.tipoPago === 'mensual') {
-                    mesesIncremento = 1;
-                } else if (poliza.tipoPago === 'trimestral') {
-                    mesesIncremento = 3;
-                }
+                const mesesIncremento = obtenerIntervaloMeses(poliza.tipoPago);
 
                 // Calcular monto fraccionado como fallback
-                let montoFraccionado = poliza.primaTotal || 0;
-                if (poliza.tipoPago === 'mensual') {
-                    montoFraccionado = montoFraccionado / 12;
-                } else if (poliza.tipoPago === 'trimestral') {
-                    montoFraccionado = montoFraccionado / 4;
-                }
+                const cantidadRecibos = obtenerNumeroRecibosPorTipo(
+                    poliza.tipoPago,
+                    poliza.duracionMeses
+                );
+                const montoFraccionado = (poliza.primaTotal || 0) / cantidadRecibos;
 
                 // Bucle para generar pagos recurrentes
                 // Condición ESTRICTAMENTE MENOR (<) para no generar pago en fecha de vencimiento
@@ -2060,7 +2040,7 @@ const obtenerEventosAgenda = async (req, res) => {
                     });
 
                     // Incrementar fecha según tipo de pago
-                    fechaIterada.setMonth(fechaIterada.getMonth() + mesesIncremento);
+                    fechaIterada = sumarMesesSeguro(fechaIterada, mesesIncremento);
                     index++;
                 }
             }
@@ -4066,8 +4046,7 @@ const resolverCobranzaConPago = async (req, res) => {
             poliza.estado = 'Activa';
             if (poliza.fechas) {
                 const prox = new Date(poliza.proximoPago || poliza.fechas.vencimiento);
-                prox.setMonth(prox.getMonth() + 1);
-                poliza.proximoPago = prox;
+                poliza.proximoPago = calcularProximoPago(prox, poliza.tipoPago);
             }
             await poliza.save();
             return res.json({ success: true, message: 'Cobranza legacy resuelta', poliza });

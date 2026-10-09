@@ -7969,8 +7969,8 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label">Frecuencia de Pago</label>
                         <select id="poliza-tipo-pago" class="swal2-input">
                             <option value="anual" ${datosPrellenados.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
-                            <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                             <option value="semestral" ${datosPrellenados.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
+                            <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                             <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
                         </select>
                     </div>
@@ -9254,6 +9254,7 @@ Fecha de firma: {{FECHA}}`;
                 clienteEmail: poliza.clienteEmail || '',
                 clienteTelefono: poliza.clienteTelefono || '',
                 tipoPago: poliza.tipoPago || 'anual',
+                duracionMeses: poliza.duracionMeses || 12,
                 aseguradora: poliza.aseguradora || '',
                 inciso: poliza.inciso || '1',
                 paquete: poliza.paquete || poliza.tipoSeguro || '',
@@ -9277,9 +9278,13 @@ Fecha de firma: {{FECHA}}`;
                 const pagoInicial = nuevoPagoInicial;
                 const tipoPago = nuevoTipoPago || 'anual';
                 const fechaInicio = nuevaFechaInicio;
-                const cuotasPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
                 const mesesPorTipo = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
-                const totalCuotas = cuotasPorTipo[tipoPago] || 1;
+                const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
+                const duracionMeses = Math.max(1, parseInt(
+                    document.getElementById('duracionMeses')?.value,
+                    10
+                ) || 12);
+                const totalCuotas = Math.ceil(duracionMeses / mesesIntervalo);
                 const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
                 const cantidadRecibos = totalCuotas;
                 const gastosManuales = nuevoGastosExpedicion;
@@ -9309,7 +9314,6 @@ Fecha de firma: {{FECHA}}`;
                     emisionEnPrimerPago,
                     cantidadRecibos: totalCuotas
                 });
-                const mesesIntervalo = mesesPorTipo[tipoPago] || 12;
                 const recibosActuales = Array.isArray(poliza.recibos) ? poliza.recibos : [];
                 const recibos = Array.from({ length: totalCuotas }, (_, indicePlan) => {
                     const reciboActual = recibosActuales.find(recibo => {
@@ -9416,10 +9420,14 @@ Fecha de firma: {{FECHA}}`;
                                     <label class="form-label">Frecuencia de Pago</label>
                                     <select id="poliza-tipo-pago" class="swal2-input">
                                         <option value="anual" ${datosPrellenados.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
-                                        <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                                         <option value="semestral" ${datosPrellenados.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
+                                        <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                                         <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
                                     </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="duracionMeses">Duración (Meses)</label>
+                                    <input type="number" id="duracionMeses" class="form-control" value="${datosPrellenados.duracionMeses}" min="1" step="1" required>
                                 </div>
                                 <div class="row g-2">
                                     <div class="col-12 col-lg-6 mb-3">
@@ -9579,6 +9587,7 @@ Fecha de firma: {{FECHA}}`;
                     const clienteEmail = document.getElementById('poliza-email').value.trim();
                     const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
                     const tipoPago = document.getElementById('poliza-tipo-pago').value;
+                    const duracionMeses = parseInt(document.getElementById('duracionMeses').value, 10);
                     const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
                     const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
                     const paquete = document.getElementById('poliza-paquete').value.trim();
@@ -9623,6 +9632,7 @@ Fecha de firma: {{FECHA}}`;
                         clienteEmail,
                         clienteTelefono,
                         tipoPago,
+                        duracionMeses,
                         aseguradora,
                         inciso,
                         paquete,
@@ -12465,8 +12475,8 @@ Fecha de firma: {{FECHA}}`;
                             <label class="form-label fw-bold">Forma de Pago (Nuevo Año)</label>
                             <select id="renovacion-tipo-pago" class="swal2-input">
                                 <option value="anual" ${poliza.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
-                                <option value="trimestral" ${poliza.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                                 <option value="semestral" ${poliza.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
+                                <option value="trimestral" ${poliza.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                                 <option value="mensual" ${poliza.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
                             </select>
                         </div>
