@@ -87,6 +87,31 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .table td { vertical-align: middle; }
 .table-actions .dropdown { position: static; }
 .table-actions .dropdown-menu { z-index: 1050; }
+#tablaPolizas {
+    width: 100%;
+    table-layout: fixed;
+}
+#tablaPolizas th:nth-child(1) { width: 10%; }
+#tablaPolizas th:nth-child(2) { width: 22%; }
+#tablaPolizas th:nth-child(3) { width: 11%; }
+#tablaPolizas th:nth-child(4) { width: 11%; }
+#tablaPolizas th:nth-child(5) { width: 8%; }
+#tablaPolizas th:nth-child(6) { width: 10%; }
+#tablaPolizas th:nth-child(7) { width: 9%; }
+#tablaPolizas th:nth-child(8) { width: 7%; }
+#tablaPolizas th:nth-child(9) { width: 12%; }
+.poliza-cliente-detalles {
+    min-width: 0;
+    max-width: 100%;
+    color: var(--text-color-light);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+#tablaPolizas td {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
 
 #cobranza-diaria .table-responsive {
     width: 100%;
@@ -1118,6 +1143,20 @@ body.dark-mode .project-card:hover {
     .table tbody, .table tr, .table td { display: block; width: 100%; }
     .table tbody tr { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.5rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
     .table tbody td { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding: 0.75rem 0.5rem; text-align: right; }
+    #tablaPolizas tbody td {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    #tablaPolizas .poliza-cliente-detalles {
+        flex: 0 1 55%;
+        min-width: 0;
+        max-width: 55%;
+        text-align: right;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
     .table tbody td.table-actions { justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }

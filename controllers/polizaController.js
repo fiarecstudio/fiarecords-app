@@ -521,7 +521,7 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
         if (estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
@@ -562,6 +562,8 @@ const crearPoliza = async (req, res) => {
             cliente: clienteVinculado.nombre || cliente,
             clienteEmail: clienteVinculado.email || clienteEmail || '',
             clienteTelefono: clienteVinculado.telefono || clienteTelefono || '',
+            numeroSerie: numeroSerie || '',
+            descripcionVehiculo: descripcionVehiculo || '',
             tipoPago: tipoPagoFinal,
             duracionMeses,
             tipoSeguro,
@@ -657,6 +659,8 @@ const importarPolizasExcel = async (req, res) => {
             cliente: ['NOMBRE DEL CLIENTE', 'CLIENTE', 'NOMBRE CLIENTE'],
             telefono: ['TELEFONO', 'TELEFONO DEL CLIENTE', 'CELULAR', 'MOVIL'],
             email: ['EMAIL', 'CORREO', 'CORREO ELECTRONICO'],
+            numeroSerie: ['SERIE', 'NUMERO DE SERIE', 'NO SERIE', 'NUMERO SERIE'],
+            descripcionVehiculo: ['DESCRIPCION', 'DESCRIPCION DEL VEHICULO', 'DESCRIPCION VEHICULO'],
             inicio: ['VIG INICIAL', 'VIGENCIA INICIAL', 'VIGENCIA DESDE'],
             vencimiento: ['VIG FINAL', 'VIGENCIA FINAL', 'VIGENCIA HASTA'],
             tipoPago: ['FORMA DE PAGO', 'FORMA PAGO'],
@@ -742,10 +746,11 @@ const importarPolizasExcel = async (req, res) => {
         for (const row of filas.slice(encabezadoIndex + 1)) {
             const numeroPoliza = texto(leer(row, 'numeroPoliza'));
             if (!numeroPoliza) continue;
-            if (!grupos.has(numeroPoliza)) {
-                grupos.set(numeroPoliza, { datos: {}, recibos: [] });
+            const clavePoliza = numeroPoliza.toLocaleUpperCase();
+            if (!grupos.has(clavePoliza)) {
+                grupos.set(clavePoliza, { numeroPoliza, datos: {}, recibos: [] });
             }
-            const grupo = grupos.get(numeroPoliza);
+            const grupo = grupos.get(clavePoliza);
             const primeraFila = Object.fromEntries(encabezadosOriginales.map((header, index) => [header, row[index]]));
             const primaTotalExcel = convertirImporte(getCol(primeraFila, 'P TOTAL'))
                 ?? convertirImporte(getCol(primeraFila, 'PRIMA TOTAL'))
@@ -759,6 +764,8 @@ const importarPolizasExcel = async (req, res) => {
                 cliente: texto(leer(row, 'cliente')),
                 telefono: texto(leer(row, 'telefono')),
                 email: texto(leer(row, 'email')),
+                numeroSerie: texto(leer(row, 'numeroSerie')),
+                descripcionVehiculo: texto(leer(row, 'descripcionVehiculo')),
                 inicio: convertirFecha(leer(row, 'inicio')),
                 vencimiento: convertirFecha(leer(row, 'vencimiento')),
                 tipoPago: texto(leer(row, 'tipoPago')),
@@ -796,12 +803,34 @@ const importarPolizasExcel = async (req, res) => {
 
         let creadas = 0;
         let actualizadas = 0;
+        let sinCambios = 0;
+        let omitidasPorDuplicado = 0;
         const errores = [];
-        for (const [numeroPoliza, grupo] of grupos) {
+        for (const grupo of grupos.values()) {
+            const numeroPoliza = grupo.numeroPoliza;
             try {
                 const numeroPolizaTrim = numeroPoliza.trim();
                 const filtroPoliza = { empresaId, numeroPoliza: numeroPolizaTrim, deletedAt: null };
                 let poliza = await Poliza.findOne(filtroPoliza);
+                if (poliza) {
+                    const cambiosVehiculo = {};
+                    for (const campo of ['numeroSerie', 'descripcionVehiculo']) {
+                        const valorImportado = grupo.datos[campo];
+                        if (valorImportado && valorImportado !== poliza[campo]) {
+                            cambiosVehiculo[campo] = valorImportado;
+                        }
+                    }
+                    if (Object.keys(cambiosVehiculo).length > 0) {
+                        await Poliza.updateOne(
+                            { _id: poliza._id, empresaId },
+                            { $set: cambiosVehiculo }
+                        );
+                        actualizadas++;
+                    } else {
+                        sinCambios++;
+                    }
+                    continue;
+                }
                 const primaTotal = Number(poliza?.primaTotal) > 0
                     ? poliza.primaTotal
                     : grupo.datos.primaTotal
@@ -911,6 +940,8 @@ const importarPolizasExcel = async (req, res) => {
                         clienteId: clienteDoc._id,
                         clienteTelefono: grupo.datos.telefono || clienteDoc.telefono || '',
                         clienteEmail: grupo.datos.email || clienteDoc.email || '',
+                        numeroSerie: grupo.datos.numeroSerie || '',
+                        descripcionVehiculo: grupo.datos.descripcionVehiculo || '',
                         tipoSeguro: normalizarTipoSeguro(grupo.datos.tipoSeguro),
                         aseguradora: grupo.datos.aseguradora || 'Sin especificar',
                         tipoPago: normalizarFormaPago(grupo.datos.tipoPago),
@@ -1019,6 +1050,8 @@ const importarPolizasExcel = async (req, res) => {
                     cliente: clienteDoc.nombre,
                     clienteTelefono: poliza.clienteTelefono || '',
                     clienteEmail: poliza.clienteEmail || '',
+                    numeroSerie: poliza.numeroSerie || grupo.datos.numeroSerie || '',
+                    descripcionVehiculo: poliza.descripcionVehiculo || grupo.datos.descripcionVehiculo || '',
                     aseguradora: poliza.aseguradora,
                     tipoPago: poliza.tipoPago,
                     tipoSeguro: poliza.tipoSeguro,
@@ -1045,17 +1078,30 @@ const importarPolizasExcel = async (req, res) => {
                 try {
                     resultadoUpsert = await Poliza.findOneAndUpdate(
                         filtroPoliza,
-                        { $set: datosUpsert },
+                        { $setOnInsert: datosUpsert },
                         opcionesUpsert
                     );
                 } catch (error) {
                     if (error.code !== 11000) throw error;
-                    resultadoUpsert = await Poliza.findOneAndUpdate(
-                        filtroPoliza,
-                        { $set: datosUpsert },
-                        { ...opcionesUpsert, upsert: false }
-                    );
-                    if (!resultadoUpsert) throw error;
+                    const polizaDuplicada = await Poliza.findOne(filtroPoliza);
+                    if (!polizaDuplicada) throw error;
+                    const cambiosVehiculo = {};
+                    for (const campo of ['numeroSerie', 'descripcionVehiculo']) {
+                        const valorImportado = grupo.datos[campo];
+                        if (valorImportado && valorImportado !== polizaDuplicada[campo]) {
+                            cambiosVehiculo[campo] = valorImportado;
+                        }
+                    }
+                    if (Object.keys(cambiosVehiculo).length > 0) {
+                        await Poliza.updateOne(
+                            { _id: polizaDuplicada._id, empresaId },
+                            { $set: cambiosVehiculo }
+                        );
+                        actualizadas++;
+                    } else {
+                        sinCambios++;
+                    }
+                    continue;
                 }
 
                 const polizaGuardada = resultadoUpsert?.value || resultadoUpsert;
@@ -1066,11 +1112,15 @@ const importarPolizasExcel = async (req, res) => {
                 if (actualizada) actualizadas++;
                 else creadas++;
             } catch (error) {
+                if (error.code === 11000) {
+                    omitidasPorDuplicado++;
+                    continue;
+                }
                 errores.push({ numeroPoliza, error: error.message });
             }
         }
 
-        const procesadas = creadas + actualizadas;
+        const procesadas = creadas + actualizadas + sinCambios + omitidasPorDuplicado;
         res.json({
             success: true,
             message: 'Importación exitosa',
@@ -1078,6 +1128,8 @@ const importarPolizasExcel = async (req, res) => {
             procesadas,
             creadas,
             actualizadas,
+            sinCambios,
+            omitidasPorDuplicado,
             ...(errores.length ? { errores } : {})
         });
     } catch (error) {
@@ -1112,13 +1164,32 @@ const obtenerPolizas = async (req, res) => {
         }
         
         const polizas = await Poliza.find(filtro).populate('asesorId', 'username').lean();
+        const polizasActivasEmpresa = await Poliza.find({
+            empresaId,
+            deletedAt: null,
+            estado: { $regex: /^\s*activa\s*$/i },
+            numeroSerie: { $nin: ['', null] }
+        }).select('numeroSerie').lean();
+        const conteoSeries = new Map();
+        for (const poliza of polizasActivasEmpresa) {
+            const serieNormalizada = String(poliza.numeroSerie || '').trim().toLocaleUpperCase();
+            if (serieNormalizada) {
+                conteoSeries.set(serieNormalizada, (conteoSeries.get(serieNormalizada) || 0) + 1);
+            }
+        }
         
         res.json(polizas.map(poliza => {
             const asesor = poliza.asesorId;
+            const serieNormalizada = String(poliza.numeroSerie || '').trim().toLocaleUpperCase();
             return {
                 ...poliza,
                 asesorNombre: asesor?.username || poliza.asesorNombre || '',
-                asesorId: asesor?._id || asesor
+                asesorId: asesor?._id || asesor,
+                tieneSerieDuplicada: Boolean(
+                    serieNormalizada
+                    && /^activa$/i.test(String(poliza.estado || '').trim())
+                    && conteoSeries.get(serieNormalizada) > 1
+                )
             };
         }));
     } catch (error) {

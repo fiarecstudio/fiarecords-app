@@ -178,6 +178,16 @@ const polizaSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    numeroSerie: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    descripcionVehiculo: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     tipoPago: {
         type: String,
         enum: ['anual', 'trimestral', 'semestral', 'mensual'],

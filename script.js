@@ -7957,6 +7957,16 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
+                            <label class="form-label" for="poliza-numero-serie">Número de Serie</label>
+                            <input id="poliza-numero-serie" class="swal2-input" value="${escapeHTML(datosPrellenados.numeroSerie || '')}" placeholder="Serie o VIN">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="poliza-descripcion-vehiculo">Descripción del Vehículo</label>
+                            <input id="poliza-descripcion-vehiculo" class="swal2-input" value="${escapeHTML(datosPrellenados.descripcionVehiculo || '')}" placeholder="Marca, modelo, año">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
                             <label class="form-label">Correo Electrónico</label>
                             <input id="poliza-email" type="email" class="swal2-input" value="${datosPrellenados.clienteEmail || ''}" placeholder="cliente@ejemplo.com">
                         </div>
@@ -8170,6 +8180,8 @@ Fecha de firma: {{FECHA}}`;
                 const cliente = document.getElementById('poliza-cliente').value.trim();
                 const clienteEmail = document.getElementById('poliza-email').value.trim();
                 const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
+                const numeroSerie = document.getElementById('poliza-numero-serie').value.trim();
+                const descripcionVehiculo = document.getElementById('poliza-descripcion-vehiculo').value.trim();
                 const tipoPago = document.getElementById('poliza-tipo-pago').value;
                 const duracionMeses = Number(document.getElementById('duracionMeses').value);
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
@@ -8222,6 +8234,8 @@ Fecha de firma: {{FECHA}}`;
                     cliente,
                     clienteEmail,
                     clienteTelefono,
+                    numeroSerie,
+                    descripcionVehiculo,
                     tipoPago,
                     duracionMeses,
                     aseguradora,
@@ -8340,7 +8354,7 @@ Fecha de firma: {{FECHA}}`;
             if (!reporte.success) throw new Error(reporte.error || 'No se pudo completar la importación.');
 
             const tipoArchivo = reporte.tipoArchivo || 'Emisiones';
-            const resumen = `Importación ${tipoArchivo} exitosa. Procesadas: ${reporte.procesadas}; creadas: ${reporte.creadas}; actualizadas: ${reporte.actualizadas}.`;
+            const resumen = `Importación ${tipoArchivo} exitosa. Procesadas: ${reporte.procesadas}; creadas: ${reporte.creadas}; actualizadas: ${reporte.actualizadas}; sin cambios: ${reporte.sinCambios || 0}; omitidas por duplicado: ${reporte.omitidasPorDuplicado || 0}.`;
             const fallos = reporte.errores?.length ? ` Errores: ${reporte.errores.map(item => `${item.numeroPoliza}: ${item.error}`).join(' | ')}` : '';
             if (resultadoEl) {
                 resultadoEl.className = `col-12 small ${fallos ? 'text-warning' : 'text-success'}`;
@@ -8512,7 +8526,13 @@ Fecha de firma: {{FECHA}}`;
             return `
                 <tr>
                     <td data-label="Número">${escapeHTML(p.numeroPoliza || 'N/A')}</td>
-                    <td data-label="Cliente">${escapeHTML(p.cliente || 'N/A')}</td>
+                    <td data-label="Cliente">
+                        <div>${escapeHTML(p.cliente || 'N/A')}</div>
+                        <div class="poliza-cliente-detalles">
+                            ${p.descripcionVehiculo ? `<small class="d-block">${escapeHTML(p.descripcionVehiculo)}</small>` : ''}
+                            ${p.numeroSerie ? `<small class="d-block">Serie: ${escapeHTML(p.numeroSerie)}${p.tieneSerieDuplicada ? ' <span class="badge bg-danger ms-1">⚠️ Serie Duplicada</span>' : ''}</small>` : ''}
+                        </div>
+                    </td>
                     <td data-label="Asesor">${escapeHTML(obtenerNombreAsesorPoliza(p) || 'Sin Asesor')}</td>
                     <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
                     <td data-label="Vencimiento">${fechaVencimiento}</td>
@@ -8581,6 +8601,8 @@ Fecha de firma: {{FECHA}}`;
             const coincideTexto = !consulta || [
                 poliza.numeroPoliza,
                 poliza.cliente,
+                poliza.numeroSerie,
+                poliza.descripcionVehiculo,
                 nombreAsesor,
                 poliza.aseguradora,
                 poliza.tipoSeguro
