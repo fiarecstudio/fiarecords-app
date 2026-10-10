@@ -2377,7 +2377,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
 
         const matchInicial = {
             empresaId: new mongoose.Types.ObjectId(empresaId),
-            estado: { $nin: ['Cancelada', 'Renovada'] },
+            estado: { $regex: /^Activa$/i },
             $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
         };
         if (userRole !== 'admin') {
@@ -4085,6 +4085,145 @@ const resolverCobranzaConPago = async (req, res) => {
 };
 
 
+async function actualizarPolizasVencidas(req, res) {
+    if (req && req.user?.role !== 'admin' && !req.user?.isSuperAdmin) {
+        return res.status(403).json({
+            success: false,
+            error: 'Acceso denegado. Solo administradores pueden actualizar pólizas vencidas.'
+        });
+    }
+
+    try {
+        const polizas = await Poliza.find({ estado: { $regex: /activa/i } });
+        const hoy = new Date();
+        let contador = 0;
+
+        for (const poliza of polizas) {
+            const valorFecha = poliza.fechas && poliza.fechas.vencimiento
+                ? poliza.fechas.vencimiento
+                : null;
+            if (!valorFecha) {
+                continue;
+            }
+
+            const fechaObj = new Date(valorFecha);
+            if (!isNaN(fechaObj.getTime()) && fechaObj < hoy) {
+                poliza.estado = 'Vencida';
+                await poliza.save();
+                contador++;
+            }
+        }
+
+        const respuesta = {
+            success: true,
+            message: 'Limpieza finalizada',
+            polizasActualizadas: contador
+        };
+
+        if (res) {
+            return res.json(respuesta);
+        }
+
+        console.log(`[Cron Pólizas] ${respuesta.message} Actualizadas: ${respuesta.polizasActualizadas}`);
+        return respuesta;
+    } catch (error) {
+        console.error('[Actualización pólizas vencidas] Error:', error);
+        if (res) {
+            return res.status(500).json({
+                success: false,
+                error: 'Error al actualizar pólizas vencidas.'
+            });
+        }
+        throw error;
+    }
+}
+
+async function auditarFechasPolizas(req, res) {
+    try {
+        const polizas = await Poliza.find({
+            ...(req.tenantFilter || {}),
+            deletedAt: null,
+            estado: 'Activa'
+        })
+            .limit(20)
+            .lean();
+
+        const camposFecha = [
+            'fechaFin',
+            'vigenciaFin',
+            'vigenciaAl',
+            'fechaVencimiento',
+            'vencimiento',
+            'fechas.vencimiento'
+        ];
+        const resultado = polizas.map(poliza => {
+            const fechas = {};
+
+            for (const campo of camposFecha) {
+                const valor = campo === 'fechas.vencimiento'
+                    ? poliza.fechas?.vencimiento
+                    : poliza[campo];
+                fechas[campo] = {
+                    valor: valor === undefined ? '[undefined]' : valor,
+                    tipo: typeof valor
+                };
+            }
+
+            return {
+                _id: poliza._id,
+                fechas
+            };
+        });
+
+        return res.json({
+            success: true,
+            total: resultado.length,
+            polizas: resultado
+        });
+    } catch (error) {
+        console.error('[Auditoría fechas pólizas] Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al auditar las fechas de las pólizas.'
+        });
+    }
+}
+
+async function auditarVencidasReales(req, res) {
+    try {
+        const polizas = await Poliza.find({
+            ...(req.tenantFilter || {}),
+            estado: { $regex: /activa/i }
+        }).populate('clienteId', 'nombre');
+        const hoy = new Date();
+        const vencidas = [];
+
+        for (const poliza of polizas) {
+            const fechaObj = new Date(poliza.fechas?.vencimiento);
+            if (!Number.isNaN(fechaObj.getTime()) && fechaObj < hoy) {
+                vencidas.push({
+                    _id: poliza._id,
+                    numeroPoliza: poliza.numeroPoliza,
+                    nombreCliente: poliza.clienteId?.nombre || poliza.cliente || null,
+                    vencimiento: fechaObj.toISOString()
+                });
+            }
+        }
+
+        return res.json({
+            success: true,
+            totalVencidasEncontradas: vencidas.length,
+            detalle: vencidas
+        });
+    } catch (error) {
+        console.error('[Auditoría vencidas reales] Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error al auditar pólizas vencidas.'
+        });
+    }
+}
+
 module.exports = {
     crearPoliza,
     importarPolizasExcel,
@@ -4116,5 +4255,8 @@ module.exports = {
     enviarCorreoCobranzaDiaria,
     actualizarEnlacePago,
     generarCalendarioRecibos,
-    resolverCobranzaConPago
+    resolverCobranzaConPago,
+    actualizarPolizasVencidas,
+    auditarFechasPolizas,
+    auditarVencidasReales
 };

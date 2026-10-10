@@ -14,6 +14,10 @@ const polizaController = require('../controllers/polizaController');
 const Poliza = require('../models/Poliza');
 const Notificacion = require('../models/Notificacion');
 
+router.get('/auditoria-fechas', auth, applyTenantFilter, polizaController.auditarFechasPolizas);
+router.get('/auditoria-vencidas-reales', auth, applyTenantFilter, polizaController.auditarVencidasReales);
+router.get('/limpieza-vencidas', auth, applyTenantFilter, polizaController.actualizarPolizasVencidas);
+
 /**
  * Normaliza el texto del PDF respetando saltos de línea vitales
  */

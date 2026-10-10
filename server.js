@@ -4,12 +4,14 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const cron = require('node-cron');
 const cors = require('cors');
 const path = require('path');
 const mongoSanitize = require('express-mongo-sanitize');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const { initializeSocket } = require('./socket');
+const { actualizarPolizasVencidas } = require('./controllers/polizaController');
 
 let limiters = {};
 try {
@@ -199,6 +201,15 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
     // --- NUEVO: ACTIVAR CRON DE NOTIFICACIONES ---
     const { iniciarCronNotificaciones } = require('./cron/cronNotificaciones');
     iniciarCronNotificaciones();
+
+    cron.schedule('0 0 * * *', async () => {
+      try {
+        await actualizarPolizasVencidas();
+      } catch (error) {
+        console.error('[Cron Pólizas] Error al actualizar pólizas vencidas:', error);
+      }
+    });
+    console.log('✅ Cron de pólizas vencidas programado para ejecutarse diariamente a medianoche');
     // ---------------------------------
     
     const PORT = process.env.PORT || 5000;
