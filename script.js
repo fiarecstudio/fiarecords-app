@@ -1715,14 +1715,13 @@ let proyectoIdEnEdicion = null;
 
     function filtrarPolizasDashboard(polizas) {
         const asesorSeleccionado = document.getElementById('filtroAsesorDashboard')?.value || '';
-        const anoSeleccionado = document.getElementById('filtroAnoDashboard')?.value || '';
+        const anoSeleccionado = document.getElementById('filtroAnoDashboard')?.value || String(new Date().getFullYear());
         return polizas.filter(poliza => {
             const coincideAsesor = !asesorSeleccionado
                 || obtenerNombreAsesorDashboard(poliza) === asesorSeleccionado;
             const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : null;
-            const coincideAno = !anoSeleccionado
-                || (fechaInicio && !Number.isNaN(fechaInicio.getTime())
-                    && String(fechaInicio.getFullYear()) === anoSeleccionado);
+            const coincideAno = fechaInicio && !Number.isNaN(fechaInicio.getTime())
+                && String(fechaInicio.getFullYear()) === anoSeleccionado;
             return coincideAsesor && coincideAno;
         });
     }
@@ -1733,7 +1732,7 @@ let proyectoIdEnEdicion = null;
         const polizasPeriodo = Array(labels.length).fill(0);
         const ventasPorAsesor = new Map();
         const fechaActual = new Date();
-        const anoSeleccionado = Number(document.getElementById('filtroAnoDashboard')?.value) || null;
+        const anoSeleccionado = Number(document.getElementById('filtroAnoDashboard')?.value) || fechaActual.getFullYear();
         const mesGrafica = fechaActual.getMonth();
         const semanaActual = Math.min(Math.ceil(fechaActual.getDate() / 7) - 1, 4);
         const periodIndex = value => {
@@ -1753,7 +1752,7 @@ let proyectoIdEnEdicion = null;
         const numeroPagosPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
 
         polizas.forEach(poliza => {
-            if (poliza.estado === 'Cancelada') return;
+            if (String(poliza.estado || '').trim().toLowerCase() === 'cancelada') return;
             const fechaInicio = poliza.fechas?.inicio;
             const indiceVenta = periodIndex(fechaInicio);
             if (indiceVenta >= 0) {
@@ -1818,8 +1817,10 @@ let proyectoIdEnEdicion = null;
 
     function filtrarDashboardSeguros() {
         const filtroTiempo = document.getElementById('filtroTiempoGraficas')?.value || 'mensual';
-        const respuestaCacheada = dashboardSegurosCache.get(filtroTiempo)
-            || leerRespaldoOffline('backup_dashboard_seguros', filtroTiempo);
+        const anioSeleccionado = document.getElementById('filtroAnoDashboard')?.value || String(new Date().getFullYear());
+        const claveCache = `${filtroTiempo}:${anioSeleccionado}`;
+        const respuestaCacheada = dashboardSegurosCache.get(claveCache)
+            || leerRespaldoOffline('backup_dashboard_seguros', claveCache);
         cargarDashboardSeguros(filtroTiempo, false, respuestaCacheada || null);
     }
 
@@ -1844,16 +1845,18 @@ let proyectoIdEnEdicion = null;
             const filtroSeleccionado = filtroTiempo
                 || document.getElementById('filtroTiempoGraficas')?.value
                 || 'mensual';
-            const urlMetricas = `/api/polizas/metricas-seguros?filtroTiempo=${encodeURIComponent(filtroSeleccionado)}`;
+            const anioSeleccionado = document.getElementById('filtroAnoDashboard')?.value || String(new Date().getFullYear());
+            const claveCache = `${filtroSeleccionado}:${anioSeleccionado}`;
+            const urlMetricas = `/api/polizas/metricas-seguros?filtroTiempo=${encodeURIComponent(filtroSeleccionado)}&anio=${encodeURIComponent(anioSeleccionado)}`;
             if (forzarRecarga) {
-                dashboardSegurosCache.delete(filtroSeleccionado);
+                dashboardSegurosCache.delete(claveCache);
                 dashboardPolizasCache = null;
             }
             let response = respuestaActualizada;
             let tieneCache = Boolean(respuestaActualizada);
             if (!respuestaActualizada && !forzarRecarga) {
-                response = dashboardSegurosCache.get(filtroSeleccionado)
-                    || leerRespaldoOffline('backup_dashboard_seguros', filtroSeleccionado);
+                response = dashboardSegurosCache.get(claveCache)
+                    || leerRespaldoOffline('backup_dashboard_seguros', claveCache);
                 tieneCache = Boolean(response);
             }
             if (!response) response = await fetchAPI(urlMetricas);
@@ -1861,8 +1864,8 @@ let proyectoIdEnEdicion = null;
                 showToast('Modo Offline: No hay métricas locales disponibles.', 'info');
                 return;
             }
-            dashboardSegurosCache.set(filtroSeleccionado, response);
-            guardarRespaldoOffline('backup_dashboard_seguros', response, filtroSeleccionado);
+            dashboardSegurosCache.set(claveCache, response);
+            guardarRespaldoOffline('backup_dashboard_seguros', response, claveCache);
             const data = response.metricas || {};
             const datosGraficas = response.graficas || {};
             const detalles = response.detalles || {};
@@ -1981,6 +1984,12 @@ let proyectoIdEnEdicion = null;
             const graficasPolizas = polizasFiltradasDashboard
                 ? calcularGraficasDashboardPolizas(polizasFiltradasDashboard, filtroSeleccionado, labelsGraficas)
                 : (datosGraficas && typeof datosGraficas === 'object' ? datosGraficas : {});
+            const seriePolizasEmitidas = asesorSeleccionado
+                ? (datosGraficas.polizasPorPeriodoAsesor?.[asesorSeleccionado] || Array(labelsGraficas.length).fill(0))
+                : datosGraficas.polizasMes;
+            if (Array.isArray(seriePolizasEmitidas)) {
+                graficasPolizas.polizasPeriodo = seriePolizasEmitidas;
+            }
             const canvasCobrado = document.getElementById('chartCobradoPendiente');
             const canvasPolizasPeriodo = document.getElementById('chartPolizasPeriodo');
             const canvasVentasAsesor = document.getElementById('chartVentasAsesor');
@@ -2142,7 +2151,13 @@ let proyectoIdEnEdicion = null;
 
             if (tieneCache && !respuestaActualizada && navigator.onLine) {
                 fetchAPI(urlMetricas, { silent: true })
-                    .then(responseFresca => cargarDashboardSeguros(filtroSeleccionado, false, responseFresca))
+                    .then(responseFresca => {
+                        const anioActual = document.getElementById('filtroAnoDashboard')?.value
+                            || String(new Date().getFullYear());
+                        if (`${filtroSeleccionado}:${anioActual}` === claveCache) {
+                            cargarDashboardSeguros(filtroSeleccionado, false, responseFresca);
+                        }
+                    })
                     .catch(error => console.warn('[cargarDashboardSeguros] Revalidación en segundo plano falló:', error));
             }
 

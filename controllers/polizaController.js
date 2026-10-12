@@ -1736,6 +1736,13 @@ const obtenerMetricasSeguros = async (req, res) => {
             return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
         }
 
+        const anioActual = new Date().getFullYear();
+        const anioSolicitado = req.query.anio;
+        const anioGrafica = anioSolicitado === undefined ? anioActual : Number(anioSolicitado);
+        if (!Number.isInteger(anioGrafica) || anioGrafica < 1900 || anioGrafica > 2200) {
+            return res.status(400).json({ success: false, error: 'El año seleccionado para las métricas no es válido.' });
+        }
+
         const filtroBase = {
             ...filtroTenant,
             deletedAt: null,
@@ -1748,6 +1755,15 @@ const obtenerMetricasSeguros = async (req, res) => {
         }
 
         const polizas = await Poliza.find(filtroBase).lean();
+        const filtroEmisiones = { ...filtroTenant, deletedAt: null };
+        if (!esAdmin) {
+            const asesorId = usuario._id || usuario.id;
+            if (asesorId) filtroEmisiones.asesorId = asesorId;
+        }
+        const polizasEmisiones = await Poliza.find(filtroEmisiones)
+            .select('numeroPoliza estado fechas.inicio asesorId asesorNombre')
+            .populate('asesorId', 'username')
+            .lean();
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -1853,7 +1869,6 @@ const obtenerMetricasSeguros = async (req, res) => {
 
         const filtro = req.query.filtroTiempo || 'mensual';
         const fechaActual = new Date();
-        const currentYear = fechaActual.getFullYear();
         const currentMonth = fechaActual.getMonth();
         const labels = filtro === 'semanal'
             ? ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4', 'Semana 5']
@@ -1863,24 +1878,40 @@ const obtenerMetricasSeguros = async (req, res) => {
         const cobrado = Array(labels.length).fill(0);
         const pendiente = Array(labels.length).fill(0);
         const polizasMes = Array(labels.length).fill(0);
+        const polizasPorPeriodoAsesor = {};
         const numeroPagosPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
         const obtenerIndicePeriodo = fecha => {
             if (!fecha || Number.isNaN(fecha.getTime())) return -1;
             if (filtro === 'mensual') {
-                return fecha.getFullYear() === currentYear ? fecha.getMonth() : -1;
+                return fecha.getFullYear() === anioGrafica ? fecha.getMonth() : -1;
             }
-            if (fecha.getFullYear() !== currentYear || fecha.getMonth() !== currentMonth) return -1;
+            if (fecha.getFullYear() !== anioGrafica || fecha.getMonth() !== currentMonth) return -1;
             if (filtro === 'semanal') return Math.min(Math.ceil(fecha.getDate() / 7) - 1, 4);
             if (filtro === 'diario') return fecha.getDate() - 1;
             return -1;
         };
 
-        polizas.forEach(poliza => {
-            if (poliza.estado === 'Cancelada') return;
+        const polizasAuditoriaPorMes = Array.from({ length: polizasMes.length }, () => []);
+        polizasEmisiones.forEach(poliza => {
+            if (String(poliza.estado || '').trim().toLowerCase() === 'cancelada') return;
 
             const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : null;
             const indiceInicio = obtenerIndicePeriodo(fechaInicio);
-            if (indiceInicio >= 0) polizasMes[indiceInicio] += 1;
+            if (indiceInicio >= 0) {
+                polizasMes[indiceInicio] += 1;
+                const asesor = poliza.asesorId?.username || poliza.asesorNombre || 'Sin Asesor';
+                polizasPorPeriodoAsesor[asesor] ||= Array(labels.length).fill(0);
+                polizasPorPeriodoAsesor[asesor][indiceInicio] += 1;
+                polizasAuditoriaPorMes[indiceInicio].push({
+                    numeroPoliza: poliza.numeroPoliza || '',
+                    fechaInicio: fechaInicio.toISOString(),
+                    estado: poliza.estado || ''
+                });
+            }
+        });
+
+        polizas.forEach(poliza => {
+            if (poliza.estado === 'Cancelada') return;
 
             const recibos = poliza.recibos || [];
             if (recibos.length > 0) {
@@ -1927,7 +1958,16 @@ const obtenerMetricasSeguros = async (req, res) => {
             }
         });
 
-        const graficas = { labels, cobrado, pendiente, polizasMes };
+        console.log('[obtenerMetricasSeguros] Auditoría Pólizas por Periodo', {
+            anio: anioGrafica,
+            meses: labels.map((mes, indice) => ({
+                mes,
+                cantidad: polizasAuditoriaPorMes[indice].length,
+                polizas: polizasAuditoriaPorMes[indice]
+            }))
+        });
+
+        const graficas = { labels, cobrado, pendiente, polizasMes, polizasPorPeriodoAsesor };
 
         res.json({
             success: true,
