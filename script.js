@@ -3396,7 +3396,7 @@ let proyectoIdEnEdicion = null;
             : configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        const seccionesSeguros = ['polizas', 'config-correos', 'clientes-crm', 'cobranza-diaria'];
+        const seccionesSeguros = ['polizas', 'config-correos', 'clientes-crm', 'cobranza-diaria', 'reportes'];
         // NOTA: 'dashboard' y 'agenda' están permitidos para AMBOS tipos
         const seccionesEstandarBloqueadas = ['flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
         
@@ -3417,7 +3417,7 @@ let proyectoIdEnEdicion = null;
             'dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones',
             'historial-proyectos', 'gestion-artistas', 'gestion-servicios',
             'gestion-usuarios', 'configuracion', 'papelera-reciclaje', 'mis-deudas',
-            'polizas', 'config-correos'
+            'polizas', 'config-correos', 'reportes'
         ];
 
         // Secciones que solo los administradores pueden acceder
@@ -7330,8 +7330,7 @@ Fecha de firma: {{FECHA}}`;
                                  </div>
                                  <div class="nav-group mb-3">
                                      <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Reportes / Comisiones</div>
-                                     <a class="nav-link-sidebar" href="#" onclick="event.preventDefault(); app.exportarReporteExcel()"><i class="bi file-earmark-spreadsheet"></i> Exportar Excel</a>
-                                     <a class="nav-link-sidebar" href="#" onclick="event.preventDefault(); app.exportarReportePDF()"><i class="bi file-earmark-pdf"></i> Exportar PDF</a>
+                                     <a class="nav-link-sidebar" data-seccion="reportes"><i class="bi file-earmark-bar-graph"></i> Generador de Reportes</a>
                                  </div>`;
 
                      if (isSuperAdmin) {
@@ -7374,6 +7373,7 @@ Fecha de firma: {{FECHA}}`;
                     html += `<div class="nav-group mb-3">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Seguros</div>
                                 <a class="nav-link-sidebar" data-seccion="polizas"><i class="bi shield-check"></i> Pólizas</a>
+                                <a class="nav-link-sidebar" data-seccion="reportes"><i class="bi file-earmark-bar-graph"></i> Generador de Reportes</a>
                                 <a class="nav-link-sidebar" data-seccion="papelera-reciclaje"><i class="bi trash"></i> Papelera</a>
                                 <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración Correos</a>
                              </div>`;
