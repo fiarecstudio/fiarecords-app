@@ -9722,6 +9722,32 @@ Fecha de firma: {{FECHA}}`;
         };
     }
 
+    function obtenerParametrosReporteExportacion(filtroAsesor) {
+        const tipoReporte = document.getElementById('tipo-reporte-exportacion')?.value || 'cobranza';
+        const fechaInicio = document.getElementById('fecha-inicio-exportacion')?.value || '';
+        const fechaFin = document.getElementById('fecha-fin-exportacion')?.value || '';
+        if (tipoReporte === 'emisiones') {
+            if (!fechaInicio || !fechaFin) {
+                showToast('Selecciona el rango de fechas para el reporte de Emisiones', 'error');
+                return null;
+            }
+            if (fechaFin < fechaInicio) {
+                showToast('La fecha final no puede ser anterior a la fecha inicial', 'error');
+                return null;
+            }
+        }
+
+        const parametros = new URLSearchParams(filtroAsesor.query.replace(/^\?/, ''));
+        parametros.set('tipoReporte', tipoReporte);
+        if (fechaInicio) parametros.set('fechaInicio', fechaInicio);
+        if (fechaFin) parametros.set('fechaFin', fechaFin);
+        return {
+            tipoReporte,
+            query: `?${parametros.toString()}`,
+            nombreBase: tipoReporte === 'emisiones' ? 'Reporte_Emisiones' : 'Reporte_Polizas'
+        };
+    }
+
     async function exportarReporteExcel() {
         try {
             console.log('[exportarReporteExcel] Iniciando exportación...');
@@ -9729,7 +9755,9 @@ Fecha de firma: {{FECHA}}`;
 
             const token = localStorage.getItem('token');
             const filtroAsesor = obtenerFiltroAsesorExportacion();
-            const response = await fetch(`/api/polizas/exportar/excel${filtroAsesor.query}`, {
+            const reporte = obtenerParametrosReporteExportacion(filtroAsesor);
+            if (!reporte) return;
+            const response = await fetch(`/api/polizas/exportar/excel${reporte.query}`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
@@ -9748,7 +9776,7 @@ Fecha de firma: {{FECHA}}`;
             const a = document.createElement('a');
             a.href = url;
             const fecha = new Date().toISOString().split('T')[0];
-            a.download = `Reporte_Polizas${filtroAsesor.nombreArchivo}_${fecha}.xlsx`;
+            a.download = `${reporte.nombreBase}${filtroAsesor.nombreArchivo}_${fecha}.xlsx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -9768,7 +9796,9 @@ Fecha de firma: {{FECHA}}`;
 
             const token = localStorage.getItem('token');
             const filtroAsesor = obtenerFiltroAsesorExportacion();
-            const response = await fetch(`/api/polizas/exportar/pdf${filtroAsesor.query}`, {
+            const reporte = obtenerParametrosReporteExportacion(filtroAsesor);
+            if (!reporte) return;
+            const response = await fetch(`/api/polizas/exportar/pdf${reporte.query}`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
@@ -9787,7 +9817,7 @@ Fecha de firma: {{FECHA}}`;
             const a = document.createElement('a');
             a.href = url;
             const fecha = new Date().toISOString().split('T')[0];
-            a.download = `Reporte_Polizas${filtroAsesor.nombreArchivo}_${fecha}.pdf`;
+            a.download = `${reporte.nombreBase}${filtroAsesor.nombreArchivo}_${fecha}.pdf`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);

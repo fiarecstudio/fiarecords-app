@@ -3534,14 +3534,380 @@ const asignarAsesor = async (req, res) => {
 // ==========================================
 // EXPORTAR REPORTE EXCEL (ACTUALIZADO CON ASESOR Y DESGLOSE DE PAGOS)
 // ==========================================
+const COLUMNAS_REPORTE_EMISIONES = [
+    { header: 'MES', key: 'mes', width: 14 },
+    { header: 'AÑO', key: 'anio', width: 10 },
+    { header: 'N/R', key: 'nr', width: 8 },
+    { header: 'AGENTE', key: 'agente', width: 22 },
+    { header: 'VIG INICIAL', key: 'vigInicial', width: 15 },
+    { header: 'VIG FINAL', key: 'vigFinal', width: 15 },
+    { header: 'NOMBRE DEL CLIENTE', key: 'cliente', width: 28 },
+    { header: 'RAMO', key: 'ramo', width: 18 },
+    { header: 'DESCRIPCION', key: 'descripcion', width: 30 },
+    { header: 'MODELO', key: 'modelo', width: 16 },
+    { header: 'SERIE', key: 'serie', width: 22 },
+    { header: 'POLIZA', key: 'poliza', width: 20 },
+    { header: 'FORMA DE PAGO', key: 'formaPago', width: 18 },
+    { header: 'ASEGURADORA', key: 'aseguradora', width: 22 },
+    { header: 'P NETA', key: 'primaNeta', width: 15 },
+    { header: 'P TOTAL', key: 'primaTotal', width: 15 },
+    { header: 'ESTATUS', key: 'estatus', width: 18 },
+    { header: 'COMISION', key: 'comision', width: 15 },
+    { header: 'TEL CLIENTE', key: 'telefono', width: 18 },
+    { header: 'CORREO', key: 'correo', width: 28 },
+    { header: 'DIRIGIRSE A', key: 'dirigirseA', width: 22 },
+    { header: 'TARJETA', key: 'tarjeta', width: 18 },
+    { header: 'VIGENCIA', key: 'vigencia', width: 16 },
+    { header: 'SEGURIDAD', key: 'seguridad', width: 18 }
+];
+
+function obtenerSolicitudReporte(req, res) {
+    const tipoReporte = String(req.query.tipoReporte || 'cobranza').toLowerCase();
+    if (!['cobranza', 'emisiones'].includes(tipoReporte)) {
+        res.status(400).json({ error: 'El tipo de reporte seleccionado no es válido' });
+        return null;
+    }
+    if (tipoReporte !== 'emisiones') return { tipoReporte, filtroFechas: null };
+
+    const { fechaInicio, fechaFin } = req.query;
+    const esFechaValida = valor => {
+        if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+        const fecha = new Date(`${valor}T00:00:00.000Z`);
+        return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+    };
+    if (!esFechaValida(fechaInicio) || !esFechaValida(fechaFin) || fechaFin < fechaInicio) {
+        res.status(400).json({ error: 'Selecciona un rango de fechas válido para el reporte de Emisiones' });
+        return null;
+    }
+
+    const inicio = new Date(`${fechaInicio}T00:00:00.000Z`);
+    const finExclusivo = new Date(`${fechaFin}T00:00:00.000Z`);
+    finExclusivo.setUTCDate(finExclusivo.getUTCDate() + 1);
+    return {
+        tipoReporte,
+        filtroFechas: { 'fechas.inicio': { $gte: inicio, $lt: finExclusivo } }
+    };
+}
+
+function obtenerFilaReporteEmisiones(poliza) {
+    const formatearFecha = fecha => {
+        if (!fecha) return '';
+        const date = new Date(fecha);
+        if (Number.isNaN(date.getTime())) return '';
+        return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+    };
+    const sinDato = valor => valor === null || valor === undefined ? '' : String(valor);
+
+    const fechaInicio = poliza.fechas?.inicio ? new Date(poliza.fechas.inicio) : null;
+    const fechaInicioValida = fechaInicio && !Number.isNaN(fechaInicio.getTime());
+    const renovada = Boolean(poliza.polizaAnteriorId || poliza.renovaciones?.length);
+    return {
+        mes: fechaInicioValida
+            ? new Intl.DateTimeFormat('es-MX', { month: 'long', timeZone: 'UTC' }).format(fechaInicio).toLocaleUpperCase('es-MX')
+            : '',
+        anio: fechaInicioValida ? fechaInicio.getUTCFullYear() : '',
+        nr: renovada ? 'R' : 'N',
+        agente: poliza.asesorId?.username || poliza.asesorNombre || '',
+        vigInicial: formatearFecha(poliza.fechas?.inicio),
+        vigFinal: formatearFecha(poliza.fechas?.vencimiento),
+        cliente: sinDato(poliza.cliente),
+        ramo: sinDato(poliza.tipoSeguro),
+        descripcion: sinDato(poliza.descripcionVehiculo),
+        modelo: sinDato(poliza.modelo || poliza.modeloVehiculo),
+        serie: sinDato(poliza.numeroSerie),
+        poliza: sinDato(poliza.numeroPoliza),
+        formaPago: sinDato(poliza.tipoPago),
+        aseguradora: sinDato(poliza.aseguradora),
+        primaNeta: poliza.primaNeta ?? '',
+        primaTotal: poliza.primaTotal ?? '',
+        estatus: sinDato(poliza.estado),
+        comision: poliza.comision ?? '',
+        telefono: sinDato(poliza.clienteTelefono),
+        correo: sinDato(poliza.clienteEmail),
+        dirigirseA: sinDato(poliza.dirigirseA),
+        tarjeta: sinDato(poliza.tarjeta),
+        vigencia: sinDato(poliza.vigencia || (poliza.duracionMeses ? `${poliza.duracionMeses} meses` : '')),
+        seguridad: sinDato(poliza.seguridad)
+    };
+}
+
+async function exportarEmisionesPDF(polizas, res, rangoFechas) {
+    const doc = new PDFDocument({ margin: 18, size: 'A3', layout: 'landscape', bufferPages: true });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Reporte_Emisiones_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.pipe(res);
+
+    const filas = polizas.map(obtenerFilaReporteEmisiones);
+    const encabezados = COLUMNAS_REPORTE_EMISIONES.map(columna => columna.header);
+    const pesosAncho = [3, 2, 2, 4, 4, 4, 8, 4, 8, 4, 5, 5, 4, 5, 4, 4, 4, 4, 5, 6, 5, 4, 4, 4];
+    const anchoTabla = doc.page.width - 36;
+    const totalPeso = pesosAncho.reduce((total, peso) => total + peso, 0);
+    const anchos = pesosAncho.map(peso => (anchoTabla * peso) / totalPeso);
+    const alturaEncabezado = 32;
+    const padding = 2;
+    const dibujarEncabezados = y => {
+        let x = 18;
+        doc.font('Helvetica-Bold').fontSize(5.5);
+        encabezados.forEach((encabezado, indice) => {
+            doc.rect(x, y, anchos[indice], alturaEncabezado).fillAndStroke('#E9ECEF', '#B8B8B8');
+            doc.fillColor('#111111').text(encabezado, x + padding, y + padding, {
+                width: anchos[indice] - padding * 2,
+                height: alturaEncabezado - padding * 2,
+                align: 'center',
+                valign: 'center'
+            });
+            x += anchos[indice];
+        });
+    };
+    const dibujarTitulo = () => {
+        doc.font('Helvetica-Bold').fontSize(14).fillColor('#111111')
+            .text('Reporte de Emisiones', 18, 18, { width: anchoTabla, align: 'center' });
+        doc.font('Helvetica').fontSize(8).fillColor('#444444')
+            .text(`Vigencias con inicio entre ${rangoFechas.fechaInicio} y ${rangoFechas.fechaFin}`, 18, 36, {
+                width: anchoTabla,
+                align: 'center'
+            });
+    };
+
+    dibujarTitulo();
+    let y = 52;
+    dibujarEncabezados(y);
+    y += alturaEncabezado;
+    for (const fila of filas) {
+        const valores = COLUMNAS_REPORTE_EMISIONES.map(columna => {
+            const valor = fila[columna.key];
+            return typeof valor === 'number' ? valor.toFixed(2) : String(valor ?? '');
+        });
+        doc.font('Helvetica').fontSize(5.5);
+        const alturas = valores.map((valor, indice) => doc.heightOfString(valor, {
+            width: anchos[indice] - padding * 2,
+            align: 'center'
+        }));
+        const altoFila = Math.max(16, ...alturas.map(altura => altura + padding * 2));
+        if (y + altoFila > doc.page.height - 18) {
+            doc.addPage({ size: 'A3', layout: 'landscape', margin: 18 });
+            y = 18;
+            dibujarEncabezados(y);
+            y += alturaEncabezado;
+        }
+        let x = 18;
+        valores.forEach((valor, indice) => {
+            doc.rect(x, y, anchos[indice], altoFila).stroke('#D0D0D0');
+            doc.fillColor('#111111').text(valor, x + padding, y + padding, {
+                width: anchos[indice] - padding * 2,
+                height: altoFila - padding * 2,
+                align: 'center',
+                valign: 'center'
+            });
+            x += anchos[indice];
+        });
+        y += altoFila;
+    }
+    doc.end();
+}
+
+const COLUMNAS_REPORTE_COBRANZA = [
+    { header: 'MES', key: 'mes', width: 14 },
+    { header: 'SOCIO (Asesor)', key: 'socio', width: 22 },
+    { header: 'VIG INICIAL', key: 'vigInicial', width: 15 },
+    { header: 'VIG FINAL', key: 'vigFinal', width: 15 },
+    { header: 'NOMBRE DEL CLIENTE', key: 'cliente', width: 28 },
+    { header: 'RECIBO', key: 'recibo', width: 12 },
+    { header: 'FECHA LIMITE DE PAGO', key: 'fechaLimite', width: 22 },
+    { header: 'MES DE PAGO', key: 'mesPago', width: 16 },
+    { header: 'AÑO', key: 'anio', width: 10 },
+    { header: 'POLIZA', key: 'poliza', width: 20 },
+    { header: 'FORMA DE PAGO', key: 'formaPago', width: 18 },
+    { header: 'ASEGURADORA', key: 'aseguradora', width: 20 },
+    { header: 'P NETA', key: 'primaNeta', width: 15 },
+    { header: 'P TOTAL', key: 'primaTotal', width: 15 },
+    { header: 'ESTATUS', key: 'estatus', width: 18 },
+    { header: 'COMISION', key: 'comision', width: 15 }
+];
+
+function obtenerFilasReporteCobranza(polizas) {
+    const fechaReporte = fecha => {
+        if (!fecha) return null;
+        const valor = new Date(fecha);
+        return Number.isNaN(valor.getTime()) ? null : valor;
+    };
+    const formatearFecha = fecha => {
+        const valor = fechaReporte(fecha);
+        return valor
+            ? `${String(valor.getUTCDate()).padStart(2, '0')}/${String(valor.getUTCMonth() + 1).padStart(2, '0')}/${valor.getUTCFullYear()}`
+            : '';
+    };
+    const obtenerMes = fecha => {
+        const valor = fechaReporte(fecha);
+        return valor
+            ? new Intl.DateTimeFormat('es-MX', { month: 'long', timeZone: 'UTC' }).format(valor).toLocaleUpperCase('es-MX')
+            : '';
+    };
+    const numeroPagosPorTipo = { mensual: 12, trimestral: 4, semestral: 2, anual: 1 };
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const filas = [];
+
+    polizas.forEach(poliza => {
+        const numPagos = numeroPagosPorTipo[poliza.tipoPago] || 1;
+        const recibos = poliza.recibos || [];
+        const fechasEsperadas = [];
+        const fechaInicio = fechaReporte(poliza.fechas?.inicio);
+        if (fechaInicio) {
+            for (let indice = 0; indice < numPagos; indice++) {
+                const fecha = new Date(fechaInicio);
+                const mesesPorPago = { mensual: 1, trimestral: 3, semestral: 6 };
+                if (mesesPorPago[poliza.tipoPago]) {
+                    fecha.setMonth(fechaInicio.getMonth() + indice * mesesPorPago[poliza.tipoPago]);
+                } else if (poliza.tipoPago === 'anual') {
+                    fecha.setFullYear(fechaInicio.getFullYear() + indice);
+                }
+                fechasEsperadas.push(fecha);
+            }
+        }
+
+        const pagos = recibos.length
+            ? recibos.map((recibo, indice) => ({
+                indice,
+                fecha: recibo.fechaVencimientoRecibo || recibo.fechaVencimiento || fechasEsperadas[indice],
+                monto: Number(recibo.montoRecibo) || 0,
+                estado: String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+            }))
+            : Array.from({ length: numPagos }, (_, indice) => {
+                const pagoRegistrado = poliza.pagos?.[indice];
+                const fecha = fechasEsperadas[indice];
+                const estadoRegistrado = String(pagoRegistrado?.estado || '').toLowerCase();
+                let estado = estadoRegistrado;
+                if (!estado) {
+                    const fechaLimpia = fecha ? new Date(fecha) : null;
+                    if (fechaLimpia) fechaLimpia.setHours(0, 0, 0, 0);
+                    estado = fechaLimpia && fechaLimpia < hoy ? 'atrasado' : 'pendiente';
+                }
+                const montoConfigurado = indice === 0
+                    ? (Number(poliza.primerPago) || (numPagos === 1 ? Number(poliza.primaTotal) || 0 : 0))
+                    : Number(poliza.montoAbono) || 0;
+                return {
+                    indice,
+                    fecha,
+                    monto: Number(pagoRegistrado?.monto ?? montoConfigurado) || 0,
+                    estado
+                };
+            });
+
+        pagos.forEach(pago => {
+            if (['pagado', 'cancelado'].includes(pago.estado)) return;
+            const fechaLimite = fechaReporte(pago.fecha);
+            const estadoRecibo = ['pendiente', 'atrasado'].includes(pago.estado)
+                ? pago.estado
+                : 'pendiente';
+            filas.push({
+                mes: obtenerMes(pago.fecha),
+                socio: poliza.asesorId?.username || poliza.asesorNombre || 'General',
+                vigInicial: formatearFecha(poliza.fechas?.inicio),
+                vigFinal: formatearFecha(poliza.fechas?.vencimiento),
+                cliente: poliza.cliente || '',
+                recibo: `${pago.indice + 1}/${pagos.length}`,
+                fechaLimite: formatearFecha(pago.fecha),
+                mesPago: obtenerMes(pago.fecha),
+                anio: fechaLimite ? fechaLimite.getUTCFullYear() : '',
+                poliza: poliza.numeroPoliza || '',
+                formaPago: poliza.tipoPago || '',
+                aseguradora: poliza.aseguradora || '',
+                primaNeta: calcularPagoNeto(poliza.primaNeta, pagos.length, pago.indice, {
+                    primaTotal: poliza.primaTotal,
+                    gastosExpedicion: poliza.gastosExpedicion,
+                    montoAbono: poliza.montoAbono,
+                    primerPago: poliza.primerPago,
+                    emisionEnPrimerPago: poliza.emisionEnPrimerPago
+                }),
+                primaTotal: pago.monto,
+                estatus: pago.estado === 'pendiente' || pago.estado === 'atrasado'
+                    ? pago.estado.charAt(0).toUpperCase() + pago.estado.slice(1)
+                    : poliza.estado || 'Pendiente',
+                comision: poliza.comision ?? ''
+            });
+        });
+    });
+    return filas;
+}
+
+async function exportarCobranzaPDF(filas, res) {
+    const doc = new PDFDocument({ margin: 18, size: 'A3', layout: 'landscape', bufferPages: true });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Reporte_Cobranza_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.pipe(res);
+
+    const encabezados = COLUMNAS_REPORTE_COBRANZA.map(columna => columna.header);
+    const pesosAncho = [3, 5, 4, 4, 7, 3, 5, 4, 2, 5, 4, 5, 3, 3, 3, 3];
+    const anchoTabla = doc.page.width - 36;
+    const totalPeso = pesosAncho.reduce((total, peso) => total + peso, 0);
+    const anchos = pesosAncho.map(peso => (anchoTabla * peso) / totalPeso);
+    const alturaEncabezado = 32;
+    const padding = 2;
+    const dibujarEncabezados = y => {
+        let x = 18;
+        doc.font('Helvetica-Bold').fontSize(6);
+        encabezados.forEach((encabezado, indice) => {
+            doc.rect(x, y, anchos[indice], alturaEncabezado).fillAndStroke('#E9ECEF', '#B8B8B8');
+            doc.fillColor('#111111').text(encabezado, x + padding, y + padding, {
+                width: anchos[indice] - padding * 2,
+                height: alturaEncabezado - padding * 2,
+                align: 'center',
+                valign: 'center'
+            });
+            x += anchos[indice];
+        });
+    };
+
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#111111')
+        .text('Reporte de Cobranza', 18, 18, { width: anchoTabla, align: 'center' });
+    let y = 42;
+    dibujarEncabezados(y);
+    y += alturaEncabezado;
+    filas.forEach(fila => {
+        const valores = COLUMNAS_REPORTE_COBRANZA.map(columna => {
+            const valor = fila[columna.key];
+            return typeof valor === 'number' ? valor.toFixed(2) : String(valor ?? '');
+        });
+        doc.font('Helvetica').fontSize(6);
+        const alturas = valores.map((valor, indice) => doc.heightOfString(valor, {
+            width: anchos[indice] - padding * 2,
+            align: 'center'
+        }));
+        const altoFila = Math.max(16, ...alturas.map(altura => altura + padding * 2));
+        if (y + altoFila > doc.page.height - 18) {
+            doc.addPage({ size: 'A3', layout: 'landscape', margin: 18 });
+            y = 18;
+            dibujarEncabezados(y);
+            y += alturaEncabezado;
+        }
+        let x = 18;
+        valores.forEach((valor, indice) => {
+            doc.rect(x, y, anchos[indice], altoFila).stroke('#D0D0D0');
+            doc.fillColor('#111111').text(valor, x + padding, y + padding, {
+                width: anchos[indice] - padding * 2,
+                height: altoFila - padding * 2,
+                align: 'center',
+                valign: 'center'
+            });
+            x += anchos[indice];
+        });
+        y += altoFila;
+    });
+    doc.end();
+}
+
 const exportarReporteExcel = async (req, res) => {
     try {
         const empresaId = req.user.empresaId;
         const userRole = req.user.role;
         const userId = req.user._id || req.user.id;
+        const solicitudReporte = obtenerSolicitudReporte(req, res);
+        if (!solicitudReporte) return;
 
         // Construir filtro
         let filtro = { empresaId, deletedAt: null };
+        if (solicitudReporte.filtroFechas) Object.assign(filtro, solicitudReporte.filtroFechas);
         if (userRole !== 'admin') {
             filtro.asesorId = userId;
         }
@@ -3564,6 +3930,57 @@ const exportarReporteExcel = async (req, res) => {
             .populate('asesorId', 'username')
             .sort({ createdAt: -1 })
             .lean();
+
+        if (solicitudReporte.tipoReporte === 'emisiones') {
+            const workbookEmisiones = new ExcelJS.Workbook();
+            const worksheetEmisiones = workbookEmisiones.addWorksheet('Emisiones');
+            worksheetEmisiones.columns = COLUMNAS_REPORTE_EMISIONES;
+            polizas.forEach(poliza => {
+                worksheetEmisiones.addRow(obtenerFilaReporteEmisiones(poliza));
+            });
+            worksheetEmisiones.views = [{ state: 'frozen', ySplit: 1 }];
+            worksheetEmisiones.autoFilter = `A1:X${Math.max(1, worksheetEmisiones.rowCount)}`;
+            worksheetEmisiones.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            worksheetEmisiones.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF365F91' }
+            };
+            worksheetEmisiones.getRow(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            worksheetEmisiones.getRow(1).height = 30;
+
+            const sufijoAsesorEmisiones = asesorExportado
+                ? `_Asesor_${String(asesorExportado.username || 'asesor').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+                : '';
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=Reporte_Emisiones${sufijoAsesorEmisiones}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            await workbookEmisiones.xlsx.write(res);
+            return res.end();
+        }
+
+        const filasCobranza = obtenerFilasReporteCobranza(polizas);
+        const workbookCobranza = new ExcelJS.Workbook();
+        const worksheetCobranza = workbookCobranza.addWorksheet('Cobranza');
+        worksheetCobranza.columns = COLUMNAS_REPORTE_COBRANZA;
+        worksheetCobranza.addRows(filasCobranza);
+        worksheetCobranza.views = [{ state: 'frozen', ySplit: 1 }];
+        worksheetCobranza.autoFilter = `A1:P${Math.max(1, worksheetCobranza.rowCount)}`;
+        worksheetCobranza.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheetCobranza.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF365F91' }
+        };
+        worksheetCobranza.getRow(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        worksheetCobranza.getRow(1).height = 30;
+
+        const sufijoAsesorCobranza = asesorExportado
+            ? `_Asesor_${String(asesorExportado.username || 'asesor').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+            : '';
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=Reporte_Cobranza${sufijoAsesorCobranza}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await workbookCobranza.xlsx.write(res);
+        return res.end();
 
         // Crear workbook
         const workbook = new ExcelJS.Workbook();
@@ -3742,9 +4159,12 @@ const exportarReportePDF = async (req, res) => {
         const empresaId = req.user.empresaId;
         const userRole = req.user.role;
         const userId = req.user._id || req.user.id;
+        const solicitudReporte = obtenerSolicitudReporte(req, res);
+        if (!solicitudReporte) return;
 
         // Construir filtro
         let filtro = { empresaId, deletedAt: null };
+        if (solicitudReporte.filtroFechas) Object.assign(filtro, solicitudReporte.filtroFechas);
         if (userRole !== 'admin') {
             filtro.asesorId = userId;
         }
@@ -3763,6 +4183,14 @@ const exportarReportePDF = async (req, res) => {
         }
 
         const polizas = await Poliza.find(filtro).populate('asesorId', 'username').sort({ createdAt: -1 }).lean();
+
+        if (solicitudReporte.tipoReporte === 'emisiones') {
+            await exportarEmisionesPDF(polizas, res, req.query);
+            return;
+        }
+
+        await exportarCobranzaPDF(obtenerFilasReporteCobranza(polizas), res);
+        return;
 
         // Obtener configuración de la empresa para el logo
         const config = await Configuracion.findOne({ empresaId });

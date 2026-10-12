@@ -1261,6 +1261,24 @@
                     <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <h2 class="mb-0"><i class="bi bi-shield-check me-2"></i>Gestión de Pólizas</h2>
                         <div class="d-flex gap-2 flex-wrap">
+                            <div class="d-flex flex-wrap align-items-end gap-2">
+                                <div>
+                                    <label for="tipo-reporte-exportacion" class="form-label small mb-1">Tipo de reporte</label>
+                                    <select id="tipo-reporte-exportacion" class="form-select form-select-sm">
+                                        <option value="cobranza" selected>Reporte de Cobranza</option>
+                                        <option value="emisiones">Reporte de Emisiones</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="fecha-inicio-exportacion" class="form-label small mb-1">Desde</label>
+                                    <input id="fecha-inicio-exportacion" class="form-control form-control-sm" type="date" aria-label="Fecha inicial del reporte">
+                                </div>
+                                <div>
+                                    <label for="fecha-fin-exportacion" class="form-label small mb-1">Hasta</label>
+                                    <input id="fecha-fin-exportacion" class="form-control form-control-sm" type="date" aria-label="Fecha final del reporte">
+                                </div>
+                                <small class="text-muted">El rango se aplica a Emisiones según el inicio de vigencia.</small>
+                            </div>
                             <!-- Botones de Exportación -->
                             <div class="export-buttons">
                                 <button id="btnExportarExcel" type="button" class="btn btn-success btn-sm">
