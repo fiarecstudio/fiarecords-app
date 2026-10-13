@@ -10812,6 +10812,31 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     // MODULO DE SEGUROS - CONFIGURACIÓN DE CORREOS SMTP
     // ==================================================================
+    async function guardarFirmaCorreo() {
+        const signatureHtml = document.getElementById('firma-correo-html')?.value;
+        if (typeof signatureHtml !== 'string') return;
+        if (!navigator.onLine) {
+            showToast('Se requiere conexión para guardar la firma de correo.', 'warning');
+            return;
+        }
+
+        try {
+            const empresaId = localStorage.getItem('empresaActiva')
+                || localStorage.getItem('selected_empresa_id')
+                || 'all';
+            const response = await fetchAPI('/api/configuracion/notificaciones-email/firma', {
+                method: 'PUT',
+                body: JSON.stringify({ signatureHtml }),
+                headers: { 'X-Empresa-Id': empresaId }
+            });
+            const editor = document.getElementById('firma-correo-html');
+            editor.value = response.signatureHtml || '';
+            showToast('Firma de correo guardada.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No se pudo guardar la firma.', 'error');
+        }
+    }
+
     async function guardarYProbarSMTP() {
         const host = document.getElementById('smtp-host').value;
         const port = document.getElementById('smtp-port').value;
@@ -10821,31 +10846,6 @@ Fecha de firma: {{FECHA}}`;
         if (!host || !port || !user || !password) {
             Swal.fire('Error', 'Completa todos los campos', 'warning');
             return;
-        }
-
-        async function guardarFirmaCorreo() {
-            const signatureHtml = document.getElementById('firma-correo-html')?.value;
-            if (typeof signatureHtml !== 'string') return;
-            if (!navigator.onLine) {
-                showToast('Se requiere conexión para guardar la firma de correo.', 'warning');
-                return;
-            }
-
-            try {
-                const empresaId = localStorage.getItem('empresaActiva')
-                    || localStorage.getItem('selected_empresa_id')
-                    || 'all';
-                const response = await fetchAPI('/api/configuracion/notificaciones-email/firma', {
-                    method: 'PUT',
-                    body: JSON.stringify({ signatureHtml }),
-                    headers: { 'X-Empresa-Id': empresaId }
-                });
-                const editor = document.getElementById('firma-correo-html');
-                editor.value = response.signatureHtml || '';
-                showToast('Firma de correo guardada.', 'success');
-            } catch (error) {
-                showToast(error.message || 'No se pudo guardar la firma.', 'error');
-            }
         }
 
         try {
