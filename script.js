@@ -3532,41 +3532,108 @@ let proyectoIdEnEdicion = null;
     async function cargarBandejaEntrada() {
         const lista = document.getElementById('bandeja-lista');
         if (!lista) return;
-        lista.innerHTML = '<div class="list-group-item text-muted">Cargando correos...</div>';
+        lista.innerHTML = '<div class="bandeja-list-message text-muted">Cargando correos...</div>';
 
         try {
             const response = await fetchAPI('/api/bandeja-entrada');
             correosBandejaEntrada = Array.isArray(response.emails) ? response.emails : [];
             correoBandejaSeleccionado = null;
             mostrarCorreoSeleccionado();
-
-            if (correosBandejaEntrada.length === 0) {
-                lista.innerHTML = '<div class="list-group-item text-muted">No hay correos en la bandeja.</div>';
-                return;
-            }
-
-            lista.innerHTML = correosBandejaEntrada.map((correo, index) => `
-                <button type="button" class="list-group-item list-group-item-action text-start" onclick="app.seleccionarCorreoBandeja(${index})">
-                    <span class="d-block fw-bold">${escapeHTML(String(correo.from || 'Remitente desconocido'))}</span>
-                    <span class="d-block">${escapeHTML(String(correo.subject || '(Sin asunto)'))}</span>
-                    <span class="d-block small text-muted">${escapeHTML(String(correo.snippet || ''))}</span>
-                </button>
-            `).join('');
+            renderizarListaBandeja();
         } catch (error) {
-            lista.innerHTML = '<div class="list-group-item text-danger">No fue posible cargar los correos.</div>';
+            lista.innerHTML = '<div class="bandeja-list-message text-danger">No fue posible cargar los correos.</div>';
             showToast(error.message || 'No fue posible cargar la bandeja.', 'error');
         }
     }
 
+    function formatoFechaListaCorreo(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const today = new Date();
+        if (date.toDateString() === today.toDateString()) {
+            return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
+    }
+
+    function renderizarListaBandeja() {
+        const lista = document.getElementById('bandeja-lista');
+        document.getElementById('bandeja-contador').textContent = `${correosBandejaEntrada.length} correos recientes`;
+        if (!correosBandejaEntrada.length) {
+            lista.innerHTML = '<div class="bandeja-list-message text-muted">No hay mensajes en la bandeja.</div>';
+            return;
+        }
+
+        lista.innerHTML = correosBandejaEntrada.map((correo, index) => {
+            const selected = correoBandejaSeleccionado?.id === correo.id;
+            return `
+                <button type="button" class="bandeja-email-item${correo.seen ? '' : ' is-unread'}${selected ? ' is-selected' : ''}" data-email-index="${index}" aria-pressed="${selected}">
+                    <span class="bandeja-email-row">
+                        <span class="bandeja-email-sender">${escapeHTML(String(correo.fromName || correo.fromEmail || 'Remitente desconocido'))}</span>
+                        <time class="bandeja-email-time">${escapeHTML(formatoFechaListaCorreo(correo.date))}</time>
+                    </span>
+                    <span class="bandeja-email-subject-row">
+                        <span class="bandeja-email-subject">${escapeHTML(String(correo.subject || '(Sin asunto)'))}</span>
+                    </span>
+                    <span class="bandeja-email-snippet">${escapeHTML(String(correo.snippet || ''))}</span>
+                </button>
+            `;
+        }).join('');
+        lista.querySelectorAll('[data-email-index]').forEach(button => {
+            button.addEventListener('click', () => seleccionarCorreoBandeja(Number(button.dataset.emailIndex)));
+        });
+    }
+
+    function crearInicialesRemitente(name, email) {
+        const source = String(name || '').trim();
+        const words = source.split(/\s+/).filter(Boolean);
+        if (words.length > 1) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+        if (source.length > 1) return source.slice(0, 2).toUpperCase();
+        return String(email || '?').slice(0, 2).toUpperCase();
+    }
+
+    function generarDocumentoCorreo(correo) {
+        let body = correo.html;
+        if (!body) {
+            const safeText = escapeHTML(String(correo.text || correo.snippet || '')
+                .replace(/<(https?:\/\/[^>\s]+)>/gi, '$1'))
+                .replace(/\r?\n/g, '<br>');
+            body = `<div>${safeText}</div>`;
+        }
+        const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; connect-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
+        return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.55 Arial,sans-serif;color:#242424;margin:16px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}a{color:#2563eb}</style></head><body>${body}</body></html>`;
+    }
+
     function mostrarCorreoSeleccionado() {
         const correo = correoBandejaSeleccionado;
-        document.getElementById('bandeja-asunto').textContent = correo?.subject || 'Selecciona un correo';
-        document.getElementById('bandeja-remitente').textContent = correo ? `De: ${correo.from || ''}` : '';
-        document.getElementById('bandeja-fecha').textContent = correo?.date
-            ? new Date(correo.date).toLocaleString('es-MX')
-            : '';
-        document.getElementById('bandeja-contenido').textContent = correo?.text || correo?.snippet || '';
-        document.getElementById('bandeja-responder').disabled = !correo;
+        document.getElementById('bandeja-vacio').classList.toggle('d-none', Boolean(correo));
+        document.getElementById('bandeja-lectura').classList.toggle('d-none', !correo);
+        if (!correo) return;
+
+        document.getElementById('bandeja-asunto').textContent = correo.subject || '(Sin asunto)';
+        document.getElementById('bandeja-remitente-nombre').textContent = correo.fromName || correo.fromEmail || 'Remitente desconocido';
+        document.getElementById('bandeja-remitente-email').textContent = `<${correo.fromEmail || ''}>`;
+        document.getElementById('bandeja-avatar').textContent = crearInicialesRemitente(correo.fromName, correo.fromEmail);
+        const fecha = document.getElementById('bandeja-fecha');
+        fecha.textContent = correo.date ? new Date(correo.date).toLocaleString('es-MX', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) : '';
+        fecha.dateTime = correo.date || '';
+        const emailFrame = document.getElementById('bandeja-cuerpo-email');
+        emailFrame.onload = () => {
+            try {
+                const content = emailFrame.contentDocument;
+                const height = Math.max(content.documentElement.scrollHeight, content.body.scrollHeight);
+                emailFrame.style.height = `${Math.min(Math.max(height, 440), window.innerHeight * 0.85)}px`;
+            } catch (error) {
+                console.warn('[BandejaEntrada] No fue posible ajustar la altura del mensaje.', error);
+            }
+        };
+        emailFrame.srcdoc = generarDocumentoCorreo(correo);
+        const unreadButton = document.getElementById('bandeja-marcar-no-leido');
+        unreadButton.disabled = !correo.seen;
+        renderizarListaBandeja();
     }
 
     function seleccionarCorreoBandeja(index) {
@@ -3574,15 +3641,47 @@ let proyectoIdEnEdicion = null;
         mostrarCorreoSeleccionado();
     }
 
-    function abrirRespuestaCorreo() {
+    function abrirRespuestaCorreo(mode = 'reply') {
         if (!correoBandejaSeleccionado) return;
-        document.getElementById('respuesta-destinatario').value = correoBandejaSeleccionado.fromEmail
-            || correoBandejaSeleccionado.from.match(/<([^>]+)>/)?.[1]
-            || correoBandejaSeleccionado.from;
-        document.getElementById('respuesta-asunto').value = /^re:/i.test(correoBandejaSeleccionado.subject)
-            ? correoBandejaSeleccionado.subject
-            : `Re: ${correoBandejaSeleccionado.subject}`;
-        document.getElementById('respuesta-mensaje').value = '';
+        const correo = correoBandejaSeleccionado;
+        const destinatarios = mode === 'replyAll'
+            ? (correo.replyAllEmails || [correo.fromEmail]).filter(Boolean)
+            : mode === 'reply' ? [correo.fromEmail].filter(Boolean) : [];
+        const asunto = correo.subject || '(Sin asunto)';
+        const forward = mode === 'forward';
+        document.getElementById('modalResponderCorreoLabel').textContent = forward ? 'Reenviar correo' : 'Responder correo';
+        document.getElementById('respuesta-destinatario').value = destinatarios.join(', ');
+        document.getElementById('respuesta-asunto').value = forward
+            ? (/^fwd?:/i.test(asunto) ? asunto : `Fwd: ${asunto}`)
+            : (/^re:/i.test(asunto) ? asunto : `Re: ${asunto}`);
+        document.getElementById('respuesta-mensaje').value = forward
+            ? `\n\n---------- Mensaje reenviado ----------\nDe: ${correo.fromName} <${correo.fromEmail}>\nFecha: ${correo.date ? new Date(correo.date).toLocaleString('es-MX') : ''}\nAsunto: ${asunto}\n\n${correo.text || correo.snippet || ''}`
+            : '';
+        document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', forward || mode === 'reply');
+        document.getElementById('respuesta-enviar').textContent = forward ? 'Reenviar' : 'Enviar respuesta';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
+    }
+
+    async function marcarCorreoNoLeido() {
+        if (!correoBandejaSeleccionado?.seen) return;
+        if (!navigator.onLine) {
+            showToast('Se necesita conexión para cambiar el estado del correo.', 'warning');
+            return;
+        }
+        const button = document.getElementById('bandeja-marcar-no-leido');
+        button.disabled = true;
+        try {
+            await fetchAPI('/api/bandeja-entrada/mark-unread', {
+                method: 'POST',
+                body: JSON.stringify({ id: correoBandejaSeleccionado.id })
+            });
+            correoBandejaSeleccionado.seen = false;
+            mostrarCorreoSeleccionado();
+            showToast('El correo se marcó como no leído.', 'success');
+        } catch (error) {
+            button.disabled = false;
+            showToast(error.message || 'No fue posible actualizar el correo.', 'error');
+        }
     }
 
     async function responderCorreo(event) {
@@ -3590,10 +3689,16 @@ let proyectoIdEnEdicion = null;
         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
         submitButton.disabled = true;
         try {
+            const rawRecipients = document.getElementById('respuesta-destinatario').value;
+            const validRecipients = rawRecipients.split(/[;,]/).map(address => address.trim()).filter(Boolean);
+            if (!validRecipients.length || validRecipients.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))) {
+                showToast('Ingresa direcciones de correo válidas.', 'error');
+                return;
+            }
             const response = await fetchAPI('/api/bandeja-entrada/reply', {
                 method: 'POST',
                 body: JSON.stringify({
-                    destinatario: document.getElementById('respuesta-destinatario').value,
+                    destinatario: validRecipients.join(','),
                     asunto: document.getElementById('respuesta-asunto').value,
                     mensaje: document.getElementById('respuesta-mensaje').value
                 })
@@ -12200,7 +12305,7 @@ Fecha de firma: {{FECHA}}`;
         compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
-        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, responderCorreo,
+        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, marcarCorreoNoLeido, responderCorreo,
         enviarAFlujoDirecto,
         nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
         toggleAuth, registerUser, recoverPassword, resetPassword,

@@ -42,6 +42,57 @@ function getTextPart(message) {
     return message.parts.find(part => part.which === '');
 }
 
+function decodeHtmlEntities(value) {
+    return value
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/&#(\d+);/g, (match, code) => {
+            const point = Number(code);
+            return point <= 0x10ffff ? String.fromCodePoint(point) : match;
+        })
+        .replace(/&#x([a-f\d]+);/gi, (match, code) => {
+            const point = parseInt(code, 16);
+            return point <= 0x10ffff ? String.fromCodePoint(point) : match;
+        });
+}
+
+function cleanSnippet(text, html) {
+    const source = text || String(html || '')
+        .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<br\s*\/?>|<\/(?:p|div|li|tr|h[1-6])>/gi, '\n')
+        .replace(/<[^>]*>/g, ' ');
+    const lines = decodeHtmlEntities(source)
+        .replace(/<https?:\/\/([^>]+)>/gi, 'https://$1')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u200B-\u200D\uFEFF]/g, ' ')
+        .split(/\r?\n+/)
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .filter(line => line && !/(?:^|[\s-])(?:confidentiality notice|confidential|disclaimer|unsubscribe|privacy policy|aviso de confidencialidad|aviso de privacidad|cancelar suscripci[oó]n)(?:$|[\s:.-])/i.test(line));
+    return lines.join(' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+function htmlWithInlineAttachments(parsed) {
+    if (typeof parsed.html !== 'string') return '';
+    const inlineAttachments = new Map((parsed.attachments || [])
+        .filter(attachment => attachment.cid && attachment.content)
+        .map(attachment => [
+            attachment.cid.replace(/^<|>$/g, '').toLowerCase(),
+            `data:${attachment.contentType || 'application/octet-stream'};base64,${attachment.content.toString('base64')}`
+        ]));
+    return parsed.html.replace(/cid:([^"'\s)>]+)/gi, (match, cid) => {
+        let normalizedCid = cid;
+        try {
+            normalizedCid = decodeURIComponent(cid);
+        } catch (error) {
+            normalizedCid = cid;
+        }
+        return inlineAttachments.get(normalizedCid.replace(/^<|>$/g, '').toLowerCase()) || match;
+    });
+}
+
 async function getInbox(req, res) {
     let connection;
     try {
@@ -68,24 +119,34 @@ async function getInbox(req, res) {
             }
             const rawEmail = sourcePart.body;
             const parsed = await simpleParser(rawEmail);
-            const plainText = (parsed.text || '')
-                .replace(/\s+/g, ' ')
-                .trim();
+            const plainText = parsed.text || '';
 
             const flags = message.attributes.flags || [];
-            const from = parsed.from?.value
-                ?.map(({ name, address }) => name ? `${name} <${address}>` : address)
-                .filter(Boolean)
-                .join(', ') || parsed.from?.text || '';
+            const fromValue = parsed.from?.value?.[0];
+            const recipients = addresses => (addresses?.value || [])
+                .map(({ address }) => address)
+                .filter(Boolean);
+            const replyAllEmails = [
+                ...(parsed.from?.value || []),
+                ...(parsed.to?.value || []),
+                ...(parsed.cc?.value || [])
+            ]
+                .map(({ address }) => address)
+                .filter(address => address && address.toLowerCase() !== process.env.IMAP_USER?.toLowerCase())
+                .filter((address, index, all) => all.findIndex(item => item.toLowerCase() === address.toLowerCase()) === index);
 
             return {
                 id: String(message.attributes.uid),
-                from,
-                fromEmail: parsed.from?.value?.[0]?.address || '',
+                fromName: fromValue?.name || fromValue?.address || parsed.from?.text || 'Remitente desconocido',
+                fromEmail: fromValue?.address || '',
                 subject: parsed.subject || '(Sin asunto)',
                 date: parsed.date ? parsed.date.toISOString() : null,
-                snippet: plainText.slice(0, 240),
-                text: parsed.text || plainText,
+                snippet: cleanSnippet(plainText, parsed.html),
+                text: plainText,
+                html: htmlWithInlineAttachments(parsed),
+                toEmails: recipients(parsed.to),
+                ccEmails: recipients(parsed.cc),
+                replyAllEmails,
                 seen: flags.some(flag => flag.toLowerCase() === '\\seen')
             };
         }));
@@ -104,6 +165,33 @@ async function getInbox(req, res) {
     }
 }
 
+async function markUnread(req, res) {
+    const uid = Number(req.body?.id);
+    if (!Number.isSafeInteger(uid) || uid < 1) {
+        return res.status(400).json({ success: false, error: 'El identificador del correo no es válido.' });
+    }
+
+    let connection;
+    try {
+        connection = await imaps.connect(getImapConfig());
+        connection.on('error', error => {
+            console.error('[BandejaEntrada] Error de conexión IMAP:', error);
+        });
+        await connection.openBox('INBOX');
+        await connection.delFlags(uid, '\\Seen');
+        return res.json({ success: true, message: 'El correo se marcó como no leído.' });
+    } catch (error) {
+        console.error('[BandejaEntrada] Error al marcar correo como no leído:', error);
+        const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;
+        return res.status(status).json({
+            success: false,
+            error: status === 503 ? error.message : 'No fue posible actualizar el estado del correo.'
+        });
+    } finally {
+        if (connection) connection.end();
+    }
+}
+
 function escapeHtml(value) {
     return value.replace(/[&<>'"]/g, character => ({
         '&': '&amp;',
@@ -115,11 +203,16 @@ function escapeHtml(value) {
 }
 
 async function replyEmail(req, res) {
-    const destinatario = typeof req.body.destinatario === 'string' ? req.body.destinatario.trim() : '';
+    const destinatarios = typeof req.body?.destinatario === 'string'
+        ? [...new Set(req.body.destinatario.split(/[;,]/).map(address => address.trim()).filter(Boolean))]
+        : [];
     const asuntoOriginal = typeof req.body.asunto === 'string' ? req.body.asunto.trim() : '';
     const mensaje = typeof req.body.mensaje === 'string' ? req.body.mensaje.trim() : '';
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario) || !asuntoOriginal || !mensaje) {
+    if (!destinatarios.length
+        || destinatarios.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+        || !asuntoOriginal
+        || !mensaje) {
         return res.status(400).json({
             success: false,
             error: 'Indica un destinatario válido, asunto y mensaje.'
@@ -137,11 +230,11 @@ async function replyEmail(req, res) {
             });
         }
 
-        const asunto = /^re:/i.test(asuntoOriginal) ? asuntoOriginal : `Re: ${asuntoOriginal}`;
+        const asunto = /^(?:re|fwd?):/i.test(asuntoOriginal) ? asuntoOriginal : `Re: ${asuntoOriginal}`;
         const cuerpo = `<p>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</p>`;
         await enviarEmail({
             empresaId,
-            destinatario,
+            destinatario: destinatarios,
             asunto,
             cuerpo,
             replyTo
@@ -157,4 +250,4 @@ async function replyEmail(req, res) {
     }
 }
 
-module.exports = { getInbox, replyEmail };
+module.exports = { getInbox, markUnread, replyEmail };

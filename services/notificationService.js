@@ -15,7 +15,8 @@ async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo })
             name: config.senderName || 'M Asesores',
             email: config.smtpUser || process.env.SMTP_USER || 'cobranza@masesores.mx'
         },
-        to: [{ email: destinatario }],
+        to: (Array.isArray(destinatario) ? destinatario : [destinatario])
+            .map(email => ({ email })),
         subject: asunto,
         htmlContent: cuerpo
     };

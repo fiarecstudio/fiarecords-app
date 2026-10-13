@@ -1480,23 +1480,56 @@
                         </button>
                     </div>
                     <div class="card-body pt-3">
-                        <div class="row g-3">
-                            <div class="col-12 col-lg-4">
-                                <div id="bandeja-lista" class="list-group" aria-label="Correos recibidos">
-                                    <div class="list-group-item text-muted">Selecciona Actualizar para consultar los correos.</div>
+                        <div class="bandeja-workspace">
+                            <aside class="bandeja-list-pane">
+                                <div class="bandeja-pane-heading">
+                                    <div>
+                                        <h3 class="h6 mb-0">Bandeja de entrada</h3>
+                                        <span id="bandeja-contador" class="small text-muted">Correos recientes</span>
+                                    </div>
+                                    <i class="bi bi-chevron-down text-muted" aria-hidden="true"></i>
                                 </div>
-                            </div>
-                            <div class="col-12 col-lg-8">
-                                <div class="border rounded p-3">
-                                    <h5 id="bandeja-asunto" class="mb-2">Selecciona un correo</h5>
-                                    <p id="bandeja-remitente" class="text-muted mb-1"></p>
-                                    <p id="bandeja-fecha" class="text-muted small mb-3"></p>
-                                    <div id="bandeja-contenido" class="text-break"></div>
-                                    <button id="bandeja-responder" type="button" class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalResponderCorreo" onclick="app.abrirRespuestaCorreo()" disabled>
-                                        <i class="bi bi-reply"></i> Responder
-                                    </button>
+                                <div id="bandeja-lista" class="bandeja-email-list" aria-label="Correos recibidos">
+                                    <div class="bandeja-list-message text-muted">Selecciona Actualizar para consultar los correos.</div>
                                 </div>
-                            </div>
+                            </aside>
+                            <section class="bandeja-reading-pane" aria-label="Lectura del correo">
+                                <div id="bandeja-vacio" class="bandeja-empty-state">
+                                    <i class="bi bi-envelope-open" aria-hidden="true"></i>
+                                    <h3 class="h5">Selecciona un mensaje para leerlo</h3>
+                                    <p class="text-muted mb-0">Tus correos recientes aparecerán en esta bandeja.</p>
+                                </div>
+                                <div id="bandeja-lectura" class="d-none">
+                                    <header class="bandeja-message-header">
+                                        <h2 id="bandeja-asunto" class="bandeja-message-subject"></h2>
+                                        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                                            <div class="d-flex align-items-center gap-3 min-w-0">
+                                                <div id="bandeja-avatar" class="bandeja-avatar" aria-hidden="true"></div>
+                                                <div class="min-w-0">
+                                                    <div class="fw-bold text-truncate" id="bandeja-remitente-nombre"></div>
+                                                    <div class="small text-muted text-truncate" id="bandeja-remitente-email"></div>
+                                                </div>
+                                            </div>
+                                            <time id="bandeja-fecha" class="small text-muted"></time>
+                                        </div>
+                                    </header>
+                                    <div class="bandeja-toolbar" role="toolbar" aria-label="Acciones del correo">
+                                        <button type="button" class="btn btn-sm btn-primary" onclick="app.abrirRespuestaCorreo('reply')">
+                                            <i class="bi bi-reply"></i> Responder
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.abrirRespuestaCorreo('replyAll')">
+                                            <i class="bi bi-reply-all"></i> Responder a todos
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.abrirRespuestaCorreo('forward')">
+                                            <i class="bi bi-forward"></i> Reenviar
+                                        </button>
+                                        <button id="bandeja-marcar-no-leido" type="button" class="btn btn-sm btn-outline-secondary ms-lg-auto" onclick="app.marcarCorreoNoLeido()">
+                                            <i class="bi bi-envelope"></i> Marcar como no leído
+                                        </button>
+                                    </div>
+                                    <iframe id="bandeja-cuerpo-email" class="bandeja-email-frame" title="Contenido del correo" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+                                </div>
+                            </section>
                         </div>
                     </div>
                 </div>
@@ -1510,8 +1543,9 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                         </div>
                         <div class="modal-body">
-                            <label for="respuesta-destinatario" class="form-label">Destinatario</label>
-                            <input id="respuesta-destinatario" type="email" class="form-control mb-3" required>
+                            <label for="respuesta-destinatario" class="form-label">Para</label>
+                            <input id="respuesta-destinatario" type="text" class="form-control mb-3" autocomplete="email" required>
+                            <div id="respuesta-destinatario-ayuda" class="form-text mb-3">Puedes separar varios destinatarios con comas.</div>
                             <label for="respuesta-asunto" class="form-label">Asunto</label>
                             <input id="respuesta-asunto" type="text" class="form-control mb-3" required>
                             <label for="respuesta-mensaje" class="form-label">Mensaje</label>
@@ -1519,7 +1553,7 @@
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-primary">Enviar respuesta</button>
+                            <button id="respuesta-enviar" type="submit" class="btn btn-primary">Enviar respuesta</button>
                         </div>
                     </form>
                 </div>
