@@ -3716,6 +3716,7 @@ async function exportarEmisionesPDF(polizas, res, rangoFechas) {
     for (const fila of filas) {
         const valores = COLUMNAS_REPORTE_EMISIONES.map(columna => {
             const valor = fila[columna.key];
+            if (columna.key === 'anio' && typeof valor === 'number') return String(Math.trunc(valor));
             return typeof valor === 'number' ? valor.toFixed(2) : String(valor ?? '');
         });
         doc.font('Helvetica').fontSize(5.5);
@@ -3972,6 +3973,7 @@ const exportarReporteExcel = async (req, res) => {
             .lean();
 
         if (solicitudReporte.tipoReporte === 'emisiones') {
+            polizas.sort((a, b) => new Date(a.fechas.inicio) - new Date(b.fechas.inicio));
             const workbookEmisiones = new ExcelJS.Workbook();
             const worksheetEmisiones = workbookEmisiones.addWorksheet('Emisiones');
             worksheetEmisiones.columns = COLUMNAS_REPORTE_EMISIONES;
@@ -4225,6 +4227,7 @@ const exportarReportePDF = async (req, res) => {
         const polizas = await Poliza.find(filtro).populate('asesorId', 'username').sort({ createdAt: -1 }).lean();
 
         if (solicitudReporte.tipoReporte === 'emisiones') {
+            polizas.sort((a, b) => new Date(a.fechas.inicio) - new Date(b.fechas.inicio));
             await exportarEmisionesPDF(polizas, res, req.query);
             return;
         }
