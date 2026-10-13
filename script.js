@@ -3433,11 +3433,11 @@ let proyectoIdEnEdicion = null;
             'dashboard', 'agenda', 'flujo-trabajo', 'cotizaciones',
             'historial-proyectos', 'gestion-artistas', 'gestion-servicios',
             'gestion-usuarios', 'configuracion', 'papelera-reciclaje', 'mis-deudas',
-            'polizas', 'config-correos', 'reportes'
+            'polizas', 'config-correos', 'reportes', 'bandeja-entrada'
         ];
 
         // Secciones que solo los administradores pueden acceder
-        const seccionesSoloAdmin = ['config-correos', 'configuracion', 'mis-deudas', 'gestion-usuarios'];
+        const seccionesSoloAdmin = ['config-correos', 'configuracion', 'mis-deudas', 'gestion-usuarios', 'bandeja-entrada'];
 
         if (esCliente && seccionesProhibidasParaCliente.includes(id)) {
             id = 'vista-artista'; 
@@ -3484,6 +3484,7 @@ let proyectoIdEnEdicion = null;
                 'mis-deudas': cargarDeudas,
                 'polizas': cargarPolizas,
                 'clientes-crm': cargarClientesCrm,
+                'bandeja-entrada': cargarBandejaEntrada,
                 'cobranza-diaria': () => {
                     initEventosCobranzaDiaria();
                     return cargarCobranzaDiaria();
@@ -3523,6 +3524,87 @@ let proyectoIdEnEdicion = null;
         
         // Si no tiene ningún permiso específico, ir a flujo de trabajo por defecto
         mostrarSeccion('flujo-trabajo');
+    }
+
+    let correosBandejaEntrada = [];
+    let correoBandejaSeleccionado = null;
+
+    async function cargarBandejaEntrada() {
+        const lista = document.getElementById('bandeja-lista');
+        if (!lista) return;
+        lista.innerHTML = '<div class="list-group-item text-muted">Cargando correos...</div>';
+
+        try {
+            const response = await fetchAPI('/api/bandeja-entrada');
+            correosBandejaEntrada = Array.isArray(response.emails) ? response.emails : [];
+            correoBandejaSeleccionado = null;
+            mostrarCorreoSeleccionado();
+
+            if (correosBandejaEntrada.length === 0) {
+                lista.innerHTML = '<div class="list-group-item text-muted">No hay correos en la bandeja.</div>';
+                return;
+            }
+
+            lista.innerHTML = correosBandejaEntrada.map((correo, index) => `
+                <button type="button" class="list-group-item list-group-item-action text-start" onclick="app.seleccionarCorreoBandeja(${index})">
+                    <span class="d-block fw-bold">${escapeHTML(String(correo.from || 'Remitente desconocido'))}</span>
+                    <span class="d-block">${escapeHTML(String(correo.subject || '(Sin asunto)'))}</span>
+                    <span class="d-block small text-muted">${escapeHTML(String(correo.snippet || ''))}</span>
+                </button>
+            `).join('');
+        } catch (error) {
+            lista.innerHTML = '<div class="list-group-item text-danger">No fue posible cargar los correos.</div>';
+            showToast(error.message || 'No fue posible cargar la bandeja.', 'error');
+        }
+    }
+
+    function mostrarCorreoSeleccionado() {
+        const correo = correoBandejaSeleccionado;
+        document.getElementById('bandeja-asunto').textContent = correo?.subject || 'Selecciona un correo';
+        document.getElementById('bandeja-remitente').textContent = correo ? `De: ${correo.from || ''}` : '';
+        document.getElementById('bandeja-fecha').textContent = correo?.date
+            ? new Date(correo.date).toLocaleString('es-MX')
+            : '';
+        document.getElementById('bandeja-contenido').textContent = correo?.text || correo?.snippet || '';
+        document.getElementById('bandeja-responder').disabled = !correo;
+    }
+
+    function seleccionarCorreoBandeja(index) {
+        correoBandejaSeleccionado = correosBandejaEntrada[index] || null;
+        mostrarCorreoSeleccionado();
+    }
+
+    function abrirRespuestaCorreo() {
+        if (!correoBandejaSeleccionado) return;
+        document.getElementById('respuesta-destinatario').value = correoBandejaSeleccionado.fromEmail
+            || correoBandejaSeleccionado.from.match(/<([^>]+)>/)?.[1]
+            || correoBandejaSeleccionado.from;
+        document.getElementById('respuesta-asunto').value = /^re:/i.test(correoBandejaSeleccionado.subject)
+            ? correoBandejaSeleccionado.subject
+            : `Re: ${correoBandejaSeleccionado.subject}`;
+        document.getElementById('respuesta-mensaje').value = '';
+    }
+
+    async function responderCorreo(event) {
+        event.preventDefault();
+        const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        try {
+            const response = await fetchAPI('/api/bandeja-entrada/reply', {
+                method: 'POST',
+                body: JSON.stringify({
+                    destinatario: document.getElementById('respuesta-destinatario').value,
+                    asunto: document.getElementById('respuesta-asunto').value,
+                    mensaje: document.getElementById('respuesta-mensaje').value
+                })
+            });
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
+            showToast(response.message || 'Respuesta enviada correctamente.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No fue posible enviar la respuesta.', 'error');
+        } finally {
+            submitButton.disabled = false;
+        }
     }
     
     // --- VISTA ARTISTA ---
@@ -7404,6 +7486,12 @@ Fecha de firma: {{FECHA}}`;
                              </div>`;
                 }
             }
+        }
+        if (role === 'admin') {
+            html += `<div class="nav-group mb-3">
+                        <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Correo</div>
+                        <a class="nav-link-sidebar" data-seccion="bandeja-entrada"><i class="bi inbox"></i> Bandeja de Entrada</a>
+                     </div>`;
         }
         navContainer.innerHTML = html;
         
@@ -12112,6 +12200,7 @@ Fecha de firma: {{FECHA}}`;
         compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
+        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, responderCorreo,
         enviarAFlujoDirecto,
         nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
         toggleAuth, registerUser, recoverPassword, resetPassword,

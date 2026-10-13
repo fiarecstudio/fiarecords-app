@@ -1,6 +1,6 @@
 const Empresa = require('../models/Empresa');
 
-async function enviarEmail({ empresaId, destinatario, asunto, cuerpo }) {
+async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo }) {
     const empresa = await Empresa.findById(empresaId);
     const configEmpresa = empresa?.notificaciones?.email;
     const config = configEmpresa?.enabled ? configEmpresa : {};
@@ -19,6 +19,10 @@ async function enviarEmail({ empresaId, destinatario, asunto, cuerpo }) {
         subject: asunto,
         htmlContent: cuerpo
     };
+
+    if (replyTo) {
+        payload.replyTo = { email: replyTo };
+    }
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',

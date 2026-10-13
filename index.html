@@ -1469,6 +1469,62 @@
                 </div>
             </section>
 
+            <!-- SECCIÓN: BANDEJA DE ENTRADA -->
+            <section id="bandeja-entrada" class="section-view d-none">
+                <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
+                <div class="card">
+                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <h2 class="mb-0"><i class="bi bi-inbox me-2"></i>Bandeja de Entrada</h2>
+                        <button type="button" class="btn btn-outline-primary" onclick="app.cargarBandejaEntrada()">
+                            <i class="bi bi-arrow-clockwise"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="card-body pt-3">
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-4">
+                                <div id="bandeja-lista" class="list-group" aria-label="Correos recibidos">
+                                    <div class="list-group-item text-muted">Selecciona Actualizar para consultar los correos.</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-8">
+                                <div class="border rounded p-3">
+                                    <h5 id="bandeja-asunto" class="mb-2">Selecciona un correo</h5>
+                                    <p id="bandeja-remitente" class="text-muted mb-1"></p>
+                                    <p id="bandeja-fecha" class="text-muted small mb-3"></p>
+                                    <div id="bandeja-contenido" class="text-break"></div>
+                                    <button id="bandeja-responder" type="button" class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalResponderCorreo" onclick="app.abrirRespuestaCorreo()" disabled>
+                                        <i class="bi bi-reply"></i> Responder
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="modal fade" id="modalResponderCorreo" tabindex="-1" aria-labelledby="modalResponderCorreoLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form class="modal-content" onsubmit="app.responderCorreo(event)">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalResponderCorreoLabel">Responder correo</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="respuesta-destinatario" class="form-label">Destinatario</label>
+                            <input id="respuesta-destinatario" type="email" class="form-control mb-3" required>
+                            <label for="respuesta-asunto" class="form-label">Asunto</label>
+                            <input id="respuesta-asunto" type="text" class="form-control mb-3" required>
+                            <label for="respuesta-mensaje" class="form-label">Mensaje</label>
+                            <textarea id="respuesta-mensaje" class="form-control" rows="5" required></textarea>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Enviar respuesta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- SECCIÓN: CONFIGURACIÓN DE CORREOS (MÓDULO DE SEGUROS) -->
             <section id="config-correos" class="section-view d-none">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
