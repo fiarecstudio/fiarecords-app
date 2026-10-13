@@ -339,7 +339,7 @@ body.dark-mode #canvas-firma {
 
 /* LAYOUT */
 #app-wrapper { display: flex; height: 100dvh; overflow: hidden; }
-.sidebar { width: 280px; background-color: var(--sidebar-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100%; z-index: 1000; transition: transform 0.3s ease; flex-shrink: 0; }
+.sidebar { width: 280px; background-color: var(--sidebar-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100%; z-index: 1000; transition: width 0.25s ease, flex-basis 0.25s ease, padding 0.25s ease, transform 0.3s ease; flex-shrink: 0; }
 .sidebar-header { text-align: center; margin-bottom: 2rem; }
 .sidebar-nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
 .sidebar .nav-link-sidebar { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 4px; color: #6c757d; text-decoration: none; font-weight: 500; transition: all 0.3s ease; cursor: pointer; }
@@ -449,7 +449,7 @@ main { flex: 1; overflow-y: auto; padding: 2rem; overflow-x: hidden; }
 }
 
 /* Utilidades responsive (header, formularios, sidebar) */
-.sidebar-toggle-btn { display: none; }
+.sidebar-toggle-btn { display: inline-flex; align-items: center; justify-content: center; }
 .search-box-desktop { display: block; }
 .search-box-mobile-alt { display: none; }
 .form-card-centered { width: 100%; max-width: 800px; margin-left: auto; margin-right: auto; }
@@ -1062,6 +1062,7 @@ body.dark-mode .project-card:hover {
         box-shadow: 5px 0 15px rgba(0,0,0,0.2);
         transition: left 0.3s ease;
     }
+
     .sidebar.show { left: 0; }
     #sidebar-overlay {
         display: none;
@@ -1885,4 +1886,21 @@ body.dark-mode .fc-button-primary:hover,
 body.dark-mode .fc-button-primary:active {
     background-color: #444444 !important;
     border-color: #555555 !important;
+}
+
+@media (min-width: 1025px) {
+    #app-wrapper.sidebar-collapsed .sidebar {
+        width: 0;
+        flex-basis: 0;
+        padding-right: 0;
+        padding-left: 0;
+        overflow: hidden;
+        visibility: hidden;
+        border-right-width: 0;
+    }
+
+    #app-wrapper.sidebar-collapsed #main-content {
+        width: 100%;
+        flex: 1 1 100%;
+    }
 }

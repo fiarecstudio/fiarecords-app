@@ -155,11 +155,11 @@
     
     <div id="sidebar-overlay"></div>
 
-    <div class="main-content">
+    <div id="main-content" class="main-content">
         <header class="main-header d-flex flex-column gap-2">
             <div class="header-top-row d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
                 <div class="header-brand d-flex align-items-center gap-2 min-w-0">
-                    <button id="hamburger-menu" class="btn btn-sm btn-outline-secondary sidebar-toggle-btn flex-shrink-0" type="button" aria-label="Abrir menú">
+                    <button id="hamburger-menu" class="btn btn-sm btn-outline-secondary sidebar-toggle-btn flex-shrink-0" type="button" aria-label="Contraer menú" aria-expanded="true" title="Contraer o expandir menú">
                         <i class="bi bi-list fs-5"></i>
                     </button>
                     <div id="welcome-user" class="fw-bold text-truncate header-welcome-user"></div>
@@ -1475,9 +1475,14 @@
                 <div class="card">
                     <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <h2 class="mb-0"><i class="bi bi-inbox me-2"></i>Bandeja de Entrada</h2>
+                        <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-primary" onclick="app.abrirNuevoCorreo()">
+                            <i class="bi bi-plus-lg"></i> Nuevo Correo
+                        </button>
                         <button type="button" class="btn btn-outline-primary" onclick="app.cargarBandejaEntrada()">
                             <i class="bi bi-arrow-clockwise"></i> Actualizar
                         </button>
+                        </div>
                     </div>
                     <div class="card-body pt-3">
                         <div class="bandeja-workspace">
@@ -1550,6 +1555,7 @@
                             <input id="respuesta-asunto" type="text" class="form-control mb-3" required>
                             <label for="respuesta-mensaje" class="form-label">Mensaje</label>
                             <textarea id="respuesta-mensaje" class="form-control" rows="5" required></textarea>
+                            <div class="form-text mt-2">La firma de la empresa se agregará automáticamente al enviar.</div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -1595,6 +1601,15 @@
                                 </button>
                             </div>
                         </form>
+                        <hr class="my-4">
+                        <div>
+                            <label for="firma-correo-html" class="form-label fw-semibold">Firma de correo (HTML)</label>
+                            <textarea id="firma-correo-html" class="form-control" rows="7" maxlength="30000" placeholder="<p>Atentamente,<br>Nombre de la empresa</p>"></textarea>
+                            <div class="form-text">Se añadirá automáticamente a los correos nuevos y respuestas. Se admiten formato HTML e imágenes; se eliminan etiquetas y atributos inseguros al guardar.</div>
+                            <button type="button" class="btn btn-outline-primary mt-3" onclick="app.guardarFirmaCorreo()">
+                                <i class="bi bi-save"></i> Guardar firma
+                            </button>
+                        </div>
                     </div>
                 </div>
             </section>

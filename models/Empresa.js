@@ -58,7 +58,8 @@ const EmpresaSchema = new mongoose.Schema({
             smtpHost: { type: String, default: '' },
             smtpPort: { type: Number, default: 587 },
             smtpUser: { type: String, default: '' },
-            smtpPass: { type: String, default: '' }
+            smtpPass: { type: String, default: '' },
+            signatureHtml: { type: String, default: '' }
         },
         whatsapp: {
             enabled: { type: Boolean, default: false },

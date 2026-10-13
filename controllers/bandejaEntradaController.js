@@ -61,12 +61,15 @@ function decodeHtmlEntities(value) {
 }
 
 function cleanSnippet(text, html) {
-    const source = text || String(html || '')
+    const source = decodeHtmlEntities(String(text || html || ''))
+        .replace(/<((?:https?:\/\/)[^>\s]+)>/gi, '$1')
+        .replace(/<!doctype[^>]*>/gi, ' ')
+        .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, ' ')
         .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<(?:meta|link)\b[^>]*>/gi, ' ')
         .replace(/<br\s*\/?>|<\/(?:p|div|li|tr|h[1-6])>/gi, '\n')
         .replace(/<[^>]*>/g, ' ');
-    const lines = decodeHtmlEntities(source)
-        .replace(/<https?:\/\/([^>]+)>/gi, 'https://$1')
+    const lines = source
         .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u200B-\u200D\uFEFF]/g, ' ')
         .split(/\r?\n+/)
         .map(line => line.replace(/\s+/g, ' ').trim())
@@ -206,8 +209,9 @@ async function replyEmail(req, res) {
     const destinatarios = typeof req.body?.destinatario === 'string'
         ? [...new Set(req.body.destinatario.split(/[;,]/).map(address => address.trim()).filter(Boolean))]
         : [];
-    const asuntoOriginal = typeof req.body.asunto === 'string' ? req.body.asunto.trim() : '';
+    const asuntoOriginal = typeof req.body.asunto === 'string' ? req.body.asunto.trim().replace(/[\r\n]+/g, ' ') : '';
     const mensaje = typeof req.body.mensaje === 'string' ? req.body.mensaje.trim() : '';
+    const tipo = ['new', 'reply', 'forward'].includes(req.body?.tipo) ? req.body.tipo : 'reply';
 
     if (!destinatarios.length
         || destinatarios.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
@@ -230,8 +234,11 @@ async function replyEmail(req, res) {
             });
         }
 
-        const asunto = /^(?:re|fwd?):/i.test(asuntoOriginal) ? asuntoOriginal : `Re: ${asuntoOriginal}`;
-        const cuerpo = `<p>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</p>`;
+        const asunto = tipo === 'new' || /^(?:re|fwd?):/i.test(asuntoOriginal)
+            ? asuntoOriginal
+            : `${tipo === 'forward' ? 'Fwd' : 'Re'}: ${asuntoOriginal}`;
+        const signatureHtml = empresa?.notificaciones?.email?.signatureHtml || '';
+        const cuerpo = `<div>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</div>${signatureHtml ? `<br>${signatureHtml}` : ''}`;
         await enviarEmail({
             empresaId,
             destinatario: destinatarios,

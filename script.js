@@ -873,6 +873,10 @@ let proyectoIdEnEdicion = null;
                 if (configConsolidada && Date.now() - configTimestamp < CACHE_DURATION_MS) {
                     configCache = configConsolidada;
                     logoBase64 = localStorage.getItem(`backup_logo_${finalEmpresaId}`) || null;
+                    const firmaCorreo = document.getElementById('firma-correo-html');
+                    if (firmaCorreo && typeof configConsolidada.notificacionesEmail?.signatureHtml === 'string') {
+                        firmaCorreo.value = configConsolidada.notificacionesEmail.signatureHtml;
+                    }
                     setTimeout(() => {
                         loadInitialConfig(finalEmpresaId, true).catch((err) => {
                             console.warn('[loadInitialConfig] Actualización en segundo plano:', err.message);
@@ -909,6 +913,10 @@ let proyectoIdEnEdicion = null;
                     }
                     if (smtpUser && config.notificacionesEmail.smtpUser) {
                         smtpUser.value = config.notificacionesEmail.smtpUser;
+                    }
+                    const firmaCorreo = document.getElementById('firma-correo-html');
+                    if (firmaCorreo && typeof config.notificacionesEmail.signatureHtml === 'string') {
+                        firmaCorreo.value = config.notificacionesEmail.signatureHtml;
                     }
                 }
             }
@@ -3412,7 +3420,7 @@ let proyectoIdEnEdicion = null;
             : configCache?.tipoDashboard || 'estandar';
         const esDashboardSeguros = tipoDashboard === 'seguros';
         
-        const seccionesSeguros = ['polizas', 'config-correos', 'clientes-crm', 'cobranza-diaria', 'reportes'];
+        const seccionesSeguros = ['polizas', 'clientes-crm', 'cobranza-diaria', 'reportes'];
         // NOTA: 'dashboard' y 'agenda' están permitidos para AMBOS tipos
         const seccionesEstandarBloqueadas = ['flujo-trabajo', 'cotizaciones', 'historial-proyectos', 'registrar-proyecto', 'gestion-artistas', 'gestion-servicios'];
         
@@ -3528,6 +3536,7 @@ let proyectoIdEnEdicion = null;
 
     let correosBandejaEntrada = [];
     let correoBandejaSeleccionado = null;
+    let modoCorreoActual = 'reply';
 
     async function cargarBandejaEntrada() {
         const lista = document.getElementById('bandeja-lista');
@@ -3602,7 +3611,7 @@ let proyectoIdEnEdicion = null;
             body = `<div>${safeText}</div>`;
         }
         const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; connect-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
-        return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.55 Arial,sans-serif;color:#242424;margin:16px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}a{color:#2563eb}</style></head><body>${body}</body></html>`;
+        return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.55 Arial,sans-serif;color:#e5e7eb!important;background:#111827;margin:16px;overflow-x:auto;word-wrap:break-word;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}a{color:#60a5fa}</style></head><body>${body}</body></html>`;
     }
 
     function mostrarCorreoSeleccionado() {
@@ -3642,24 +3651,32 @@ let proyectoIdEnEdicion = null;
     }
 
     function abrirRespuestaCorreo(mode = 'reply') {
-        if (!correoBandejaSeleccionado) return;
-        const correo = correoBandejaSeleccionado;
+        if (mode !== 'new' && !correoBandejaSeleccionado) return;
+        const correo = correoBandejaSeleccionado || {};
+        modoCorreoActual = mode;
         const destinatarios = mode === 'replyAll'
             ? (correo.replyAllEmails || [correo.fromEmail]).filter(Boolean)
             : mode === 'reply' ? [correo.fromEmail].filter(Boolean) : [];
         const asunto = correo.subject || '(Sin asunto)';
+        const isNew = mode === 'new';
         const forward = mode === 'forward';
-        document.getElementById('modalResponderCorreoLabel').textContent = forward ? 'Reenviar correo' : 'Responder correo';
+        document.getElementById('modalResponderCorreoLabel').textContent = isNew
+            ? 'Nuevo correo'
+            : forward ? 'Reenviar correo' : mode === 'replyAll' ? 'Responder a todos' : 'Responder correo';
         document.getElementById('respuesta-destinatario').value = destinatarios.join(', ');
-        document.getElementById('respuesta-asunto').value = forward
+        document.getElementById('respuesta-asunto').value = isNew ? '' : forward
             ? (/^fwd?:/i.test(asunto) ? asunto : `Fwd: ${asunto}`)
             : (/^re:/i.test(asunto) ? asunto : `Re: ${asunto}`);
         document.getElementById('respuesta-mensaje').value = forward
             ? `\n\n---------- Mensaje reenviado ----------\nDe: ${correo.fromName} <${correo.fromEmail}>\nFecha: ${correo.date ? new Date(correo.date).toLocaleString('es-MX') : ''}\nAsunto: ${asunto}\n\n${correo.text || correo.snippet || ''}`
             : '';
-        document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', forward || mode === 'reply');
-        document.getElementById('respuesta-enviar').textContent = forward ? 'Reenviar' : 'Enviar respuesta';
+        document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', isNew || forward || mode === 'reply');
+        document.getElementById('respuesta-enviar').textContent = isNew ? 'Enviar correo' : forward ? 'Reenviar' : 'Enviar respuesta';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
+    }
+
+    function abrirNuevoCorreo() {
+        abrirRespuestaCorreo('new');
     }
 
     async function marcarCorreoNoLeido() {
@@ -3700,7 +3717,8 @@ let proyectoIdEnEdicion = null;
                 body: JSON.stringify({
                     destinatario: validRecipients.join(','),
                     asunto: document.getElementById('respuesta-asunto').value,
-                    mensaje: document.getElementById('respuesta-mensaje').value
+                    mensaje: document.getElementById('respuesta-mensaje').value,
+                    tipo: modoCorreoActual
                 })
             });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
@@ -4855,25 +4873,44 @@ Fecha de firma: {{FECHA}}`;
         const hamburger = document.getElementById('hamburger-menu'); 
         const sidebar = document.querySelector('.sidebar'); 
         const overlay = document.getElementById('sidebar-overlay'); 
-        const toggleMenu = () => { 
-            sidebar.classList.toggle('show'); 
-            overlay.classList.toggle('show'); 
+        const appWrapper = document.getElementById('app-wrapper');
+        if (!hamburger || !sidebar || !appWrapper) return;
+
+        const setExpanded = expanded => {
+            hamburger.setAttribute('aria-expanded', String(expanded));
+            hamburger.setAttribute('aria-label', expanded ? 'Contraer menú' : 'Expandir menú');
         }; 
-        if (hamburger && !hamburger.dataset.listener) {
+        setExpanded(window.innerWidth > 1024 || sidebar.classList.contains('show'));
+
+        const closeMobileMenu = () => {
+            sidebar.classList.remove('show');
+            overlay?.classList.remove('show');
+            setExpanded(false);
+        };
+
+        if (!hamburger.dataset.listener) {
             hamburger.dataset.listener = 'true';
-            hamburger.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleMenu();
+            hamburger.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) {
+                    const expanded = sidebar.classList.toggle('show');
+                    overlay?.classList.toggle('show', expanded);
+                    setExpanded(expanded);
+                    return;
+                }
+
+                const collapsed = sidebar.classList.toggle('sidebar-collapsed');
+                appWrapper.classList.toggle('sidebar-collapsed', collapsed);
+                setExpanded(!collapsed);
             });
         }
-        if (overlay) overlay.addEventListener('pointerdown', toggleMenu); 
+
+        if (overlay && !overlay.dataset.listener) {
+            overlay.dataset.listener = 'true';
+            overlay.addEventListener('click', closeMobileMenu);
+        }
         document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { 
             link.addEventListener('click', () => { 
-                if (window.innerWidth <= 768) { 
-                    sidebar.classList.remove('show'); 
-                    overlay.classList.remove('show'); 
-                } 
+                if (window.innerWidth <= 1024) closeMobileMenu();
             }); 
         }); 
     }
@@ -7587,6 +7624,7 @@ Fecha de firma: {{FECHA}}`;
                     html += `<div class="nav-group">
                                 <div class="text-uppercase text-muted small fw-bold px-3 mb-2">Administrador</div>
                                 <a class="nav-link-sidebar text-danger" data-seccion="mis-deudas"><i class="bi wallet2"></i> Mis Deudas</a>
+                                <a class="nav-link-sidebar" data-seccion="config-correos"><i class="bi envelope"></i> Configuración de Correos</a>
                                 <a class="nav-link-sidebar" data-seccion="configuracion"><i class="bi gear"></i> Configuración</a>
                              </div>`;
                 }
@@ -10785,6 +10823,31 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
 
+        async function guardarFirmaCorreo() {
+            const signatureHtml = document.getElementById('firma-correo-html')?.value;
+            if (typeof signatureHtml !== 'string') return;
+            if (!navigator.onLine) {
+                showToast('Se requiere conexión para guardar la firma de correo.', 'warning');
+                return;
+            }
+
+            try {
+                const empresaId = localStorage.getItem('empresaActiva')
+                    || localStorage.getItem('selected_empresa_id')
+                    || 'all';
+                const response = await fetchAPI('/api/configuracion/notificaciones-email/firma', {
+                    method: 'PUT',
+                    body: JSON.stringify({ signatureHtml }),
+                    headers: { 'X-Empresa-Id': empresaId }
+                });
+                const editor = document.getElementById('firma-correo-html');
+                editor.value = response.signatureHtml || '';
+                showToast('Firma de correo guardada.', 'success');
+            } catch (error) {
+                showToast(error.message || 'No se pudo guardar la firma.', 'error');
+            }
+        }
+
         try {
             Swal.fire({
                 title: 'Guardando configuración SMTP...',
@@ -12305,7 +12368,7 @@ Fecha de firma: {{FECHA}}`;
         compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
-        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, marcarCorreoNoLeido, responderCorreo,
+        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, abrirNuevoCorreo, marcarCorreoNoLeido, responderCorreo,
         enviarAFlujoDirecto,
         nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
         toggleAuth, registerUser, recoverPassword, resetPassword,
@@ -12325,7 +12388,7 @@ Fecha de firma: {{FECHA}}`;
         mostrarOverlayKanban,
         abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
-        guardarYProbarSMTP, enviarCorreoPrueba,
+        guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,
         abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, abrirModalRenovarPoliza, procesarRenovacion,
         prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,

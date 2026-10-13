@@ -6,6 +6,7 @@ const Empresa = require('../models/Empresa'); // Importar para buscar empresa pr
 const auth = require('../middleware/auth');
 const { applyTenantFilter, buildQueryFilter, hasTenantAccess, limpiarEmpresaId, getEmpresaPrincipalId } = require('../middleware/tenantFilter');
 const multer = require('multer');
+const sanitizeHtml = require('sanitize-html');
 
 // Configuración de Multer
 const storage = multer.memoryStorage();
@@ -176,7 +177,8 @@ router.get('/', async (req, res) => {
                         enabled: empresa.notificaciones.email.enabled,
                         smtpHost: empresa.notificaciones.email.smtpHost,
                         smtpPort: empresa.notificaciones.email.smtpPort,
-                        smtpUser: empresa.notificaciones.email.smtpUser
+                        smtpUser: empresa.notificaciones.email.smtpUser,
+                        signatureHtml: empresa.notificaciones.email.signatureHtml || ''
                         // smtpPass NO se envía al frontend por seguridad
                     };
                 }
@@ -446,7 +448,8 @@ router.put('/notificaciones-email', isAdmin, async (req, res) => {
             smtpHost: smtpHost || '',
             smtpPort: smtpPort || 587,
             smtpUser: smtpUser || '',
-            smtpPass: smtpPass || ''
+            smtpPass: smtpPass || '',
+            signatureHtml: empresa.notificaciones.email.signatureHtml || ''
         };
         
         await empresa.save();
@@ -466,6 +469,72 @@ router.put('/notificaciones-email', isAdmin, async (req, res) => {
     } catch (err) {
         console.error('[Config SMTP] Error:', err);
         res.status(500).json({ error: 'Error al guardar configuración SMTP', details: err.message });
+    }
+});
+
+router.put('/notificaciones-email/firma', isAdmin, async (req, res) => {
+    const signatureHtml = req.body?.signatureHtml;
+    if (typeof signatureHtml !== 'string') {
+        return res.status(400).json({ error: 'La firma debe enviarse como texto HTML.' });
+    }
+    if (signatureHtml.length > 30000) {
+        return res.status(400).json({ error: 'La firma no puede exceder 30,000 caracteres.' });
+    }
+
+    const headerId = req.headers['x-empresa-id'] || req.headers['X-Empresa-Id'];
+    const targetId = limpiarEmpresaId(headerId) || req.user?.empresaId?.toString();
+    if (!targetId || !mongoose.Types.ObjectId.isValid(targetId)) {
+        return res.status(400).json({ error: 'Selecciona una empresa válida para guardar la firma.' });
+    }
+
+    try {
+        const safeSignature = sanitizeHtml(signatureHtml, {
+            allowedTags: [
+                'a', 'b', 'blockquote', 'br', 'caption', 'center', 'div', 'em',
+                'font', 'h1', 'h2', 'h3', 'h4', 'hr', 'i', 'img', 'li', 'ol',
+                'p', 'span', 'strong', 'table', 'tbody', 'td', 'tfoot', 'th',
+                'thead', 'tr', 'u', 'ul'
+            ],
+            allowedAttributes: {
+                a: ['href', 'name', 'target', 'rel', 'style'],
+                div: ['align', 'style'],
+                font: ['color', 'face', 'size', 'style'],
+                img: ['src', 'alt', 'width', 'height', 'style'],
+                p: ['align', 'style'],
+                span: ['style'],
+                table: ['align', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
+                td: ['align', 'colspan', 'rowspan', 'style', 'valign', 'width'],
+                th: ['align', 'colspan', 'rowspan', 'style', 'valign', 'width'],
+                '*': ['style']
+            },
+            allowedStyles: {
+                '*': {
+                    'background-color': [/^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^transparent$/i],
+                    'border': [/^[\w\s#().,-]+$/],
+                    'color': [/^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^[a-z]+$/i],
+                    'font-family': [/^[\w\s"',-]+$/],
+                    'font-size': [/^[\d.]+(px|pt|em|%)$/],
+                    'font-weight': [/^(normal|bold|[1-9]00)$/],
+                    'height': [/^[\d.]+(px|pt|%)$/],
+                    'max-width': [/^[\d.]+(px|pt|%)$/],
+                    'text-align': [/^(left|center|right)$/],
+                    'text-decoration': [/^(none|underline)$/],
+                    'width': [/^[\d.]+(px|pt|%)$/]
+                }
+            },
+            allowedSchemes: ['http', 'https', 'mailto', 'data'],
+            allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+            allowProtocolRelative: false
+        });
+        const empresa = await Empresa.findById(targetId);
+        if (!empresa) return res.status(404).json({ error: 'Empresa no encontrada.' });
+
+        empresa.set('notificaciones.email.signatureHtml', safeSignature);
+        await empresa.save();
+        return res.json({ success: true, signatureHtml: safeSignature });
+    } catch (error) {
+        console.error('[Config firma email] Error al guardar:', error);
+        return res.status(500).json({ error: 'No se pudo guardar la firma de correo.' });
     }
 });
 

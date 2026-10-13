@@ -31,6 +31,7 @@
     "nodemailer": "^8.0.1",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.19.1",
+    "sanitize-html": "^2.18.0",
     "socket.io": "^4.8.1",
     "xlsx": "^0.18.5",
     "xss-clean": "^0.1.4"
