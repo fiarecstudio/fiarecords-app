@@ -1,6 +1,6 @@
 const Empresa = require('../models/Empresa');
 
-async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo }) {
+async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo, attachments, headers }) {
     const empresa = await Empresa.findById(empresaId);
     const configEmpresa = empresa?.notificaciones?.email;
     const config = configEmpresa?.enabled ? configEmpresa : {};
@@ -23,6 +23,12 @@ async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo })
 
     if (replyTo) {
         payload.replyTo = { email: replyTo };
+    }
+    if (Array.isArray(attachments) && attachments.length) {
+        payload.attachment = attachments.map(({ name, content }) => ({ name, content }));
+    }
+    if (headers && Object.keys(headers).length) {
+        payload.headers = headers;
     }
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {

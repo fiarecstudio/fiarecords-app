@@ -178,7 +178,8 @@ router.get('/', async (req, res) => {
                         smtpHost: empresa.notificaciones.email.smtpHost,
                         smtpPort: empresa.notificaciones.email.smtpPort,
                         smtpUser: empresa.notificaciones.email.smtpUser,
-                        signatureHtml: empresa.notificaciones.email.signatureHtml || ''
+                        firmaHTML: empresa.notificaciones.email.firmaHTML || empresa.notificaciones.email.signatureHtml || '',
+                        signatureHtml: empresa.notificaciones.email.firmaHTML || empresa.notificaciones.email.signatureHtml || ''
                         // smtpPass NO se envía al frontend por seguridad
                     };
                 }
@@ -443,14 +444,11 @@ router.put('/notificaciones-email', isAdmin, async (req, res) => {
         
         // Actualizar campo notificaciones.email
         empresa.notificaciones = empresa.notificaciones || {};
-        empresa.notificaciones.email = {
-            enabled: enabled !== undefined ? enabled : true,
-            smtpHost: smtpHost || '',
-            smtpPort: smtpPort || 587,
-            smtpUser: smtpUser || '',
-            smtpPass: smtpPass || '',
-            signatureHtml: empresa.notificaciones.email.signatureHtml || ''
-        };
+        if (enabled !== undefined) empresa.set('notificaciones.email.enabled', enabled);
+        if (smtpHost !== undefined) empresa.set('notificaciones.email.smtpHost', smtpHost);
+        if (smtpPort !== undefined) empresa.set('notificaciones.email.smtpPort', smtpPort);
+        if (smtpUser !== undefined) empresa.set('notificaciones.email.smtpUser', smtpUser);
+        if (smtpPass !== undefined) empresa.set('notificaciones.email.smtpPass', smtpPass);
         
         await empresa.save();
         
@@ -473,7 +471,7 @@ router.put('/notificaciones-email', isAdmin, async (req, res) => {
 });
 
 router.put('/notificaciones-email/firma', isAdmin, async (req, res) => {
-    const signatureHtml = req.body?.signatureHtml;
+    const signatureHtml = req.body?.firmaHTML ?? req.body?.signatureHtml;
     if (typeof signatureHtml !== 'string') {
         return res.status(400).json({ error: 'La firma debe enviarse como texto HTML.' });
     }
@@ -529,9 +527,10 @@ router.put('/notificaciones-email/firma', isAdmin, async (req, res) => {
         const empresa = await Empresa.findById(targetId);
         if (!empresa) return res.status(404).json({ error: 'Empresa no encontrada.' });
 
+        empresa.set('notificaciones.email.firmaHTML', safeSignature);
         empresa.set('notificaciones.email.signatureHtml', safeSignature);
         await empresa.save();
-        return res.json({ success: true, signatureHtml: safeSignature });
+        return res.json({ success: true, firmaHTML: safeSignature, signatureHtml: safeSignature });
     } catch (error) {
         console.error('[Config firma email] Error al guardar:', error);
         return res.status(500).json({ error: 'No se pudo guardar la firma de correo.' });

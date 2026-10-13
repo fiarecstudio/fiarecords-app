@@ -1,9 +1,34 @@
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
+const sanitizeHtml = require('sanitize-html');
 const Empresa = require('../models/Empresa');
 const { enviarEmail } = require('../services/notificationService');
 
 const MAX_INBOX_MESSAGES = 50;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const EMAIL_HTML_OPTIONS = {
+    allowedTags: [
+        'a', 'b', 'blockquote', 'br', 'caption', 'center', 'div', 'em', 'font',
+        'h1', 'h2', 'h3', 'h4', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre',
+        'span', 'strong', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr',
+        'u', 'ul'
+    ],
+    allowedAttributes: {
+        a: ['href', 'name', 'target', 'rel', 'style'],
+        div: ['align', 'style', 'data-email-signature', 'data-original-quote'],
+        font: ['color', 'face', 'size', 'style'],
+        img: ['src', 'alt', 'width', 'height', 'style'],
+        p: ['align', 'style'],
+        span: ['style'],
+        table: ['align', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
+        td: ['align', 'colspan', 'rowspan', 'style', 'valign', 'width'],
+        th: ['align', 'colspan', 'rowspan', 'style', 'valign', 'width'],
+        '*': ['style']
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'data'],
+    allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+    allowProtocolRelative: false
+};
 
 function getImapConfig() {
     const { IMAP_HOST, IMAP_USER, IMAP_PASS } = process.env;
@@ -146,7 +171,12 @@ async function getInbox(req, res) {
                 date: parsed.date ? parsed.date.toISOString() : null,
                 snippet: cleanSnippet(plainText, parsed.html),
                 text: plainText,
-                html: htmlWithInlineAttachments(parsed),
+                html: sanitizeHtml(htmlWithInlineAttachments(parsed), EMAIL_HTML_OPTIONS),
+                messageId: parsed.messageId || '',
+                inReplyTo: Array.isArray(parsed.inReplyTo)
+                    ? parsed.inReplyTo
+                    : parsed.inReplyTo ? [parsed.inReplyTo] : [],
+                references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
                 toEmails: recipients(parsed.to),
                 ccEmails: recipients(parsed.cc),
                 replyAllEmails,
@@ -211,16 +241,44 @@ async function replyEmail(req, res) {
         : [];
     const asuntoOriginal = typeof req.body.asunto === 'string' ? req.body.asunto.trim().replace(/[\r\n]+/g, ' ') : '';
     const mensaje = typeof req.body.mensaje === 'string' ? req.body.mensaje.trim() : '';
-    const tipo = ['new', 'reply', 'forward'].includes(req.body?.tipo) ? req.body.tipo : 'reply';
+    const tipo = ['new', 'reply', 'replyAll', 'forward'].includes(req.body?.tipo) ? req.body.tipo : 'reply';
+    const attachments = req.body?.attachments ?? [];
+    const originalMessageId = typeof req.body?.originalMessageId === 'string'
+        ? req.body.originalMessageId.trim()
+        : '';
 
     if (!destinatarios.length
         || destinatarios.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
         || !asuntoOriginal
-        || !mensaje) {
+        || typeof mensaje !== 'string'
+        || !mensaje.trim()
+        || !Array.isArray(attachments)) {
         return res.status(400).json({
             success: false,
-            error: 'Indica un destinatario válido, asunto y mensaje.'
+            error: 'Indica un destinatario válido, asunto, mensaje y adjuntos válidos.'
         });
+    }
+
+    const attachmentsValidos = [];
+    let totalAttachmentBytes = 0;
+    for (const attachment of attachments) {
+        if (!attachment || typeof attachment.name !== 'string'
+            || !attachment.name.trim() || attachment.name.length > 255
+            || /[\r\n]/.test(attachment.name)
+            || typeof attachment.content !== 'string'
+            || !attachment.content
+            || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(attachment.content)) {
+            return res.status(400).json({ success: false, error: 'Uno de los archivos adjuntos no es válido.' });
+        }
+        const contentBytes = Buffer.from(attachment.content, 'base64').length;
+        totalAttachmentBytes += contentBytes;
+        if (totalAttachmentBytes > MAX_ATTACHMENT_BYTES) {
+            return res.status(413).json({ success: false, error: 'El tamaño total de los adjuntos no puede exceder 10 MB.' });
+        }
+        attachmentsValidos.push({ name: attachment.name.trim(), content: attachment.content });
+    }
+    if (originalMessageId.length > 998 || /[\r\n]/.test(originalMessageId)) {
+        return res.status(400).json({ success: false, error: 'El identificador del correo original no es válido.' });
     }
 
     try {
@@ -237,14 +295,41 @@ async function replyEmail(req, res) {
         const asunto = tipo === 'new' || /^(?:re|fwd?):/i.test(asuntoOriginal)
             ? asuntoOriginal
             : `${tipo === 'forward' ? 'Fwd' : 'Re'}: ${asuntoOriginal}`;
-        const signatureHtml = empresa?.notificaciones?.email?.signatureHtml || '';
-        const cuerpo = `<div>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</div>${signatureHtml ? `<br>${signatureHtml}` : ''}`;
+        const signatureHtml = sanitizeHtml(
+            empresa?.notificaciones?.email?.firmaHTML || empresa?.notificaciones?.email?.signatureHtml || '',
+            EMAIL_HTML_OPTIONS
+        );
+        const mensajeHtml = req.body?.mensajeHtml === true
+            ? sanitizeHtml(mensaje, EMAIL_HTML_OPTIONS)
+            : `<div>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</div>`;
+        const textoRedactado = sanitizeHtml(mensaje, {
+            ...EMAIL_HTML_OPTIONS,
+            exclusiveFilter: frame => frame.tag === 'div'
+                && ['true'].includes(frame.attribs['data-email-signature'] || frame.attribs['data-original-quote'])
+        }).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+        if (!textoRedactado) {
+            return res.status(400).json({ success: false, error: 'El mensaje no puede estar vacío.' });
+        }
+        const mensajeSinFirma = req.body?.mensajeHtml === true
+            ? sanitizeHtml(mensaje, {
+                ...EMAIL_HTML_OPTIONS,
+                exclusiveFilter: frame => frame.tag === 'div' && frame.attribs['data-email-signature'] === 'true'
+            })
+            : mensajeHtml;
+        const cuerpo = `${mensajeSinFirma}${signatureHtml ? `<br>${signatureHtml}` : ''}`;
+        const headers = tipo === 'reply' || tipo === 'replyAll'
+            ? originalMessageId
+                ? { 'In-Reply-To': originalMessageId, References: originalMessageId }
+                : undefined
+            : undefined;
         await enviarEmail({
             empresaId,
             destinatario: destinatarios,
             asunto,
             cuerpo,
-            replyTo
+            replyTo,
+            attachments: attachmentsValidos,
+            headers
         });
 
         return res.json({ success: true, message: 'Respuesta enviada correctamente.' });

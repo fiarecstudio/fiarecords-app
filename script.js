@@ -874,8 +874,10 @@ let proyectoIdEnEdicion = null;
                     configCache = configConsolidada;
                     logoBase64 = localStorage.getItem(`backup_logo_${finalEmpresaId}`) || null;
                     const firmaCorreo = document.getElementById('firma-correo-html');
-                    if (firmaCorreo && typeof configConsolidada.notificacionesEmail?.signatureHtml === 'string') {
-                        firmaCorreo.value = configConsolidada.notificacionesEmail.signatureHtml;
+                    const cachedSignature = configConsolidada.notificacionesEmail?.firmaHTML
+                        ?? configConsolidada.notificacionesEmail?.signatureHtml;
+                    if (firmaCorreo && typeof cachedSignature === 'string') {
+                        firmaCorreo.value = cachedSignature;
                     }
                     setTimeout(() => {
                         loadInitialConfig(finalEmpresaId, true).catch((err) => {
@@ -915,8 +917,10 @@ let proyectoIdEnEdicion = null;
                         smtpUser.value = config.notificacionesEmail.smtpUser;
                     }
                     const firmaCorreo = document.getElementById('firma-correo-html');
-                    if (firmaCorreo && typeof config.notificacionesEmail.signatureHtml === 'string') {
-                        firmaCorreo.value = config.notificacionesEmail.signatureHtml;
+                    const loadedSignature = config.notificacionesEmail.firmaHTML
+                        ?? config.notificacionesEmail.signatureHtml;
+                    if (firmaCorreo && typeof loadedSignature === 'string') {
+                        firmaCorreo.value = loadedSignature;
                     }
                 }
             }
@@ -3537,6 +3541,20 @@ let proyectoIdEnEdicion = null;
     let correosBandejaEntrada = [];
     let correoBandejaSeleccionado = null;
     let modoCorreoActual = 'reply';
+    let archivosCorreoSeleccionados = [];
+
+    function obtenerFirmaCorreo() {
+        return configCache?.notificacionesEmail?.firmaHTML
+            || configCache?.notificacionesEmail?.signatureHtml
+            || '';
+    }
+
+    function insertarFirmaEnEditorCorreo() {
+        const editor = document.getElementById('respuesta-mensaje');
+        const firma = obtenerFirmaCorreo();
+        if (!editor || !firma || editor.querySelector('[data-email-signature="true"]')) return;
+        editor.insertAdjacentHTML('beforeend', `<br><div data-email-signature="true">${firma}</div>`);
+    }
 
     async function cargarBandejaEntrada() {
         const lista = document.getElementById('bandeja-lista');
@@ -3603,15 +3621,57 @@ let proyectoIdEnEdicion = null;
     }
 
     function generarDocumentoCorreo(correo) {
-        let body = correo.html;
-        if (!body) {
-            const safeText = escapeHTML(String(correo.text || correo.snippet || '')
-                .replace(/<(https?:\/\/[^>\s]+)>/gi, '$1'))
-                .replace(/\r?\n/g, '<br>');
-            body = `<div>${safeText}</div>`;
-        }
+        const threadEmails = obtenerCorreosDelHilo(correo);
+        const body = threadEmails.map((mensaje, index) => {
+            let messageBody = mensaje.html;
+            if (!messageBody) {
+                const safeText = escapeHTML(String(mensaje.text || mensaje.snippet || '')
+                    .replace(/<(https?:\/\/[^>\s]+)>/gi, '$1'))
+                    .replace(/\r?\n/g, '<br>');
+                messageBody = `<div>${safeText}</div>`;
+            }
+            const fecha = mensaje.date
+                ? new Date(mensaje.date).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })
+                : '';
+            const separator = index ? 'border-top:1px solid #374151;padding-top:16px;margin-top:20px;' : '';
+            return `<article style="${separator}"><div style="font-weight:bold;margin-bottom:12px">${escapeHTML(String(mensaje.fromName || mensaje.fromEmail || 'Remitente desconocido'))} &lt;${escapeHTML(String(mensaje.fromEmail || ''))}&gt; <span style="font-weight:normal;color:#9ca3af">${escapeHTML(fecha)}</span></div>${messageBody}</article>`;
+        }).join('');
         const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; connect-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
         return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.55 Arial,sans-serif;color:#e5e7eb!important;background:#111827;margin:16px;overflow-x:auto;word-wrap:break-word;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}a{color:#60a5fa}</style></head><body>${body}</body></html>`;
+    }
+
+    function normalizarAsuntoHilo(asunto) {
+        return String(asunto || '')
+            .replace(/^(?:(?:re|fw|fwd)\s*:\s*)+/i, '')
+            .trim()
+            .toLocaleLowerCase();
+    }
+
+    function obtenerCorreosDelHilo(correoInicial) {
+        const relacionados = new Set([correoInicial.id]);
+        let cambio = true;
+        while (cambio) {
+            cambio = false;
+            for (const correo of correosBandejaEntrada) {
+                if (relacionados.has(correo.id)) continue;
+                const references = [
+                    ...(Array.isArray(correo.references) ? correo.references : []),
+                    ...(Array.isArray(correo.inReplyTo) ? correo.inReplyTo : correo.inReplyTo ? [correo.inReplyTo] : [])
+                ].filter(Boolean);
+                const enlazado = references.some(reference => relacionados.has(
+                    correosBandejaEntrada.find(item => item.messageId === reference)?.id
+                ));
+                const asuntoNormalizado = normalizarAsuntoHilo(correo.subject);
+                const asuntoInicialNormalizado = normalizarAsuntoHilo(correoInicial.subject);
+                if ((asuntoNormalizado && asuntoNormalizado === asuntoInicialNormalizado) || enlazado) {
+                    relacionados.add(correo.id);
+                    cambio = true;
+                }
+            }
+        }
+        return correosBandejaEntrada
+            .filter(correo => relacionados.has(correo.id))
+            .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
     }
 
     function mostrarCorreoSeleccionado() {
@@ -3652,8 +3712,17 @@ let proyectoIdEnEdicion = null;
 
     function abrirRespuestaCorreo(mode = 'reply') {
         if (mode !== 'new' && !correoBandejaSeleccionado) return;
+        if (!obtenerFirmaCorreo()) {
+            loadInitialConfig(null, true).then(() => {
+                insertarFirmaEnEditorCorreo();
+                actualizarVistaPreviaCorreo();
+            }).catch(error => {
+                console.warn('[BandejaEntrada] No fue posible cargar la firma de correo:', error.message);
+            });
+        }
         const correo = correoBandejaSeleccionado || {};
         modoCorreoActual = mode;
+        archivosCorreoSeleccionados = [];
         const destinatarios = mode === 'replyAll'
             ? (correo.replyAllEmails || [correo.fromEmail]).filter(Boolean)
             : mode === 'reply' ? [correo.fromEmail].filter(Boolean) : [];
@@ -3667,16 +3736,81 @@ let proyectoIdEnEdicion = null;
         document.getElementById('respuesta-asunto').value = isNew ? '' : forward
             ? (/^fwd?:/i.test(asunto) ? asunto : `Fwd: ${asunto}`)
             : (/^re:/i.test(asunto) ? asunto : `Re: ${asunto}`);
-        document.getElementById('respuesta-mensaje').value = forward
-            ? `\n\n---------- Mensaje reenviado ----------\nDe: ${correo.fromName} <${correo.fromEmail}>\nFecha: ${correo.date ? new Date(correo.date).toLocaleString('es-MX') : ''}\nAsunto: ${asunto}\n\n${correo.text || correo.snippet || ''}`
+        const editor = document.getElementById('respuesta-mensaje');
+        const fechaOriginal = correo.date ? new Date(correo.date).toLocaleString('es-MX') : '';
+        const cuerpoOriginal = correo.html || `<div>${escapeHTML(String(correo.text || correo.snippet || '')).replace(/\r?\n/g, '<br>')}</div>`;
+        const quotedMessage = mode === 'reply' || mode === 'replyAll' || forward
+            ? `<br><br><div data-original-quote="true" style="border-left:2px solid #3b82f6;padding-left:12px;margin-top:15px;color:#9ca3af;"><p style="font-weight:bold;margin-bottom:5px;">----- ${forward ? 'Mensaje reenviado' : 'Mensaje original'} -----</p><p style="margin:2px 0;"><b>De:</b> ${escapeHTML(String(correo.fromName || ''))} &lt;${escapeHTML(String(correo.fromEmail || ''))}&gt;</p><p style="margin:2px 0;"><b>Enviado:</b> ${escapeHTML(fechaOriginal)}</p><p style="margin:2px 0;"><b>Asunto:</b> ${escapeHTML(asunto)}</p><br><div>${cuerpoOriginal}</div></div>`
             : '';
+        editor.innerHTML = `<div><br></div>${quotedMessage}`;
+        insertarFirmaEnEditorCorreo();
         document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', isNew || forward || mode === 'reply');
         document.getElementById('respuesta-enviar').textContent = isNew ? 'Enviar correo' : forward ? 'Reenviar' : 'Enviar respuesta';
+        document.getElementById('respuesta-adjuntos').value = '';
+        renderizarAdjuntosCorreo();
+        actualizarVistaPreviaCorreo();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
     }
 
     function abrirNuevoCorreo() {
         abrirRespuestaCorreo('new');
+    }
+
+    function renderizarAdjuntosCorreo() {
+        const container = document.getElementById('respuesta-adjuntos-lista');
+        if (!container) return;
+        container.innerHTML = archivosCorreoSeleccionados.map((file, index) => {
+            const size = file.size >= 1024 * 1024
+                ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+                : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+            return `<div class="d-flex align-items-center justify-content-between gap-2 small border rounded p-2 mb-1"><span class="text-truncate">${escapeHTML(file.name)} <span class="text-muted">(${size})</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove-attachment="${index}" aria-label="Quitar ${escapeHTML(file.name)}"><i class="bi bi-x-lg"></i></button></div>`;
+        }).join('');
+        container.querySelectorAll('[data-remove-attachment]').forEach(button => {
+            button.addEventListener('click', () => {
+                archivosCorreoSeleccionados.splice(Number(button.dataset.removeAttachment), 1);
+                renderizarAdjuntosCorreo();
+            });
+        });
+    }
+
+    function seleccionarAdjuntosCorreo(event) {
+        const selected = Array.from(event.target.files || []);
+        const combined = [...archivosCorreoSeleccionados, ...selected];
+        const totalBytes = combined.reduce((total, file) => total + file.size, 0);
+        if (totalBytes > 10 * 1024 * 1024) {
+            showToast('El tamaño total de los adjuntos no puede exceder 10 MB.', 'warning');
+            event.target.value = '';
+            return;
+        }
+        archivosCorreoSeleccionados = combined;
+        event.target.value = '';
+        renderizarAdjuntosCorreo();
+    }
+
+    async function convertirAdjuntosABase64(files) {
+        return Promise.all(files.map(file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const dataUrl = String(reader.result || '');
+                const separator = dataUrl.indexOf(',');
+                if (separator < 0) return reject(new Error(`No se pudo leer el archivo ${file.name}.`));
+                resolve({ name: file.name, content: dataUrl.slice(separator + 1) });
+            };
+            reader.onerror = () => reject(reader.error || new Error(`No se pudo leer el archivo ${file.name}.`));
+            reader.readAsDataURL(file);
+        })));
+    }
+
+    function actualizarVistaPreviaCorreo() {
+        const preview = document.getElementById('respuesta-cuerpo-preview');
+        const editor = document.getElementById('respuesta-mensaje');
+        if (!preview || !editor) return;
+        const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'";
+        const bodyContent = editor.innerHTML || '<p class="text-muted">Escribe tu mensaje para ver la vista previa.</p>';
+        const body = bodyContent.includes('data-email-signature="true"')
+            ? bodyContent
+            : `${bodyContent}${obtenerFirmaCorreo() ? `<br>${obtenerFirmaCorreo()}` : ''}`;
+        preview.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{font:14px/1.5 Arial,sans-serif;color:#212529;margin:12px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%;width:100%}</style></head><body>${body}</body></html>`;
     }
 
     async function marcarCorreoNoLeido() {
@@ -3712,13 +3846,17 @@ let proyectoIdEnEdicion = null;
                 showToast('Ingresa direcciones de correo válidas.', 'error');
                 return;
             }
+            const attachments = await convertirAdjuntosABase64(archivosCorreoSeleccionados);
             const response = await fetchAPI('/api/bandeja-entrada/reply', {
                 method: 'POST',
                 body: JSON.stringify({
                     destinatario: validRecipients.join(','),
                     asunto: document.getElementById('respuesta-asunto').value,
-                    mensaje: document.getElementById('respuesta-mensaje').value,
-                    tipo: modoCorreoActual
+                    mensaje: document.getElementById('respuesta-mensaje').innerHTML,
+                    mensajeHtml: true,
+                    tipo: modoCorreoActual,
+                    originalMessageId: correoBandejaSeleccionado?.messageId || '',
+                    attachments
                 })
             });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
@@ -10826,11 +10964,19 @@ Fecha de firma: {{FECHA}}`;
                 || 'all';
             const response = await fetchAPI('/api/configuracion/notificaciones-email/firma', {
                 method: 'PUT',
-                body: JSON.stringify({ signatureHtml }),
+                body: JSON.stringify({ firmaHTML: signatureHtml }),
                 headers: { 'X-Empresa-Id': empresaId }
             });
             const editor = document.getElementById('firma-correo-html');
             editor.value = response.signatureHtml || '';
+            if (configCache) {
+                configCache.notificacionesEmail = {
+                    ...(configCache.notificacionesEmail || {}),
+                    firmaHTML: response.firmaHTML || response.signatureHtml || '',
+                    signatureHtml: response.signatureHtml || response.firmaHTML || ''
+                };
+            }
+            actualizarVistaPreviaCorreo();
             showToast('Firma de correo guardada.', 'success');
         } catch (error) {
             showToast(error.message || 'No se pudo guardar la firma.', 'error');
@@ -12409,6 +12555,8 @@ Fecha de firma: {{FECHA}}`;
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
         cerrarPrintPreview, ejecutarImpresion
     });
+    document.getElementById('respuesta-adjuntos')?.addEventListener('change', seleccionarAdjuntosCorreo);
+    document.getElementById('respuesta-mensaje')?.addEventListener('input', actualizarVistaPreviaCorreo);
     // Cableado: funciones usadas en onclick/HTML pero fuera del objeto window.app
     window.app.toggleTheme = toggleTheme;
     window.app.compartirDatosBancariosWhatsApp = compartirDatosBancariosWhatsApp;

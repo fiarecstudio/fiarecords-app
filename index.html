@@ -1541,7 +1541,7 @@
             </section>
 
             <div class="modal fade" id="modalResponderCorreo" tabindex="-1" aria-labelledby="modalResponderCorreoLabel" aria-hidden="true">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <form class="modal-content" onsubmit="app.responderCorreo(event)">
                         <div class="modal-header">
                             <h5 class="modal-title" id="modalResponderCorreoLabel">Responder correo</h5>
@@ -1554,8 +1554,13 @@
                             <label for="respuesta-asunto" class="form-label">Asunto</label>
                             <input id="respuesta-asunto" type="text" class="form-control mb-3" required>
                             <label for="respuesta-mensaje" class="form-label">Mensaje</label>
-                            <textarea id="respuesta-mensaje" class="form-control" rows="5" required></textarea>
+                            <div id="respuesta-mensaje" class="form-control mb-3" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mensaje del correo" style="min-height: 150px; overflow-y: auto;"></div>
+                            <label for="respuesta-adjuntos" class="form-label">Adjuntar archivos</label>
+                            <input id="respuesta-adjuntos" type="file" class="form-control" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                            <div id="respuesta-adjuntos-lista" class="mt-2" aria-live="polite"></div>
                             <div class="form-text mt-2">La firma de la empresa se agregará automáticamente al enviar.</div>
+                            <label for="respuesta-cuerpo-preview" class="form-label fw-semibold mt-3">Vista previa del cuerpo y firma</label>
+                            <iframe id="respuesta-cuerpo-preview" class="form-control w-100" title="Vista previa del correo" sandbox="allow-same-origin" style="height: 180px;"></iframe>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
