@@ -3,7 +3,7 @@ const { simpleParser } = require('mailparser');
 const Empresa = require('../models/Empresa');
 const { enviarEmail } = require('../services/notificationService');
 
-const MAX_INBOX_MESSAGES = 30;
+const MAX_INBOX_MESSAGES = 50;
 
 function getImapConfig() {
     const { IMAP_HOST, IMAP_USER, IMAP_PASS } = process.env;
@@ -52,12 +52,12 @@ async function getInbox(req, res) {
         });
         await connection.openBox('INBOX');
 
-        const uids = await buscarUids(connection);
-        const latestUids = uids.slice(-MAX_INBOX_MESSAGES).reverse();
+        const uids = (await buscarUids(connection)).sort((a, b) => a - b);
+        const latestUids = uids.slice(-MAX_INBOX_MESSAGES);
         if (latestUids.length === 0) return res.json({ success: true, emails: [] });
 
         const messages = await connection.search(
-            [['UID', latestUids.join(',')]],
+            [['UID', `${latestUids[0]}:${latestUids[latestUids.length - 1]}`]],
             { bodies: [''], markSeen: false }
         );
 
@@ -72,18 +72,25 @@ async function getInbox(req, res) {
                 .replace(/\s+/g, ' ')
                 .trim();
 
+            const flags = message.attributes.flags || [];
+            const from = parsed.from?.value
+                ?.map(({ name, address }) => name ? `${name} <${address}>` : address)
+                .filter(Boolean)
+                .join(', ') || parsed.from?.text || '';
+
             return {
                 id: String(message.attributes.uid),
-                from: parsed.from?.text || '',
+                from,
                 fromEmail: parsed.from?.value?.[0]?.address || '',
                 subject: parsed.subject || '(Sin asunto)',
-                date: parsed.date || null,
+                date: parsed.date ? parsed.date.toISOString() : null,
                 snippet: plainText.slice(0, 240),
-                text: parsed.text || plainText
+                text: parsed.text || plainText,
+                seen: flags.some(flag => flag.toLowerCase() === '\\seen')
             };
         }));
 
-        emails.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        emails.reverse();
         return res.json({ success: true, emails });
     } catch (error) {
         console.error('[BandejaEntrada] Error al consultar INBOX:', error);
