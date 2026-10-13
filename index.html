@@ -1484,6 +1484,9 @@
                         </button>
                         </div>
                     </div>
+                    <div class="card-body pt-2 pb-0">
+                        <span id="bandeja-sync-status" class="small text-muted" role="status" aria-live="polite">Aún no se ha actualizado</span>
+                    </div>
                     <div class="card-body pt-3">
                         <div class="bandeja-workspace">
                             <aside class="bandeja-list-pane">
@@ -1494,6 +1497,16 @@
                                     </div>
                                     <i class="bi bi-chevron-down text-muted" aria-hidden="true"></i>
                                 </div>
+                                <div class="d-flex gap-2 mb-2" role="tablist" aria-label="Carpetas de correo">
+                                    <button id="bandeja-tab-inbox" type="button" class="btn btn-sm btn-primary" onclick="app.mostrarCarpetaBandeja('INBOX')" role="tab" aria-selected="true">
+                                        <i class="bi bi-inbox"></i> Entrada
+                                    </button>
+                                    <button id="bandeja-tab-sent" type="button" class="btn btn-sm btn-outline-secondary" onclick="app.mostrarCarpetaBandeja('Sent')" role="tab" aria-selected="false">
+                                        <i class="bi bi-send"></i> Enviados
+                                    </button>
+                                </div>
+                                <label class="visually-hidden" for="buscarCorreo">Buscar correos</label>
+                                <input id="buscarCorreo" class="form-control form-control-sm mb-2" type="search" placeholder="🔍 Buscar por asunto, correo o nombre...">
                                 <div id="bandeja-lista" class="bandeja-email-list" aria-label="Correos recibidos">
                                     <div class="bandeja-list-message text-muted">Selecciona Actualizar para consultar los correos.</div>
                                 </div>
@@ -1611,6 +1624,13 @@
                             <label for="firma-correo-html" class="form-label fw-semibold">Firma de correo (HTML)</label>
                             <textarea id="firma-correo-html" class="form-control" rows="7" maxlength="30000" placeholder="<p>Atentamente,<br>Nombre de la empresa</p>"></textarea>
                             <div class="form-text">Se añadirá automáticamente a los correos nuevos y respuestas. Se admiten formato HTML e imágenes; se eliminan etiquetas y atributos inseguros al guardar.</div>
+                            <label for="firma-imagen-archivo" class="btn btn-outline-secondary mt-3">
+                                <i class="bi bi-camera"></i> Subir Imagen/Logo para Firma
+                            </label>
+                            <input id="firma-imagen-archivo" class="visually-hidden" type="file" accept="image/*">
+                            <div class="form-text">La imagen se reduce para que la firma pueda guardarse dentro del límite permitido.</div>
+                            <label class="form-label fw-semibold mt-3" for="firma-correo-preview">Vista previa de la firma</label>
+                            <iframe id="firma-correo-preview" class="form-control w-100" title="Vista previa de la firma" sandbox="allow-same-origin" style="height: 180px;"></iframe>
                             <button type="button" class="btn btn-outline-primary mt-3" onclick="app.guardarFirmaCorreo()">
                                 <i class="bi bi-save"></i> Guardar firma
                             </button>

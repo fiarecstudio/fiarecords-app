@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { applyTenantFilter } = require('../middleware/tenantFilter');
-const { getInbox, markUnread, replyEmail } = require('../controllers/bandejaEntradaController');
+const { getInbox, getEmailDetail, markUnread, replyEmail } = require('../controllers/bandejaEntradaController');
 
 router.use(auth);
 router.use(applyTenantFilter);
@@ -12,6 +12,7 @@ router.use((req, res, next) => {
 });
 
 router.get('/', getInbox);
+router.get('/:id', getEmailDetail);
 router.post('/reply', replyEmail);
 router.post('/mark-unread', markUnread);
 

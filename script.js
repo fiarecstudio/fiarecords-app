@@ -878,6 +878,7 @@ let proyectoIdEnEdicion = null;
                         ?? configConsolidada.notificacionesEmail?.signatureHtml;
                     if (firmaCorreo && typeof cachedSignature === 'string') {
                         firmaCorreo.value = cachedSignature;
+                        renderizarPreviewFirma();
                     }
                     setTimeout(() => {
                         loadInitialConfig(finalEmpresaId, true).catch((err) => {
@@ -921,6 +922,7 @@ let proyectoIdEnEdicion = null;
                         ?? config.notificacionesEmail.signatureHtml;
                     if (firmaCorreo && typeof loadedSignature === 'string') {
                         firmaCorreo.value = loadedSignature;
+                        renderizarPreviewFirma();
                     }
                 }
             }
@@ -3542,6 +3544,10 @@ let proyectoIdEnEdicion = null;
     let correoBandejaSeleccionado = null;
     let modoCorreoActual = 'reply';
     let archivosCorreoSeleccionados = [];
+    let carpetaBandejaActual = 'INBOX';
+    let busquedaCorreoTimeout = null;
+    let secuenciaConsultaBandeja = 0;
+    const detallesCorreoCache = new Map();
 
     function obtenerFirmaCorreo() {
         return configCache?.notificacionesEmail?.firmaHTML
@@ -3556,21 +3562,97 @@ let proyectoIdEnEdicion = null;
         editor.insertAdjacentHTML('beforeend', `<br><div data-email-signature="true">${firma}</div>`);
     }
 
-    async function cargarBandejaEntrada() {
+    function esCarpetaEnviados(folder = carpetaBandejaActual) {
+        return /sent|enviados/i.test(String(folder || ''));
+    }
+
+    function actualizarEstadoSincronizacion(message, syncing = false) {
+        const status = document.getElementById('bandeja-sync-status');
+        if (!status) return;
+        status.textContent = message;
+        status.classList.toggle('text-primary', syncing);
+        status.classList.toggle('text-muted', !syncing);
+    }
+
+    async function cargarBandejaEntrada(options = {}) {
         const lista = document.getElementById('bandeja-lista');
         if (!lista) return;
-        lista.innerHTML = '<div class="bandeja-list-message text-muted">Cargando correos...</div>';
+        const folder = options.folder || carpetaBandejaActual;
+        const requestId = ++secuenciaConsultaBandeja;
+        const query = typeof options.query === 'string'
+            ? options.query.trim()
+            : (document.getElementById('buscarCorreo')?.value || '').trim();
+        const folderChanged = folder !== carpetaBandejaActual;
+        if (folderChanged) {
+            carpetaBandejaActual = folder;
+            correoBandejaSeleccionado = null;
+            document.getElementById('bandeja-vacio')?.classList.remove('d-none');
+            document.getElementById('bandeja-lectura')?.classList.add('d-none');
+        }
+        actualizarEstadoSincronizacion('⟳ Sincronizando...', true);
 
         try {
-            const response = await fetchAPI('/api/bandeja-entrada');
-            correosBandejaEntrada = Array.isArray(response.emails) ? response.emails : [];
-            correoBandejaSeleccionado = null;
+            const params = new URLSearchParams({ folder });
+            if (query) params.set('q', query);
+            const response = await fetchAPI(`/api/bandeja-entrada?${params.toString()}`);
+            if (requestId !== secuenciaConsultaBandeja) return;
+            const fetchedEmails = Array.isArray(response.emails) ? response.emails : [];
+            const selectedId = correoBandejaSeleccionado?.id;
+            if (query || folderChanged) {
+                correosBandejaEntrada = fetchedEmails;
+            } else {
+                const existingIds = new Set(correosBandejaEntrada.map(email => email.id));
+                const newEmails = fetchedEmails.filter(email => !existingIds.has(email.id));
+                const fetchedById = new Map(fetchedEmails.map(email => [email.id, email]));
+                correosBandejaEntrada = [...newEmails, ...correosBandejaEntrada]
+                    .map(email => fetchedById.get(email.id) || email)
+                    .filter((email, index, all) => all.findIndex(candidate => candidate.id === email.id) === index)
+                    .slice(0, 50);
+                if (selectedId && !correosBandejaEntrada.some(email => email.id === selectedId)) {
+                    const selectedPrevious = correoBandejaSeleccionado;
+                    if (selectedPrevious) correosBandejaEntrada.push(selectedPrevious);
+                }
+            }
+            if (selectedId) {
+                correoBandejaSeleccionado = correosBandejaEntrada.find(email => email.id === selectedId)
+                    || correoBandejaSeleccionado;
+            }
+            if (correoBandejaSeleccionado && !query && !folderChanged) {
+                const refreshedSelected = correosBandejaEntrada.find(email => email.id === selectedId);
+                if (refreshedSelected) correoBandejaSeleccionado = { ...correoBandejaSeleccionado, ...refreshedSelected };
+            }
+            const now = new Date();
+            actualizarEstadoSincronizacion(`Última actualización: ${now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`);
             mostrarCorreoSeleccionado();
             renderizarListaBandeja();
         } catch (error) {
-            lista.innerHTML = '<div class="bandeja-list-message text-danger">No fue posible cargar los correos.</div>';
+            actualizarEstadoSincronizacion('No fue posible sincronizar. Se conserva la lista anterior.');
             showToast(error.message || 'No fue posible cargar la bandeja.', 'error');
         }
+    }
+
+    function mostrarCarpetaBandeja(folder) {
+        document.getElementById('bandeja-tab-inbox').className = `btn btn-sm ${folder === 'INBOX' ? 'btn-primary' : 'btn-outline-secondary'}`;
+        document.getElementById('bandeja-tab-inbox').setAttribute('aria-selected', String(folder === 'INBOX'));
+        document.getElementById('bandeja-tab-sent').className = `btn btn-sm ${folder !== 'INBOX' ? 'btn-primary' : 'btn-outline-secondary'}`;
+        document.getElementById('bandeja-tab-sent').setAttribute('aria-selected', String(folder !== 'INBOX'));
+        return cargarBandejaEntrada({ folder });
+    }
+
+    function normalizarTextoCorreo(value) {
+        return String(value || '').toLocaleLowerCase();
+    }
+
+    function correoCoincideBusqueda(correo, query) {
+        if (!query) return true;
+        const searchable = [
+            correo.subject,
+            correo.fromName,
+            correo.fromEmail,
+            ...(correo.toEmails || []),
+            correo.snippet
+        ].map(normalizarTextoCorreo).join(' ');
+        return searchable.includes(normalizarTextoCorreo(query));
     }
 
     function formatoFechaListaCorreo(value) {
@@ -3586,30 +3668,65 @@ let proyectoIdEnEdicion = null;
 
     function renderizarListaBandeja() {
         const lista = document.getElementById('bandeja-lista');
-        document.getElementById('bandeja-contador').textContent = `${correosBandejaEntrada.length} correos recientes`;
-        if (!correosBandejaEntrada.length) {
-            lista.innerHTML = '<div class="bandeja-list-message text-muted">No hay mensajes en la bandeja.</div>';
+        const query = document.getElementById('buscarCorreo')?.value || '';
+        const matchingEmails = correosBandejaEntrada.filter(correo => correoCoincideBusqueda(correo, query));
+        const folderLabel = esCarpetaEnviados() ? 'enviados' : 'recibidos';
+        document.getElementById('bandeja-contador').textContent = `${matchingEmails.length} correos ${folderLabel}`;
+        if (!matchingEmails.length) {
+            const message = query ? 'No hay correos que coincidan con la búsqueda.' : 'No hay mensajes en esta carpeta.';
+            if (!lista.querySelector('.bandeja-list-message') || lista.querySelector('.bandeja-list-message').textContent !== message) {
+                lista.innerHTML = `<div class="bandeja-list-message text-muted">${message}</div>`;
+            }
             return;
         }
 
-        lista.innerHTML = correosBandejaEntrada.map((correo, index) => {
+        lista.querySelector('.bandeja-list-message')?.remove();
+        const existing = new Map(Array.from(lista.querySelectorAll('[data-email-id]'))
+            .map(button => [button.dataset.emailId, button]));
+        const retained = new Set();
+        let cursor = lista.firstElementChild;
+        for (const correo of matchingEmails) {
             const selected = correoBandejaSeleccionado?.id === correo.id;
-            return `
-                <button type="button" class="bandeja-email-item${correo.seen ? '' : ' is-unread'}${selected ? ' is-selected' : ''}" data-email-index="${index}" aria-pressed="${selected}">
+            const senderLabel = esCarpetaEnviados(correo.folder)
+                ? `Para: ${(correo.toEmails || []).join(', ') || 'Destinatario desconocido'}`
+                : correo.fromName || correo.fromEmail || 'Remitente desconocido';
+            const id = String(correo.id);
+            const renderKey = JSON.stringify([
+                senderLabel, correo.subject, correo.date, correo.snippet,
+                correo.seen, selected, correo.toEmails
+            ]);
+            let button = existing.get(id);
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.emailId = id;
+                button.addEventListener('click', () => {
+                    const index = correosBandejaEntrada.findIndex(item => String(item.id) === id);
+                    seleccionarCorreoBandeja(index);
+                });
+            }
+            retained.add(id);
+            if (button.dataset.renderKey !== renderKey) {
+                button.className = `bandeja-email-item${correo.seen ? '' : ' is-unread'}${selected ? ' is-selected' : ''}`;
+                button.setAttribute('aria-pressed', String(selected));
+                button.innerHTML = `
                     <span class="bandeja-email-row">
-                        <span class="bandeja-email-sender">${escapeHTML(String(correo.fromName || correo.fromEmail || 'Remitente desconocido'))}</span>
+                        <span class="bandeja-email-sender">${escapeHTML(String(senderLabel))}</span>
                         <time class="bandeja-email-time">${escapeHTML(formatoFechaListaCorreo(correo.date))}</time>
                     </span>
                     <span class="bandeja-email-subject-row">
                         <span class="bandeja-email-subject">${escapeHTML(String(correo.subject || '(Sin asunto)'))}</span>
                     </span>
                     <span class="bandeja-email-snippet">${escapeHTML(String(correo.snippet || ''))}</span>
-                </button>
-            `;
-        }).join('');
-        lista.querySelectorAll('[data-email-index]').forEach(button => {
-            button.addEventListener('click', () => seleccionarCorreoBandeja(Number(button.dataset.emailIndex)));
-        });
+                `;
+                button.dataset.renderKey = renderKey;
+            }
+            if (button !== cursor) lista.insertBefore(button, cursor);
+            cursor = button.nextElementSibling;
+        }
+        for (const [id, button] of existing) {
+            if (!retained.has(id)) button.remove();
+        }
     }
 
     function crearInicialesRemitente(name, email) {
@@ -3674,6 +3791,28 @@ let proyectoIdEnEdicion = null;
             .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
     }
 
+    async function obtenerDetalleCorreo(correo) {
+        const cacheKey = `${correo.folder || carpetaBandejaActual}:${correo.id}`;
+        if (detallesCorreoCache.has(cacheKey)) return detallesCorreoCache.get(cacheKey);
+        const params = new URLSearchParams({ folder: correo.folder || carpetaBandejaActual });
+        const response = await fetchAPI(`/api/bandeja-entrada/${encodeURIComponent(correo.id)}?${params.toString()}`);
+        const detail = response.email;
+        detallesCorreoCache.set(cacheKey, detail);
+        return detail;
+    }
+
+    async function cargarCuerposDelHilo(correo) {
+        const related = obtenerCorreosDelHilo(correo);
+        const details = await Promise.all(related.map(item => obtenerDetalleCorreo(item)));
+        if (correoBandejaSeleccionado?.id !== correo.id) return;
+        for (const detail of details) {
+            const index = correosBandejaEntrada.findIndex(item => item.id === detail.id);
+            if (index >= 0) correosBandejaEntrada[index] = { ...correosBandejaEntrada[index], ...detail };
+        }
+        correoBandejaSeleccionado = correosBandejaEntrada.find(item => item.id === correo.id) || correo;
+        mostrarCorreoSeleccionado();
+    }
+
     function mostrarCorreoSeleccionado() {
         const correo = correoBandejaSeleccionado;
         document.getElementById('bandeja-vacio').classList.toggle('d-none', Boolean(correo));
@@ -3708,6 +3847,25 @@ let proyectoIdEnEdicion = null;
     function seleccionarCorreoBandeja(index) {
         correoBandejaSeleccionado = correosBandejaEntrada[index] || null;
         mostrarCorreoSeleccionado();
+        if (!correoBandejaSeleccionado) return;
+        const selected = correoBandejaSeleccionado;
+        actualizarEstadoSincronizacion('Cargando mensaje...', true);
+        cargarCuerposDelHilo(selected)
+            .then(() => actualizarEstadoSincronizacion(`Última actualización: ${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`))
+            .catch(error => {
+                actualizarEstadoSincronizacion('No fue posible cargar el detalle del correo.');
+                showToast(error.message || 'No fue posible abrir el correo seleccionado.', 'error');
+            });
+    }
+
+    function programarBusquedaCorreo(value) {
+        renderizarListaBandeja();
+        if (busquedaCorreoTimeout) clearTimeout(busquedaCorreoTimeout);
+        busquedaCorreoTimeout = setTimeout(() => {
+            cargarBandejaEntrada({ query: value }).catch(error => {
+                console.error('[BandejaEntrada] Error en búsqueda remota:', error);
+            });
+        }, 450);
     }
 
     function abrirRespuestaCorreo(mode = 'reply') {
@@ -3824,7 +3982,10 @@ let proyectoIdEnEdicion = null;
         try {
             await fetchAPI('/api/bandeja-entrada/mark-unread', {
                 method: 'POST',
-                body: JSON.stringify({ id: correoBandejaSeleccionado.id })
+                body: JSON.stringify({
+                    id: correoBandejaSeleccionado.id,
+                    folder: correoBandejaSeleccionado.folder || carpetaBandejaActual
+                })
             });
             correoBandejaSeleccionado.seen = false;
             mostrarCorreoSeleccionado();
@@ -3860,7 +4021,14 @@ let proyectoIdEnEdicion = null;
                 })
             });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
-            showToast(response.message || 'Respuesta enviada correctamente.', 'success');
+            if (response.sentCopySaved === false) {
+                showToast('Correo enviado, pero no se pudo guardar una copia en Enviados.', 'warning');
+            } else {
+                showToast(response.message || 'Respuesta enviada correctamente.', 'success');
+            }
+            if (esCarpetaEnviados()) {
+                await cargarBandejaEntrada();
+            }
         } catch (error) {
             showToast(error.message || 'No fue posible enviar la respuesta.', 'error');
         } finally {
@@ -10950,6 +11118,93 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     // MODULO DE SEGUROS - CONFIGURACIÓN DE CORREOS SMTP
     // ==================================================================
+    function renderizarPreviewFirma() {
+        const preview = document.getElementById('firma-correo-preview');
+        const editor = document.getElementById('firma-correo-html');
+        if (!preview || !editor) return;
+        const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'";
+        const content = editor.value.trim() || '<p style="color:#6b7280">La vista previa de la firma aparecerá aquí.</p>';
+        preview.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{font:14px/1.5 Arial,sans-serif;margin:12px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%;width:100%}</style></head><body>${content}</body></html>`;
+    }
+
+    async function prepararImagenFirma(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            throw new Error('Selecciona un archivo de imagen válido.');
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            throw new Error('La imagen de firma debe pesar menos de 10 MB.');
+        }
+        const source = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(reader.error || new Error('No se pudo leer la imagen.'));
+            reader.readAsDataURL(file);
+        });
+        const image = await new Promise((resolve, reject) => {
+            const element = new Image();
+            element.onload = () => resolve(element);
+            element.onerror = () => reject(new Error('El archivo seleccionado no es una imagen válida.'));
+            element.src = source;
+        });
+        const scale = Math.min(1, 600 / image.width, 220 / image.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('No se pudo procesar la imagen en este navegador.');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.76);
+        while (dataUrl.length > 24000 && canvas.width > 120) {
+            const nextWidth = Math.round(canvas.width * 0.82);
+            const nextHeight = Math.max(1, Math.round(canvas.height * 0.82));
+            const resized = document.createElement('canvas');
+            resized.width = nextWidth;
+            resized.height = nextHeight;
+            const resizedContext = resized.getContext('2d');
+            if (!resizedContext) break;
+            resizedContext.fillStyle = '#ffffff';
+            resizedContext.fillRect(0, 0, nextWidth, nextHeight);
+            resizedContext.drawImage(canvas, 0, 0, nextWidth, nextHeight);
+            canvas.width = nextWidth;
+            canvas.height = nextHeight;
+            context.drawImage(resized, 0, 0);
+            dataUrl = resized.toDataURL('image/jpeg', 0.68);
+        }
+        if (dataUrl.length > 24000) {
+            throw new Error('La imagen no se pudo comprimir lo suficiente para guardarse en la firma.');
+        }
+        return dataUrl;
+    }
+
+    async function insertarImagenFirma(event) {
+        const input = event.currentTarget;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        try {
+            const dataUrl = await prepararImagenFirma(file);
+            const editor = document.getElementById('firma-correo-html');
+            const imgTag = `<img src="${dataUrl}" alt="Logo de la empresa" style="max-width:240px;height:auto;">`;
+            const insertion = `${editor.value && !editor.value.endsWith('\n') ? '\n' : ''}${imgTag}`;
+            const start = editor.selectionStart ?? editor.value.length;
+            const end = editor.selectionEnd ?? editor.value.length;
+            if (editor.value.length - (end - start) + insertion.length > 30000) {
+                throw new Error('La firma supera el límite de 30,000 caracteres con esta imagen.');
+            }
+            editor.value = `${editor.value.slice(0, start)}${insertion}${editor.value.slice(end)}`;
+            editor.focus();
+            const caret = start + insertion.length;
+            editor.setSelectionRange(caret, caret);
+            renderizarPreviewFirma();
+            showToast('Imagen optimizada e insertada en la firma.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No se pudo insertar la imagen.', 'error');
+        }
+    }
+
     async function guardarFirmaCorreo() {
         const signatureHtml = document.getElementById('firma-correo-html')?.value;
         if (typeof signatureHtml !== 'string') return;
@@ -10976,6 +11231,7 @@ Fecha de firma: {{FECHA}}`;
                     signatureHtml: response.signatureHtml || response.firmaHTML || ''
                 };
             }
+            renderizarPreviewFirma();
             actualizarVistaPreviaCorreo();
             showToast('Firma de correo guardada.', 'success');
         } catch (error) {
@@ -12514,7 +12770,7 @@ Fecha de firma: {{FECHA}}`;
         compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
-        cargarBandejaEntrada, seleccionarCorreoBandeja, abrirRespuestaCorreo, abrirNuevoCorreo, marcarCorreoNoLeido, responderCorreo,
+        cargarBandejaEntrada, mostrarCarpetaBandeja, seleccionarCorreoBandeja, abrirRespuestaCorreo, abrirNuevoCorreo, marcarCorreoNoLeido, responderCorreo,
         enviarAFlujoDirecto,
         nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
         toggleAuth, registerUser, recoverPassword, resetPassword,
@@ -12557,6 +12813,16 @@ Fecha de firma: {{FECHA}}`;
     });
     document.getElementById('respuesta-adjuntos')?.addEventListener('change', seleccionarAdjuntosCorreo);
     document.getElementById('respuesta-mensaje')?.addEventListener('input', actualizarVistaPreviaCorreo);
+    document.getElementById('buscarCorreo')?.addEventListener('input', event => programarBusquedaCorreo(event.target.value));
+    document.getElementById('firma-correo-html')?.addEventListener('input', renderizarPreviewFirma);
+    document.getElementById('firma-imagen-archivo')?.addEventListener('change', insertarImagenFirma);
+    window.setInterval(() => {
+        const inbox = document.getElementById('bandeja-entrada');
+        if (inbox?.classList.contains('active') && document.visibilityState === 'visible') {
+            cargarBandejaEntrada().catch(error => console.error('[BandejaEntrada] Error de sincronización automática:', error));
+        }
+    }, 180000);
+    renderizarPreviewFirma();
     // Cableado: funciones usadas en onclick/HTML pero fuera del objeto window.app
     window.app.toggleTheme = toggleTheme;
     window.app.compartirDatosBancariosWhatsApp = compartirDatosBancariosWhatsApp;

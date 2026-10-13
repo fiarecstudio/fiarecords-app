@@ -1,11 +1,14 @@
 const imaps = require('imap-simple');
+const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const sanitizeHtml = require('sanitize-html');
 const Empresa = require('../models/Empresa');
 const { enviarEmail } = require('../services/notificationService');
 
 const MAX_INBOX_MESSAGES = 50;
+const MAX_SNIPPET_BYTES = 512;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const LIST_HEADERS = 'HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CC CONTENT-TYPE CONTENT-TRANSFER-ENCODING)';
 const EMAIL_HTML_OPTIONS = {
     allowedTags: [
         'a', 'b', 'blockquote', 'br', 'caption', 'center', 'div', 'em', 'font',
@@ -54,9 +57,12 @@ function getImapConfig() {
     };
 }
 
-function buscarUids(connection) {
+function buscarUids(connection, query) {
     return new Promise((resolve, reject) => {
-        connection.imap.search(['ALL'], (error, uids) => {
+        const criteria = query
+            ? [['OR', ['SUBJECT', query], ['OR', ['FROM', query], ['TO', query]]]]
+            : ['ALL'];
+        connection.imap.search(criteria, (error, uids) => {
             if (error) return reject(error);
             resolve(uids);
         });
@@ -65,6 +71,109 @@ function buscarUids(connection) {
 
 function getTextPart(message) {
     return message.parts.find(part => part.which === '');
+}
+
+function fetchByUids(connection, uids, options) {
+    return new Promise((resolve, reject) => {
+        const fetch = connection.imap.fetch(uids, options);
+        const pendingMessages = [];
+        fetch.on('message', message => {
+            pendingMessages.push(new Promise((resolveMessage, rejectMessage) => {
+                let attributes;
+                const parts = [];
+                message.on('attributes', value => {
+                    attributes = value;
+                });
+                message.on('body', (stream, info) => {
+                    let body = '';
+                    stream.on('data', chunk => {
+                        body += chunk.toString('utf8');
+                    });
+                    stream.once('error', rejectMessage);
+                    stream.once('end', () => {
+                        const part = { which: info.which, size: info.size, body };
+                        if (/^HEADER/i.test(part.which)) part.body = Imap.parseHeader(part.body);
+                        parts.push(part);
+                    });
+                });
+                message.once('error', rejectMessage);
+                message.once('end', () => resolveMessage({ attributes, parts }));
+            }));
+        });
+        fetch.once('error', reject);
+        fetch.once('end', () => {
+            Promise.all(pendingMessages).then(resolve, reject);
+        });
+    });
+}
+
+function getPart(message, prefix) {
+    return message.parts.find(part => part.which.toUpperCase().startsWith(prefix));
+}
+
+function headerText(headers, name) {
+    return (headers[name.toLowerCase()] || []).join(' ');
+}
+
+function headerToRaw(headers) {
+    return Object.entries(headers)
+        .map(([name, values]) => `${name}: ${values.join(' ')}`)
+        .join('\r\n');
+}
+
+function flattenBoxes(boxes, parent = '', result = []) {
+    for (const [name, box] of Object.entries(boxes || {})) {
+        const delimiter = box.delimiter || '.';
+        const fullName = parent ? `${parent}${delimiter}${name}` : name;
+        result.push(fullName);
+        flattenBoxes(box.children, fullName, result);
+    }
+    return result;
+}
+
+async function resolveMailbox(connection, requestedFolder) {
+    if (!requestedFolder || requestedFolder.toLowerCase() === 'inbox') return 'INBOX';
+    const requestedKey = requestedFolder.toLowerCase().replace(/[._\s-]/g, '');
+    if (!requestedKey.includes('sent') && !requestedKey.includes('enviados')) {
+        throw new Error('La carpeta solicitada no está permitida.');
+    }
+    const available = flattenBoxes(await connection.getBoxes());
+    const normalized = available.map(name => ({ name, key: name.toLowerCase().replace(/[._\s-]/g, '') }));
+    const sent = normalized.find(box => box.key === requestedKey)
+        || normalized.find(box => box.key === 'sent')
+        || normalized.find(box => box.key === 'enviados')
+        || normalized.find(box => box.key.includes('sent'))
+        || normalized.find(box => box.key.includes('enviados'));
+    if (!sent) throw new Error('No se encontró una carpeta de enviados en el servidor IMAP.');
+    return sent.name;
+}
+
+async function formatListEmail(message, folder) {
+    const header = getPart(message, 'HEADER');
+    if (!header) throw new Error(`No se pudieron obtener las cabeceras del correo UID ${message.attributes.uid}.`);
+    const headers = header.body;
+    const parsed = await simpleParser(headerToRaw(headers));
+    const snippetPart = message.parts.find(part => /^TEXT</i.test(part.which));
+    const rawSnippet = snippetPart?.body || '';
+    const fromValue = parsed.from?.value?.[0];
+    const toEmails = (parsed.to?.value || []).map(({ address }) => address).filter(Boolean);
+    const rawDate = parsed.date;
+    const date = rawDate && !Number.isNaN(rawDate.getTime()) ? rawDate.toISOString() : null;
+    const snippet = cleanSnippet(rawSnippet.slice(0, MAX_SNIPPET_BYTES), '');
+    return {
+        id: String(message.attributes.uid),
+        folder,
+        fromName: fromValue?.name || fromValue?.address || parsed.from?.text || 'Remitente desconocido',
+        fromEmail: fromValue?.address || '',
+        toEmails,
+        subject: parsed.subject || '(Sin asunto)',
+        date,
+        snippet,
+        seen: (message.attributes.flags || []).some(flag => flag.toLowerCase() === '\\seen'),
+        messageId: parsed.messageId || headerText(headers, 'message-id'),
+        inReplyTo: Array.isArray(parsed.inReplyTo) ? parsed.inReplyTo : parsed.inReplyTo ? [parsed.inReplyTo] : [],
+        references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : []
+    };
 }
 
 function decodeHtmlEntities(value) {
@@ -124,77 +233,105 @@ function htmlWithInlineAttachments(parsed) {
 async function getInbox(req, res) {
     let connection;
     try {
+        const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
         const config = getImapConfig();
         connection = await imaps.connect(config);
         connection.on('error', error => {
             console.error('[BandejaEntrada] Error de conexión IMAP:', error);
         });
-        await connection.openBox('INBOX');
+        const mailbox = await resolveMailbox(connection, String(req.query.folder || 'INBOX'));
+        await connection.openBox(mailbox);
 
-        const uids = (await buscarUids(connection)).sort((a, b) => a - b);
+        const uids = (await buscarUids(connection, query)).sort((a, b) => a - b);
         const latestUids = uids.slice(-MAX_INBOX_MESSAGES);
-        if (latestUids.length === 0) return res.json({ success: true, emails: [] });
+        if (latestUids.length === 0) return res.json({ success: true, emails: [], folder: mailbox });
 
-        const messages = await connection.search(
-            [['UID', `${latestUids[0]}:${latestUids[latestUids.length - 1]}`]],
-            { bodies: [''], markSeen: false }
+        const messages = await fetchByUids(
+            connection,
+            latestUids,
+            { bodies: [LIST_HEADERS, `TEXT<0.${MAX_SNIPPET_BYTES}>`], markSeen: false }
         );
 
-        const emails = await Promise.all(messages.map(async message => {
-            const sourcePart = getTextPart(message);
-            if (!sourcePart) {
-                throw new Error(`No se pudo obtener el contenido del correo UID ${message.attributes.uid}.`);
-            }
-            const rawEmail = sourcePart.body;
-            const parsed = await simpleParser(rawEmail);
-            const plainText = parsed.text || '';
+        const emails = await Promise.all(messages
+            .map(message => formatListEmail(message, mailbox)));
 
-            const flags = message.attributes.flags || [];
+        emails.reverse();
+        return res.json({ success: true, emails, folder: mailbox, query });
+    } catch (error) {
+        console.error('[BandejaEntrada] Error al consultar INBOX:', error);
+        const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503
+            : /no está permitida/.test(error.message) ? 400 : 502;
+        return res.status(status).json({
+            success: false,
+            error: status !== 502 ? error.message : 'No fue posible consultar la bandeja IMAP.'
+        });
+    } finally {
+        if (connection) connection.end();
+    }
+}
+
+async function getEmailDetail(req, res) {
+        const uid = Number(req.params.id);
+        if (!Number.isSafeInteger(uid) || uid < 1) {
+            return res.status(400).json({ success: false, error: 'El identificador del correo no es válido.' });
+        }
+
+        let connection;
+        try {
+            connection = await imaps.connect(getImapConfig());
+            connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
+            const mailbox = await resolveMailbox(connection, String(req.query.folder || 'INBOX'));
+            await connection.openBox(mailbox);
+            const messages = await connection.search([['UID', String(uid)]], { bodies: [''], markSeen: false });
+            const message = messages.find(item => String(item.attributes.uid) === String(uid));
+            const sourcePart = message && getTextPart(message);
+            if (!sourcePart) return res.status(404).json({ success: false, error: 'El correo ya no existe en esa carpeta.' });
+
+            const parsed = await simpleParser(sourcePart.body);
             const fromValue = parsed.from?.value?.[0];
-            const recipients = addresses => (addresses?.value || [])
-                .map(({ address }) => address)
-                .filter(Boolean);
+            const recipients = addresses => (addresses?.value || []).map(({ address }) => address).filter(Boolean);
             const replyAllEmails = [
                 ...(parsed.from?.value || []),
                 ...(parsed.to?.value || []),
                 ...(parsed.cc?.value || [])
-            ]
-                .map(({ address }) => address)
+            ].map(({ address }) => address)
                 .filter(address => address && address.toLowerCase() !== process.env.IMAP_USER?.toLowerCase())
                 .filter((address, index, all) => all.findIndex(item => item.toLowerCase() === address.toLowerCase()) === index);
-
-            return {
+            const email = {
                 id: String(message.attributes.uid),
+                folder: mailbox,
                 fromName: fromValue?.name || fromValue?.address || parsed.from?.text || 'Remitente desconocido',
                 fromEmail: fromValue?.address || '',
                 subject: parsed.subject || '(Sin asunto)',
                 date: parsed.date ? parsed.date.toISOString() : null,
-                snippet: cleanSnippet(plainText, parsed.html),
-                text: plainText,
+                snippet: cleanSnippet(parsed.text, parsed.html),
+                text: parsed.text || '',
                 html: sanitizeHtml(htmlWithInlineAttachments(parsed), EMAIL_HTML_OPTIONS),
                 messageId: parsed.messageId || '',
-                inReplyTo: Array.isArray(parsed.inReplyTo)
-                    ? parsed.inReplyTo
-                    : parsed.inReplyTo ? [parsed.inReplyTo] : [],
+                inReplyTo: Array.isArray(parsed.inReplyTo) ? parsed.inReplyTo : parsed.inReplyTo ? [parsed.inReplyTo] : [],
                 references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
                 toEmails: recipients(parsed.to),
                 ccEmails: recipients(parsed.cc),
                 replyAllEmails,
-                seen: flags.some(flag => flag.toLowerCase() === '\\seen')
+                attachments: (parsed.attachments || []).map(attachment => ({
+                    name: attachment.filename || 'archivo',
+                    contentType: attachment.contentType,
+                    size: attachment.size,
+                    content: attachment.content.toString('base64')
+                })),
+                seen: (message.attributes.flags || []).some(flag => flag.toLowerCase() === '\\seen')
             };
-        }));
-
-        emails.reverse();
-        return res.json({ success: true, emails });
-    } catch (error) {
-        console.error('[BandejaEntrada] Error al consultar INBOX:', error);
-        const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;
-        return res.status(status).json({
-            success: false,
-            error: status === 503 ? error.message : 'No fue posible consultar la bandeja IMAP.'
-        });
-    } finally {
-        if (connection) connection.end();
+            return res.json({ success: true, email });
+        } catch (error) {
+            console.error('[BandejaEntrada] Error al consultar detalle:', error);
+            const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503
+                : /no está permitida/.test(error.message) ? 400 : 502;
+            return res.status(status).json({
+                success: false,
+                error: status !== 502 ? error.message : 'No fue posible consultar el correo seleccionado.'
+            });
+        } finally {
+            if (connection) connection.end();
     }
 }
 
@@ -210,7 +347,8 @@ async function markUnread(req, res) {
         connection.on('error', error => {
             console.error('[BandejaEntrada] Error de conexión IMAP:', error);
         });
-        await connection.openBox('INBOX');
+        const mailbox = await resolveMailbox(connection, String(req.body?.folder || 'INBOX'));
+        await connection.openBox(mailbox);
         await connection.delFlags(uid, '\\Seen');
         return res.json({ success: true, message: 'El correo se marcó como no leído.' });
     } catch (error) {
@@ -233,6 +371,69 @@ function escapeHtml(value) {
         "'": '&#39;',
         '"': '&quot;'
     }[character]));
+}
+
+function wrapBase64(value) {
+    return value.match(/.{1,76}/g)?.join('\r\n') || '';
+}
+
+function encodeHeader(value) {
+    const text = String(value || '').replace(/[\r\n]+/g, ' ').trim();
+    return /^[\x20-\x7E]*$/.test(text)
+        ? text
+        : `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+}
+
+function createRawSentMessage({ sender, destinatarios, asunto, cuerpo, attachments, headers }) {
+    const safeSender = String(sender || '').replace(/[\r\n<>]/g, '');
+    const safeRecipients = destinatarios.map(address => String(address).replace(/[\r\n<>]/g, ''));
+    const messageHeaders = [
+        `From: ${safeSender}`,
+        `To: ${safeRecipients.join(', ')}`,
+        `Subject: ${encodeHeader(asunto)}`,
+        `Date: ${new Date().toUTCString()}`,
+        `MIME-Version: 1.0`
+    ];
+    if (headers) {
+        if (headers['In-Reply-To']) messageHeaders.push(`In-Reply-To: ${headers['In-Reply-To']}`);
+        if (headers.References) messageHeaders.push(`References: ${headers.References}`);
+    }
+
+    if (!attachments.length) {
+        messageHeaders.push('Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64');
+        return `${messageHeaders.join('\r\n')}\r\n\r\n${wrapBase64(Buffer.from(cuerpo, 'utf8').toString('base64'))}\r\n`;
+    }
+
+    const boundary = `fiarecords-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    messageHeaders.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+    const parts = [
+        `--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrapBase64(Buffer.from(cuerpo, 'utf8').toString('base64'))}`
+    ];
+    for (const attachment of attachments) {
+        const safeName = attachment.name.replace(/["\r\n]/g, '_');
+        parts.push(`--${boundary}\r\nContent-Type: application/octet-stream; name="${safeName}"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename="${safeName}"\r\n\r\n${wrapBase64(attachment.content)}`);
+    }
+    parts.push(`--${boundary}--`);
+    return `${messageHeaders.join('\r\n')}\r\n\r\n${parts.join('\r\n')}\r\n`;
+}
+
+async function saveSentCopy({ destinatarios, asunto, cuerpo, attachments, headers, empresa }) {
+    let connection;
+    try {
+        connection = await imaps.connect(getImapConfig());
+        connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP Sent:', error));
+        const mailbox = await resolveMailbox(connection, 'Sent');
+        const senderEmail = empresa?.notificaciones?.email?.smtpUser || process.env.SMTP_USER || process.env.IMAP_USER;
+        const sender = senderEmail ? `${empresa?.nombre || 'M Asesores'} <${senderEmail}>` : process.env.IMAP_USER;
+        const raw = createRawSentMessage({ sender, destinatarios, asunto, cuerpo, attachments, headers });
+        await connection.append(raw, { mailbox, flags: ['\\Seen'] });
+        return true;
+    } catch (error) {
+        console.warn('[BandejaEntrada] No se pudo guardar copia en Enviados:', error.message);
+        return false;
+    } finally {
+        if (connection) connection.end();
+    }
 }
 
 async function replyEmail(req, res) {
@@ -331,8 +532,20 @@ async function replyEmail(req, res) {
             attachments: attachmentsValidos,
             headers
         });
+        const sentCopySaved = await saveSentCopy({
+            destinatarios,
+            asunto,
+            cuerpo,
+            attachments: attachmentsValidos,
+            headers,
+            empresa
+        });
 
-        return res.json({ success: true, message: 'Respuesta enviada correctamente.' });
+        return res.json({
+            success: true,
+            message: 'Respuesta enviada correctamente.',
+            sentCopySaved
+        });
     } catch (error) {
         console.error('[BandejaEntrada] Error al enviar respuesta con Brevo:', error);
         return res.status(502).json({
@@ -342,4 +555,4 @@ async function replyEmail(req, res) {
     }
 }
 
-module.exports = { getInbox, markUnread, replyEmail };
+module.exports = { getInbox, getEmailDetail, markUnread, replyEmail };
