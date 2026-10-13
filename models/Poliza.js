@@ -239,6 +239,11 @@ const polizaSchema = new mongoose.Schema({
         required: [true, 'La prima total es obligatoria'],
         min: [0, 'La prima total debe ser mayor o igual a 0']
     },
+    moneda: {
+        type: String,
+        enum: ['MXN', 'USD'],
+        default: 'MXN'
+    },
     primaNeta: {
         type: Number,
         default: 0

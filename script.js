@@ -1942,7 +1942,8 @@ let proyectoIdEnEdicion = null;
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <h6 class="card-title mb-0">Proyección Cobranza</h6>
-                                        <h3 class="mb-0">$${safeMoney(data.proyeccionCobranzaMes || 0)}</h3>
+                                        <h3 class="mb-0">$${Number(data.proyeccionCobranzaMXN ?? data.proyeccionCobranzaMes ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span class="small text-muted">MXN</span></h3>
+                                        <div class="small text-muted mt-1">USD $${Number(data.proyeccionCobranzaUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                         <small>Mes actual</small>
                                     </div>
                                     <i class="bi bi-currency-dollar insurance-kpi-icon" aria-hidden="true"></i>
@@ -6527,15 +6528,16 @@ Fecha de firma: {{FECHA}}`;
             
             const primaTotal = p.primaTotal || 0;
             const saldoRestante = p.saldoRestante !== undefined ? p.saldoRestante : (primaTotal - montoPagado);
+            const moneda = p.moneda || 'MXN';
             
             return `
                 <tr>
                     <td>${escapeHTML(p.cliente || 'N/A')}</td>
                     <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                     <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
-                    <td>$${primaTotal.toFixed(2)}</td>
-                    <td>$${montoPagado.toFixed(2)}</td>
-                    <td>$${saldoRestante.toFixed(2)}</td>
+                    <td>$${primaTotal.toFixed(2)} ${escapeHTML(moneda)}</td>
+                    <td>$${montoPagado.toFixed(2)} ${escapeHTML(moneda)}</td>
+                    <td>$${saldoRestante.toFixed(2)} ${escapeHTML(moneda)}</td>
                     <td>
                         <button class="btn btn-sm btn-success" onclick="app.registrarPagoRapido('${p._id}')" title="Registrar Pago"><i class="bi bi-cash"></i> Pagar</button>
                         <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Ver Historial"><i class="bi bi-clock-history"></i></button>
@@ -7502,6 +7504,7 @@ Fecha de firma: {{FECHA}}`;
             'poliza-inciso': datos.inciso || '1',
             'poliza-paquete': datos.paquete || datos.tipoSeguro || '',
             'poliza-prima': datos.primaTotal || '',
+            'poliza-moneda': datos.moneda || 'MXN',
             'poliza-prima-neta': datos.primaNeta || '',
             'gastosExpedicion': datos.gastosExpedicion || ''
         };
@@ -8041,6 +8044,13 @@ Fecha de firma: {{FECHA}}`;
                             <input id="poliza-prima" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaTotal || ''}" placeholder="0.00">
                         </div>
                         <div class="mb-3">
+                            <label class="form-label" for="poliza-moneda">Moneda</label>
+                            <select id="poliza-moneda" name="moneda" class="swal2-input">
+                                <option value="MXN" ${(datosPrellenados.moneda || 'MXN') === 'MXN' ? 'selected' : ''}>MXN</option>
+                                <option value="USD" ${datosPrellenados.moneda === 'USD' ? 'selected' : ''}>USD</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label" for="poliza-prima-neta">Prima Neta</label>
                             <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta || ''}" placeholder="0.00">
                         </div>
@@ -8160,21 +8170,23 @@ Fecha de firma: {{FECHA}}`;
                         <tr>
                             <td>${escapeHTML(recibo.numeroRecibo)}</td>
                             <td>${escapeHTML(recibo.periodoCobertura)}</td>
-                            <td>$${Number(recibo.montoRecibo).toFixed(2)}</td>
-                            <td>$${Number(recibo.montoPagoNeto).toFixed(2)}</td>
+                            <td>$${Number(recibo.montoRecibo).toFixed(2)} ${escapeHTML(document.getElementById('poliza-moneda').value || 'MXN')}</td>
+                            <td>$${Number(recibo.montoPagoNeto).toFixed(2)} ${escapeHTML(document.getElementById('poliza-moneda').value || 'MXN')}</td>
                             <td>${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()}</td>
                             <td>${escapeHTML(recibo.estadoRecibo)}</td>
                         </tr>`).join('');
                     document.getElementById('resumenVistaPreviaRecibos').textContent =
-                        `Pagado corregido: $${resultadoPreview.sumaPagados.toFixed(2)} · Saldo: $${resultadoPreview.saldoRestante.toFixed(2)}`;
+                        `Pagado corregido: $${resultadoPreview.sumaPagados.toFixed(2)} ${document.getElementById('poliza-moneda').value || 'MXN'} · Saldo: $${resultadoPreview.saldoRestante.toFixed(2)} ${document.getElementById('poliza-moneda').value || 'MXN'}`;
                     document.getElementById('vistaPreviaRecibos').hidden = false;
-                    const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+                    const moneda = document.getElementById('poliza-moneda').value || 'MXN';
+                    const formatoMoneda = monto =>
+                        `$${new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(monto)} ${moneda}`;
                     const resumen = resultadoPreview.resumenFinanciero;
-                    document.getElementById('resumenPrimaNeta').textContent = formatoMoneda.format(resumen.primaNeta);
-                    document.getElementById('resumenRecargos').textContent = formatoMoneda.format(resumen.recargos);
-                    document.getElementById('resumenEmision').textContent = formatoMoneda.format(resumen.emision);
-                    document.getElementById('resumenIva').textContent = formatoMoneda.format(resumen.iva);
-                    document.getElementById('resumenPrimaTotal').textContent = formatoMoneda.format(resumen.total);
+                    document.getElementById('resumenPrimaNeta').textContent = formatoMoneda(resumen.primaNeta);
+                    document.getElementById('resumenRecargos').textContent = formatoMoneda(resumen.recargos);
+                    document.getElementById('resumenEmision').textContent = formatoMoneda(resumen.emision);
+                    document.getElementById('resumenIva').textContent = formatoMoneda(resumen.iva);
+                    document.getElementById('resumenPrimaTotal').textContent = formatoMoneda(resumen.total);
                     document.getElementById('resumenFinancieroPoliza').hidden = false;
                     return true;
                 };
@@ -8183,7 +8195,7 @@ Fecha de firma: {{FECHA}}`;
                     actualizarVistaPreviaRecibos({ mostrarError: true });
                 });
                 ['input', 'change'].forEach(tipoEvento => {
-                    ['poliza-prima', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio', 'poliza-monto-abono', 'poliza-primer-pago']
+                    ['poliza-prima', 'poliza-moneda', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio', 'poliza-monto-abono', 'poliza-primer-pago']
                         .forEach(id => document.getElementById(id)?.addEventListener(tipoEvento, () => {
                             actualizarVistaPreviaRecibos();
                         }));
@@ -8207,6 +8219,7 @@ Fecha de firma: {{FECHA}}`;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                 const estado = document.getElementById('poliza-estado').value;
                 const primaTotal = document.getElementById('poliza-prima').value;
+                const moneda = document.getElementById('poliza-moneda').value;
                 const primaNeta = document.getElementById('poliza-prima-neta').value;
                 const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                 const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
@@ -8263,6 +8276,7 @@ Fecha de firma: {{FECHA}}`;
                     },
                     estado,
                     primaTotal: parseFloat(primaTotal),
+                    moneda,
                     primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
                     gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                     emisionEnPrimerPago,
@@ -9034,9 +9048,9 @@ Fecha de firma: {{FECHA}}`;
         renderizarPaginaCobranza(tabActiva);
     }
 
-    function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, fecha, periodo, enlacePago }) {
+    function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, fecha, periodo, enlacePago, moneda = 'MXN' }) {
         const detallePeriodo = periodo ? ` correspondiente al periodo ${periodo}` : '';
-        let mensaje = `Hola ${cliente}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${tipoSeguro} por la cantidad de $${Number(monto || 0).toFixed(2)}${detallePeriodo} con fecha límite el ${fecha}. Cualquier duda estamos a tus órdenes.`;
+        let mensaje = `Hola ${cliente}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${tipoSeguro} por la cantidad de $${Number(monto || 0).toFixed(2)} ${moneda}${detallePeriodo} con fecha límite el ${fecha}. Cualquier duda estamos a tus órdenes.`;
         if (enlacePago) mensaje += ` Puedes realizar tu pago de forma segura aquí: ${enlacePago}`;
         return mensaje;
     }
@@ -9063,7 +9077,8 @@ Fecha de firma: {{FECHA}}`;
                 const fechaProximoPago = fechaProximoPagoValor ? new Date(fechaProximoPagoValor).toLocaleDateString('es-MX') : 'N/A';
                 const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
                 const montoPagar = reciboPendiente?.montoRecibo ?? p.montoPagar ?? 0;
-                const montoFormateado = '$' + Number(montoPagar).toFixed(2);
+                const moneda = p.moneda || 'MXN';
+                const montoFormateado = '$' + Number(montoPagar).toFixed(2) + ' ' + moneda;
 
                 let estadoClase = 'bg-secondary';
                 if (p.estado === 'Activa') estadoClase = 'bg-success';
@@ -9101,7 +9116,8 @@ Fecha de firma: {{FECHA}}`;
                     monto: montoPagar,
                     fecha: fechaMostrar,
                     periodo: reciboPendiente?.periodoCobertura,
-                    enlacePago: p.enlacePago
+                    enlacePago: p.enlacePago,
+                    moneda
                 });
                 const mensajeWhatsApp = encodeURIComponent(mensajeWhatsAppBase);
 
@@ -9290,6 +9306,7 @@ Fecha de firma: {{FECHA}}`;
                 cliente: poliza.cliente || '',
                 clienteEmail: poliza.clienteEmail || '',
                 clienteTelefono: poliza.clienteTelefono || '',
+                moneda: poliza.moneda || 'MXN',
                 tipoPago: poliza.tipoPago || 'anual',
                 duracionMeses: poliza.duracionMeses || 12,
                 aseguradora: poliza.aseguradora || '',
@@ -9487,6 +9504,13 @@ Fecha de firma: {{FECHA}}`;
                                     </div>
                                 </div>
                                 <div class="mb-3">
+                                    <label class="form-label" for="poliza-moneda">Moneda</label>
+                                    <select id="poliza-moneda" name="moneda" class="swal2-input">
+                                        <option value="MXN" ${(datosPrellenados.moneda || 'MXN') === 'MXN' ? 'selected' : ''}>MXN</option>
+                                        <option value="USD" ${datosPrellenados.moneda === 'USD' ? 'selected' : ''}>USD</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
                                     <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
                                     <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion}" placeholder="66.58">
                                 </div>
@@ -9579,6 +9603,7 @@ Fecha de firma: {{FECHA}}`;
                         planRecibosCambio = resultadoPreview.recibos;
                         poliza.recibos = planRecibosCambio;
                         recibosRecalculados = true;
+                        const moneda = document.getElementById('poliza-moneda').value || 'MXN';
                         const tablaVistaPrevia = document.getElementById('tablaVistaPreviaRecibos');
                         const recibosPagados = poliza.recibos.filter(recibo =>
                             String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
@@ -9595,15 +9620,15 @@ Fecha de firma: {{FECHA}}`;
                             return `<tr>
                                 <td>${escapeHTML(recibo.numeroRecibo || 'N/A')}</td>
                                 <td>${escapeHTML(recibo.periodoCobertura || 'N/A')}</td>
-                                <td>$${montoRecibo.toFixed(2)}</td>
-                                <td>$${pagoNeto.toFixed(2)}</td>
+                                <td>$${montoRecibo.toFixed(2)} ${escapeHTML(moneda)}</td>
+                                <td>$${pagoNeto.toFixed(2)} ${escapeHTML(moneda)}</td>
                                 <td>${fechaVencimiento}</td>
                                 <td>${escapeHTML(recibo.estadoRecibo || 'pendiente')}</td>
                             </tr>`;
                         }).join('');
                         document.getElementById('resumenVistaPreviaRecibos').textContent =
-                            `Costo: $${nuevoCostoTotal.toFixed(2)} · Pagado: $${resultadoPreview.sumaPagados.toFixed(2)} · `
-                            + `Saldo restante: $${resultadoPreview.saldoRestante.toFixed(2)} · `
+                            `Costo: $${nuevoCostoTotal.toFixed(2)} ${moneda} · Pagado: $${resultadoPreview.sumaPagados.toFixed(2)} ${moneda} · `
+                            + `Saldo restante: $${resultadoPreview.saldoRestante.toFixed(2)} ${moneda} · `
                             + `${recibosPagados} pagados · ${resultadoPreview.cuotasPendientes} cuotas pendientes · `
                             + `${recibosPendientes} recibos generados`;
                         document.getElementById('vistaPreviaRecibos').hidden = false;
@@ -9617,6 +9642,7 @@ Fecha de firma: {{FECHA}}`;
                     };
                     document.getElementById('emisionEnPrimerPago')?.addEventListener('change', recalcularSiHayDatos);
                     document.getElementById('gastosExpedicion')?.addEventListener('input', recalcularSiHayDatos);
+                    document.getElementById('poliza-moneda')?.addEventListener('change', recalcularSiHayDatos);
                 },
                 preConfirm: async () => {
                     const numero = document.getElementById('poliza-numero').value.trim();
@@ -9632,6 +9658,7 @@ Fecha de firma: {{FECHA}}`;
                     const fechaInicio = document.getElementById('poliza-inicio').value;
                     const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                     const primaTotal = document.getElementById('poliza-prima').value;
+                    const moneda = document.getElementById('poliza-moneda').value;
                     const primaNeta = document.getElementById('poliza-prima-neta').value;
                     const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                     const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
@@ -9679,6 +9706,7 @@ Fecha de firma: {{FECHA}}`;
                             vencimiento: parseInputDate(fechaVencimiento)
                         },
                         primaTotal: parseFloat(primaTotal),
+                        moneda,
                         primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
                         gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                         emisionEnPrimerPago,
@@ -10070,8 +10098,8 @@ Fecha de firma: {{FECHA}}`;
                     <tr>
                         <td><strong>${r.numeroRecibo || 'N/A'}</strong></td>
                         <td>${indiceVista + 1}/${recibosOrdenados.length}</td>
-                        <td>$${r.montoRecibo?.toFixed(2) || '0.00'}</td>
-                        <td>$${calcularPagoNeto(r.montoRecibo, indiceVista).toFixed(2)}</td>
+                        <td>$${r.montoRecibo?.toFixed(2) || '0.00'} ${escapeHTML(poliza.moneda || 'MXN')}</td>
+                        <td>$${calcularPagoNeto(r.montoRecibo, indiceVista).toFixed(2)} ${escapeHTML(poliza.moneda || 'MXN')}</td>
                         <td>${fechaVencimiento}</td>
                         <td>${fechaPago}</td>
                         <td><span class="badge bg-${estadoClass}">${r.estadoRecibo || 'N/A'}</span></td>
@@ -10155,7 +10183,7 @@ Fecha de firma: {{FECHA}}`;
             html: `
                 <div class="text-start">
                     <p><strong>Periodo:</strong> ${recibo.periodoCobertura}</p>
-                    <p><strong>Monto a pagar:</strong> $${recibo.montoRecibo?.toFixed(2)}</p>
+                    <p><strong>Monto a pagar:</strong> $${recibo.montoRecibo?.toFixed(2)} ${escapeHTML(poliza.moneda || 'MXN')}</p>
                     <p><strong>Vencimiento:</strong> ${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()}</p>
                     <hr>
                     <label class="form-label fw-bold">Método de Pago</label>
@@ -10371,7 +10399,8 @@ Fecha de firma: {{FECHA}}`;
                 monto: montoPendiente,
                 fecha: fechaMostrar,
                 periodo: reciboPendiente?.periodoCobertura,
-                enlacePago: poliza.enlacePago
+                enlacePago: poliza.enlacePago,
+                moneda: poliza.moneda || 'MXN'
             });
             const mensajeCodificado = encodeURIComponent(mensaje);
             const whatsappUrl = `https://wa.me/52${telefono}?text=${mensajeCodificado}`;
@@ -10493,7 +10522,8 @@ Fecha de firma: {{FECHA}}`;
                         monto: montoPendiente,
                         fecha: fechaPago,
                         periodo: reciboPendiente?.periodoCobertura,
-                        enlacePago: poliza.enlacePago
+                        enlacePago: poliza.enlacePago,
+                        moneda: poliza.moneda || 'MXN'
                     });
                 }
 
@@ -12528,7 +12558,7 @@ Fecha de firma: {{FECHA}}`;
                     <div class="text-start">
                         <div class="alert alert-warning">
                             <strong>Vigencia actual:</strong> ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}<br>
-                            <strong>Prima actual:</strong> $${poliza.primaTotal?.toFixed(2) || '0.00'}
+                            <strong>Prima actual:</strong> $${poliza.primaTotal?.toFixed(2) || '0.00'} ${escapeHTML(poliza.moneda || 'MXN')}
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold" for="nuevoNumeroPolizaRenovacion">Nuevo número de póliza</label>
@@ -12617,6 +12647,7 @@ Fecha de firma: {{FECHA}}`;
                     // Llamar al endpoint de renovación existente
                     const datosRenovacion = new FormData();
                     datosRenovacion.append('primaTotal', String(formValues.primaTotal));
+                    datosRenovacion.append('moneda', poliza.moneda || 'MXN');
                     datosRenovacion.append('tipoPago', formValues.tipoPago);
                     datosRenovacion.append('numeroPoliza', formValues.numeroPoliza);
                     datosRenovacion.append('fechaInicio', formValues.fechaInicio);

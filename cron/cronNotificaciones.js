@@ -37,11 +37,14 @@ async function procesarNotificacionesDiarias() {
                                 });
 
                                 if (!yaNotificadoHoy) {
+                                    const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
+                                    const montoRecibo = Number(recibo.montoRecibo) || 0;
+                                    const importeFormateado = `${moneda === 'USD' ? '' : '$'}${montoRecibo.toFixed(2)} ${moneda}`;
                                     await generarYEnviarNotificacion({
                                         empresaId,
                                         poliza,
                                         tipo: 'pago_pendiente',
-                                        mensaje: `Estimado(a) ${poliza.cliente}, tiene un recibo pendiente (${recibo.numeroRecibo} - ${recibo.periodoCobertura}) por $${recibo.montoRecibo?.toFixed(2)} con fecha límite el ${fVencimientoRecibo.toLocaleDateString()}.`,
+                                        mensaje: `Estimado(a) ${poliza.cliente}, tiene un recibo pendiente (${recibo.numeroRecibo} - ${recibo.periodoCobertura}) por ${importeFormateado} con fecha límite el ${fVencimientoRecibo.toLocaleDateString()}.`,
                                         diasRestantes: diasParaRecibo,
                                         numeroRecibo: recibo.numeroRecibo
                                     });

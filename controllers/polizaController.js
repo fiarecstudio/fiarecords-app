@@ -29,6 +29,15 @@ function escaparHtmlCorreo(valor) {
     })[caracter]);
 }
 
+function formatearMontoPoliza(monto, moneda) {
+    const monedaNormalizada = moneda === 'USD' ? 'USD' : 'MXN';
+    const cantidad = new Intl.NumberFormat('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Number(monto) || 0);
+    return `${monedaNormalizada === 'USD' ? '' : '$'}${cantidad} ${monedaNormalizada}`;
+}
+
 function construirCorreoCobranza({
     cliente,
     mensaje,
@@ -468,18 +477,33 @@ function datosClienteDesdeModelo(cliente) {
     };
 }
 
-async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clienteEmail, clienteTelefono, clienteId }) {
+async function vincularOCrearCliente({
+    empresaId,
+    asesorId,
+    clienteNombre,
+    clienteEmail,
+    clienteTelefono,
+    clienteId,
+    actualizarNombreCliente = true
+}) {
     const vacio = { clienteId: null, nombre: '', email: '', telefono: '' };
 
     if (clienteId) {
         const existente = await Cliente.findOne({ _id: clienteId, empresaId, deletedAt: null });
         if (existente) {
             let changed = false;
-            if (clienteEmail && !existente.email) {
+            if (actualizarNombreCliente
+                && clienteNombre !== undefined
+                && clienteNombre !== null
+                && existente.nombre !== clienteNombre.trim()) {
+                existente.nombre = clienteNombre.trim();
+                changed = true;
+            }
+            if (clienteEmail !== undefined && clienteEmail !== null && existente.email !== clienteEmail.trim()) {
                 existente.email = clienteEmail.trim();
                 changed = true;
             }
-            if (clienteTelefono && !existente.telefono) {
+            if (clienteTelefono !== undefined && clienteTelefono !== null && existente.telefono !== clienteTelefono.trim()) {
                 existente.telefono = clienteTelefono.trim();
                 changed = true;
             }
@@ -506,11 +530,11 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
     }
 
     let changed = false;
-    if (clienteEmail && !cliente.email) {
+    if (clienteEmail !== undefined && clienteEmail !== null && cliente.email !== clienteEmail.trim()) {
         cliente.email = clienteEmail.trim();
         changed = true;
     }
-    if (clienteTelefono && !cliente.telefono) {
+    if (clienteTelefono !== undefined && clienteTelefono !== null && cliente.telefono !== clienteTelefono.trim()) {
         cliente.telefono = clienteTelefono.trim();
         changed = true;
     }
@@ -521,9 +545,12 @@ async function vincularOCrearCliente({ empresaId, asesorId, clienteNombre, clien
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, primaNeta, gastosExpedicion, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, gastosExpedicion, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
         if (estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
+        }
+        if (moneda !== undefined && !['MXN', 'USD'].includes(moneda)) {
+            return res.status(400).json({ error: 'La moneda debe ser MXN o USD.' });
         }
         const duracionMeses = normalizarDuracionMeses(duracionMesesSolicitada);
         if (duracionMeses === null) {
@@ -570,6 +597,7 @@ const crearPoliza = async (req, res) => {
             aseguradora,
             fechas: fechasNormalizadas,
             primaTotal,
+            moneda,
             primaNeta: Number(primaNeta) || 0,
             gastosExpedicion: Number(gastosExpedicion) || 0,
             emisionEnPrimerPago: emisionEnPrimerPago === true,
@@ -1212,6 +1240,9 @@ const actualizarPoliza = async (req, res) => {
         if (datosActualizacion.estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(datosActualizacion.estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
+        if (datosActualizacion.moneda !== undefined && !['MXN', 'USD'].includes(datosActualizacion.moneda)) {
+            return res.status(400).json({ error: 'La moneda debe ser MXN o USD.' });
+        }
 
         if (datosActualizacion.duracionMeses !== undefined) {
             datosActualizacion.duracionMeses = normalizarDuracionMeses(datosActualizacion.duracionMeses);
@@ -1227,7 +1258,10 @@ const actualizarPoliza = async (req, res) => {
         }
 
         if (datosActualizacion.fechas) {
-            datosActualizacion.fechas = normalizarFechasPoliza(datosActualizacion.fechas);
+            datosActualizacion.fechas = normalizarFechasPoliza({
+                ...(polizaExistente.fechas?.toObject?.() || polizaExistente.fechas || {}),
+                ...datosActualizacion.fechas
+            });
         }
 
         const fechasCambiaron = datosActualizacion.fechas && (
@@ -1283,16 +1317,21 @@ const actualizarPoliza = async (req, res) => {
                 empresaId,
                 asesorId: asesorParaCliente,
                 clienteNombre: datosActualizacion.cliente ?? polizaExistente.cliente,
-                clienteEmail: datosActualizacion.clienteEmail ?? polizaExistente.clienteEmail,
-                clienteTelefono: datosActualizacion.clienteTelefono ?? polizaExistente.clienteTelefono,
+                clienteEmail: datosActualizacion.clienteEmail,
+                clienteTelefono: datosActualizacion.clienteTelefono,
+                actualizarNombreCliente: datosActualizacion.cliente !== undefined,
                 clienteId: datosActualizacion.clienteId || polizaExistente.clienteId
             });
 
             datosActualizacion.clienteId = clienteVinculado.clienteId;
             if (clienteVinculado.clienteId) {
                 datosActualizacion.cliente = clienteVinculado.nombre || datosActualizacion.cliente || polizaExistente.cliente;
-                datosActualizacion.clienteEmail = clienteVinculado.email || (datosActualizacion.clienteEmail ?? polizaExistente.clienteEmail ?? '');
-                datosActualizacion.clienteTelefono = clienteVinculado.telefono || (datosActualizacion.clienteTelefono ?? polizaExistente.clienteTelefono ?? '');
+                datosActualizacion.clienteEmail = datosActualizacion.clienteEmail !== undefined
+                    ? (clienteVinculado.email || datosActualizacion.clienteEmail)
+                    : (clienteVinculado.email || polizaExistente.clienteEmail || '');
+                datosActualizacion.clienteTelefono = datosActualizacion.clienteTelefono !== undefined
+                    ? (clienteVinculado.telefono || datosActualizacion.clienteTelefono)
+                    : (clienteVinculado.telefono || polizaExistente.clienteTelefono || '');
             }
         }
 
@@ -1687,9 +1726,11 @@ const enviarRecordatorioManual = async (req, res) => {
         const enlacePago = poliza.enlacePago
             ? ` Puedes realizar tu pago de forma segura aquí: ${poliza.enlacePago}`
             : '';
+        const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
+        const montoFormateado = formatearMontoPoliza(montoPendiente, poliza.moneda);
         let mensaje = tipo === 'vencimiento_poliza'
             ? `Hola ${poliza.cliente}, tu póliza No. ${poliza.numeroPoliza} vencerá el ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}.`
-            : `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${poliza.tipoSeguro || 'seguro'} por la cantidad de $${montoPendiente.toFixed(2)}${periodoPendiente} con fecha límite el ${fechaPagoPendiente ? new Date(fechaPagoPendiente).toLocaleDateString('es-MX') : 'N/A'}. Cualquier duda estamos a tus órdenes.${enlacePago}`;
+            : `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${poliza.tipoSeguro || 'seguro'} por la cantidad de ${montoFormateado}${periodoPendiente} con fecha límite el ${fechaPagoPendiente ? new Date(fechaPagoPendiente).toLocaleDateString('es-MX') : 'N/A'}. Cualquier duda estamos a tus órdenes.${enlacePago}`;
 
         const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
         const Notificacion = require('../models/Notificacion');
@@ -1705,7 +1746,7 @@ const enviarRecordatorioManual = async (req, res) => {
                 mensaje,
                 numeroPoliza: poliza.numeroPoliza,
                 aseguradora: poliza.aseguradora,
-                monto: new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(montoPendiente),
+                monto: montoFormateado,
                 fechaVencimiento: fechaVencimiento
                     ? new Date(fechaVencimiento).toLocaleDateString('es-MX')
                     : 'N/A',
@@ -1827,11 +1868,23 @@ const obtenerMetricasSeguros = async (req, res) => {
         });
 
         let proyeccionCobranza = 0;
+        let proyeccionCobranzaMXN = 0;
+        let proyeccionCobranzaUSD = 0;
         const mesActual = new Date().getMonth();
         const añoActual = new Date().getFullYear();
 
         polizas.forEach(poliza => {
             if (poliza.estado === 'Cancelada' || poliza.estado === 'Renovada') return;
+            const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
+            const sumarProyeccion = monto => {
+                const importe = Number(monto) || 0;
+                proyeccionCobranza += importe;
+                if (moneda === 'USD') {
+                    proyeccionCobranzaUSD += importe;
+                } else {
+                    proyeccionCobranzaMXN += importe;
+                }
+            };
 
             if (poliza.recibos && poliza.recibos.length > 0) {
                 poliza.recibos.forEach(recibo => {
@@ -1840,7 +1893,7 @@ const obtenerMetricasSeguros = async (req, res) => {
                     if (estadoR === 'pendiente') {
                         const fechaR = new Date(recibo.fechaVencimientoRecibo || recibo.fechaVencimiento);
                         if (fechaR.getMonth() === mesActual && fechaR.getFullYear() === añoActual) {
-                            proyeccionCobranza += parseFloat(
+                            sumarProyeccion(
                                 recibo.montoRecibo || poliza.montoAbono || (poliza.primaTotal / 12) || 0
                             );
                         }
@@ -1849,7 +1902,7 @@ const obtenerMetricasSeguros = async (req, res) => {
             } else if (poliza.proximoPago) {
                 const fechaPago = new Date(poliza.proximoPago);
                 if (fechaPago.getMonth() === mesActual && fechaPago.getFullYear() === añoActual) {
-                    proyeccionCobranza += parseFloat(
+                    sumarProyeccion(
                         poliza.montoAbono || poliza.saldoRestante || poliza.primaTotal || 0
                     );
                 }
@@ -1864,6 +1917,8 @@ const obtenerMetricasSeguros = async (req, res) => {
             totalRecaudado,
             proyeccionCobranza,
             proyeccionCobranzaMes: proyeccionCobranza,
+            proyeccionCobranzaMXN,
+            proyeccionCobranzaUSD,
             renovacionesUrgentes
         };
 
@@ -2398,10 +2453,7 @@ const enviarRecordatorioCorreo = async (req, res) => {
         }
         
         // Formatear monto
-        const montoFormateado = new Intl.NumberFormat('es-MX', {
-            style: 'currency',
-            currency: 'MXN'
-        }).format(montoPago);
+        const montoFormateado = formatearMontoPoliza(montoPago, poliza.moneda);
         
         // Formatear fecha de vencimiento
         const fechaVencimiento = poliza.fechas?.vencimiento 
@@ -2651,6 +2703,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 clienteEmail: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
+                                moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
                                     $arrayElemAt: [{
@@ -2692,6 +2745,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 clienteEmail: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
+                                moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
                                     $arrayElemAt: [{
@@ -2733,6 +2787,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 clienteEmail: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
+                                moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
                                     $arrayElemAt: [{
@@ -2783,6 +2838,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                 email: poliza.clienteEmail || '',
                 tipoSeguro: poliza.tipoSeguro,
                 tipoPago: poliza.tipoPago,
+                moneda: poliza.moneda || 'MXN',
                 montoPagar: reciboPendiente?.montoRecibo ?? poliza.montoCalculado ?? 0,
                 reciboPendiente: reciboPendiente ? {
                     montoRecibo: reciboPendiente.montoRecibo,
@@ -2902,10 +2958,7 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
             montoPagar = poliza.primaTotal;
         }
         
-        const montoFormateado = new Intl.NumberFormat('es-MX', { 
-            style: 'currency', 
-            currency: 'MXN' 
-        }).format(montoPagar);
+        const montoFormateado = formatearMontoPoliza(montoPagar, poliza.moneda);
         
         if (poliza.fechas?.vencimiento) {
             const fVenc = new Date(poliza.fechas.vencimiento);
@@ -3381,6 +3434,7 @@ const renovarPoliza = async (req, res) => {
                 inciso: datosExtraidos.inciso || polizaAntigua.inciso,
                 paquete: datosExtraidos.paquete || polizaAntigua.paquete,
                 primaTotal: Number(req.body.primaTotal) || datosExtraidos.primaTotal || polizaAntigua.primaTotal,
+                moneda: polizaAntigua.moneda || 'MXN',
                 primaNeta: req.body.primaNeta != null && req.body.primaNeta !== '' ? Number(req.body.primaNeta) : polizaAntigua.primaNeta || 0,
                 gastosExpedicion: polizaAntigua.gastosExpedicion || 0,
                 emisionEnPrimerPago: polizaAntigua.emisionEnPrimerPago || false,
@@ -3415,6 +3469,7 @@ const renovarPoliza = async (req, res) => {
                     vencimiento: normalizarFechaLocal(req.body.fechaVencimiento || fechasSolicitadas.vencimiento) || polizaAntigua.fechas?.vencimiento
                 },
                 primaTotal: Number(primaTotal) || polizaAntigua.primaTotal,
+                moneda: polizaAntigua.moneda || 'MXN',
                 primaNeta: primaNeta != null && primaNeta !== '' ? Number(primaNeta) : polizaAntigua.primaNeta || 0,
                 gastosExpedicion: polizaAntigua.gastosExpedicion || 0,
                 emisionEnPrimerPago: polizaAntigua.emisionEnPrimerPago || false,
