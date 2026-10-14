@@ -1877,7 +1877,7 @@
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Renovar Póliza</h5>
+          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Renovación con Carátula PDF</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -1885,17 +1885,20 @@
             <input type="hidden" id="renovarPolizaId">
             <div class="alert alert-info">
               <i class="bi bi-info-circle me-2"></i>
-              Sube el PDF de la nueva póliza. El sistema actualizará las fechas y guardará la póliza anterior en el historial.
+              Sube la nueva carátula PDF. Revisarás y podrás ajustar los datos heredados y extraídos antes de confirmar la renovación.
             </div>
-            <div class="mb-3">
-              <label for="pdfRenovacion" class="form-label">PDF de la Nueva Póliza <span class="text-danger">*</span></label>
-              <input type="file" id="pdfRenovacion" accept=".pdf" class="form-control" required>
+            <div id="zonaPdfRenovacion" class="mb-3 p-4 border border-2 border-secondary rounded text-center" style="border-style: dashed !important;">
+              <label for="pdfRenovacion" class="form-label d-block">Carátula PDF de la nueva póliza</label>
+              <i class="bi bi-file-earmark-pdf fs-2 text-danger"></i>
+              <p class="mb-2">Arrastra el PDF aquí o selecciónalo para extraer sus datos</p>
+              <input type="file" id="pdfRenovacion" accept=".pdf,application/pdf" class="form-control" required>
+              <small id="nombrePdfRenovacion" class="form-text text-muted"></small>
             </div>
           </form>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" form="formRenovarPoliza" class="btn btn-primary">Subir y Renovar</button>
+          <button type="submit" form="formRenovarPoliza" class="btn btn-primary">Leer carátula y revisar</button>
         </div>
       </div>
     </div>

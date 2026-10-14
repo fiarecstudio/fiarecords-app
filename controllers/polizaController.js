@@ -545,7 +545,7 @@ async function vincularOCrearCliente({
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, tipoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, gastosExpedicion, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
         if (estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
@@ -591,7 +591,11 @@ const crearPoliza = async (req, res) => {
             clienteTelefono: clienteVinculado.telefono || clienteTelefono || '',
             numeroSerie: numeroSerie || '',
             descripcionVehiculo: descripcionVehiculo || '',
+            vehiculo: vehiculo || '',
+            placas: placas || '',
+            motor: motor || '',
             tipoPago: tipoPagoFinal,
+            conductoPago: conductoPago || '',
             duracionMeses,
             tipoSeguro,
             aseguradora,
@@ -600,6 +604,8 @@ const crearPoliza = async (req, res) => {
             moneda,
             primaNeta: Number(primaNeta) || 0,
             gastosExpedicion: Number(gastosExpedicion) || 0,
+            recargoPagoFraccionado: Number(recargoPagoFraccionado) || 0,
+            iva: Number(iva) || 0,
             emisionEnPrimerPago: emisionEnPrimerPago === true,
             documentoDriveId,
             inciso,
@@ -1256,6 +1262,11 @@ const actualizarPoliza = async (req, res) => {
         if (datosActualizacion.gastosExpedicion !== undefined) {
             datosActualizacion.gastosExpedicion = Number(datosActualizacion.gastosExpedicion) || 0;
         }
+        for (const campo of ['recargoPagoFraccionado', 'iva']) {
+            if (datosActualizacion[campo] !== undefined) {
+                datosActualizacion[campo] = Number(datosActualizacion[campo]) || 0;
+            }
+        }
 
         if (datosActualizacion.fechas) {
             datosActualizacion.fechas = normalizarFechasPoliza({
@@ -1519,7 +1530,8 @@ const obtenerPolizaPorId = async (req, res) => {
         
         // Buscar por id, empresaId y que no esté eliminada, con populate de clienteId
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
-            .populate('clienteId', 'nombre telefono email');
+            .populate('clienteId', 'nombre telefono email')
+            .populate('asesorId', 'username nombre email');
         
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
@@ -3302,6 +3314,9 @@ const renovarPoliza = async (req, res) => {
             console.log('[RENOVAR] Error: Póliza no encontrada');
             return res.status(404).json({ error: 'Póliza no encontrada' });
         }
+        const asesorOriginal = polizaAntigua.asesorId
+            ? await Usuario.findOne({ _id: polizaAntigua.asesorId, empresaId }).select('username nombre email').lean()
+            : null;
 
         console.log('[RENOVAR] Póliza antigua encontrada:', polizaAntigua.numeroPoliza);
 
@@ -3471,9 +3486,12 @@ const renovarPoliza = async (req, res) => {
                 primaTotal: Number(primaTotal) || polizaAntigua.primaTotal,
                 moneda: polizaAntigua.moneda || 'MXN',
                 primaNeta: primaNeta != null && primaNeta !== '' ? Number(primaNeta) : polizaAntigua.primaNeta || 0,
-                gastosExpedicion: polizaAntigua.gastosExpedicion || 0,
+                gastosExpedicion: req.body.gastosExpedicion != null && req.body.gastosExpedicion !== ''
+                    ? Number(req.body.gastosExpedicion)
+                    : polizaAntigua.gastosExpedicion || 0,
                 emisionEnPrimerPago: polizaAntigua.emisionEnPrimerPago || false,
                 tipoPago: tipoPago || polizaAntigua.tipoPago,
+                conductoPago: req.body.conductoPago || polizaAntigua.conductoPago || '',
                 primerPago: primerPago || polizaAntigua.primerPago,
                 montoAbono: montoAbono || polizaAntigua.montoAbono,
                 tipoSeguro: tipoSeguro || polizaAntigua.tipoSeguro,
@@ -3485,6 +3503,44 @@ const renovarPoliza = async (req, res) => {
                 clienteTelefono: polizaAntigua.clienteTelefono
             };
         }
+
+        const montoRenovacion = (campo, respaldo) => {
+            if (req.body[campo] === undefined || req.body[campo] === null || req.body[campo] === '') {
+                return Number(respaldo) || 0;
+            }
+            const monto = Number(req.body[campo]);
+            if (!Number.isFinite(monto) || monto < 0) {
+                throw Object.assign(new Error(`El campo ${campo} debe ser un monto válido.`), { statusCode: 400 });
+            }
+            return monto;
+        };
+        datosNuevaPoliza = {
+            ...datosNuevaPoliza,
+            numeroPoliza: req.body.numeroPoliza || datosNuevaPoliza.numeroPoliza || polizaAntigua.numeroPoliza,
+            cliente: polizaAntigua.cliente,
+            clienteEmail: polizaAntigua.clienteEmail,
+            clienteTelefono: polizaAntigua.clienteTelefono,
+            numeroSerie: req.body.numeroSerie ?? polizaAntigua.numeroSerie ?? '',
+            descripcionVehiculo: req.body.descripcionVehiculo ?? polizaAntigua.descripcionVehiculo ?? '',
+            vehiculo: req.body.vehiculo ?? polizaAntigua.vehiculo ?? polizaAntigua.descripcionVehiculo ?? '',
+            placas: req.body.placas ?? polizaAntigua.placas ?? '',
+            motor: req.body.motor ?? polizaAntigua.motor ?? '',
+            tipoPago: req.body.tipoPago || datosNuevaPoliza.tipoPago || polizaAntigua.tipoPago,
+            conductoPago: req.body.conductoPago ?? polizaAntigua.conductoPago ?? '',
+            tipoSeguro: req.body.tipoSeguro || polizaAntigua.tipoSeguro,
+            aseguradora: req.body.aseguradora || polizaAntigua.aseguradora,
+            inciso: req.body.inciso || datosNuevaPoliza.inciso || polizaAntigua.inciso,
+            paquete: req.body.paquete || datosNuevaPoliza.paquete || polizaAntigua.paquete,
+            primaTotal: montoRenovacion('primaTotal', datosNuevaPoliza.primaTotal ?? polizaAntigua.primaTotal),
+            primaNeta: montoRenovacion('primaNeta', datosNuevaPoliza.primaNeta ?? polizaAntigua.primaNeta),
+            gastosExpedicion: montoRenovacion('gastosExpedicion', datosNuevaPoliza.gastosExpedicion ?? polizaAntigua.gastosExpedicion),
+            recargoPagoFraccionado: montoRenovacion('recargoPagoFraccionado', polizaAntigua.recargoPagoFraccionado),
+            iva: montoRenovacion('iva', polizaAntigua.iva),
+            moneda: req.body.moneda || polizaAntigua.moneda || 'MXN',
+            emisionEnPrimerPago: req.body.emisionEnPrimerPago ?? polizaAntigua.emisionEnPrimerPago ?? false,
+            primerPago: montoRenovacion('primerPago', req.body.primerPago ?? polizaAntigua.primerPago),
+            montoAbono: montoRenovacion('montoAbono', req.body.montoAbono ?? polizaAntigua.montoAbono)
+        };
 
         const duracionMesesNueva = normalizarDuracionMeses(
             req.body.duracionMeses ?? datosNuevaPoliza.duracionMeses ?? polizaAntigua.duracionMeses
@@ -3512,7 +3568,11 @@ const renovarPoliza = async (req, res) => {
         // HISTORIAL: Crear nueva póliza con los mismos datos del cliente
         const nuevaPoliza = new Poliza({
             empresaId,
-            asesorId,
+            asesorId: polizaAntigua.asesorId || asesorId,
+            asesorNombre: asesorOriginal?.username
+                || (polizaAntigua.asesorNombre && polizaAntigua.asesorNombre !== 'General'
+                    ? polizaAntigua.asesorNombre
+                    : req.body.asesorNombre || 'General'),
             clienteId: polizaAntigua.clienteId, // Mantener el mismo clienteId si existe
             polizaAnteriorId: polizaAntigua._id,
             ...datosNuevaPoliza,

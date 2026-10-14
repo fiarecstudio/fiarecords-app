@@ -188,10 +188,30 @@ const polizaSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
+    vehiculo: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    placas: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    motor: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     tipoPago: {
         type: String,
         enum: ['anual', 'trimestral', 'semestral', 'mensual'],
         default: 'anual'
+    },
+    conductoPago: {
+        type: String,
+        trim: true,
+        default: ''
     },
     duracionMeses: {
         type: Number,
@@ -252,6 +272,16 @@ const polizaSchema = new mongoose.Schema({
         type: Number,
         default: 0,
         min: [0, 'Los gastos de expedición deben ser mayores o iguales a 0']
+    },
+    recargoPagoFraccionado: {
+        type: Number,
+        default: 0,
+        min: [0, 'El recargo por pago fraccionado debe ser mayor o igual a 0']
+    },
+    iva: {
+        type: Number,
+        default: 0,
+        min: [0, 'El IVA debe ser mayor o igual a 0']
     },
     emisionEnPrimerPago: {
         type: Boolean,

@@ -8057,7 +8057,13 @@ Fecha de firma: {{FECHA}}`;
             'poliza-prima': datos.primaTotal || '',
             'poliza-moneda': datos.moneda || 'MXN',
             'poliza-prima-neta': datos.primaNeta || '',
-            'gastosExpedicion': datos.gastosExpedicion || ''
+            'gastosExpedicion': datos.gastosExpedicion || '',
+            'poliza-vehiculo': datos.vehiculo || '',
+            'poliza-placas': datos.placas || '',
+            'poliza-motor': datos.motor || '',
+            'poliza-conducto-pago': datos.conductoPago || '',
+            'poliza-recargo-fraccionado': datos.recargoPagoFraccionado || '',
+            'poliza-iva': datos.iva || ''
         };
 
         // NO sobrescribir el campo de cliente si ya tiene un valor (viene del CRM)
@@ -8081,7 +8087,9 @@ Fecha de firma: {{FECHA}}`;
             const partes = fechaStr.toLowerCase().split('/');
             if (partes.length === 3) {
                 const dia = partes[0].padStart(2, '0');
-                const mes = meses[partes[1].substring(0, 3)] || '01';
+                const mes = /^\d{1,2}$/.test(partes[1])
+                    ? partes[1].padStart(2, '0')
+                    : (meses[partes[1].substring(0, 3)] || '01');
                 return `${partes[2]}-${mes}-${dia}`;
             }
             return fechaStr; // Devolver original si no coincide con formato esperado
@@ -8501,7 +8509,7 @@ Fecha de firma: {{FECHA}}`;
 
         let recibosRecalculados = false;
         const { value: formValues } = await Swal.fire({
-            title: editando ? 'Editar Póliza' : 'Registrar Nueva Póliza',
+            title: editando ? 'Editar Póliza' : (window.polizaARenovar ? 'Revisar Renovación de Póliza' : 'Registrar Nueva Póliza'),
             width: 'min(920px, 95vw)',
             customClass: { popup: 'poliza-swal-popup' },
             html: `
@@ -8536,6 +8544,20 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
+                            <label class="form-label" for="poliza-vehiculo">Vehículo (marca/submarca/modelo)</label>
+                            <input id="poliza-vehiculo" class="swal2-input" value="${escapeHTML(datosPrellenados.vehiculo || '')}">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="poliza-placas">Placas</label>
+                            <input id="poliza-placas" class="swal2-input" value="${escapeHTML(datosPrellenados.placas || '')}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="poliza-motor">Número de Motor</label>
+                        <input id="poliza-motor" class="swal2-input" value="${escapeHTML(datosPrellenados.motor || '')}">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
                             <label class="form-label">Correo Electrónico</label>
                             <input id="poliza-email" type="email" class="swal2-input" value="${datosPrellenados.clienteEmail || ''}" placeholder="cliente@ejemplo.com">
                         </div>
@@ -8552,6 +8574,10 @@ Fecha de firma: {{FECHA}}`;
                             <option value="trimestral" ${datosPrellenados.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
                             <option value="mensual" ${datosPrellenados.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="poliza-conducto-pago">Forma / Conducto de Pago</label>
+                        <input id="poliza-conducto-pago" class="swal2-input" value="${escapeHTML(datosPrellenados.conductoPago || '')}" placeholder="Ej. transferencia, cargo automático">
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="duracionMeses">Duración (Meses)</label>
@@ -8608,6 +8634,14 @@ Fecha de firma: {{FECHA}}`;
                         <div class="mb-3">
                             <label class="form-label" for="gastosExpedicion">Gastos de Expedición / Recibo (Opc.)</label>
                             <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion || ''}" placeholder="66.58">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="poliza-recargo-fraccionado">Recargo por Pago Fraccionado</label>
+                            <input id="poliza-recargo-fraccionado" type="number" min="0" step="0.01" class="swal2-input" value="${datosPrellenados.recargoPagoFraccionado || ''}" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="poliza-iva">IVA</label>
+                            <input id="poliza-iva" type="number" min="0" step="0.01" class="swal2-input" value="${datosPrellenados.iva || ''}" placeholder="0.00">
                         </div>
                         <div class="form-check mb-3 poliza-emision-check">
                             <input class="form-check-input" type="checkbox" id="emisionEnPrimerPago" name="emisionEnPrimerPago" ${emisionEnPrimerPago ? 'checked' : ''}>
@@ -8668,13 +8702,15 @@ Fecha de firma: {{FECHA}}`;
             `,
             focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: editando ? 'Actualizar' : 'Guardar',
+            confirmButtonText: editando ? 'Actualizar' : (window.polizaARenovar ? 'Confirmar Renovación' : 'Guardar'),
             cancelButtonText: 'Cancelar',
             didOpen: () => {
                 // Mapear datos después de que el modal se abre
                 if (datosPrellenados && Object.keys(datosPrellenados).length > 0) {
                     mapearDatosAFormulario(datosPrellenados);
                 }
+                const asesorPrecargado = datosPrellenados.asesorId?._id || datosPrellenados.asesorId || '';
+                if (asesorPrecargado) document.getElementById('poliza-asesor').value = asesorPrecargado;
                 configurarAutoCalculoPrima();
                 configurarVisibilidadCamposPago();
 
@@ -8760,7 +8796,11 @@ Fecha de firma: {{FECHA}}`;
                 const clienteTelefono = document.getElementById('poliza-telefono').value.trim();
                 const numeroSerie = document.getElementById('poliza-numero-serie').value.trim();
                 const descripcionVehiculo = document.getElementById('poliza-descripcion-vehiculo').value.trim();
+                const vehiculo = document.getElementById('poliza-vehiculo').value.trim();
+                const placas = document.getElementById('poliza-placas').value.trim();
+                const motor = document.getElementById('poliza-motor').value.trim();
                 const tipoPago = document.getElementById('poliza-tipo-pago').value;
+                const conductoPago = document.getElementById('poliza-conducto-pago').value.trim();
                 const duracionMeses = Number(document.getElementById('duracionMeses').value);
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
                 const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
@@ -8773,12 +8813,18 @@ Fecha de firma: {{FECHA}}`;
                 const moneda = document.getElementById('poliza-moneda').value;
                 const primaNeta = document.getElementById('poliza-prima-neta').value;
                 const gastosExpedicion = document.getElementById('gastosExpedicion').value;
+                const recargoPagoFraccionado = document.getElementById('poliza-recargo-fraccionado').value;
+                const iva = document.getElementById('poliza-iva').value;
                 const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
                 const montoAbono = document.getElementById('poliza-monto-abono').value;
                 const primerPago = document.getElementById('poliza-primer-pago').value;
                 const diasAnticipacionAviso = document.getElementById('poliza-dias-aviso').value;
                 const diasGracia = document.getElementById('poliza-dias-gracia').value;
                 const asesorId = document.getElementById('poliza-asesor').value;
+                const asesorIdRenovacion = asesorId
+                    || datosPrellenados.asesorId?._id
+                    || datosPrellenados.asesorId
+                    || null;
                 const clienteIdValue = document.getElementById('poliza-cliente-id').value || null;
 
                 if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
@@ -8815,7 +8861,11 @@ Fecha de firma: {{FECHA}}`;
                     clienteTelefono,
                     numeroSerie,
                     descripcionVehiculo,
+                    vehiculo,
+                    placas,
+                    motor,
                     tipoPago,
+                    conductoPago,
                     duracionMeses,
                     aseguradora,
                     inciso,
@@ -8830,12 +8880,17 @@ Fecha de firma: {{FECHA}}`;
                     moneda,
                     primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
                     gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
+                    recargoPagoFraccionado: recargoPagoFraccionado ? parseFloat(recargoPagoFraccionado) : 0,
+                    iva: iva ? parseFloat(iva) : 0,
                     emisionEnPrimerPago,
                     montoAbono: montoAbono ? parseFloat(montoAbono) : null,
                     primerPago: primerPago ? parseFloat(primerPago) : null,
                     diasAnticipacionAviso: diasAnticipacionAviso ? parseInt(diasAnticipacionAviso) : 3,
                     diasGracia: diasGracia ? parseInt(diasGracia) : 30,
-                    ...(!editando ? { asesorId: asesorId || null } : {}),
+                    ...(!editando ? { asesorId: asesorIdRenovacion } : {}),
+                    ...(!editando && window.polizaARenovar
+                        ? { asesorNombre: datosPrellenados.asesorNombre || '' }
+                        : {}),
                     clienteId: clienteIdValue
                 };
             }
@@ -9100,7 +9155,7 @@ Fecha de firma: {{FECHA}}`;
 
             const esPendienteRenovacion = estado === 'PendienteRenovacion';
             const btnRenovar = esPendienteRenovacion
-                ? `<button class="btn btn-sm btn-warning" onclick="abrirModalRenovacion('${p._id}')" title="Renovar Póliza"><i class="bi bi-arrow-repeat"></i> Renovar</button>`
+                ? `<button class="btn btn-sm btn-warning" onclick="app.renovarPoliza('${p._id}')" title="Renovar Póliza"><i class="bi bi-arrow-repeat"></i> Renovar</button>`
                 : '';
 
             return `
@@ -11613,22 +11668,70 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function renovarPoliza(polizaId) {
-        // Abrir modal de renovación con PDF
-        abrirModalRenovarPoliza(polizaId);
+        try {
+            window.polizaRenovacionDatos = await fetchAPI(`/api/polizas/${polizaId}`);
+            await abrirModalRenovarPoliza(polizaId);
+        } catch (error) {
+            console.error('[renovarPoliza] No se pudo cargar la póliza original:', error);
+            Swal.fire('Error', error.message || 'No se pudieron cargar los datos de la póliza', 'error');
+        }
     }
 
-    function abrirModalRenovarPoliza(polizaId) {
-        // Cerrar el modal del Expediente del Cliente si está abierto
-        const modalPerfilCliente = bootstrap.Modal.getInstance(document.getElementById('modalPerfilCliente'));
-        if (modalPerfilCliente) {
-            modalPerfilCliente.hide();
+    async function abrirModalRenovarPoliza(polizaId) {
+        const modalPerfilClienteElement = document.getElementById('modalPerfilCliente');
+        if (modalPerfilClienteElement?.classList.contains('show')) {
+            const modalPerfilCliente = bootstrap.Modal.getOrCreateInstance(modalPerfilClienteElement);
+            await new Promise(resolve => {
+                modalPerfilClienteElement.addEventListener('hidden.bs.modal', resolve, { once: true });
+                modalPerfilCliente.hide();
+            });
         }
 
         // Guardar el ID de la póliza a renovar en variable global
         window.polizaARenovar = polizaId;
 
-        // Abrir el modal estándar de "Nueva Póliza"
-        abrirModalNuevaPoliza();
+        const form = document.getElementById('formRenovarPoliza');
+        const pdfInput = document.getElementById('pdfRenovacion');
+        const pdfName = document.getElementById('nombrePdfRenovacion');
+        form?.reset();
+        document.getElementById('renovarPolizaId').value = polizaId;
+        if (pdfName) pdfName.textContent = '';
+        if (pdfInput) {
+            pdfInput.onchange = event => {
+                if (pdfName) pdfName.textContent = pdfInput.files?.[0]?.name || '';
+                procesarRenovacion(event);
+            };
+        }
+
+        const zonaPdf = document.getElementById('zonaPdfRenovacion');
+        if (zonaPdf && zonaPdf.dataset.dropHandlerBound !== 'true') {
+            zonaPdf.addEventListener('dragover', event => {
+                event.preventDefault();
+                zonaPdf.classList.add('border-primary');
+            });
+            zonaPdf.addEventListener('dragleave', () => zonaPdf.classList.remove('border-primary'));
+            zonaPdf.addEventListener('drop', event => {
+                event.preventDefault();
+                zonaPdf.classList.remove('border-primary');
+                if (!pdfInput || !event.dataTransfer?.files?.length) return;
+                pdfInput.files = event.dataTransfer.files;
+                pdfInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            zonaPdf.dataset.dropHandlerBound = 'true';
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRenovarPoliza'));
+        const modalElement = document.getElementById('modalRenovarPoliza');
+        if (modalElement.dataset.renewalCleanupBound !== 'true') {
+            modalElement.addEventListener('hidden.bs.modal', () => {
+                if (!window.procesandoRenovacion) {
+                    window.polizaARenovar = null;
+                    window.polizaRenovacionDatos = null;
+                }
+            });
+            modalElement.dataset.renewalCleanupBound = 'true';
+        }
+        modal.show();
     }
 
     function verPolizaDesdeCRM(poliza) {
@@ -11643,53 +11746,100 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function procesarRenovacion(event) {
-        event.preventDefault();
+        event?.preventDefault();
+        if (window.procesandoRenovacion) return;
 
         try {
             const polizaId = document.getElementById('renovarPolizaId').value;
-            const pdfFile = document.getElementById('pdfRenovacion').files[0];
+            const pdfInput = document.getElementById('pdfRenovacion');
+            const pdfFile = pdfInput?.files?.[0];
 
             if (!pdfFile) {
-                Swal.fire('Error', 'Debes seleccionar un archivo PDF', 'warning');
+                if (event?.type === 'submit') Swal.fire('Error', 'Debes seleccionar un archivo PDF', 'warning');
                 return;
             }
+            if (pdfFile.type !== 'application/pdf' && !pdfFile.name.toLowerCase().endsWith('.pdf')) {
+                Swal.fire('Error', 'El archivo seleccionado debe ser un PDF', 'warning');
+                return;
+            }
+            window.procesandoRenovacion = true;
 
-            // Crear FormData para enviar el archivo
             const formData = new FormData();
-            formData.append('pdf', pdfFile);
+            formData.append('archivo', pdfFile);
 
-            console.log('[procesarRenovacion] Enviando renovación para póliza:', polizaId);
-            console.log('[procesarRenovacion] Archivo:', pdfFile.name);
-
-            // Mostrar loading
             Swal.fire({
-                title: 'Procesando renovación...',
-                text: 'Por favor espera',
+                title: 'Leyendo carátula PDF...',
+                text: 'Los datos se cargarán en el formulario para que puedas revisarlos antes de guardar.',
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
                 }
             });
 
-            await fetchAPI(`/api/polizas/${polizaId}/renovar`, {
+            const response = await fetchAPI('/api/polizas/extraer-pdf', {
                 method: 'POST',
                 body: formData,
                 isFormData: true
             });
+            if (!response?.success || !response.datos) {
+                throw new Error(response?.message || 'No se pudieron extraer los datos del PDF');
+            }
 
-            Swal.fire('Éxito', 'Póliza renovada correctamente', 'success');
-
-            // Cerrar modal y recargar datos
+            const original = window.polizaRenovacionDatos || {};
+            const extraidos = response.datos;
+            const fechaInput = fecha => {
+                if (!fecha) return '';
+                const iso = String(fecha).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+                const partes = String(fecha).match(/^(\d{1,2})\/([A-Za-z]{3}|\d{1,2})\/(\d{4})$/);
+                if (!partes) return '';
+                const meses = { ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06', jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12' };
+                const mes = /^\d+$/.test(partes[2]) ? partes[2].padStart(2, '0') : meses[partes[2].toLowerCase()];
+                return mes ? `${partes[3]}-${mes}-${partes[1].padStart(2, '0')}` : '';
+            };
+            const importeExtraido = (campo, respaldo) =>
+                Number(extraidos[campo]) > 0 ? Number(extraidos[campo]) : Number(respaldo) || 0;
+            const fechasOriginales = original.fechas || {};
+            const polizaFormulario = {
+                ...original,
+                numeroPoliza: extraidos.numeroPoliza || original.numeroPoliza || '',
+                cliente: original.cliente || original.clienteId?.nombre || '',
+                clienteId: original.clienteId?._id || original.clienteId || null,
+                aseguradora: original.aseguradora || extraidos.aseguradora || '',
+                tipoSeguro: original.tipoSeguro || extraidos.tipoSeguro || 'Vehicular',
+                inciso: extraidos.inciso || original.inciso || '1',
+                paquete: extraidos.paquete || original.paquete || '',
+                numeroSerie: original.numeroSerie || '',
+                descripcionVehiculo: original.descripcionVehiculo || '',
+                vehiculo: original.vehiculo || original.descripcionVehiculo || '',
+                placas: original.placas || '',
+                motor: original.motor || '',
+                tipoPago: extraidos.tipoPago || original.tipoPago || 'anual',
+                conductoPago: extraidos.conductoPago || original.conductoPago || '',
+                fechaInicio: fechaInput(extraidos.fechaInicio) || fechaInput(fechasOriginales.inicio),
+                fechaVencimiento: fechaInput(extraidos.fechaVencimiento) || fechaInput(fechasOriginales.vencimiento),
+                primaTotal: importeExtraido('primaTotal', original.primaTotal),
+                primaNeta: importeExtraido('primaNeta', original.primaNeta),
+                gastosExpedicion: importeExtraido('gastosExpedicion', original.gastosExpedicion),
+                recargoPagoFraccionado: importeExtraido('recargoPagoFraccionado', original.recargoPagoFraccionado),
+                iva: importeExtraido('iva', original.iva),
+                asesorId: original.asesorId?._id || original.asesorId || '',
+                asesorNombre: (original.asesorNombre && original.asesorNombre !== 'General')
+                    || original.asesorId?.username
+                    || original.asesorId?.nombre
+                    || original.asesorId?.email
+                    || original.asesorNombre
+                    || ''
+            };
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalRenovarPoliza'));
-            modal.hide();
-            cargarClientesCrm(true);
-            cargarPolizas(true);
+            modal?.hide();
+            Swal.close();
+            await abrirModalPoliza(null, polizaFormulario);
         } catch (error) {
             console.error('[procesarRenovacion] Error:', error);
-            console.error('[procesarRenovacion] Error message:', error.message);
-            console.error('[procesarRenovacion] Error details:', JSON.stringify(error, null, 2));
-            const errorMessage = error.message || error.error || 'No se pudo renovar la póliza';
-            Swal.fire('Error', errorMessage, 'error');
+            Swal.fire('Error', error.message || 'No se pudo leer la carátula PDF', 'error');
+        } finally {
+            window.procesandoRenovacion = false;
         }
     }
 
@@ -12806,7 +12956,7 @@ Fecha de firma: {{FECHA}}`;
         exportarReporteExcel, exportarReportePDF,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,
-        abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, abrirModalRenovarPoliza, procesarRenovacion,
+        abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, procesarRenovacion,
         prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,
         enviarNotificacionManual,
         verHistorialNotificaciones,
@@ -13229,138 +13379,6 @@ Fecha de firma: {{FECHA}}`;
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
-        }
-    }
-
-    // FASE 3: Función para abrir modal de renovación anual
-    window.abrirModalRenovacion = async function(polizaId) {
-        try {
-            const poliza = await fetchAPI(`/api/polizas/${polizaId}`);
-            
-            const { value: formValues } = await Swal.fire({
-                title: `Renovar Póliza ${poliza.numeroPoliza}`,
-                html: `
-                    <div class="text-start">
-                        <div class="alert alert-warning">
-                            <strong>Vigencia actual:</strong> ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}<br>
-                            <strong>Prima actual:</strong> $${poliza.primaTotal?.toFixed(2) || '0.00'} ${escapeHTML(poliza.moneda || 'MXN')}
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold" for="nuevoNumeroPolizaRenovacion">Nuevo número de póliza</label>
-                            <input type="text" id="nuevoNumeroPolizaRenovacion" class="swal2-input" placeholder="Escribe el nuevo número de póliza">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Nueva Prima Total</label>
-                            <input id="renovacion-prima" type="number" step="0.01" class="swal2-input" value="${poliza.primaTotal || ''}" placeholder="Nueva prima anual">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Forma de Pago (Nuevo Año)</label>
-                            <select id="renovacion-tipo-pago" class="swal2-input">
-                                <option value="anual" ${poliza.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
-                                <option value="semestral" ${poliza.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
-                                <option value="trimestral" ${poliza.tipoPago === 'trimestral' ? 'selected' : ''}>Trimestral</option>
-                                <option value="mensual" ${poliza.tipoPago === 'mensual' ? 'selected' : ''}>Mensual</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Nueva Fecha Inicio</label>
-                            <input id="renovacion-inicio" type="date" class="swal2-input" value="${poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : ''}">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Nueva Fecha Vencimiento</label>
-                            <input id="renovacion-vencimiento" type="date" class="swal2-input" value="">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">PDF de Nueva Póliza (Opcional)</label>
-                            <input id="renovacion-pdf" type="file" class="swal2-file-input" accept=".pdf">
-                            <small class="text-muted">Sube el nuevo PDF de la póliza renovada</small>
-                        </div>
-                    </div>
-                `,
-                focusConfirm: false,
-                showCancelButton: true,
-                confirmButtonText: 'Renovar',
-                cancelButtonText: 'Cancelar',
-                didOpen: () => {
-                    // Calcular automáticamente el vencimiento (1 año después del inicio)
-                    const inicioInput = document.getElementById('renovacion-inicio');
-                    const vencimientoInput = document.getElementById('renovacion-vencimiento');
-                    
-                    inicioInput.addEventListener('change', () => {
-                        if (inicioInput.value) {
-                            const inicio = new Date(inicioInput.value);
-                            const vencimiento = new Date(inicio);
-                            vencimiento.setFullYear(vencimiento.getFullYear() + 1);
-                            vencimientoInput.value = formatDateForInput(vencimiento);
-                        }
-                    });
-                    
-                    // Calcular inicial
-                    if (inicioInput.value) {
-                        const inicio = new Date(inicioInput.value);
-                        const vencimiento = new Date(inicio);
-                        vencimiento.setFullYear(vencimiento.getFullYear() + 1);
-                        vencimientoInput.value = formatDateForInput(vencimiento);
-                    }
-                },
-                preConfirm: () => {
-                    const primaTotal = document.getElementById('renovacion-prima').value;
-                    const tipoPago = document.getElementById('renovacion-tipo-pago').value;
-                    const fechaInicio = document.getElementById('renovacion-inicio').value;
-                    const fechaVencimiento = document.getElementById('renovacion-vencimiento').value;
-                    const numeroPoliza = document.getElementById('nuevoNumeroPolizaRenovacion').value.trim();
-                    const pdfFile = document.getElementById('renovacion-pdf').files[0];
-
-                    if (!primaTotal || !fechaInicio || !fechaVencimiento) {
-                        Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
-                        return;
-                    }
-
-                    return {
-                        primaTotal: parseFloat(primaTotal),
-                        tipoPago,
-                        numeroPoliza,
-                        fechaInicio,
-                        fechaVencimiento,
-                        pdfFile
-                    };
-                }
-            });
-
-            if (formValues) {
-                try {
-                    // Llamar al endpoint de renovación existente
-                    const datosRenovacion = new FormData();
-                    datosRenovacion.append('primaTotal', String(formValues.primaTotal));
-                    datosRenovacion.append('moneda', poliza.moneda || 'MXN');
-                    datosRenovacion.append('tipoPago', formValues.tipoPago);
-                    datosRenovacion.append('numeroPoliza', formValues.numeroPoliza);
-                    datosRenovacion.append('fechaInicio', formValues.fechaInicio);
-                    datosRenovacion.append('fechaVencimiento', formValues.fechaVencimiento);
-                    if (formValues.pdfFile) datosRenovacion.append('pdf', formValues.pdfFile);
-
-                    const response = await fetchAPI(`/api/polizas/${polizaId}/renovar`, {
-                        method: 'POST',
-                        body: datosRenovacion,
-                        isFormData: true
-                    });
-
-                    if (response.success) {
-                        Swal.fire('Éxito', 'Póliza renovada correctamente', 'success');
-                        await cargarPolizas(true);
-                    } else {
-                        Swal.fire('Error', response.error || 'Error al renovar póliza', 'error');
-                    }
-                } catch (error) {
-                    console.error('[abrirModalRenovacion] Error:', error);
-                    Swal.fire('Error', 'Error al renovar póliza', 'error');
-                }
-            }
-    // Exponer la función al scope global para que los botones HTML puedan llamarla
-    window.abrirModalRenovacion = abrirModalRenovacion;
-        } catch (error) {
-            console.error('[abrirModalRenovacion] Error:', error);
-            Swal.fire('Error', 'Error al cargar datos de la póliza', 'error');
         }
     }
 

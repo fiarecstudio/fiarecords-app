@@ -185,7 +185,7 @@ router.put('/:id/asignar-asesor', auth, applyTenantFilter, polizaController.asig
 /**
  * ENDPOINT DE EXTRACCIÓN (Optimizado con Lógica Posicional para CHUBB)
  */
-router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) => {
+const extraerDatosPdf = async (req, res) => {
     try {
         console.log('[Extraer Datos] Iniciando proceso de extracción...');
 
@@ -227,7 +227,13 @@ router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) =
             paquete: '',
             fechaInicio: '',
             fechaVencimiento: '',
-            primaTotal: 0
+            primaTotal: 0,
+            primaNeta: 0,
+            gastosExpedicion: 0,
+            recargoPagoFraccionado: 0,
+            iva: 0,
+            tipoPago: '',
+            conductoPago: ''
         };
 
         console.log('[Extraer Datos] Extrayendo fechas...');
@@ -297,6 +303,30 @@ router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) =
             }
         }
 
+        const extraerMonto = etiquetas => {
+            const etiqueta = etiquetas.join('|');
+            const monto = '(?:\\$\\s*)?([\\d,]+(?:\\.\\d{1,2})?)';
+            const encontrado = textoCompleto.match(new RegExp(
+                `(?:${etiqueta})\\s*[:\\-]?\\s*${monto}|${monto}\\s*(?:${etiqueta})`,
+                'i'
+            ));
+            const valor = encontrado?.[1] || encontrado?.[2] || encontrado?.[3];
+            return valor ? Number(valor.replace(/,/g, '')) : 0;
+        };
+        datos.primaNeta = extraerMonto(['PRIMA\\s+NETA']);
+        datos.primaTotal = extraerMonto(['PRIMA\\s+TOTAL', 'TOTAL\\s+A\\s+PAGAR']) || datos.primaTotal;
+        datos.gastosExpedicion = extraerMonto([
+            'GASTOS?\\s+DE?\\s+EXPEDICI[ÓO]N',
+            'GASTOS?\\s+DE?\\s+EMISI[ÓO]N',
+            'DERECHO\\s+DE\\s+P[ÓO]LIZA'
+        ]);
+        datos.recargoPagoFraccionado = extraerMonto(['RECARGO(?:\\s+POR)?\\s+PAGO\\s+FRACCIONADO', 'RECARGO\\s+POR\\s+FINANCIAMIENTO']);
+        datos.iva = extraerMonto(['IVA']);
+        const formaPagoMatch = textoCompleto.match(/(?:FORMA|CONDUCTO)\\s+(?:DE\\s+)?PAGO\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÜÑ ]{3,30})/i);
+        if (formaPagoMatch) datos.conductoPago = formaPagoMatch[1].trim();
+        const tipoPagoMatch = datos.conductoPago.match(/ANUAL|SEMESTRAL|TRIMESTRAL|MENSUAL/i);
+        if (tipoPagoMatch) datos.tipoPago = tipoPagoMatch[0].toLowerCase();
+
         console.log('[Extraer Datos] Datos extraídos exitosamente:', JSON.stringify(datos, null, 2));
         console.log('[Extraer Datos] Enviando respuesta JSON...');
         res.json({ success: true, datos: datos });
@@ -306,6 +336,9 @@ router.post('/extraer-datos', auth, upload.single('archivo'), async (req, res) =
         console.error('[Extraer Datos] Stack trace:', error.stack);
         res.status(500).json({ success: false, message: 'Error interno', error: error.message });
     }
-});
+};
+
+router.post('/extraer-datos', auth, upload.single('archivo'), extraerDatosPdf);
+router.post('/extraer-pdf', auth, upload.single('archivo'), extraerDatosPdf);
 
 module.exports = router;
