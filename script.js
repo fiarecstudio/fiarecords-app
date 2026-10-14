@@ -3474,6 +3474,9 @@ let proyectoIdEnEdicion = null;
         if (btnBack) { if (id === 'dashboard' || (id === 'vista-artista' && esCliente)) { btnBack.style.display = 'none'; } else { btnBack.style.display = 'inline-flex'; } } 
         
         if (seccionActiva) { 
+            if (id === 'bandeja-entrada') {
+                document.getElementById('navbar-inbox-unread-dot')?.classList.add('d-none');
+            }
             seccionActiva.classList.add('active'); 
             if(linkActivo) linkActivo.classList.add('active'); 
             if (updateHistory && `#${id}` !== window.location.hash) { history.pushState(null, null, `#${id}`); } 
@@ -3546,6 +3549,7 @@ let proyectoIdEnEdicion = null;
     let modoCorreoActual = 'reply';
     let archivosCorreoSeleccionados = [];
     let carpetaBandejaActual = 'INBOX';
+    let filtroBandejaNoLeidos = false;
     let busquedaCorreoTimeout = null;
     let secuenciaConsultaBandeja = 0;
     const detallesCorreoCache = new Map();
@@ -3573,6 +3577,19 @@ let proyectoIdEnEdicion = null;
         status.textContent = message;
         status.classList.toggle('text-primary', syncing);
         status.classList.toggle('text-muted', !syncing);
+    }
+
+    async function actualizarIndicadorCorreos() {
+        const userInfo = getUserRoleAndId();
+        const indicator = document.getElementById('navbar-inbox-unread-dot');
+        if (!indicator || userInfo.role !== 'admin') return;
+        try {
+            const response = await fetchAPI('/api/bandeja-entrada/unread-count');
+            const bandejaActiva = document.getElementById('bandeja-entrada')?.classList.contains('active');
+            indicator.classList.toggle('d-none', bandejaActiva || !(Number(response.unreadCount) > 0));
+        } catch (error) {
+            console.error('[BandejaEntrada] No se pudo actualizar el indicador de no leídos:', error);
+        }
     }
 
     async function cargarBandejaEntrada(options = {}) {
@@ -3670,11 +3687,15 @@ let proyectoIdEnEdicion = null;
     function renderizarListaBandeja() {
         const lista = document.getElementById('bandeja-lista');
         const query = document.getElementById('buscarCorreo')?.value || '';
-        const matchingEmails = correosBandejaEntrada.filter(correo => correoCoincideBusqueda(correo, query));
+        const matchingEmails = correosBandejaEntrada.filter(correo =>
+            (!filtroBandejaNoLeidos || !correo.seen) && correoCoincideBusqueda(correo, query)
+        );
         const folderLabel = esCarpetaEnviados() ? 'enviados' : 'recibidos';
         document.getElementById('bandeja-contador').textContent = `${matchingEmails.length} correos ${folderLabel}`;
         if (!matchingEmails.length) {
-            const message = query ? 'No hay correos que coincidan con la búsqueda.' : 'No hay mensajes en esta carpeta.';
+            const message = filtroBandejaNoLeidos && !query
+                ? 'No hay correos no leídos en esta carpeta.'
+                : query ? 'No hay correos que coincidan con la búsqueda.' : 'No hay mensajes en esta carpeta.';
             if (!lista.querySelector('.bandeja-list-message') || lista.querySelector('.bandeja-list-message').textContent !== message) {
                 lista.innerHTML = `<div class="bandeja-list-message text-muted">${message}</div>`;
             }
@@ -3728,6 +3749,19 @@ let proyectoIdEnEdicion = null;
         for (const [id, button] of existing) {
             if (!retained.has(id)) button.remove();
         }
+    }
+
+    function toggleFiltroNoLeidos() {
+        filtroBandejaNoLeidos = !filtroBandejaNoLeidos;
+        const button = document.getElementById('bandeja-filtro-no-leidos');
+        button?.setAttribute('aria-pressed', String(filtroBandejaNoLeidos));
+        button?.classList.toggle('btn-primary', filtroBandejaNoLeidos);
+        button?.classList.toggle('btn-outline-secondary', !filtroBandejaNoLeidos);
+        if (filtroBandejaNoLeidos && correoBandejaSeleccionado?.seen) {
+            correoBandejaSeleccionado = null;
+            mostrarCorreoSeleccionado();
+        }
+        renderizarListaBandeja();
     }
 
     function crearInicialesRemitente(name, email) {
@@ -3864,7 +3898,9 @@ let proyectoIdEnEdicion = null;
         if (!correoBandejaSeleccionado) return;
         const selected = correoBandejaSeleccionado;
         actualizarEstadoSincronizacion('Cargando mensaje...', true);
-        cargarCuerposDelHilo(selected)
+        Promise.resolve()
+            .then(() => selected.seen ? null : marcarCorreoLeido(selected))
+            .then(() => cargarCuerposDelHilo(selected))
             .then(() => actualizarEstadoSincronizacion(`Última actualización: ${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`))
             .catch(error => {
                 actualizarEstadoSincronizacion('No fue posible cargar el detalle del correo.');
@@ -3887,7 +3923,6 @@ let proyectoIdEnEdicion = null;
         if (!obtenerFirmaCorreo()) {
             loadInitialConfig(null, true).then(() => {
                 insertarFirmaEnEditorCorreo();
-                actualizarVistaPreviaCorreo();
             }).catch(error => {
                 console.warn('[BandejaEntrada] No fue posible cargar la firma de correo:', error.message);
             });
@@ -3920,7 +3955,6 @@ let proyectoIdEnEdicion = null;
         document.getElementById('respuesta-enviar').textContent = isNew ? 'Enviar correo' : forward ? 'Reenviar' : 'Enviar respuesta';
         document.getElementById('respuesta-adjuntos').value = '';
         renderizarAdjuntosCorreo();
-        actualizarVistaPreviaCorreo();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
     }
 
@@ -3973,16 +4007,40 @@ let proyectoIdEnEdicion = null;
         })));
     }
 
-    function actualizarVistaPreviaCorreo() {
-        const preview = document.getElementById('respuesta-cuerpo-preview');
-        const editor = document.getElementById('respuesta-mensaje');
-        if (!preview || !editor) return;
-        const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'";
-        const bodyContent = editor.innerHTML || '<p class="text-muted">Escribe tu mensaje para ver la vista previa.</p>';
-        const body = bodyContent.includes('data-email-signature="true"')
-            ? bodyContent
-            : `${bodyContent}${obtenerFirmaCorreo() ? `<br>${obtenerFirmaCorreo()}` : ''}`;
-        preview.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{font:14px/1.5 Arial,sans-serif;color:#212529;margin:12px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%;width:100%}</style></head><body>${body}</body></html>`;
+    function actualizarCorreoEnLista(id, seen) {
+        const correoId = String(id);
+        for (const correo of correosBandejaEntrada) {
+            if (String(correo.id) === correoId) correo.seen = seen;
+        }
+        for (const [cacheKey, detail] of detallesCorreoCache) {
+            if (cacheKey.endsWith(`:${correoId}`)) detallesCorreoCache.set(cacheKey, { ...detail, seen });
+        }
+        if (String(correoBandejaSeleccionado?.id) === correoId) {
+            correoBandejaSeleccionado.seen = seen;
+        }
+        renderizarListaBandeja();
+        if (correoBandejaSeleccionado) {
+            document.getElementById('bandeja-marcar-no-leido').disabled = !correoBandejaSeleccionado.seen;
+        }
+    }
+
+    async function marcarCorreoLeido(correo) {
+        if (!correo || correo.seen) return;
+        actualizarCorreoEnLista(correo.id, true);
+        try {
+            await fetchAPI('/api/bandeja-entrada/mark-read', {
+                method: 'POST',
+                body: JSON.stringify({
+                    id: correo.id,
+                    folder: correo.folder || carpetaBandejaActual
+                })
+            });
+            actualizarCorreoEnLista(correo.id, true);
+            actualizarIndicadorCorreos();
+        } catch (error) {
+            actualizarCorreoEnLista(correo.id, false);
+            showToast(error.message || 'No fue posible marcar el correo como leído.', 'error');
+        }
     }
 
     async function marcarCorreoNoLeido() {
@@ -3992,20 +4050,26 @@ let proyectoIdEnEdicion = null;
             return;
         }
         const button = document.getElementById('bandeja-marcar-no-leido');
+        const correo = correoBandejaSeleccionado;
         button.disabled = true;
         try {
             await fetchAPI('/api/bandeja-entrada/mark-unread', {
                 method: 'POST',
                 body: JSON.stringify({
-                    id: correoBandejaSeleccionado.id,
-                    folder: correoBandejaSeleccionado.folder || carpetaBandejaActual
+                    id: correo.id,
+                    folder: correo.folder || carpetaBandejaActual
                 })
             });
-            correoBandejaSeleccionado.seen = false;
-            mostrarCorreoSeleccionado();
+            actualizarCorreoEnLista(correo.id, false);
+            if (String(correoBandejaSeleccionado?.id) === String(correo.id)) {
+                correoBandejaSeleccionado = null;
+                mostrarCorreoSeleccionado();
+                renderizarListaBandeja();
+            }
+            actualizarIndicadorCorreos();
             showToast('El correo se marcó como no leído.', 'success');
         } catch (error) {
-            button.disabled = false;
+            button.disabled = !correoBandejaSeleccionado?.seen;
             showToast(error.message || 'No fue posible actualizar el correo.', 'error');
         }
     }
@@ -5207,6 +5271,15 @@ Fecha de firma: {{FECHA}}`;
             overlay?.classList.remove('show');
             setExpanded(false);
         };
+        const closeMenuForNavigation = () => {
+            if (window.innerWidth <= 1024) {
+                closeMobileMenu();
+                return;
+            }
+            sidebar.classList.add('sidebar-collapsed');
+            appWrapper.classList.add('sidebar-collapsed');
+            setExpanded(false);
+        };
 
         if (!hamburger.dataset.listener) {
             hamburger.dataset.listener = 'true';
@@ -5230,7 +5303,7 @@ Fecha de firma: {{FECHA}}`;
         }
         document.querySelectorAll('.nav-link-sidebar, #btn-nuevo-proyecto-sidebar').forEach(link => { 
             link.addEventListener('click', () => { 
-                if (window.innerWidth <= 1024) closeMobileMenu();
+                closeMenuForNavigation();
             }); 
         }); 
     }
@@ -7854,6 +7927,7 @@ Fecha de firma: {{FECHA}}`;
         const navContainer = document.getElementById('sidebar-nav-container'); 
         let p = user.permisos ||[]; 
         const role = user.role ? user.role.toLowerCase() : 'cliente'; 
+        document.getElementById('navbar-inbox-button')?.classList.toggle('d-none', role !== 'admin');
         
         // CANDADO DE EMPRESA PARA MÓDULO DE SEGUROS (DINÁMICO)
         // Verificar si la empresa actual tiene el módulo de Seguros activado y tipo de dashboard
@@ -7974,8 +8048,23 @@ Fecha de firma: {{FECHA}}`;
                     e.preventDefault();
                     mostrarSeccion(e.currentTarget.dataset.seccion);
                 }
+                if (e.currentTarget.dataset.seccion || e.currentTarget.id === 'btn-nuevo-proyecto-sidebar') {
+                    const sidebar = document.querySelector('.sidebar');
+                    const wrapper = document.getElementById('app-wrapper');
+                    const hamburger = document.getElementById('hamburger-menu');
+                    const overlay = document.getElementById('sidebar-overlay');
+                    sidebar?.classList.remove('show');
+                    overlay?.classList.remove('show');
+                    if (window.innerWidth > 1024) {
+                        sidebar?.classList.add('sidebar-collapsed');
+                        wrapper?.classList.add('sidebar-collapsed');
+                    }
+                    hamburger?.setAttribute('aria-expanded', 'false');
+                    hamburger?.setAttribute('aria-label', 'Expandir menú');
+                }
             });
         });
+        if (role === 'admin') actualizarIndicadorCorreos();
     }
 
     // ==================================================================
@@ -11301,7 +11390,6 @@ Fecha de firma: {{FECHA}}`;
                 };
             }
             renderizarPreviewFirma();
-            actualizarVistaPreviaCorreo();
             showToast('Firma de correo guardada.', 'success');
         } catch (error) {
             showToast(error.message || 'No se pudo guardar la firma.', 'error');
@@ -12952,9 +13040,11 @@ Fecha de firma: {{FECHA}}`;
         cargarFlujoDeTrabajo,
         recargarKanbanReactivo,
         mostrarOverlayKanban,
+        toggleFiltroNoLeidos,
         abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
+        toggleMinimizarCorreo,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,
         abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, procesarRenovacion,
         prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,
@@ -12976,12 +13066,63 @@ Fecha de firma: {{FECHA}}`;
         cerrarPrintPreview, ejecutarImpresion
     });
     document.getElementById('respuesta-adjuntos')?.addEventListener('change', seleccionarAdjuntosCorreo);
-    document.getElementById('respuesta-mensaje')?.addEventListener('input', actualizarVistaPreviaCorreo);
     document.getElementById('buscarCorreo')?.addEventListener('input', event => programarBusquedaCorreo(event.target.value));
     document.getElementById('firma-correo-html')?.addEventListener('input', renderizarPreviewFirma);
     document.getElementById('firma-imagen-archivo')?.addEventListener('change', insertarImagenFirma);
+    const modalCorreo = document.getElementById('modalResponderCorreo');
+    const botonMinimizarCorreo = document.getElementById('respuesta-minimizar');
+    const actualizarBotonMinimizarCorreo = minimizado => {
+        const icono = botonMinimizarCorreo?.querySelector('i');
+        if (icono) {
+            icono.classList.toggle('bi-dash-lg', !minimizado);
+            icono.classList.toggle('bi-fullscreen', minimizado);
+        }
+        botonMinimizarCorreo?.setAttribute('aria-label', minimizado ? 'Restaurar correo' : 'Minimizar correo');
+        if (botonMinimizarCorreo) botonMinimizarCorreo.title = minimizado ? 'Restaurar' : 'Minimizar';
+    };
+    function restaurarModalCorreo() {
+        if (!modalCorreo?.classList.contains('modal-correo-minimizado')) return;
+        modalCorreo.classList.remove('modal-correo-minimizado');
+        document.querySelectorAll('.modal-backdrop.correo-minimizado-backdrop')
+            .forEach(backdrop => backdrop.classList.remove('correo-minimizado-backdrop'));
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        bootstrap.Modal.getInstance(modalCorreo)?._focustrap?.activate();
+        actualizarBotonMinimizarCorreo(false);
+    }
+    function toggleMinimizarCorreo() {
+        if (!modalCorreo?.classList.contains('show')) return;
+        if (modalCorreo.classList.contains('modal-correo-minimizado')) {
+            restaurarModalCorreo();
+            return;
+        }
+        modalCorreo.classList.add('modal-correo-minimizado');
+        document.querySelector('.modal-backdrop:last-of-type')
+            ?.classList.add('correo-minimizado-backdrop');
+        bootstrap.Modal.getInstance(modalCorreo)?._focustrap?.deactivate();
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        actualizarBotonMinimizarCorreo(true);
+    }
+    if (modalCorreo && modalCorreo.dataset.minimizeHandlersBound !== 'true') {
+        modalCorreo.dataset.minimizeHandlersBound = 'true';
+        modalCorreo.querySelector('.modal-header')?.addEventListener('click', event => {
+            if (modalCorreo.classList.contains('modal-correo-minimizado')
+                && !event.target.closest('button')) {
+                restaurarModalCorreo();
+            }
+        });
+        modalCorreo.addEventListener('hidden.bs.modal', () => {
+            modalCorreo.classList.remove('modal-correo-minimizado');
+            document.querySelectorAll('.modal-backdrop.correo-minimizado-backdrop')
+                .forEach(backdrop => backdrop.classList.remove('correo-minimizado-backdrop'));
+            actualizarBotonMinimizarCorreo(false);
+        });
+    }
     window.setInterval(() => {
         const inbox = document.getElementById('bandeja-entrada');
+        actualizarIndicadorCorreos();
         if (inbox?.classList.contains('active') && document.visibilityState === 'visible') {
             cargarBandejaEntrada().catch(error => console.error('[BandejaEntrada] Error de sincronización automática:', error));
         }

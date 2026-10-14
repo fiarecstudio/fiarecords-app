@@ -1197,7 +1197,10 @@ const obtenerPolizas = async (req, res) => {
             filtro.asesorId = userId;
         }
         
-        const polizas = await Poliza.find(filtro).populate('asesorId', 'username').lean();
+        const polizas = await Poliza.find(filtro)
+            .populate('asesorId', 'username')
+            .sort({ 'fechas.inicio': -1, createdAt: -1 })
+            .lean();
         const polizasActivasEmpresa = await Poliza.find({
             empresaId,
             deletedAt: null,

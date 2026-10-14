@@ -267,6 +267,31 @@ async function getInbox(req, res) {
     }
 }
 
+async function getUnreadCount(req, res) {
+    let connection;
+    try {
+        connection = await imaps.connect(getImapConfig());
+        connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
+        await connection.openBox('INBOX');
+        const uids = await new Promise((resolve, reject) => {
+            connection.imap.search(['UNSEEN'], (error, results) => {
+                if (error) return reject(error);
+                resolve(results || []);
+            });
+        });
+        return res.json({ success: true, unreadCount: uids.length });
+    } catch (error) {
+        console.error('[BandejaEntrada] Error al consultar correos no leídos:', error);
+        const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;
+        return res.status(status).json({
+            success: false,
+            error: status !== 502 ? error.message : 'No fue posible consultar los correos no leídos.'
+        });
+    } finally {
+        if (connection) connection.end();
+    }
+}
+
 async function getEmailDetail(req, res) {
         const uid = Number(req.params.id);
         if (!Number.isSafeInteger(uid) || uid < 1) {
@@ -332,7 +357,7 @@ async function getEmailDetail(req, res) {
     }
 }
 
-async function markUnread(req, res) {
+async function updateSeenFlag(req, res, seen) {
     const uid = Number(req.body?.id);
     if (!Number.isSafeInteger(uid) || uid < 1) {
         return res.status(400).json({ success: false, error: 'El identificador del correo no es válido.' });
@@ -346,10 +371,18 @@ async function markUnread(req, res) {
         });
         const mailbox = await resolveMailbox(connection, String(req.body?.folder || 'INBOX'));
         await connection.openBox(mailbox);
-        await connection.delFlags(uid, '\\Seen');
-        return res.json({ success: true, message: 'El correo se marcó como no leído.' });
+        if (seen) {
+            await connection.addFlags(uid, '\\Seen');
+        } else {
+            await connection.delFlags(uid, '\\Seen');
+        }
+        return res.json({
+            success: true,
+            seen,
+            message: seen ? 'El correo se marcó como leído.' : 'El correo se marcó como no leído.'
+        });
     } catch (error) {
-        console.error('[BandejaEntrada] Error al marcar correo como no leído:', error);
+        console.error(`[BandejaEntrada] Error al marcar correo como ${seen ? 'leído' : 'no leído'}:`, error);
         const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;
         return res.status(status).json({
             success: false,
@@ -358,6 +391,14 @@ async function markUnread(req, res) {
     } finally {
         if (connection) connection.end();
     }
+}
+
+async function markRead(req, res) {
+    return updateSeenFlag(req, res, true);
+}
+
+async function markUnread(req, res) {
+    return updateSeenFlag(req, res, false);
 }
 
 function escapeHtml(value) {
@@ -552,4 +593,4 @@ async function replyEmail(req, res) {
     }
 }
 
-module.exports = { getInbox, getEmailDetail, markUnread, replyEmail };
+module.exports = { getInbox, getUnreadCount, getEmailDetail, markRead, markUnread, replyEmail };

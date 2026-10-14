@@ -187,6 +187,10 @@
                             <i class="bi bi-envelope"></i>
                         </button>
                     </div>
+                    <button id="navbar-inbox-button" type="button" class="btn btn-sm btn-outline-secondary header-btn-icon position-relative d-none" title="Bandeja de entrada" aria-label="Abrir bandeja de entrada" onclick="app.mostrarSeccion('bandeja-entrada')">
+                        <i class="bi bi-envelope"></i>
+                        <span id="navbar-inbox-unread-dot" class="navbar-inbox-unread-dot d-none" aria-label="Hay correos no leídos"></span>
+                    </button>
                     <div id="connection-status" class="connection-status status-online" onclick="app.syncNow()" title="Sincronizar">
                         <div class="status-indicator-dot"></div>
                         <span id="connection-text" class="d-none d-sm-inline">En Línea</span>
@@ -1505,8 +1509,13 @@
                                         <i class="bi bi-send"></i> Enviados
                                     </button>
                                 </div>
-                                <label class="visually-hidden" for="buscarCorreo">Buscar correos</label>
-                                <input id="buscarCorreo" class="form-control form-control-sm mb-2" type="search" placeholder="🔍 Buscar por asunto, correo o nombre...">
+                                <div class="d-flex gap-2 mb-2">
+                                    <label class="visually-hidden" for="buscarCorreo">Buscar correos</label>
+                                    <input id="buscarCorreo" class="form-control form-control-sm" type="search" placeholder="🔍 Buscar por asunto, correo o nombre...">
+                                    <button id="bandeja-filtro-no-leidos" type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap" onclick="app.toggleFiltroNoLeidos()" aria-pressed="false">
+                                        No leídos
+                                    </button>
+                                </div>
                                 <div id="bandeja-lista" class="bandeja-email-list" aria-label="Correos recibidos">
                                     <div class="bandeja-list-message text-muted">Selecciona Actualizar para consultar los correos.</div>
                                 </div>
@@ -1558,7 +1567,12 @@
                     <form class="modal-content" onsubmit="app.responderCorreo(event)">
                         <div class="modal-header">
                             <h5 class="modal-title" id="modalResponderCorreoLabel">Responder correo</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            <div class="d-flex align-items-center gap-2">
+                                <button id="respuesta-minimizar" type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="app.toggleMinimizarCorreo()" aria-label="Minimizar correo" title="Minimizar">
+                                    <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
                         </div>
                         <div class="modal-body">
                             <label for="respuesta-destinatario" class="form-label">Para</label>
@@ -1572,8 +1586,6 @@
                             <input id="respuesta-adjuntos" type="file" class="form-control" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
                             <div id="respuesta-adjuntos-lista" class="mt-2" aria-live="polite"></div>
                             <div class="form-text mt-2">La firma de la empresa se agregará automáticamente al enviar.</div>
-                            <label for="respuesta-cuerpo-preview" class="form-label fw-semibold mt-3">Vista previa del cuerpo y firma</label>
-                            <iframe id="respuesta-cuerpo-preview" class="form-control w-100" title="Vista previa del correo" sandbox="allow-same-origin" style="height: 180px;"></iframe>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
