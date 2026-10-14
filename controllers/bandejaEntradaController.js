@@ -6,9 +6,7 @@ const Empresa = require('../models/Empresa');
 const { enviarEmail } = require('../services/notificationService');
 
 const MAX_INBOX_MESSAGES = 50;
-const MAX_SNIPPET_BYTES = 512;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const LIST_HEADERS = 'HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CC CONTENT-TYPE CONTENT-TRANSFER-ENCODING)';
 const EMAIL_HTML_OPTIONS = {
     allowedTags: [
         'a', 'b', 'blockquote', 'br', 'caption', 'center', 'div', 'em', 'font',
@@ -153,20 +151,19 @@ async function formatListEmail(message, folder) {
     if (!header) throw new Error(`No se pudieron obtener las cabeceras del correo UID ${message.attributes.uid}.`);
     const headers = header.body;
     const parsed = await simpleParser(headerToRaw(headers));
-    const snippetPart = message.parts.find(part => /^TEXT</i.test(part.which));
-    const rawSnippet = snippetPart?.body || '';
     const fromValue = parsed.from?.value?.[0];
     const toEmails = (parsed.to?.value || []).map(({ address }) => address).filter(Boolean);
     const rawDate = parsed.date;
     const date = rawDate && !Number.isNaN(rawDate.getTime()) ? rawDate.toISOString() : null;
-    const snippet = cleanSnippet(rawSnippet.slice(0, MAX_SNIPPET_BYTES), '');
+    const subject = parsed.subject || '(Sin asunto)';
+    const snippet = cleanSnippet(subject, '') || 'Correo recibido';
     return {
         id: String(message.attributes.uid),
         folder,
         fromName: fromValue?.name || fromValue?.address || parsed.from?.text || 'Remitente desconocido',
         fromEmail: fromValue?.address || '',
         toEmails,
-        subject: parsed.subject || '(Sin asunto)',
+        subject,
         date,
         snippet,
         seen: (message.attributes.flags || []).some(flag => flag.toLowerCase() === '\\seen'),
@@ -249,7 +246,7 @@ async function getInbox(req, res) {
         const messages = await fetchByUids(
             connection,
             latestUids,
-            { bodies: [LIST_HEADERS, `TEXT<0.${MAX_SNIPPET_BYTES}>`], markSeen: false }
+            { bodies: ['HEADER'], markSeen: false }
         );
 
         const emails = await Promise.all(messages
