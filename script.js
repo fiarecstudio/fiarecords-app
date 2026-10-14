@@ -766,6 +766,7 @@ let proyectoIdEnEdicion = null;
                 chk.checked = isDark;
             }
         });
+        actualizarTemaIframeCorreo(isDark);
     }
 
     function safeDate(dateStr) {
@@ -3737,6 +3738,19 @@ let proyectoIdEnEdicion = null;
         return String(email || '?').slice(0, 2).toUpperCase();
     }
 
+    function estilosLecturaCorreo(isDark) {
+        const color = isDark ? '#f3f4f6' : '#111827';
+        const background = isDark ? '#111827' : '#ffffff';
+        const linkColor = isDark ? '#60a5fa' : '#2563eb';
+        return `body{font:15px/1.55 Arial,sans-serif;color:${color}!important;background-color:${background}!important;margin:16px;overflow-x:auto;word-wrap:break-word;overflow-wrap:anywhere}p,span,div,td,th,li,font{color:${color}!important}a{color:${linkColor}!important}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}`;
+    }
+
+    function actualizarTemaIframeCorreo(isDark = isDarkMode()) {
+        const emailFrame = document.getElementById('bandeja-cuerpo-email');
+        const style = emailFrame?.contentDocument?.getElementById('email-theme-styles');
+        if (style) style.textContent = estilosLecturaCorreo(isDark);
+    }
+
     function generarDocumentoCorreo(correo) {
         const threadEmails = obtenerCorreosDelHilo(correo);
         const body = threadEmails.map((mensaje, index) => {
@@ -3754,7 +3768,7 @@ let proyectoIdEnEdicion = null;
             return `<article style="${separator}"><div style="font-weight:bold;margin-bottom:12px">${escapeHTML(String(mensaje.fromName || mensaje.fromEmail || 'Remitente desconocido'))} &lt;${escapeHTML(String(mensaje.fromEmail || ''))}&gt; <span style="font-weight:normal;color:#9ca3af">${escapeHTML(fecha)}</span></div>${messageBody}</article>`;
         }).join('');
         const policy = "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; connect-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
-        return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.55 Arial,sans-serif;color:#e5e7eb!important;background:#111827;margin:16px;overflow-x:auto;word-wrap:break-word;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}a{color:#60a5fa}</style></head><body>${body}</body></html>`;
+        return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style id="email-theme-styles">${estilosLecturaCorreo(isDarkMode())}</style></head><body>${body}</body></html>`;
     }
 
     function normalizarAsuntoHilo(asunto) {
