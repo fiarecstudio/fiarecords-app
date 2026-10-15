@@ -3836,7 +3836,7 @@ let proyectoIdEnEdicion = null;
         }
         return correosBandejaEntrada
             .filter(correo => relacionados.has(correo.id))
-            .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     }
 
     async function obtenerDetalleCorreo(correo) {
@@ -3960,6 +3960,42 @@ let proyectoIdEnEdicion = null;
 
     function abrirNuevoCorreo() {
         abrirRespuestaCorreo('new');
+    }
+
+    function pegarTextoPlanoCorreo(event) {
+        const editor = event.currentTarget;
+        const text = event.clipboardData?.getData('text/plain');
+        if (typeof text !== 'string') return;
+        event.preventDefault();
+        if (!text) return;
+
+        const selection = window.getSelection();
+        let range;
+        if (selection?.rangeCount) {
+            range = selection.getRangeAt(0);
+            if (!editor.contains(range.commonAncestorContainer)) range = null;
+        }
+        if (!range) {
+            range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+        }
+
+        range.deleteContents();
+        const fragment = document.createDocumentFragment();
+        const lines = text.replace(/\r\n?/g, '\n').split('\n');
+        lines.forEach((line, index) => {
+            if (index) fragment.appendChild(document.createElement('br'));
+            if (line) fragment.appendChild(document.createTextNode(line));
+        });
+        const lastNode = fragment.lastChild;
+        range.insertNode(fragment);
+        if (lastNode) {
+            range.setStartAfter(lastNode);
+            range.collapse(true);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+        }
     }
 
     function renderizarAdjuntosCorreo() {
@@ -13066,6 +13102,7 @@ Fecha de firma: {{FECHA}}`;
         cerrarPrintPreview, ejecutarImpresion
     });
     document.getElementById('respuesta-adjuntos')?.addEventListener('change', seleccionarAdjuntosCorreo);
+    document.getElementById('respuesta-mensaje')?.addEventListener('paste', pegarTextoPlanoCorreo);
     document.getElementById('buscarCorreo')?.addEventListener('input', event => programarBusquedaCorreo(event.target.value));
     document.getElementById('firma-correo-html')?.addEventListener('input', renderizarPreviewFirma);
     document.getElementById('firma-imagen-archivo')?.addEventListener('change', insertarImagenFirma);

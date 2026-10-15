@@ -1640,7 +1640,7 @@ body.dark-mode .bandeja-email-item.is-unread .bandeja-email-subject {
     width: 100%;
     min-height: 55vh;
     border: 0;
-    background: #fff;
+    background: transparent;
 }
 @media (max-width: 991.98px) {
     .bandeja-workspace { grid-template-columns: minmax(0, 1fr); }

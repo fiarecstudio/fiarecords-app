@@ -555,7 +555,7 @@ async function replyEmail(req, res) {
                 exclusiveFilter: frame => frame.tag === 'div' && frame.attribs['data-email-signature'] === 'true'
             })
             : mensajeHtml;
-        const cuerpo = `${mensajeSinFirma}${signatureHtml ? `<br>${signatureHtml}` : ''}`;
+        const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333333;font-size:14px;">${mensajeSinFirma}</div>${signatureHtml ? `<br>${signatureHtml}` : ''}`;
         const headers = tipo === 'reply' || tipo === 'replyAll'
             ? originalMessageId
                 ? { 'In-Reply-To': originalMessageId, References: originalMessageId }
