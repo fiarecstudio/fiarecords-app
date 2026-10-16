@@ -1306,18 +1306,6 @@
                                 <input type="date" id="filtroFechaHasta" class="form-control form-control-sm" title="Fecha Hasta" onchange="app.filtrarPolizasUI()" oninput="app.filtrarPolizasUI()">
                             </div>
                         </div>
-                        <div class="row g-2 align-items-end mb-3">
-                            <div class="col-12 col-lg-6">
-                                <label for="archivoImportacionPolizas" class="form-label fw-semibold">Importar Excel (Cobranza o Emisiones)</label>
-                                <input id="archivoImportacionPolizas" class="form-control" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                            </div>
-                            <div class="col-12 col-lg-auto">
-                                <button class="btn btn-outline-success" type="button" onclick="app.importarPolizasExcel()">
-                                    <i class="bi bi-cloud-arrow-up"></i> Subir y Sincronizar
-                                </button>
-                            </div>
-                            <div id="resultadoImportacionPolizas" class="col-12 small" role="status" aria-live="polite"></div>
-                        </div>
                         <div class="table-responsive">
                             <table id="tablaPolizas" class="table table-hover">
                                 <thead>
@@ -1357,7 +1345,7 @@
                                 <div class="row g-3 align-items-end">
                                     <div class="col-12 col-md-4">
                                         <label for="tipo-reporte-exportacion" class="form-label">Tipo de reporte</label>
-                                        <select id="tipo-reporte-exportacion" class="form-select">
+                                        <select id="tipo-reporte-exportacion" class="form-select" onchange="app.actualizarVistaReporteCobranza()">
                                             <option value="cobranza" selected>Reporte de Cobranza</option>
                                             <option value="emisiones">Reporte de Emisiones</option>
                                         </select>
@@ -1381,6 +1369,80 @@
                                             <i class="bi bi-file-earmark-pdf me-1"></i> Descargar PDF
                                         </button>
                                     </div>
+                                </div>
+                                <div id="controles-cobranza-exportacion">
+                                    <div class="row g-3 align-items-start mt-3">
+                                        <div class="col-12 col-md-4 d-flex flex-column">
+                                            <label for="filtro-mes-cobranza-exportacion" class="form-label">Filtrar por Mes</label>
+                                            <select id="filtro-mes-cobranza-exportacion" class="form-select" onchange="app.cambiarMesReporteCobranza()">
+                                                <option value="" selected>Todos los meses</option>
+                                                <option value="1">Enero</option>
+                                                <option value="2">Febrero</option>
+                                                <option value="3">Marzo</option>
+                                                <option value="4">Abril</option>
+                                                <option value="5">Mayo</option>
+                                                <option value="6">Junio</option>
+                                                <option value="7">Julio</option>
+                                                <option value="8">Agosto</option>
+                                                <option value="9">Septiembre</option>
+                                                <option value="10">Octubre</option>
+                                                <option value="11">Noviembre</option>
+                                                <option value="12">Diciembre</option>
+                                            </select>
+                                            <small class="text-muted">Solo aplica al Reporte de Cobranza; filtra por fecha límite de pago.</small>
+                                        </div>
+                                        <div class="col-12 col-md-4 d-flex flex-column">
+                                            <label for="filtro-estatus-cobranza-exportacion" class="form-label">Filtrar por Estatus</label>
+                                            <select id="filtro-estatus-cobranza-exportacion" class="form-select" onchange="app.filtrarReporteCobranza()">
+                                                <option value="" selected>Todos los estatus</option>
+                                                <option value="pendiente">Pendiente</option>
+                                                <option value="atrasado">Atrasado</option>
+                                                <option value="pagado">Pagado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="vista-tabla-reporte-cobranza" class="mt-4">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                        <h3 class="h5 mb-0">Recibos de Cobranza</h3>
+                                        <button type="button" class="badge bg-warning text-dark border-0" data-reporte-cobranza-filtro="pendiente" aria-pressed="false">Pendientes: <span id="reporte-cobranza-pendientes">0</span></button>
+                                        <button type="button" class="badge bg-danger border-0" data-reporte-cobranza-filtro="atrasado" aria-pressed="false">Atrasados: <span id="reporte-cobranza-atrasados">0</span></button>
+                                        <button type="button" class="badge bg-success border-0" data-reporte-cobranza-filtro="pagado" aria-pressed="false">Pagados: <span id="reporte-cobranza-pagados">0</span></button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-reporte-cobranza-filtro="" aria-pressed="false">Todos</button>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th>Póliza</th>
+                                                    <th>Cliente</th>
+                                                    <th>Recibo</th>
+                                                    <th>Fecha límite de pago</th>
+                                                    <th>Monto</th>
+                                                    <th>Estatus</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tabla-reporte-cobranza-body">
+                                                <tr><td colspan="6" class="text-center text-muted">Cargando recibos...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="paginacion-reporte-cobranza" class="d-flex justify-content-between align-items-center gap-2 flex-wrap mt-3" aria-label="Paginación del reporte de Cobranza"></div>
+                                </div>
+                                <div class="row g-2 align-items-end mt-4 pt-3 border-top">
+                                    <div class="col-12">
+                                        <h3 class="h5 mb-2">Importar Excel (Cobranza o Emisiones)</h3>
+                                    </div>
+                                    <div class="col-12 col-lg-6">
+                                        <label for="archivoImportacionPolizas" class="form-label">Seleccionar archivo</label>
+                                        <input id="archivoImportacionPolizas" class="form-control" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                                    </div>
+                                    <div class="col-12 col-lg-auto">
+                                        <button class="btn btn-outline-success" type="button" onclick="app.importarPolizasExcel()">
+                                            <i class="bi bi-cloud-arrow-up"></i> Subir y Sincronizar
+                                        </button>
+                                    </div>
+                                    <div id="resultadoImportacionPolizas" class="col-12 small" role="status" aria-live="polite"></div>
                                 </div>
                             </div>
                         </div>

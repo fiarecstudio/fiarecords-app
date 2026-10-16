@@ -3502,6 +3502,7 @@ let proyectoIdEnEdicion = null;
                 'mis-deudas': cargarDeudas,
                 'polizas': cargarPolizas,
                 'clientes-crm': cargarClientesCrm,
+                'reportes': cargarReporteCobranza,
                 'bandeja-entrada': cargarBandejaEntrada,
                 'cobranza-diaria': () => {
                     initEventosCobranzaDiaria();
@@ -9122,6 +9123,7 @@ Fecha de firma: {{FECHA}}`;
             }
             input.value = '';
             await cargarPolizas(true);
+            await cargarReporteCobranza();
         } catch (error) {
             console.error('[importarPolizasExcel] Error:', error);
             if (resultadoEl) {
@@ -10482,6 +10484,175 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     // EXPORTACIÓN DE REPORTES
     // ==================================================================
+    let solicitudReporteCobranzaId = 0;
+    let filasReporteCobranza = [];
+    let paginaReporteCobranza = 1;
+    const FILAS_POR_PAGINA_REPORTE_COBRANZA = 15;
+
+    function actualizarVistaReporteCobranza() {
+        const esCobranza = document.getElementById('tipo-reporte-exportacion')?.value !== 'emisiones';
+        const vista = document.getElementById('vista-tabla-reporte-cobranza');
+        const controles = document.getElementById('controles-cobranza-exportacion');
+        if (vista) vista.classList.toggle('d-none', !esCobranza);
+        if (controles) controles.classList.toggle('d-none', !esCobranza);
+        if (esCobranza) cargarReporteCobranza();
+    }
+
+    function cambiarMesReporteCobranza() {
+        paginaReporteCobranza = 1;
+        cargarReporteCobranza();
+    }
+
+    function filtrarReporteCobranza() {
+        paginaReporteCobranza = 1;
+        renderizarReporteCobranza();
+    }
+
+    function renderizarReporteCobranza() {
+        const tbody = document.getElementById('tabla-reporte-cobranza-body');
+        const paginacion = document.getElementById('paginacion-reporte-cobranza');
+        if (!tbody || !paginacion) return;
+
+        const estatus = document.getElementById('filtro-estatus-cobranza-exportacion')?.value || '';
+        const filas = estatus
+            ? filasReporteCobranza.filter(fila => fila.estadoRecibo === estatus)
+            : filasReporteCobranza;
+        const totalPaginas = Math.max(1, Math.ceil(filas.length / FILAS_POR_PAGINA_REPORTE_COBRANZA));
+        paginaReporteCobranza = Math.min(paginaReporteCobranza, totalPaginas);
+        const inicio = (paginaReporteCobranza - 1) * FILAS_POR_PAGINA_REPORTE_COBRANZA;
+        const filasPagina = filas.slice(inicio, inicio + FILAS_POR_PAGINA_REPORTE_COBRANZA);
+
+        document.querySelectorAll('[data-reporte-cobranza-filtro]').forEach(boton => {
+            const activo = boton.dataset.reporteCobranzaFiltro === estatus;
+            boton.setAttribute('aria-pressed', activo ? 'true' : 'false');
+            boton.classList.toggle('opacity-50', !activo);
+        });
+
+        if (!filasPagina.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay recibos para el filtro seleccionado.</td></tr>';
+        } else {
+            tbody.innerHTML = filasPagina.map(fila => {
+                const estado = ['pendiente', 'atrasado', 'pagado'].includes(fila.estadoRecibo)
+                    ? fila.estadoRecibo
+                    : 'pendiente';
+                const fecha = fila.fechaVencimientoOriginal
+                    ? new Date(fila.fechaVencimientoOriginal).toLocaleDateString('es-MX', { timeZone: 'UTC' })
+                    : '—';
+                const monto = Number(fila.primaTotal) || 0;
+                return `<tr>
+                    <td>${escapeHTML(fila.poliza || '')}</td>
+                    <td>${escapeHTML(fila.cliente || '')}</td>
+                    <td>${escapeHTML(fila.numeroReciboOriginal || fila.recibo || '')}</td>
+                    <td>${escapeHTML(fecha)}</td>
+                    <td>${monto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
+                    <td>
+                        <select class="form-select form-select-sm" data-reporte-cobranza-estatus
+                            data-poliza-id="${escapeHTML(fila.idPoliza)}"
+                            data-recibo-index="${Number(fila.indiceRecibo)}"
+                            data-estatus-anterior="${estado}" aria-label="Cambiar estatus del recibo">
+                            <option value="pendiente" ${estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+                            <option value="atrasado" ${estado === 'atrasado' ? 'selected' : ''}>Atrasado</option>
+                            <option value="pagado" ${estado === 'pagado' ? 'selected' : ''}>Pagado</option>
+                        </select>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        const desde = filas.length ? inicio + 1 : 0;
+        const hasta = Math.min(inicio + FILAS_POR_PAGINA_REPORTE_COBRANZA, filas.length);
+        paginacion.innerHTML = `
+            <small class="text-muted">Mostrando ${desde}-${hasta} de ${filas.length} recibos</small>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-reporte-cobranza-pagina="${paginaReporteCobranza - 1}" ${paginaReporteCobranza <= 1 ? 'disabled' : ''}>Anterior</button>
+                <span class="small">Página ${paginaReporteCobranza} de ${totalPaginas}</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-reporte-cobranza-pagina="${paginaReporteCobranza + 1}" ${paginaReporteCobranza >= totalPaginas ? 'disabled' : ''}>Siguiente</button>
+            </div>`;
+    }
+
+    async function cargarReporteCobranza() {
+        const vista = document.getElementById('vista-tabla-reporte-cobranza');
+        const tbody = document.getElementById('tabla-reporte-cobranza-body');
+        if (!vista || !tbody) return;
+        if (document.getElementById('tipo-reporte-exportacion')?.value === 'emisiones') {
+            vista.classList.add('d-none');
+            return;
+        }
+
+        vista.classList.remove('d-none');
+        const solicitudId = ++solicitudReporteCobranzaId;
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Cargando recibos...</td></tr>';
+        try {
+            const parametros = new URLSearchParams();
+            const mes = document.getElementById('filtro-mes-cobranza-exportacion')?.value || '';
+            if (mes) parametros.set('mes', mes);
+            const filtroAsesor = obtenerFiltroAsesorExportacion();
+            if (filtroAsesor.query) {
+                const filtro = new URLSearchParams(filtroAsesor.query.replace(/^\?/, ''));
+                filtro.forEach((valor, clave) => parametros.set(clave, valor));
+            }
+            const query = parametros.toString();
+            const reporte = await fetchAPI(`/api/polizas/reporte-cobranza${query ? `?${query}` : ''}`);
+            if (solicitudId !== solicitudReporteCobranzaId) return;
+            if (!reporte?.success || !Array.isArray(reporte.filas)) {
+                throw new Error(reporte?.error || 'No se pudo cargar el reporte de Cobranza.');
+            }
+
+            const totales = { pendiente: 0, atrasado: 0, pagado: 0 };
+            reporte.filas.forEach(fila => {
+                if (Object.prototype.hasOwnProperty.call(totales, fila.estadoRecibo)) totales[fila.estadoRecibo]++;
+            });
+            document.getElementById('reporte-cobranza-pendientes').textContent = totales.pendiente;
+            document.getElementById('reporte-cobranza-atrasados').textContent = totales.atrasado;
+            document.getElementById('reporte-cobranza-pagados').textContent = totales.pagado;
+            filasReporteCobranza = reporte.filas;
+            renderizarReporteCobranza();
+        } catch (error) {
+            if (solicitudId !== solicitudReporteCobranzaId) return;
+            console.error('[cargarReporteCobranza] Error:', error);
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${escapeHTML(error.message || 'Error al cargar el reporte de Cobranza.')}</td></tr>`;
+        }
+    }
+
+    async function cambiarEstatusReciboReporte(select) {
+        const { polizaId, reciboIndex } = select.dataset;
+        const estatusAnterior = select.dataset.estatusAnterior;
+        select.disabled = true;
+        try {
+            await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}/recibos/${encodeURIComponent(reciboIndex)}/estatus`, {
+                method: 'PUT',
+                body: JSON.stringify({ estadoRecibo: select.value })
+            });
+            showToast('Estatus del recibo actualizado.', 'success');
+            await cargarReporteCobranza();
+        } catch (error) {
+            console.error('[cambiarEstatusReciboReporte] Error:', error);
+            select.value = estatusAnterior;
+            showToast(error.message || 'No se pudo actualizar el estatus del recibo.', 'error');
+        } finally {
+            select.disabled = false;
+        }
+    }
+
+    document.getElementById('tabla-reporte-cobranza-body')?.addEventListener('change', event => {
+        const select = event.target.closest('[data-reporte-cobranza-estatus]');
+        if (select) cambiarEstatusReciboReporte(select);
+    });
+    document.getElementById('vista-tabla-reporte-cobranza')?.addEventListener('click', event => {
+        const filtro = event.target.closest('[data-reporte-cobranza-filtro]');
+        if (filtro) {
+            const selector = document.getElementById('filtro-estatus-cobranza-exportacion');
+            if (selector) selector.value = filtro.dataset.reporteCobranzaFiltro;
+            filtrarReporteCobranza();
+            return;
+        }
+        const botonPagina = event.target.closest('[data-reporte-cobranza-pagina]');
+        if (botonPagina && !botonPagina.disabled) {
+            paginaReporteCobranza = Number(botonPagina.dataset.reporteCobranzaPagina);
+            renderizarReporteCobranza();
+        }
+    });
+
     function obtenerFiltroAsesorExportacion() {
         const selector = document.getElementById('filtro-asesor');
         const asesorId = normalizarFiltroAsesor(selector?.value);
@@ -10500,6 +10671,8 @@ Fecha de firma: {{FECHA}}`;
         const tipoReporte = document.getElementById('tipo-reporte-exportacion')?.value || 'cobranza';
         const fechaInicio = document.getElementById('fecha-inicio-exportacion')?.value || '';
         const fechaFin = document.getElementById('fecha-fin-exportacion')?.value || '';
+        const mesCobranza = document.getElementById('filtro-mes-cobranza-exportacion')?.value || '';
+        const estatusCobranza = document.getElementById('filtro-estatus-cobranza-exportacion')?.value || '';
         if (tipoReporte === 'emisiones') {
             if (!fechaInicio || !fechaFin) {
                 showToast('Selecciona el rango de fechas para el reporte de Emisiones', 'error');
@@ -10515,6 +10688,10 @@ Fecha de firma: {{FECHA}}`;
         parametros.set('tipoReporte', tipoReporte);
         if (fechaInicio) parametros.set('fechaInicio', fechaInicio);
         if (fechaFin) parametros.set('fechaFin', fechaFin);
+        if (tipoReporte === 'cobranza') {
+            if (mesCobranza) parametros.set('mes', mesCobranza);
+            if (estatusCobranza) parametros.set('estatus', estatusCobranza);
+        }
         return {
             tipoReporte,
             query: `?${parametros.toString()}`,
@@ -13079,6 +13256,7 @@ Fecha de firma: {{FECHA}}`;
         toggleFiltroNoLeidos,
         abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
+        actualizarVistaReporteCobranza, cambiarMesReporteCobranza, filtrarReporteCobranza,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
         toggleMinimizarCorreo,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,

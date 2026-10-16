@@ -685,7 +685,17 @@ const importarPolizasExcel = async (req, res) => {
 
         const encabezadosOriginales = filas[encabezadoIndex].map(value => String(value ?? ''));
         const headers = encabezadosOriginales.map(normalizarEncabezado);
-        const esCobranza = headers.some(header => header.includes('RECIBO'));
+        const tieneFechaVencimientoCobranza = headers.some(header =>
+            header.includes('FECHA LIMITE') || header === 'FECHA VENCIMIENTO'
+        );
+        const tieneIndicadorPago = headers.some(header =>
+            ['FECHA PAGO', 'FECHA DE PAGO', 'FECHA LIQUIDACION', 'PAGADO'].includes(header)
+        );
+        const esCobranza = headers.some(header => header.includes('RECIBO'))
+            || headers.some(header => header.includes('FECHA LIMITE'))
+            || tieneIndicadorPago
+            || (tieneFechaVencimientoCobranza
+                && (headers.some(header => header.includes('PERIODO')) || headers.includes('ESTATUS')));
         const columnas = {
             numeroPoliza: ['POLIZA', 'NUMERO DE POLIZA', 'NO POLIZA'],
             socio: ['AGENTE', 'SOCIO', 'ASESOR', 'NOMBRE DEL ASESOR'],
@@ -702,11 +712,13 @@ const importarPolizasExcel = async (req, res) => {
             primaTotal: ['P TOTAL', 'PRIMA TOTAL'],
             primaNeta: ['P NETA', 'PRIMA NETA'],
             numeroRecibo: ['RECIBO', 'NO RECIBO', 'NUMERO DE RECIBO'],
-            fechaLimite: ['FECHA LIMITE DE PAGO', 'FECHA LIMITE PAGO', 'VENCIMIENTO RECIBO'],
+            fechaLimite: ['FECHA LIMITE DE PAGO', 'FECHA LIMITE PAGO', 'FECHA VENCIMIENTO', 'FECHA VENCIMIENTO RECIBO', 'VENCIMIENTO RECIBO'],
             estatus: ['ESTATUS', 'ESTADO', 'ESTATUS RECIBO'],
             tipoSeguro: ['TIPO DE SEGURO', 'TIPO SEGURO'],
             periodo: ['PERIODO COBERTURA', 'PERIODO'],
-            fechaPago: ['FECHA DE PAGO', 'FECHA PAGO']
+            fechaPago: ['FECHA DE PAGO', 'FECHA PAGO'],
+            fechaLiquidacion: ['FECHA LIQUIDACION'],
+            pagado: ['PAGADO']
         };
         const buscarColumna = aliases => {
             const normalizedAliases = aliases.map(normalizarEncabezado);
@@ -743,6 +755,8 @@ const importarPolizasExcel = async (req, res) => {
             const valueText = texto(value);
             const localDate = valueText.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
             if (localDate) return new Date(Number(localDate[3]), Number(localDate[2]) - 1, Number(localDate[1]), 12);
+            const isoDate = valueText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (isoDate) return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]), 12);
             const parsed = new Date(valueText);
             return valueText && !Number.isNaN(parsed.getTime()) ? parsed : null;
         };
@@ -817,15 +831,40 @@ const importarPolizasExcel = async (req, res) => {
             }
 
             const numeroRecibo = texto(leer(row, 'numeroRecibo'));
-            const fechaVencimientoRecibo = convertirFecha(leer(row, 'fechaLimite')) || datosFila.inicio;
-            if (esCobranza && (numeroRecibo || leer(row, 'fechaLimite') || leer(row, 'periodo'))) {
+            const fechaVencimientoImportada = convertirFecha(leer(row, 'fechaLimite'));
+            const fechaVencimientoRecibo = fechaVencimientoImportada || datosFila.inicio;
+            if (esCobranza && (
+                numeroRecibo
+                || leer(row, 'fechaLimite')
+                || leer(row, 'periodo')
+                || leer(row, 'fechaPago')
+                || leer(row, 'fechaLiquidacion')
+                || leer(row, 'pagado')
+            )) {
+                const fechaPago = convertirFecha(leer(row, 'fechaPago')) || convertirFecha(leer(row, 'fechaLiquidacion'));
                 const estatus = normalizarEncabezado(leer(row, 'estatus'));
+                const valorPagado = normalizarEncabezado(leer(row, 'pagado'));
+                const indicadorPagado = ['SI', 'S', 'TRUE', 'VERDADERO', '1', 'X', 'PAGADO', 'LIQUIDADO', 'COBRADO']
+                    .includes(valorPagado);
+                const tienePago = Boolean(fechaPago)
+                    || indicadorPagado
+                    || ['PAGADO', 'LIQUIDADO', 'COBRADO'].some(estado => estatus.includes(estado));
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                const vencimientoLimpio = fechaVencimientoImportada
+                    ? new Date(fechaVencimientoImportada)
+                    : null;
+                if (vencimientoLimpio) vencimientoLimpio.setHours(0, 0, 0, 0);
                 grupo.recibos.push({
                     numeroRecibo: numeroRecibo || `REC-${grupo.recibos.length + 1}`,
                     montoRecibo: prima ?? 0,
                     fechaVencimientoRecibo,
-                    fechaPago: convertirFecha(leer(row, 'fechaPago')),
-                    estadoRecibo: estatus.includes('PAGAD') || estatus.includes('COBRAD') ? 'pagado' : 'pendiente',
+                    fechaPago: fechaPago || (tienePago ? new Date() : null),
+                    estadoRecibo: tienePago
+                        ? 'pagado'
+                        : vencimientoLimpio && vencimientoLimpio < hoy
+                            ? 'atrasado'
+                            : 'pendiente',
                     periodoCobertura: texto(leer(row, 'periodo'))
                 });
             }
@@ -1026,11 +1065,14 @@ const importarPolizasExcel = async (req, res) => {
                         recibo.montoRecibo = importado.montoRecibo;
                         recibo.fechaVencimientoRecibo = importado.fechaVencimientoRecibo || fechas.inicio;
                         recibo.estadoRecibo = importado.estadoRecibo;
+                        recibo.fechaPago = importado.estadoRecibo === 'pagado' ? importado.fechaPago || recibo.fechaPago || null : null;
+                        if (importado.estadoRecibo !== 'pagado') recibo.metodoPago = null;
                         recibo.periodoCobertura = importado.periodoCobertura || `${index + 1}/${grupo.recibos.length}`;
                     } else {
                         poliza.recibos.push({
                             ...importado,
                             fechaVencimientoRecibo: importado.fechaVencimientoRecibo || fechas.inicio,
+                            fechaPago: importado.estadoRecibo === 'pagado' ? importado.fechaPago : null,
                             periodoCobertura: importado.periodoCobertura || `${index + 1}/${grupo.recibos.length}`
                         });
                         recibo = poliza.recibos[poliza.recibos.length - 1];
@@ -1051,6 +1093,7 @@ const importarPolizasExcel = async (req, res) => {
                             pagoVinculado.reciboId = recibo._id;
                             pagoVinculado.monto = importado.montoRecibo;
                             pagoVinculado.estado = 'pagado';
+                            pagoVinculado.fechaPago = importado.fechaPago || pagoVinculado.fechaPago || new Date();
                         } else {
                             poliza.pagos.push({
                                 reciboId: recibo._id,
@@ -1061,18 +1104,23 @@ const importarPolizasExcel = async (req, res) => {
                             });
                         }
                     } else if (pagoVinculado) {
-                        pagoVinculado.estado = 'pendiente';
+                        pagoVinculado.estado = importado.estadoRecibo;
+                        pagoVinculado.fechaPago = undefined;
                     }
                 }
 
                 if (esNueva || esCobranza) {
-                    const pendientes = poliza.recibos.filter(recibo => recibo.estadoRecibo === 'pendiente');
+                    const pendientes = poliza.recibos.filter(recibo => ['pendiente', 'atrasado'].includes(recibo.estadoRecibo));
                     poliza.saldoRestante = pendientes.reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0);
                     poliza.proximoPago = pendientes
                         .map(recibo => recibo.fechaVencimientoRecibo)
                         .filter(Boolean)
                         .sort((a, b) => new Date(a) - new Date(b))[0] || null;
-                    poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+                    poliza.estadoPago = poliza.saldoRestante === 0
+                        ? 'pagado_completo'
+                        : poliza.recibos.some(recibo => recibo.estadoRecibo === 'pagado')
+                            ? 'al_corriente'
+                            : 'pendiente';
                 }
                 poliza.estado = estadoImportado || poliza.estado || 'Activa';
                 const datosUpsert = {
@@ -3725,7 +3773,23 @@ function obtenerSolicitudReporte(req, res) {
         res.status(400).json({ error: 'El tipo de reporte seleccionado no es válido' });
         return null;
     }
-    if (tipoReporte !== 'emisiones') return { tipoReporte, filtroFechas: null };
+    if (tipoReporte !== 'emisiones') {
+        const mesSolicitado = req.query.mes;
+        const estatusSolicitado = req.query.estatus || '';
+        const estatusValidos = ['', 'pendiente', 'atrasado', 'pagado'];
+        if (typeof estatusSolicitado !== 'string' || !estatusValidos.includes(estatusSolicitado)) {
+            res.status(400).json({ error: 'El estatus seleccionado no es válido para el reporte de Cobranza' });
+            return null;
+        }
+        if (mesSolicitado !== undefined && mesSolicitado !== '') {
+            if (typeof mesSolicitado !== 'string' || !/^(?:[1-9]|1[0-2])$/.test(mesSolicitado)) {
+                res.status(400).json({ error: 'El mes seleccionado no es válido para el reporte de Cobranza' });
+                return null;
+            }
+            return { tipoReporte, filtroFechas: null, mes: Number(mesSolicitado), estatus: estatusSolicitado };
+        }
+        return { tipoReporte, filtroFechas: null, mes: null, estatus: estatusSolicitado };
+    }
 
     const { fechaInicio, fechaFin } = req.query;
     const esFechaValida = valor => {
@@ -3884,7 +3948,18 @@ const COLUMNAS_REPORTE_COBRANZA = [
     { header: 'COMISION', key: 'comision', width: 15 }
 ];
 
-function obtenerFilasReporteCobranza(polizas) {
+function esPolizaCancelada(poliza) {
+    return [poliza.estado, poliza.estatusPoliza].some(estado =>
+        typeof estado === 'string' && /^\s*cancelad[oa]\s*$/i.test(estado)
+    );
+}
+
+function obtenerFilasReporteCobranza(polizas, mes = null, opciones = {}) {
+    const incluirPagados = opciones.incluirPagados === true;
+    const incluirCancelados = opciones.incluirCancelados === true;
+    const anioActual = new Date().getFullYear();
+    const inicioMesUTC = mes ? Date.UTC(anioActual, mes - 1, 1) : null;
+    const inicioMesSiguienteUTC = mes ? Date.UTC(anioActual, mes, 1) : null;
     const fechaReporte = fecha => {
         if (!fecha) return null;
         const valor = new Date(fecha);
@@ -3907,7 +3982,7 @@ function obtenerFilasReporteCobranza(polizas) {
     hoy.setHours(0, 0, 0, 0);
     const filas = [];
 
-    polizas.forEach(poliza => {
+    polizas.filter(poliza => !esPolizaCancelada(poliza)).forEach(poliza => {
         const numPagos = numeroPagosPorTipo[poliza.tipoPago] || 1;
         const recibos = poliza.recibos || [];
         const fechasEsperadas = [];
@@ -3930,7 +4005,10 @@ function obtenerFilasReporteCobranza(polizas) {
                 indice,
                 fecha: recibo.fechaVencimientoRecibo || recibo.fechaVencimiento || fechasEsperadas[indice],
                 monto: Number(recibo.montoRecibo) || 0,
-                estado: String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+                estado: String(recibo.estadoRecibo || recibo.estado || '').toLowerCase(),
+                fechaPago: recibo.fechaPago || null,
+                numeroRecibo: recibo.numeroRecibo || '',
+                esReciboPersistido: true
             }))
             : Array.from({ length: numPagos }, (_, indice) => {
                 const pagoRegistrado = poliza.pagos?.[indice];
@@ -3949,16 +4027,27 @@ function obtenerFilasReporteCobranza(polizas) {
                     indice,
                     fecha,
                     monto: Number(pagoRegistrado?.monto ?? montoConfigurado) || 0,
-                    estado
+                    estado,
+                    fechaPago: pagoRegistrado?.fechaPago || null,
+                    numeroRecibo: '',
+                    esReciboPersistido: false
                 };
             });
 
         pagos.forEach(pago => {
-            if (['pagado', 'cancelado'].includes(pago.estado)) return;
+            if (pago.estado === 'cancelado' && !incluirCancelados) return;
+            if (pago.estado === 'pagado' && !incluirPagados) return;
             const fechaLimite = fechaReporte(pago.fecha);
+            if (mes && (
+                !fechaLimite
+                || fechaLimite.getTime() < inicioMesUTC
+                || fechaLimite.getTime() >= inicioMesSiguienteUTC
+            )) return;
             const estadoRecibo = ['pendiente', 'atrasado'].includes(pago.estado)
                 ? pago.estado
-                : 'pendiente';
+                : pago.estado === 'pagado' || pago.estado === 'cancelado'
+                    ? pago.estado
+                    : 'pendiente';
             filas.push({
                 mes: obtenerMes(pago.fecha),
                 socio: poliza.asesorId?.username || poliza.asesorNombre || 'General',
@@ -3980,15 +4069,164 @@ function obtenerFilasReporteCobranza(polizas) {
                     emisionEnPrimerPago: poliza.emisionEnPrimerPago
                 }),
                 primaTotal: pago.monto,
-                estatus: pago.estado === 'pendiente' || pago.estado === 'atrasado'
-                    ? pago.estado.charAt(0).toUpperCase() + pago.estado.slice(1)
-                    : poliza.estado || 'Pendiente',
-                comision: poliza.comision ?? ''
+                estatus: estadoRecibo === 'pagado'
+                    ? 'Pagado'
+                    : estadoRecibo === 'atrasado'
+                        ? 'Atrasado'
+                        : 'Pendiente',
+                comision: poliza.comision ?? '',
+                idPoliza: String(poliza._id),
+                indiceRecibo: pago.indice,
+                numeroReciboOriginal: pago.numeroRecibo,
+                esReciboPersistido: pago.esReciboPersistido,
+                estadoRecibo,
+                fechaVencimientoOriginal: fechaLimite,
+                fechaPagoOriginal: pago.fechaPago
             });
         });
     });
     return filas;
 }
+
+function excluirPolizasCanceladas(filtro) {
+    filtro.$nor = [
+        { estado: /^\s*cancelad[oa]\s*$/i },
+        { estatusPoliza: /^\s*cancelad[oa]\s*$/i }
+    ];
+    return filtro;
+}
+
+const obtenerReporteCobranza = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.tenantFilter?.empresaId;
+        const userId = req.user?._id || req.user?.id;
+        if (!empresaId || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+
+        const solicitudReporte = obtenerSolicitudReporte({
+            query: { ...req.query, tipoReporte: 'cobranza' }
+        }, res);
+        if (!solicitudReporte) return;
+
+        const filtro = excluirPolizasCanceladas({ empresaId, deletedAt: null });
+        if (req.user.role !== 'admin') {
+            filtro.asesorId = userId;
+        } else if (req.query.asesorId && req.query.asesorId !== 'todos') {
+            if (!mongoose.Types.ObjectId.isValid(req.query.asesorId)) {
+                return res.status(400).json({ success: false, error: 'El asesor seleccionado no es válido.' });
+            }
+            const asesor = await Usuario.findOne({ _id: req.query.asesorId, empresaId }).select('_id');
+            if (!asesor) {
+                return res.status(404).json({ success: false, error: 'Asesor no encontrado en esta empresa.' });
+            }
+            filtro.asesorId = asesor._id;
+        }
+
+        const polizas = await Poliza.find(filtro)
+            .populate('asesorId', 'username')
+            .sort({ createdAt: -1 })
+            .lean();
+        const filas = obtenerFilasReporteCobranza(polizas, solicitudReporte.mes, { incluirPagados: true });
+        return res.json({ success: true, filas });
+    } catch (error) {
+        console.error('[obtenerReporteCobranza] Error:', error);
+        return res.status(500).json({ success: false, error: 'Error al cargar el reporte de Cobranza.' });
+    }
+};
+
+const actualizarEstatusReciboReporte = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.tenantFilter?.empresaId;
+        const userId = req.user?._id || req.user?.id;
+        const indiceRecibo = Number(req.params.reciboIndex);
+        const estadosPermitidos = ['pendiente', 'atrasado', 'pagado'];
+        const estadoRecibo = String(req.body?.estadoRecibo || '').toLowerCase();
+        if (!empresaId || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+        if (!/^\d+$/.test(req.params.reciboIndex) || !Number.isSafeInteger(indiceRecibo)) {
+            return res.status(400).json({ success: false, error: 'El número de recibo no es válido.' });
+        }
+        if (!estadosPermitidos.includes(estadoRecibo)) {
+            return res.status(400).json({ success: false, error: 'El estatus del recibo no es válido.' });
+        }
+
+        const filtro = { _id: req.params.id, empresaId, deletedAt: null };
+        if (req.user.role !== 'admin') filtro.asesorId = userId;
+        const poliza = await Poliza.findOne(excluirPolizasCanceladas(filtro));
+        if (!poliza) {
+            return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        }
+
+        if (!poliza.recibos?.length) {
+            const filasLegadas = obtenerFilasReporteCobranza([poliza.toObject()], null, {
+                incluirPagados: true,
+                incluirCancelados: true
+            });
+            poliza.recibos = filasLegadas.map(fila => ({
+                numeroRecibo: fila.numeroReciboOriginal || String(fila.indiceRecibo + 1),
+                periodoCobertura: `${fila.indiceRecibo + 1}/${filasLegadas.length}`,
+                montoRecibo: Number(fila.primaTotal) || 0,
+                fechaVencimientoRecibo: fila.fechaVencimientoOriginal || poliza.fechas?.inicio,
+                fechaPago: fila.fechaPagoOriginal || null,
+                estadoRecibo: fila.estadoRecibo
+            }));
+        }
+
+        const recibo = poliza.recibos[indiceRecibo];
+        if (!recibo) {
+            return res.status(404).json({ success: false, error: 'Recibo no encontrado.' });
+        }
+
+        recibo.estadoRecibo = estadoRecibo;
+        recibo.fechaPago = estadoRecibo === 'pagado' ? recibo.fechaPago || new Date() : null;
+        recibo.metodoPago = estadoRecibo === 'pagado' ? recibo.metodoPago || 'manual' : null;
+
+        let pagoVinculado = poliza.pagos.find(pago =>
+            pago.reciboId && String(pago.reciboId) === String(recibo._id)
+        );
+        if (pagoVinculado) {
+            pagoVinculado.reciboId = recibo._id;
+            pagoVinculado.estado = estadoRecibo;
+            pagoVinculado.fechaPago = estadoRecibo === 'pagado' ? recibo.fechaPago : undefined;
+            pagoVinculado.metodoPago = estadoRecibo === 'pagado' ? recibo.metodoPago : null;
+        } else if (estadoRecibo === 'pagado') {
+            poliza.pagos.push({
+                reciboId: recibo._id,
+                monto: Number(recibo.montoRecibo) || 0,
+                fechaPago: recibo.fechaPago,
+                metodoPago: recibo.metodoPago,
+                estado: 'pagado'
+            });
+        }
+
+        const recibosPendientes = poliza.recibos.filter(item =>
+            ['pendiente', 'atrasado'].includes(String(item.estadoRecibo || item.estado || '').toLowerCase())
+        );
+        const saldoRestante = recibosPendientes.reduce((total, item) => total + (Number(item.montoRecibo) || 0), 0);
+        poliza.saldoRestante = saldoRestante;
+        const recibosActivos = poliza.recibos.filter(item =>
+            String(item.estadoRecibo || item.estado || '').toLowerCase() !== 'cancelado'
+        );
+        poliza.estadoPago = recibosActivos.length > 0
+            && recibosActivos.every(item => String(item.estadoRecibo || item.estado || '').toLowerCase() === 'pagado')
+            ? 'pagado_completo'
+            : poliza.recibos.some(item => String(item.estadoRecibo || '').toLowerCase() === 'pagado')
+                ? 'al_corriente'
+                : 'pendiente';
+        poliza.proximoPago = recibosPendientes
+            .map(item => item.fechaVencimientoRecibo || item.fechaVencimiento)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+
+        await poliza.save();
+        return res.json({ success: true, estadoRecibo, saldoRestante, estadoPago: poliza.estadoPago });
+    } catch (error) {
+        console.error('[actualizarEstatusReciboReporte] Error:', error);
+        return res.status(500).json({ success: false, error: 'Error al actualizar el estatus del recibo.' });
+    }
+};
 
 async function exportarCobranzaPDF(filas, res) {
     const doc = new PDFDocument({ margin: 18, size: 'A3', layout: 'landscape', bufferPages: true });
@@ -4066,6 +4304,9 @@ const exportarReporteExcel = async (req, res) => {
 
         // Construir filtro
         let filtro = { empresaId, deletedAt: null };
+        if (solicitudReporte.tipoReporte === 'cobranza') {
+            filtro = excluirPolizasCanceladas(filtro);
+        }
         if (solicitudReporte.filtroFechas) Object.assign(filtro, solicitudReporte.filtroFechas);
         if (userRole !== 'admin') {
             filtro.asesorId = userId;
@@ -4118,7 +4359,8 @@ const exportarReporteExcel = async (req, res) => {
             return res.end();
         }
 
-        const filasCobranza = obtenerFilasReporteCobranza(polizas);
+        const filasCobranza = obtenerFilasReporteCobranza(polizas, solicitudReporte.mes, { incluirPagados: true })
+            .filter(fila => !solicitudReporte.estatus || fila.estadoRecibo === solicitudReporte.estatus);
         const workbookCobranza = new ExcelJS.Workbook();
         const worksheetCobranza = workbookCobranza.addWorksheet('Cobranza');
         worksheetCobranza.columns = COLUMNAS_REPORTE_COBRANZA;
@@ -4324,6 +4566,9 @@ const exportarReportePDF = async (req, res) => {
 
         // Construir filtro
         let filtro = { empresaId, deletedAt: null };
+        if (solicitudReporte.tipoReporte === 'cobranza') {
+            filtro = excluirPolizasCanceladas(filtro);
+        }
         if (solicitudReporte.filtroFechas) Object.assign(filtro, solicitudReporte.filtroFechas);
         if (userRole !== 'admin') {
             filtro.asesorId = userId;
@@ -4350,7 +4595,9 @@ const exportarReportePDF = async (req, res) => {
             return;
         }
 
-        await exportarCobranzaPDF(obtenerFilasReporteCobranza(polizas), res);
+        const filasCobranza = obtenerFilasReporteCobranza(polizas, solicitudReporte.mes, { incluirPagados: true })
+            .filter(fila => !solicitudReporte.estatus || fila.estadoRecibo === solicitudReporte.estatus);
+        await exportarCobranzaPDF(filasCobranza, res);
         return;
 
         // Obtener configuración de la empresa para el logo
@@ -4911,6 +5158,8 @@ module.exports = {
     enviarRecordatorioCorreo,
     renovarPoliza,
     obtenerCobranzaDiaria,
+    obtenerReporteCobranza,
+    actualizarEstatusReciboReporte,
     marcarCobranzaResuelta,
     enviarCorreoCobranzaDiaria,
     actualizarEnlacePago,
