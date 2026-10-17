@@ -12,6 +12,10 @@ const notificacionSchema = new mongoose.Schema({
         ref: 'Poliza',
         required: true
     },
+    numeroRecibo: {
+        type: String,
+        trim: true
+    },
     tipo: {
         type: String,
         enum: ['vencimiento_poliza', 'pago_pendiente', 'pago_atrasado', 'recordatorio_pago'],

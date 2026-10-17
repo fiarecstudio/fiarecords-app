@@ -44,8 +44,9 @@ function construirCorreoCobranza({
     numeroPoliza,
     aseguradora,
     monto,
-    fechaVencimiento,
     enlacePago,
+    numeroRecibo,
+    periodoCobertura,
     nombreEmpresa = 'M Asesores'
 }) {
     let enlacePagoHtml = '';
@@ -66,9 +67,10 @@ function construirCorreoCobranza({
     const mensajeHtml = escaparHtmlCorreo(mensaje).replace(/\r?\n/g, '<br>');
     const filas = [
         ['Número de póliza', numeroPoliza],
+        ...(numeroRecibo ? [['Número de recibo', numeroRecibo]] : []),
+        ...(periodoCobertura ? [['Periodo de cobertura', periodoCobertura]] : []),
         ['Aseguradora', aseguradora],
-        ['Monto a pagar', monto],
-        ['Fecha de vencimiento', fechaVencimiento]
+        ['Monto a pagar', monto]
     ].map(([etiqueta, valor], indice) => `
         <tr style="background:${indice % 2 ? '#f8fafc' : '#ffffff'};">
             <td style="padding:12px 14px;border-bottom:1px solid #e8edf2;color:#536273;">${etiqueta}</td>
@@ -214,6 +216,7 @@ const calcularPagosNetosDistribuidos = (primaNeta, numeroPagos) => {
 
 const calcularPagosNetosConAbonosManuales = ({
     primaNeta,
+    otrosServiciosContratados,
     primaTotal,
     gastosExpedicion,
     montoAbono,
@@ -222,6 +225,7 @@ const calcularPagosNetosConAbonosManuales = ({
     numeroPagos
 }) => {
     const primaNetaTotal = Number(primaNeta) || 0;
+    const primaNetaCobrable = primaNetaTotal + (Number(otrosServiciosContratados) || 0);
     const abonoManual = Number(montoAbono) || 0;
     const pagos = Math.max(1, Number(numeroPagos) || 1);
 
@@ -232,18 +236,18 @@ const calcularPagosNetosConAbonosManuales = ({
             : gastosTotales / pagos;
         const subtotalAbono = abonoManual / 1.16;
         const recargos = (Number(primaTotal) || 0) / 1.16
-            - primaNetaTotal
+            - primaNetaCobrable
             - gastosTotales;
-        const totalPrimaRecargos = primaNetaTotal + recargos;
+        const totalPrimaRecargos = primaNetaCobrable + recargos;
         const baseImponibleSubsecuente = subtotalAbono - gastosSubsecuente;
         const ratioPrima = totalPrimaRecargos > 0
-            ? primaNetaTotal / totalPrimaRecargos
+            ? primaNetaCobrable / totalPrimaRecargos
             : 1;
         const pagoNetoSubsecuente = Math.max(0, Number((
             baseImponibleSubsecuente * ratioPrima
         ).toFixed(2)));
         const pagoNetoRecibo1 = Math.max(0, Number((
-            primaNetaTotal - (pagoNetoSubsecuente * (pagos - 1))
+            primaNetaCobrable - (pagoNetoSubsecuente * (pagos - 1))
         ).toFixed(2)));
 
         return Array.from({ length: pagos }, (_, indice) => indice === 0
@@ -251,18 +255,18 @@ const calcularPagosNetosConAbonosManuales = ({
             : pagoNetoSubsecuente);
     }
 
-    return calcularPagosNetosDistribuidos(primaNetaTotal, pagos);
+    return calcularPagosNetosDistribuidos(primaNetaCobrable, pagos);
 };
 
-const generarMontosConEmisionEnPrimerPago = (primaTotal, primaNeta, gastosExpedicion, cantidadRecibos) => {
+const generarMontosConEmisionEnPrimerPago = (primaTotal, primaNeta, otrosServiciosContratados, gastosExpedicion, cantidadRecibos) => {
     if (cantidadRecibos <= 0) return [];
     const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
     const costoTotal = redondearCentavos(Math.max(0, Number(primaTotal) || 0));
-    const primaNetaTotal = Number(primaNeta) || 0;
+    const primaNetaCobrable = (Number(primaNeta) || 0) + (Number(otrosServiciosContratados) || 0);
     const subtotalPoliza = costoTotal / 1.16;
     const emisionTotal = Math.max(0, Number(gastosExpedicion) || 0);
-    const recargosTotales = subtotalPoliza - primaNetaTotal - emisionTotal;
-    const basePorRecibo = (primaNetaTotal + recargosTotales) / cantidadRecibos;
+    const recargosTotales = subtotalPoliza - primaNetaCobrable - emisionTotal;
+    const basePorRecibo = (primaNetaCobrable + recargosTotales) / cantidadRecibos;
     const montos = Array.from({ length: cantidadRecibos }, (_, indice) => {
         const subtotal = basePorRecibo + (indice === 0 ? emisionTotal : 0);
         return redondearCentavos(subtotal * 1.16);
@@ -289,6 +293,7 @@ const distribuirMontoTotalPorRecibos = (montoTotal, cantidadRecibos) => {
 const calcularMontosRecibos = ({
     primaTotal,
     primaNeta,
+    otrosServiciosContratados,
     gastosExpedicion,
     montoAbono,
     primerPago,
@@ -316,6 +321,7 @@ const calcularMontosRecibos = ({
     return generarMontosConEmisionEnPrimerPago(
         costoTotal,
         primaNeta,
+        otrosServiciosContratados,
         gastosExpedicion,
         pagos
     );
@@ -337,6 +343,7 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
     const montosPlan = calcularMontosRecibos({
         primaTotal,
         primaNeta: opciones.primaNeta,
+        otrosServiciosContratados: opciones.otrosServiciosContratados,
         gastosExpedicion: opciones.gastosExpedicion,
         montoAbono,
         primerPago,
@@ -345,6 +352,7 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
     });
     const pagosNetosDistribuidos = calcularPagosNetosConAbonosManuales({
         primaNeta: opciones.primaNeta,
+        otrosServiciosContratados: opciones.otrosServiciosContratados,
         primaTotal,
         gastosExpedicion: opciones.gastosExpedicion,
         montoAbono,
@@ -389,6 +397,7 @@ const regenerarRecibosPendientes = ({
     primerPago,
     montoAbono,
     primaNeta,
+    otrosServiciosContratados,
     gastosExpedicion,
     emisionEnPrimerPago = false
 }) => {
@@ -399,6 +408,7 @@ const regenerarRecibosPendientes = ({
     const montosPlan = calcularMontosRecibos({
         primaTotal: costoTotal,
         primaNeta,
+        otrosServiciosContratados,
         gastosExpedicion,
         montoAbono,
         primerPago,
@@ -407,6 +417,7 @@ const regenerarRecibosPendientes = ({
     });
     const pagosNetosDistribuidos = calcularPagosNetosConAbonosManuales({
         primaNeta,
+        otrosServiciosContratados,
         primaTotal: costoTotal,
         gastosExpedicion,
         montoAbono,
@@ -458,6 +469,7 @@ const calcularPagoNeto = (
 ) => {
     return calcularPagosNetosConAbonosManuales({
         primaNeta,
+        otrosServiciosContratados: opciones.otrosServiciosContratados,
         primaTotal: opciones.primaTotal,
         gastosExpedicion: opciones.gastosExpedicion,
         montoAbono: opciones.montoAbono,
@@ -545,12 +557,20 @@ async function vincularOCrearCliente({
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, otrosServiciosContratados: otrosServiciosSolicitados, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
         if (estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
         if (moneda !== undefined && !['MXN', 'USD'].includes(moneda)) {
             return res.status(400).json({ error: 'La moneda debe ser MXN o USD.' });
+        }
+        const otrosServiciosContratados = otrosServiciosSolicitados === undefined
+            || otrosServiciosSolicitados === null
+            || otrosServiciosSolicitados === ''
+            ? 0
+            : Number(otrosServiciosSolicitados);
+        if (!Number.isFinite(otrosServiciosContratados) || otrosServiciosContratados < 0) {
+            return res.status(400).json({ error: 'Otros servicios debe ser un monto válido mayor o igual a 0.' });
         }
         const duracionMeses = normalizarDuracionMeses(duracionMesesSolicitada);
         if (duracionMeses === null) {
@@ -603,6 +623,7 @@ const crearPoliza = async (req, res) => {
             primaTotal,
             moneda,
             primaNeta: Number(primaNeta) || 0,
+            otrosServiciosContratados: Number(otrosServiciosContratados) || 0,
             gastosExpedicion: Number(gastosExpedicion) || 0,
             recargoPagoFraccionado: Number(recargoPagoFraccionado) || 0,
             iva: Number(iva) || 0,
@@ -629,6 +650,7 @@ const crearPoliza = async (req, res) => {
                 {
                     duracionMeses,
                     primaNeta: nuevaPoliza.primaNeta,
+                    otrosServiciosContratados: nuevaPoliza.otrosServiciosContratados,
                     gastosExpedicion: nuevaPoliza.gastosExpedicion,
                     emisionEnPrimerPago: nuevaPoliza.emisionEnPrimerPago
                 }
@@ -1310,6 +1332,13 @@ const actualizarPoliza = async (req, res) => {
         if (datosActualizacion.primaNeta !== undefined) {
             datosActualizacion.primaNeta = Number(datosActualizacion.primaNeta) || 0;
         }
+        if (datosActualizacion.otrosServiciosContratados !== undefined) {
+            const otrosServiciosContratados = Number(datosActualizacion.otrosServiciosContratados);
+            if (!Number.isFinite(otrosServiciosContratados) || otrosServiciosContratados < 0) {
+                return res.status(400).json({ error: 'Otros servicios debe ser un monto válido mayor o igual a 0.' });
+            }
+            datosActualizacion.otrosServiciosContratados = otrosServiciosContratados;
+        }
         if (datosActualizacion.gastosExpedicion !== undefined) {
             datosActualizacion.gastosExpedicion = Number(datosActualizacion.gastosExpedicion) || 0;
         }
@@ -1337,7 +1366,7 @@ const actualizarPoliza = async (req, res) => {
         const duracionMesesNueva = datosActualizacion.duracionMeses ?? duracionMesesActual;
         const duracionMesesCambio = duracionMesesNueva !== duracionMesesActual;
         const sinPagosRegistrados = !polizaExistente.pagos || polizaExistente.pagos.length === 0;
-        const cambioImportePlan = ['primaTotal', 'primaNeta', 'gastosExpedicion', 'primerPago', 'montoAbono'].some(campo =>
+        const cambioImportePlan = ['primaTotal', 'primaNeta', 'otrosServiciosContratados', 'gastosExpedicion', 'primerPago', 'montoAbono'].some(campo =>
             datosActualizacion[campo] !== undefined
             && (Number(datosActualizacion[campo]) || 0) !== (Number(polizaExistente[campo]) || 0)
         );
@@ -1413,6 +1442,7 @@ const actualizarPoliza = async (req, res) => {
                 primerPago,
                 montoAbono,
                 primaNeta: datosActualizacion.primaNeta ?? polizaExistente.primaNeta,
+                otrosServiciosContratados: datosActualizacion.otrosServiciosContratados ?? polizaExistente.otrosServiciosContratados,
                 gastosExpedicion: datosActualizacion.gastosExpedicion ?? polizaExistente.gastosExpedicion,
                 emisionEnPrimerPago: datosActualizacion.emisionEnPrimerPago ?? polizaExistente.emisionEnPrimerPago
             });
@@ -1449,8 +1479,13 @@ const recalcularRecibos = async (req, res) => {
         const primaTotal = obtenerImporte(req.body.costoTotal ?? req.body.primaTotal, poliza.primaTotal);
         const primerPago = obtenerImporte(req.body.pagoInicial ?? req.body.primerPago, poliza.primerPago);
         const montoAbono = obtenerImporte(req.body.montoAbono, poliza.montoAbono);
+        const otrosServiciosContratados = obtenerImporte(
+            req.body.otrosServiciosContratados,
+            poliza.otrosServiciosContratados
+        );
         const duracionMeses = normalizarDuracionMeses(req.body.duracionMeses ?? poliza.duracionMeses);
-        if ([primaTotal, primerPago, montoAbono].includes(null)) {
+        if ([primaTotal, primerPago, montoAbono, otrosServiciosContratados].includes(null)
+            || otrosServiciosContratados < 0) {
             return res.status(400).json({ error: 'Los montos deben ser valores numéricos válidos' });
         }
         if (duracionMeses === null) {
@@ -1473,6 +1508,7 @@ const recalcularRecibos = async (req, res) => {
             primerPago,
             montoAbono,
             primaNeta: req.body.primaNeta ?? poliza.primaNeta,
+            otrosServiciosContratados,
             gastosExpedicion: req.body.gastosExpedicion ?? poliza.gastosExpedicion,
             emisionEnPrimerPago
         });
@@ -1481,6 +1517,7 @@ const recalcularRecibos = async (req, res) => {
         if (req.body.primaNeta !== undefined) {
             poliza.primaNeta = obtenerImporte(req.body.primaNeta, poliza.primaNeta) ?? poliza.primaNeta;
         }
+        poliza.otrosServiciosContratados = otrosServiciosContratados;
         poliza.primerPago = primerPago;
         poliza.montoAbono = montoAbono;
         poliza.tipoPago = tipoPago;
@@ -1782,7 +1819,6 @@ const enviarRecordatorioManual = async (req, res) => {
             ?? poliza.montoAbono
             ?? 0
         );
-        const fechaPagoPendiente = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
         const periodoPendiente = reciboPendiente?.periodoCobertura
             ? ` correspondiente al periodo ${reciboPendiente.periodoCobertura}`
             : '';
@@ -1792,8 +1828,8 @@ const enviarRecordatorioManual = async (req, res) => {
         const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
         const montoFormateado = formatearMontoPoliza(montoPendiente, poliza.moneda);
         let mensaje = tipo === 'vencimiento_poliza'
-            ? `Hola ${poliza.cliente}, tu póliza No. ${poliza.numeroPoliza} vencerá el ${poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString() : 'N/A'}.`
-            : `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${poliza.tipoSeguro || 'seguro'} por la cantidad de ${montoFormateado}${periodoPendiente} con fecha límite el ${fechaPagoPendiente ? new Date(fechaPagoPendiente).toLocaleDateString('es-MX') : 'N/A'}. Cualquier duda estamos a tus órdenes.${enlacePago}`;
+            ? `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te recordamos que tu póliza No. ${poliza.numeroPoliza} requiere atención. Contacta a tu asesor si necesitas apoyo con la renovación.`
+            : `Hola ${poliza.cliente || 'Asegurado'}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${poliza.tipoSeguro || 'seguro'} por la cantidad de ${montoFormateado}${periodoPendiente}. Cualquier duda estamos a tus órdenes.${enlacePago}`;
 
         const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
         const Notificacion = require('../models/Notificacion');
@@ -1801,18 +1837,12 @@ const enviarRecordatorioManual = async (req, res) => {
         const logNotificacion = new Notificacion({ empresaId, polizaId: poliza._id, tipo, canal, destinatario, mensaje });
 
         if (canal === 'email') {
-            const fechaVencimiento = tipo === 'vencimiento_poliza'
-                ? poliza.fechas?.vencimiento
-                : (fechaPagoPendiente || poliza.fechas?.vencimiento);
             const cuerpo = construirCorreoCobranza({
                 cliente: poliza.cliente,
                 mensaje,
                 numeroPoliza: poliza.numeroPoliza,
                 aseguradora: poliza.aseguradora,
                 monto: montoFormateado,
-                fechaVencimiento: fechaVencimiento
-                    ? new Date(fechaVencimiento).toLocaleDateString('es-MX')
-                    : 'N/A',
                 enlacePago: poliza.enlacePago
             });
             await enviarEmail({ empresaId, destinatario, asunto: 'Recordatorio de Seguro', cuerpo });
@@ -2518,22 +2548,12 @@ const enviarRecordatorioCorreo = async (req, res) => {
         // Formatear monto
         const montoFormateado = formatearMontoPoliza(montoPago, poliza.moneda);
         
-        // Formatear fecha de vencimiento
-        const fechaVencimiento = poliza.fechas?.vencimiento 
-            ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            })
-            : 'N/A';
-        
         const htmlPlantilla = construirCorreoCobranza({
             cliente: poliza.cliente,
             mensaje: 'Esperamos que se encuentre muy bien. Le recordamos amablemente que su póliza requiere atención. Si ya realizó el pago, puede hacer caso omiso a este mensaje.',
             numeroPoliza: poliza.numeroPoliza,
             aseguradora: poliza.aseguradora,
             monto: montoFormateado,
-            fechaVencimiento,
             enlacePago: poliza.enlacePago
         });
 
@@ -2543,7 +2563,7 @@ const enviarRecordatorioCorreo = async (req, res) => {
         await enviarEmail({ 
             empresaId, 
             destinatario: destinatarioFinal, 
-            asunto: asunto || 'Recordatorio de Vencimiento - Póliza', 
+            asunto: asunto || 'Recordatorio de Póliza',
             cuerpo: htmlPlantilla 
         });
         
@@ -3000,9 +3020,6 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
         }
 
         // Generar mensaje dinámico profesional
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        
         let asunto = '';
         let cuerpo = '';
         let tipo = '';
@@ -3024,16 +3041,6 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
         const montoFormateado = formatearMontoPoliza(montoPagar, poliza.moneda);
         
         if (poliza.fechas?.vencimiento) {
-            const fVenc = new Date(poliza.fechas.vencimiento);
-            fVenc.setHours(0, 0, 0, 0);
-            const diasRestantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
-            const fechaFormateada = fVenc.toLocaleDateString('es-MX', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            
             asunto = `Recordatorio de Pago de Póliza - EME Asesores`;
             
             let enlacePagoHTML = '';
@@ -3062,7 +3069,7 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
                         
                         <p>Estimado(a) <strong>${poliza.cliente}</strong>,</p>
                         
-                        <p>Le recordamos que su póliza de seguro está próxima a vencer. A continuación presentamos los detalles:</p>
+                        <p>Le recordamos que su póliza requiere atención. A continuación presentamos los detalles:</p>
                         
                         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                             <tr style="background-color: #003366; color: white;">
@@ -3081,17 +3088,9 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
                                 <td style="padding: 12px; border: 1px solid #ddd;"><strong>Aseguradora:</strong></td>
                                 <td style="padding: 12px; border: 1px solid #ddd;">${poliza.aseguradora || 'N/A'}</td>
                             </tr>
-                            <tr style="background-color: #f2f2f2;">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Fecha Límite:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${fechaFormateada}</td>
-                            </tr>
                             <tr>
                                 <td style="padding: 12px; border: 1px solid #ddd;"><strong>Monto a Pagar:</strong></td>
                                 <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: #28a745;">${montoFormateado}</td>
-                            </tr>
-                            <tr style="background-color: ${diasRestantes <= 3 ? '#ffeeee' : '#e6f7ff'};">
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Días Restantes:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: ${diasRestantes <= 3 ? '#dc3545' : '#007bff'};">${diasRestantes} días</td>
                             </tr>
                         </table>
                         
@@ -3112,16 +3111,6 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
             
             tipo = 'vencimiento_poliza';
         } else if (poliza.proximoPago) {
-            const fPago = new Date(poliza.proximoPago);
-            fPago.setHours(0, 0, 0, 0);
-            const diasRestantes = Math.ceil((fPago - hoy) / (1000 * 60 * 60 * 24));
-            const fechaFormateada = fPago.toLocaleDateString('es-MX', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            
             asunto = `Recordatorio de Pago Pendiente - EME Asesores`;
             
             let enlacePagoHTML = '';
@@ -3165,17 +3154,9 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
                                 <td style="padding: 12px; border: 1px solid #ddd;"><strong>Tipo de Seguro:</strong></td>
                                 <td style="padding: 12px; border: 1px solid #ddd;">${poliza.tipoSeguro}</td>
                             </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Fecha Límite:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd;">${fechaFormateada}</td>
-                            </tr>
                             <tr style="background-color: #f2f2f2;">
                                 <td style="padding: 12px; border: 1px solid #ddd;"><strong>Monto a Pagar:</strong></td>
                                 <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: #28a745;">${montoFormateado}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px; border: 1px solid #ddd;"><strong>Días Restantes:</strong></td>
-                                <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold; color: ${diasRestantes <= 3 ? '#dc3545' : '#007bff'};">${diasRestantes} días</td>
                             </tr>
                         </table>
                         
@@ -3241,26 +3222,16 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
             tipo = 'recordatorio_manual';
         }
 
-        const fechaVencimientoCobranza = tipo === 'vencimiento_poliza'
-            ? poliza.fechas?.vencimiento
-            : (poliza.proximoPago || poliza.fechas?.vencimiento);
         cuerpo = construirCorreoCobranza({
             cliente: poliza.cliente,
             mensaje: tipo === 'vencimiento_poliza'
-                ? 'Le recordamos que su póliza está próxima a vencer. Para mantener su cobertura, contacte a su asesor si requiere apoyo con la renovación.'
+                ? 'Le recordamos que su póliza requiere atención. Contacte a su asesor si necesita apoyo con la renovación.'
                 : tipo === 'pago_pendiente'
                     ? 'Le recordamos amablemente que tiene un pago pendiente. Si ya realizó el pago, puede hacer caso omiso a este mensaje.'
                     : 'Le compartimos la información de su póliza. Si necesita ayuda, contacte a su asesor.',
             numeroPoliza: poliza.numeroPoliza,
             aseguradora: poliza.aseguradora,
             monto: montoFormateado,
-            fechaVencimiento: fechaVencimientoCobranza
-                ? new Date(fechaVencimientoCobranza).toLocaleDateString('es-MX', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                })
-                : 'N/A',
             enlacePago: poliza.enlacePago
         });
 
@@ -3279,7 +3250,7 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
             await enviarEmail({
                 empresaId,
                 destinatario,
-                asunto: tipo === 'vencimiento_poliza' ? 'Recordatorio de Vencimiento de Póliza' : 'Recordatorio de Pago',
+                asunto: tipo === 'vencimiento_poliza' ? 'Recordatorio de Póliza' : 'Recordatorio de Pago',
                 cuerpo
             });
             
@@ -3584,6 +3555,7 @@ const renovarPoliza = async (req, res) => {
             paquete: req.body.paquete || datosNuevaPoliza.paquete || polizaAntigua.paquete,
             primaTotal: montoRenovacion('primaTotal', datosNuevaPoliza.primaTotal ?? polizaAntigua.primaTotal),
             primaNeta: montoRenovacion('primaNeta', datosNuevaPoliza.primaNeta ?? polizaAntigua.primaNeta),
+            otrosServiciosContratados: montoRenovacion('otrosServiciosContratados', req.body.otrosServiciosContratados ?? polizaAntigua.otrosServiciosContratados),
             gastosExpedicion: montoRenovacion('gastosExpedicion', datosNuevaPoliza.gastosExpedicion ?? polizaAntigua.gastosExpedicion),
             recargoPagoFraccionado: montoRenovacion('recargoPagoFraccionado', polizaAntigua.recargoPagoFraccionado),
             iva: montoRenovacion('iva', polizaAntigua.iva),
@@ -3642,6 +3614,7 @@ const renovarPoliza = async (req, res) => {
                 {
                     duracionMeses: nuevaPoliza.duracionMeses,
                     primaNeta: nuevaPoliza.primaNeta,
+                    otrosServiciosContratados: nuevaPoliza.otrosServiciosContratados,
                     gastosExpedicion: nuevaPoliza.gastosExpedicion,
                     emisionEnPrimerPago: nuevaPoliza.emisionEnPrimerPago
                 }
@@ -4062,6 +4035,7 @@ function obtenerFilasReporteCobranza(polizas, mes = null, opciones = {}) {
                 formaPago: poliza.tipoPago || '',
                 aseguradora: poliza.aseguradora || '',
                 primaNeta: calcularPagoNeto(poliza.primaNeta, pagos.length, pago.indice, {
+                    otrosServiciosContratados: poliza.otrosServiciosContratados,
                     primaTotal: poliza.primaTotal,
                     gastosExpedicion: poliza.gastosExpedicion,
                     montoAbono: poliza.montoAbono,
@@ -4524,6 +4498,7 @@ const exportarReporteExcel = async (req, res) => {
                         pagosExportar.length,
                         indicePago,
                         {
+                            otrosServiciosContratados: poliza.otrosServiciosContratados,
                             primaTotal: poliza.primaTotal,
                             gastosExpedicion: poliza.gastosExpedicion,
                             montoAbono: poliza.montoAbono,
@@ -4779,6 +4754,7 @@ const exportarReportePDF = async (req, res) => {
                     pagosExportar.length,
                     indicePago,
                     {
+                        otrosServiciosContratados: poliza.otrosServiciosContratados,
                         primaTotal: poliza.primaTotal,
                         gastosExpedicion: poliza.gastosExpedicion,
                         montoAbono: poliza.montoAbono,
@@ -5132,6 +5108,7 @@ async function auditarVencidasReales(req, res) {
 }
 
 module.exports = {
+    construirCorreoCobranza,
     crearPoliza,
     importarPolizasExcel,
     obtenerPolizas,

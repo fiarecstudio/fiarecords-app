@@ -4,6 +4,58 @@ const Cliente = require('../models/Cliente');
 const Empresa = require('../models/Empresa');
 const Notificacion = require('../models/Notificacion');
 const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
+const { construirCorreoCobranza } = require('../controllers/polizaController');
+
+const TIMEZONE_MEXICO = 'America/Monterrey';
+const formatoFechaMexico = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE_MEXICO,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+});
+
+function fechaLocalMexicoAUTC(year, month, day) {
+    const fechaLocalComoUTC = Date.UTC(year, month - 1, day);
+    let timestamp = fechaLocalComoUTC;
+
+    for (let intento = 0; intento < 3; intento++) {
+        const partes = Object.fromEntries(formatoFechaMexico
+            .formatToParts(new Date(timestamp))
+            .map(({ type, value }) => [type, value]));
+        const fechaObservadaComoUTC = Date.UTC(
+            Number(partes.year),
+            Number(partes.month) - 1,
+            Number(partes.day),
+            Number(partes.hour),
+            Number(partes.minute),
+            Number(partes.second)
+        );
+        const diferencia = fechaObservadaComoUTC - fechaLocalComoUTC;
+        if (diferencia === 0) break;
+        timestamp -= diferencia;
+    }
+
+    return new Date(timestamp);
+}
+
+function obtenerRangoMesMexico(fecha = new Date()) {
+    const partes = Object.fromEntries(formatoFechaMexico
+        .formatToParts(fecha)
+        .map(({ type, value }) => [type, value]));
+    const year = Number(partes.year);
+    const month = Number(partes.month);
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextMonthYear = month === 12 ? year + 1 : year;
+
+    return {
+        inicio: fechaLocalMexicoAUTC(year, month, 1),
+        fin: fechaLocalMexicoAUTC(nextMonthYear, nextMonth, 1)
+    };
+}
 
 async function procesarNotificacionesDiarias() {
     console.log('[Cron Notificaciones] Iniciando barrido diario con configuración dinámica...');
@@ -27,26 +79,30 @@ async function procesarNotificacionesDiarias() {
 
                             // Regla de 3 días: enviar notificación exactamente 3 días antes
                             if (diasParaRecibo === 3) {
-                                // Verificar si ya se envió notificación hoy para este recibo
-                                const yaNotificadoHoy = poliza.historialNotificaciones && poliza.historialNotificaciones.some(notif => {
-                                    const notifDate = new Date(notif.fecha);
-                                    notifDate.setHours(0, 0, 0, 0);
-                                    return notif.tipo === 'pago_pendiente' && 
-                                           notif.numeroRecibo === recibo.numeroRecibo &&
-                                           notifDate.getTime() === hoy.getTime();
+                                const { inicio: inicioMes, fin: finMes } = obtenerRangoMesMexico();
+                                const yaNotificadoEsteMes = await Notificacion.exists({
+                                    empresaId,
+                                    polizaId: poliza._id,
+                                    tipo: 'pago_pendiente',
+                                    canal: 'email',
+                                    numeroRecibo: recibo.numeroRecibo,
+                                    estado: 'enviada',
+                                    fechaEnvio: { $gte: inicioMes, $lt: finMes }
                                 });
 
-                                if (!yaNotificadoHoy) {
+                                if (!yaNotificadoEsteMes) {
                                     const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
                                     const montoRecibo = Number(recibo.montoRecibo) || 0;
                                     const importeFormateado = `${moneda === 'USD' ? '' : '$'}${montoRecibo.toFixed(2)} ${moneda}`;
                                     await generarYEnviarNotificacion({
                                         empresaId,
+                                        empresa,
                                         poliza,
                                         tipo: 'pago_pendiente',
-                                        mensaje: `Estimado(a) ${poliza.cliente}, tiene un recibo pendiente (${recibo.numeroRecibo} - ${recibo.periodoCobertura}) por ${importeFormateado} con fecha límite el ${fVencimientoRecibo.toLocaleDateString()}.`,
+                                        mensaje: `Estimado(a) ${poliza.cliente}, tiene un recibo pendiente (${recibo.numeroRecibo} - ${recibo.periodoCobertura}) por ${importeFormateado}.`,
                                         diasRestantes: diasParaRecibo,
-                                        numeroRecibo: recibo.numeroRecibo
+                                        numeroRecibo: recibo.numeroRecibo,
+                                        periodoCobertura: recibo.periodoCobertura
                                     });
                                 }
                             }
@@ -76,9 +132,10 @@ async function procesarNotificacionesDiarias() {
                         if (!yaNotificadoHoy) {
                             await generarYEnviarNotificacion({
                                 empresaId,
+                                empresa,
                                 poliza,
                                 tipo: 'vencimiento_poliza',
-                                mensaje: `Estimado(a) ${poliza.cliente}, su póliza No. ${poliza.numeroPoliza} vence en ${diasRestantes} días.`,
+                                mensaje: `Estimado(a) ${poliza.cliente}, su póliza No. ${poliza.numeroPoliza} requiere atención. Contacte a su asesor si necesita apoyo con la renovación.`,
                                 diasRestantes
                             });
                         }
@@ -107,7 +164,16 @@ async function procesarNotificacionesDiarias() {
     }
 }
 
-async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje, diasRestantes = 0 }) {
+async function generarYEnviarNotificacion({
+    empresaId,
+    empresa,
+    poliza,
+    tipo,
+    mensaje,
+    diasRestantes = 0,
+    numeroRecibo,
+    periodoCobertura
+}) {
     const canal = 'email';
 
     // PRIORIDAD: Usar email del modelo Cliente, fallback a poliza.clienteEmail
@@ -126,7 +192,15 @@ async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje, di
         console.log(`[Cron Notificaciones] Sin clienteId, usando poliza.clienteEmail: ${poliza.clienteEmail}`);
     }
 
-    const registro = new Notificacion({ empresaId, polizaId: poliza._id, tipo, canal, destinatario, mensaje });
+    const registro = new Notificacion({
+        empresaId,
+        polizaId: poliza._id,
+        tipo,
+        canal,
+        destinatario,
+        mensaje,
+        ...(numeroRecibo ? { numeroRecibo } : {})
+    });
 
     // Crear entrada en historial de notificaciones de la póliza
     const entradaHistorial = {
@@ -134,16 +208,46 @@ async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje, di
         tipo,
         canal,
         mensaje,
-        diasRestantes
+        diasRestantes,
+        ...(numeroRecibo ? { numeroRecibo } : {})
     };
 
     try {
         if (canal === 'email') {
+            const recibo = numeroRecibo
+                ? poliza.recibos?.find(item => item.numeroRecibo === numeroRecibo)
+                : null;
+            const moneda = poliza.moneda === 'USD' ? 'USD' : 'MXN';
+            const monto = tipo === 'pago_pendiente'
+                ? Number(recibo?.montoRecibo) || 0
+                : Number(poliza.primaTotal) || 0;
+            const cuerpoBase = construirCorreoCobranza({
+                cliente: poliza.cliente,
+                mensaje,
+                numeroPoliza: poliza.numeroPoliza,
+                aseguradora: poliza.aseguradora,
+                monto: `${moneda === 'USD' ? '' : '$'}${monto.toFixed(2)} ${moneda}`,
+                enlacePago: poliza.enlacePago,
+                nombreEmpresa: empresa?.nombre || 'M Asesores',
+                numeroRecibo,
+                periodoCobertura
+            });
+            const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
+                || empresa?.notificaciones?.email?.signatureHtml
+                || '';
+            const cuerpo = firmaHTML
+                ? cuerpoBase.replace('</body>', `<div style="max-width:620px;margin:16px auto 0;">${firmaHTML}</div></body>`)
+                : cuerpoBase;
+            const replyTo = empresa?.notificaciones?.email?.smtpUser
+                || empresa?.email
+                || process.env.IMAP_USER;
+
             await enviarEmail({
                 empresaId,
                 destinatario,
-                asunto: tipo === 'vencimiento_poliza' ? 'Vencimiento de Póliza' : 'Pago Pendiente',
-                cuerpo: `<p>${mensaje}</p>`
+                asunto: tipo === 'vencimiento_poliza' ? 'Recordatorio de Póliza' : 'Pago Pendiente',
+                cuerpo,
+                replyTo
             });
         }
         registro.estado = 'enviada';
@@ -171,7 +275,9 @@ async function generarYEnviarNotificacion({ empresaId, poliza, tipo, mensaje, di
 }
 
 function iniciarCronNotificaciones() {
-    cron.schedule('0 9 * * *', () => { procesarNotificacionesDiarias(); });
+    cron.schedule('0 9 * * *', async () => {
+        await procesarNotificacionesDiarias();
+    }, { timezone: TIMEZONE_MEXICO });
     console.log('✅ Cron de Notificaciones programado a las 9:00 AM');
 }
 

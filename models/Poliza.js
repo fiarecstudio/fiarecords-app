@@ -79,6 +79,10 @@ const reciboSchema = new mongoose.Schema({
             type: Number,
             default: 0
         },
+        numeroRecibo: {
+            type: String,
+            trim: true
+        },
         enviadoManualmente: {
             type: Boolean,
             default: false
@@ -267,6 +271,11 @@ const polizaSchema = new mongoose.Schema({
     primaNeta: {
         type: Number,
         default: 0
+    },
+    otrosServiciosContratados: {
+        type: Number,
+        default: 0,
+        min: [0, 'Otros servicios deben ser mayores o iguales a 0']
     },
     gastosExpedicion: {
         type: Number,

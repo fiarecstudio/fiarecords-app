@@ -9062,6 +9062,7 @@ Fecha de firma: {{FECHA}}`;
             'poliza-prima': datos.primaTotal || '',
             'poliza-moneda': datos.moneda || 'MXN',
             'poliza-prima-neta': datos.primaNeta || '',
+            'poliza-otros-servicios': datos.otrosServiciosContratados || '',
             'gastosExpedicion': datos.gastosExpedicion || '',
             'poliza-vehiculo': datos.vehiculo || '',
             'poliza-placas': datos.placas || '',
@@ -9187,6 +9188,7 @@ Fecha de firma: {{FECHA}}`;
 
     function calcularPagoNetoRecibo({
         primaNeta,
+        otrosServiciosContratados,
         primaTotal,
         gastosExpedicion,
         montoAbono,
@@ -9197,6 +9199,7 @@ Fecha de firma: {{FECHA}}`;
     }) {
         return calcularPagosNetosConAbonosManuales({
             primaNeta,
+            otrosServiciosContratados,
             primaTotal,
             gastosExpedicion,
             montoAbono,
@@ -9221,6 +9224,7 @@ Fecha de firma: {{FECHA}}`;
 
     function calcularPagosNetosConAbonosManuales({
         primaNeta,
+        otrosServiciosContratados,
         primaTotal,
         gastosExpedicion,
         montoAbono,
@@ -9229,6 +9233,7 @@ Fecha de firma: {{FECHA}}`;
         cantidadRecibos
     }) {
         const primaNetaNumerica = Number(primaNeta) || 0;
+        const primaNetaCobrable = primaNetaNumerica + (Number(otrosServiciosContratados) || 0);
         const abonoManual = Number(montoAbono) || 0;
         const pagos = Math.max(1, Number(cantidadRecibos) || 1);
 
@@ -9239,18 +9244,18 @@ Fecha de firma: {{FECHA}}`;
                 : gastosTotales / pagos;
             const subtotalAbono = abonoManual / 1.16;
             const recargos = (Number(primaTotal) || 0) / 1.16
-                - primaNetaNumerica
+                - primaNetaCobrable
                 - gastosTotales;
-            const totalPrimaRecargos = primaNetaNumerica + recargos;
+            const totalPrimaRecargos = primaNetaCobrable + recargos;
             const baseImponibleSubsecuente = subtotalAbono - gastosSubsecuente;
             const ratioPrima = totalPrimaRecargos > 0
-                ? primaNetaNumerica / totalPrimaRecargos
+                ? primaNetaCobrable / totalPrimaRecargos
                 : 1;
             const pagoNetoSubsecuente = Math.max(0, Number((
                 baseImponibleSubsecuente * ratioPrima
             ).toFixed(2)));
             const pagoNetoRecibo1 = Math.max(0, Number((
-                primaNetaNumerica - (pagoNetoSubsecuente * (pagos - 1))
+                primaNetaCobrable - (pagoNetoSubsecuente * (pagos - 1))
             ).toFixed(2)));
 
             return Array.from({ length: pagos }, (_, indice) => indice === 0
@@ -9258,7 +9263,7 @@ Fecha de firma: {{FECHA}}`;
                 : pagoNetoSubsecuente);
         }
 
-        return calcularPagosNetosDistribuidos(primaNetaNumerica, pagos);
+        return calcularPagosNetosDistribuidos(primaNetaCobrable, pagos);
     }
 
     function distribuirMontoTotalPorRecibos(montoTotal, cantidadRecibos) {
@@ -9277,6 +9282,7 @@ Fecha de firma: {{FECHA}}`;
     function calcularMontosRecibos({
         primaTotal,
         primaNeta,
+        otrosServiciosContratados,
         recargos,
         gastosExpedicion,
         montoAbono,
@@ -9304,9 +9310,8 @@ Fecha de firma: {{FECHA}}`;
             return distribuirMontoTotalPorRecibos(costoInicial, pagos);
         }
 
-        const subtotalPorRecibo = (
-            (Number(primaNeta) || 0) + (Number(recargos) || 0)
-        ) / pagos;
+        const primaNetaCobrable = (Number(primaNeta) || 0) + (Number(otrosServiciosContratados) || 0);
+        const subtotalPorRecibo = (primaNetaCobrable + (Number(recargos) || 0)) / pagos;
         const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
         const montos = Array.from({ length: pagos }, (_, indice) => redondearCentavos(
             (subtotalPorRecibo + (indice === 0 ? emisionTotal : 0)) * 1.16
@@ -9319,6 +9324,7 @@ Fecha de firma: {{FECHA}}`;
     function calcularPlanRecibosVistaPrevia(poliza, {
         costoTotal,
         primaNeta,
+        otrosServiciosContratados,
         pagoInicial,
         montoAbono,
         gastosExpedicion,
@@ -9334,11 +9340,14 @@ Fecha de firma: {{FECHA}}`;
         const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
         const costoInicial = redondearCentavos(Math.max(0, costoTotal));
         const primaNetaNumerica = Number(primaNeta) || 0;
+        const otrosServiciosNumericos = Number(otrosServiciosContratados) || 0;
+        const primaNetaCobrable = primaNetaNumerica + otrosServiciosNumericos;
         const gastosExpedicionNumericos = Number(gastosExpedicion) || 0;
         const subtotalPoliza = costoInicial / 1.16;
-        const recargosTotales = subtotalPoliza - primaNetaNumerica - gastosExpedicionNumericos;
+        const recargosTotales = subtotalPoliza - primaNetaCobrable - gastosExpedicionNumericos;
         const pagosNetosDistribuidos = calcularPagosNetosConAbonosManuales({
             primaNeta: primaNetaNumerica,
+            otrosServiciosContratados: otrosServiciosNumericos,
             primaTotal: costoInicial,
             gastosExpedicion: gastosExpedicionNumericos,
             montoAbono,
@@ -9349,6 +9358,7 @@ Fecha de firma: {{FECHA}}`;
         const montosPlan = calcularMontosRecibos({
             primaTotal: costoInicial,
             primaNeta: primaNetaNumerica,
+            otrosServiciosContratados: otrosServiciosNumericos,
             recargos: recargosTotales,
             gastosExpedicion: gastosExpedicionNumericos,
             montoAbono,
@@ -9387,6 +9397,8 @@ Fecha de firma: {{FECHA}}`;
             recibos,
             resumenFinanciero: {
                 primaNeta: primaNetaNumerica,
+                otrosServiciosContratados: otrosServiciosNumericos,
+                primaNetaCobrable,
                 recargos: recargosTotales,
                 emision: gastosExpedicionNumericos,
                 iva: costoInicial - subtotalPoliza,
@@ -9492,6 +9504,7 @@ Fecha de firma: {{FECHA}}`;
             fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
             fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
             gastosExpedicion: poliza.gastosExpedicion || 0,
+            otrosServiciosContratados: poliza.otrosServiciosContratados || 0,
             duracionMeses: poliza.duracionMeses || 12,
             clienteId: poliza.clienteId?._id || poliza.clienteId || null
         } : datosIniciales;
@@ -9637,6 +9650,10 @@ Fecha de firma: {{FECHA}}`;
                             <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta || ''}" placeholder="0.00">
                         </div>
                         <div class="mb-3">
+                            <label class="form-label" for="poliza-otros-servicios">Otros Servicios Contratados (Opcional)</label>
+                            <input id="poliza-otros-servicios" type="number" min="0" step="0.01" class="swal2-input" value="${datosPrellenados.otrosServiciosContratados || ''}" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label" for="gastosExpedicion">Gastos de Expedición / Recibo (Opc.)</label>
                             <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.gastosExpedicion || ''}" placeholder="66.58">
                         </div>
@@ -9655,6 +9672,8 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div id="resumenFinancieroPoliza" class="poliza-financial-summary" hidden>
                         <div><span>Prima Neta</span><strong id="resumenPrimaNeta">$0.00</strong></div>
+                        <div><span>Otros Servicios</span><strong id="resumenOtrosServicios">$0.00</strong></div>
+                        <div><span>Prima Neta Cobrable</span><strong id="resumenPrimaNetaCobrable">$0.00</strong></div>
                         <div><span>Recargos</span><strong id="resumenRecargos">$0.00</strong></div>
                         <div><span>Emisión</span><strong id="resumenEmision">$0.00</strong></div>
                         <div><span>IVA</span><strong id="resumenIva">$0.00</strong></div>
@@ -9727,6 +9746,7 @@ Fecha de firma: {{FECHA}}`;
                 const actualizarVistaPreviaRecibos = ({ mostrarError = false } = {}) => {
                     const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                     const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
+                    const nuevosOtrosServicios = parseFloat(document.getElementById('poliza-otros-servicios').value) || 0;
                     const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
                     const nuevoMontoAbono = parseFloat(document.getElementById('poliza-monto-abono').value) || 0;
                     const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value) || 0;
@@ -9747,6 +9767,7 @@ Fecha de firma: {{FECHA}}`;
                     const resultadoPreview = calcularPlanRecibosVistaPrevia(poliza, {
                         costoTotal: nuevoCostoTotal,
                         primaNeta: nuevaPrimaNeta,
+                        otrosServiciosContratados: nuevosOtrosServicios,
                         pagoInicial: nuevoPagoInicial,
                         montoAbono: nuevoMontoAbono,
                         gastosExpedicion: nuevoGastosExpedicion,
@@ -9775,6 +9796,8 @@ Fecha de firma: {{FECHA}}`;
                         `$${new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(monto)} ${moneda}`;
                     const resumen = resultadoPreview.resumenFinanciero;
                     document.getElementById('resumenPrimaNeta').textContent = formatoMoneda(resumen.primaNeta);
+                    document.getElementById('resumenOtrosServicios').textContent = formatoMoneda(resumen.otrosServiciosContratados);
+                    document.getElementById('resumenPrimaNetaCobrable').textContent = formatoMoneda(resumen.primaNetaCobrable);
                     document.getElementById('resumenRecargos').textContent = formatoMoneda(resumen.recargos);
                     document.getElementById('resumenEmision').textContent = formatoMoneda(resumen.emision);
                     document.getElementById('resumenIva').textContent = formatoMoneda(resumen.iva);
@@ -9787,7 +9810,7 @@ Fecha de firma: {{FECHA}}`;
                     actualizarVistaPreviaRecibos({ mostrarError: true });
                 });
                 ['input', 'change'].forEach(tipoEvento => {
-                    ['poliza-prima', 'poliza-moneda', 'poliza-prima-neta', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio', 'poliza-monto-abono', 'poliza-primer-pago']
+                    ['poliza-prima', 'poliza-moneda', 'poliza-prima-neta', 'poliza-otros-servicios', 'gastosExpedicion', 'poliza-tipo-pago', 'duracionMeses', 'poliza-inicio', 'poliza-monto-abono', 'poliza-primer-pago']
                         .forEach(id => document.getElementById(id)?.addEventListener(tipoEvento, () => {
                             actualizarVistaPreviaRecibos();
                         }));
@@ -9817,6 +9840,10 @@ Fecha de firma: {{FECHA}}`;
                 const primaTotal = document.getElementById('poliza-prima').value;
                 const moneda = document.getElementById('poliza-moneda').value;
                 const primaNeta = document.getElementById('poliza-prima-neta').value;
+                const otrosServiciosContratados = document.getElementById('poliza-otros-servicios').value;
+                const otrosServiciosContratadosMonto = otrosServiciosContratados === ''
+                    ? 0
+                    : Number(otrosServiciosContratados);
                 const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                 const recargoPagoFraccionado = document.getElementById('poliza-recargo-fraccionado').value;
                 const iva = document.getElementById('poliza-iva').value;
@@ -9838,6 +9865,10 @@ Fecha de firma: {{FECHA}}`;
                 }
                 if (!Number.isInteger(duracionMeses) || duracionMeses < 1) {
                     Swal.showValidationMessage('La duración debe ser un número entero de meses igual o mayor a 1.');
+                    return;
+                }
+                if (!Number.isFinite(otrosServiciosContratadosMonto) || otrosServiciosContratadosMonto < 0) {
+                    Swal.showValidationMessage('Otros servicios debe ser un monto válido mayor o igual a 0.');
                     return;
                 }
 
@@ -9884,6 +9915,7 @@ Fecha de firma: {{FECHA}}`;
                     primaTotal: parseFloat(primaTotal),
                     moneda,
                     primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
+                    otrosServiciosContratados: otrosServiciosContratadosMonto,
                     gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                     recargoPagoFraccionado: recargoPagoFraccionado ? parseFloat(recargoPagoFraccionado) : 0,
                     iva: iva ? parseFloat(iva) : 0,
@@ -10660,9 +10692,9 @@ Fecha de firma: {{FECHA}}`;
         renderizarPaginaCobranza(tabActiva);
     }
 
-    function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, fecha, periodo, enlacePago, moneda = 'MXN' }) {
+    function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, periodo, enlacePago, moneda = 'MXN' }) {
         const detallePeriodo = periodo ? ` correspondiente al periodo ${periodo}` : '';
-        let mensaje = `Hola ${cliente}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${tipoSeguro} por la cantidad de $${Number(monto || 0).toFixed(2)} ${moneda}${detallePeriodo} con fecha límite el ${fecha}. Cualquier duda estamos a tus órdenes.`;
+        let mensaje = `Hola ${cliente}, te saludamos de EME Asesores. Te escribimos para recordarte amablemente el pago de tu póliza de ${tipoSeguro} por la cantidad de $${Number(monto || 0).toFixed(2)} ${moneda}${detallePeriodo}. Cualquier duda estamos a tus órdenes.`;
         if (enlacePago) mensaje += ` Puedes realizar tu pago de forma segura aquí: ${enlacePago}`;
         return mensaje;
     }
@@ -10726,7 +10758,6 @@ Fecha de firma: {{FECHA}}`;
                     cliente: p.cliente || 'Asegurado',
                     tipoSeguro: p.tipoSeguro || 'seguro',
                     monto: montoPagar,
-                    fecha: fechaMostrar,
                     periodo: reciboPendiente?.periodoCobertura,
                     enlacePago: p.enlacePago,
                     moneda
@@ -10929,6 +10960,7 @@ Fecha de firma: {{FECHA}}`;
                 fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
                 primaTotal: poliza.primaTotal || 0,
                 primaNeta: poliza.primaNeta || 0,
+                otrosServiciosContratados: poliza.otrosServiciosContratados || 0,
                 gastosExpedicion: poliza.gastosExpedicion || 0,
                 emisionEnPrimerPago: poliza.emisionEnPrimerPago === true,
                 montoAbono: poliza.montoAbono || 0,
@@ -10938,9 +10970,10 @@ Fecha de firma: {{FECHA}}`;
                 enlacePago: poliza.enlacePago || ''
             };
 
-            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevoPagoInicial, nuevoMontoAbono, nuevoGastosExpedicion, emisionEnPrimerPago, nuevoTipoPago, nuevaFechaInicio }) => {
+            const calcularRecibosVistaPrevia = ({ nuevoCostoTotal, nuevaPrimaNeta, nuevosOtrosServicios, nuevoPagoInicial, nuevoMontoAbono, nuevoGastosExpedicion, emisionEnPrimerPago, nuevoTipoPago, nuevaFechaInicio }) => {
                 const costoTotal = nuevoCostoTotal;
                 const primaNeta = nuevaPrimaNeta;
+                const primaNetaCobrable = primaNeta + (Number(nuevosOtrosServicios) || 0);
                 const pagoInicial = nuevoPagoInicial;
                 const tipoPago = nuevoTipoPago || 'anual';
                 const fechaInicio = nuevaFechaInicio;
@@ -10958,6 +10991,7 @@ Fecha de firma: {{FECHA}}`;
                     return calcularPagoNetoRecibo({
                         montoRecibo: monto,
                         primaNeta,
+                        otrosServiciosContratados: nuevosOtrosServicios,
                         primaTotal: costoTotal,
                         gastosExpedicion: gastosManuales,
                         montoAbono: nuevoMontoAbono,
@@ -10969,10 +11003,11 @@ Fecha de firma: {{FECHA}}`;
                 };
                 const costoInicial = redondearCentavos(Math.max(0, costoTotal));
                 const subtotalPoliza = costoInicial / 1.16;
-                const recargos = subtotalPoliza - primaNeta - gastosManuales;
+                const recargos = subtotalPoliza - primaNetaCobrable - gastosManuales;
                 const montosPlan = calcularMontosRecibos({
                     primaTotal: costoInicial,
                     primaNeta,
+                    otrosServiciosContratados: nuevosOtrosServicios,
                     recargos,
                     gastosExpedicion: gastosManuales,
                     montoAbono: nuevoMontoAbono,
@@ -11114,6 +11149,10 @@ Fecha de firma: {{FECHA}}`;
                                         <label class="form-label">Prima Neta</label>
                                         <input id="poliza-prima-neta" type="number" step="0.01" class="swal2-input" value="${datosPrellenados.primaNeta}" placeholder="0.00">
                                     </div>
+                                    <div class="col-12 col-lg-6 mb-3">
+                                        <label class="form-label" for="poliza-otros-servicios">Otros Servicios Contratados (Opcional)</label>
+                                        <input id="poliza-otros-servicios" type="number" min="0" step="0.01" class="swal2-input" value="${datosPrellenados.otrosServiciosContratados}" placeholder="0.00">
+                                    </div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label" for="poliza-moneda">Moneda</label>
@@ -11188,6 +11227,7 @@ Fecha de firma: {{FECHA}}`;
                         event.preventDefault();
                         const nuevoCostoTotal = parseFloat(document.getElementById('poliza-prima').value) || 0;
                         const nuevaPrimaNeta = parseFloat(document.getElementById('poliza-prima-neta').value) || 0;
+                        const nuevosOtrosServicios = parseFloat(document.getElementById('poliza-otros-servicios').value) || 0;
                         const nuevoPagoInicial = parseFloat(document.getElementById('poliza-primer-pago').value) || 0;
                         const nuevoMontoAbono = parseFloat(document.getElementById('poliza-monto-abono').value) || 0;
                         const nuevoGastosExpedicion = parseFloat(document.getElementById('gastosExpedicion')?.value);
@@ -11205,6 +11245,7 @@ Fecha de firma: {{FECHA}}`;
                         const resultadoPreview = calcularRecibosVistaPrevia({
                             nuevoCostoTotal,
                             nuevaPrimaNeta,
+                            nuevosOtrosServicios,
                             nuevoPagoInicial,
                             nuevoMontoAbono,
                             nuevoGastosExpedicion,
@@ -11272,6 +11313,10 @@ Fecha de firma: {{FECHA}}`;
                     const primaTotal = document.getElementById('poliza-prima').value;
                     const moneda = document.getElementById('poliza-moneda').value;
                     const primaNeta = document.getElementById('poliza-prima-neta').value;
+                    const otrosServiciosContratados = document.getElementById('poliza-otros-servicios').value;
+                    const otrosServiciosContratadosMonto = otrosServiciosContratados === ''
+                        ? 0
+                        : Number(otrosServiciosContratados);
                     const gastosExpedicion = document.getElementById('gastosExpedicion').value;
                     const emisionEnPrimerPago = document.getElementById('emisionEnPrimerPago').checked;
                     const montoAbono = document.getElementById('poliza-monto-abono').value;
@@ -11282,6 +11327,10 @@ Fecha de firma: {{FECHA}}`;
                     const nuevoAsesorId = document.getElementById('poliza-asesor').value;
                     if (!numero || !cliente || !aseguradora || !tipoSeguro || !fechaInicio || !fechaVencimiento || !primaTotal) {
                         Swal.showValidationMessage('Por favor completa todos los campos obligatorios');
+                        return;
+                    }
+                    if (!Number.isFinite(otrosServiciosContratadosMonto) || otrosServiciosContratadosMonto < 0) {
+                        Swal.showValidationMessage('Otros servicios debe ser un monto válido mayor o igual a 0.');
                         return;
                     }
 
@@ -11320,6 +11369,7 @@ Fecha de firma: {{FECHA}}`;
                         primaTotal: parseFloat(primaTotal),
                         moneda,
                         primaNeta: primaNeta ? parseFloat(primaNeta) : 0,
+                        otrosServiciosContratados: otrosServiciosContratadosMonto,
                         gastosExpedicion: gastosExpedicion ? parseFloat(gastosExpedicion) : null,
                         emisionEnPrimerPago,
                         montoAbono: montoAbono ? parseFloat(montoAbono) : null,
@@ -11862,6 +11912,7 @@ Fecha de firma: {{FECHA}}`;
             return calcularPagoNetoRecibo({
                 montoRecibo: monto,
                 primaNeta: poliza.primaNeta,
+                otrosServiciosContratados: poliza.otrosServiciosContratados,
                 primaTotal: poliza.primaTotal,
                 gastosExpedicion: poliza.gastosExpedicion,
                 montoAbono: poliza.montoAbono,
@@ -12172,9 +12223,6 @@ Fecha de firma: {{FECHA}}`;
                 ?? reciboPendiente?.monto
                 ?? poliza.montoAbono
                 ?? 0;
-            const fechaPago = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
-            const fechaMostrar = fechaPago ? new Date(fechaPago).toLocaleDateString('es-MX') : 'N/A';
-
             if (!telefono) {
                 Swal.fire('Error', 'La póliza no tiene número de teléfono registrado', 'error');
                 return;
@@ -12184,7 +12232,6 @@ Fecha de firma: {{FECHA}}`;
                 cliente,
                 tipoSeguro: poliza.tipoSeguro || 'seguro',
                 monto: montoPendiente,
-                fecha: fechaMostrar,
                 periodo: reciboPendiente?.periodoCobertura,
                 enlacePago: poliza.enlacePago,
                 moneda: poliza.moneda || 'MXN'
@@ -12295,19 +12342,14 @@ Fecha de firma: {{FECHA}}`;
                     ?? reciboPendiente?.monto
                     ?? poliza.montoAbono
                     ?? 0;
-                const fechaVenc = poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento).toLocaleDateString('es-MX') : 'N/A';
-                const fechaPagoValor = reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago;
-                const fechaPago = fechaPagoValor ? new Date(fechaPagoValor).toLocaleDateString('es-MX') : 'N/A';
-
                 let texto = '';
                 if (tipoSeleccionado === 'vencimiento_poliza') {
-                    texto = `Hola ${clienteNombre}, te recordamos que tu póliza No. ${numeroPolizaClean} con la aseguradora ${poliza.aseguradora || 'N/A'} está próxima a vencer el ${fechaVenc}.`;
+                    texto = `Hola ${clienteNombre}, te recordamos que tu póliza No. ${numeroPolizaClean} con la aseguradora ${poliza.aseguradora || 'N/A'} requiere atención. Contacta a tu asesor si necesitas apoyo con la renovación.`;
                 } else {
                     texto = crearMensajeCobranzaDiaria({
                         cliente: clienteNombre,
                         tipoSeguro: poliza.tipoSeguro || 'seguro',
                         monto: montoPendiente,
-                        fecha: fechaPago,
                         periodo: reciboPendiente?.periodoCobertura,
                         enlacePago: poliza.enlacePago,
                         moneda: poliza.moneda || 'MXN'
