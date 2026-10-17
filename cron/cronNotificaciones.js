@@ -42,6 +42,31 @@ function fechaLocalMexicoAUTC(year, month, day) {
     return new Date(timestamp);
 }
 
+function obtenerDiaCalendarioMexico(fecha) {
+    if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [year, month, day] = fecha.split('-').map(Number);
+        return Date.UTC(year, month - 1, day) / 86400000;
+    }
+
+    const fechaValida = fecha instanceof Date ? fecha : new Date(fecha);
+    if (Number.isNaN(fechaValida.getTime())) return null;
+
+    const partes = Object.fromEntries(formatoFechaMexico
+        .formatToParts(fechaValida)
+        .map(({ type, value }) => [type, value]));
+    return Date.UTC(
+        Number(partes.year),
+        Number(partes.month) - 1,
+        Number(partes.day)
+    ) / 86400000;
+}
+
+function obtenerDiasRestantesMexico(fechaObjetivo, diaActualMexico) {
+    const diaObjetivoMexico = obtenerDiaCalendarioMexico(fechaObjetivo);
+    if (diaObjetivoMexico === null || diaActualMexico === null) return null;
+    return diaObjetivoMexico - diaActualMexico;
+}
+
 function obtenerRangoMesMexico(fecha = new Date()) {
     const partes = Object.fromEntries(formatoFechaMexico
         .formatToParts(fecha)
@@ -60,8 +85,8 @@ function obtenerRangoMesMexico(fecha = new Date()) {
 async function procesarNotificacionesDiarias() {
     console.log('[Cron Notificaciones] Iniciando barrido diario con configuración dinámica...');
     try {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
+        const ahora = new Date();
+        const hoyMexico = obtenerDiaCalendarioMexico(ahora);
         const empresasSeguros = await Empresa.find({ moduloSeguros: true });
 
         for (const empresa of empresasSeguros) {
@@ -73,9 +98,10 @@ async function procesarNotificacionesDiarias() {
                 if (poliza.recibos && poliza.recibos.length > 0) {
                     for (const recibo of poliza.recibos) {
                         if (recibo.estadoRecibo === 'pendiente' && recibo.fechaVencimientoRecibo) {
-                            const fVencimientoRecibo = new Date(recibo.fechaVencimientoRecibo);
-                            fVencimientoRecibo.setHours(0, 0, 0, 0);
-                            const diasParaRecibo = Math.ceil((fVencimientoRecibo - hoy) / (1000 * 60 * 60 * 24));
+                            const diasParaRecibo = obtenerDiasRestantesMexico(
+                                recibo.fechaVencimientoRecibo,
+                                hoyMexico
+                            );
 
                             // Regla de 3 días: enviar notificación exactamente 3 días antes
                             if (diasParaRecibo === 3) {
@@ -112,20 +138,22 @@ async function procesarNotificacionesDiarias() {
 
                 // NOTIFICACIONES DE VENCIMIENTO DE PÓLIZA
                 if (poliza.fechas && poliza.fechas.vencimiento) {
-                    const fVenc = new Date(poliza.fechas.vencimiento);
-                    fVenc.setHours(0, 0, 0, 0);
-                    const diasRestantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
+                    const diasRestantes = obtenerDiasRestantesMexico(
+                        poliza.fechas.vencimiento,
+                        hoyMexico
+                    );
 
                     // Usar configuración dinámica de recordatoriosPago
                     const recordatorios = poliza.recordatoriosPago || [7, 3, 1, 0];
                     
-                    if (recordatorios.includes(diasRestantes) && diasRestantes >= 0) {
+                    if (diasRestantes !== null
+                        && recordatorios.includes(diasRestantes)
+                        && diasRestantes >= 0) {
                         // Verificar si ya se envió notificación hoy para este día específico
                         const yaNotificadoHoy = poliza.historialNotificaciones && poliza.historialNotificaciones.some(notif => {
-                            const notifDate = new Date(notif.fecha);
-                            notifDate.setHours(0, 0, 0, 0);
+                            const diaNotificacionMexico = obtenerDiaCalendarioMexico(notif.fecha);
                             return notif.tipo === 'vencimiento_poliza' && 
-                                   notifDate.getTime() === hoy.getTime() &&
+                                   diaNotificacionMexico === hoyMexico &&
                                    notif.diasRestantes === diasRestantes;
                         });
 
@@ -144,11 +172,9 @@ async function procesarNotificacionesDiarias() {
 
                 // FASE 4: CANCELACIÓN POR EXPIRACIÓN DE PERIODO DE GRACIA
                 if (poliza.fechas?.vencimiento && poliza.fechaLimiteRenovacion) {
-                    const fLimite = new Date(poliza.fechaLimiteRenovacion);
-                    fLimite.setHours(0, 0, 0, 0);
-                    
-                    // Si la fecha actual pasó el límite de renovación
-                    if (hoy > fLimite) {
+                    const diaLimiteMexico = obtenerDiaCalendarioMexico(poliza.fechaLimiteRenovacion);
+
+                    if (diaLimiteMexico !== null && hoyMexico > diaLimiteMexico) {
                         if (poliza.estado !== 'Cancelada') {
                             console.log(`[Cron Notificaciones] Cancelando póliza ${poliza.numeroPoliza} - periodo de gracia expirado`);
                             poliza.estado = 'Cancelada';

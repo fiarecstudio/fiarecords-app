@@ -142,7 +142,25 @@ const projectMiddleware = limiters.projectCreationLimiter ? limiters.projectCrea
 // El contenido público debe exponerse antes de cualquier middleware de auth
 // y antes de la ruta catch-all que devuelve el SPA/login.
 app.use('/sounds', express.static(path.join(__dirname, 'public', 'sounds')));
-app.use(express.static(__dirname)); // Para /style.css y otros archivos en la raíz del proyecto
+app.use(/^\/backup(?:\/|$)/i, (req, res) => res.sendStatus(404));
+
+const archivosPublicosRaiz = new Map([
+  ['/style.css', 'style.css'],
+  ['/script.js', 'script.js'],
+  ['/empresas.js', 'empresas.js'],
+  ['/manifest.json', 'manifest.json'],
+  ['/sw.js', 'sw.js'],
+  ['/icon-192.png', 'icon-192.png'],
+  ['/icon-512.png', 'icon-512.png'],
+  ['/uploads/logo.png', path.join('uploads', 'logo.png')]
+]);
+app.get([...archivosPublicosRaiz.keys()], (req, res, next) => {
+  const archivo = archivosPublicosRaiz.get(req.path);
+  if (!archivo) return next();
+  return res.sendFile(path.join(__dirname, archivo), error => {
+    if (error) next(error);
+  });
+});
 app.use('/public', express.static(path.join(__dirname, 'public'))); // Para /public/css/chat.css, /public/js, /public/sounds
 
 app.use('/api/auth', authMiddleware, require('./routes/auth')); 

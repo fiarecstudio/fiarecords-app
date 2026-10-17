@@ -327,6 +327,37 @@ const calcularMontosRecibos = ({
     );
 };
 
+const validarImportesRecibos = (recibos, primaTotal) => {
+    const total = Number(primaTotal);
+    if (!Number.isFinite(total) || total <= 0) {
+        return 'La Prima Total debe ser mayor a cero para generar recibos fraccionados.';
+    }
+
+    const recibosValidos = Array.isArray(recibos) && recibos.length > 0;
+    if (!recibosValidos) {
+        return 'No se generaron recibos para el plan de pagos.';
+    }
+
+    const importes = recibos.map(recibo => Number(recibo?.montoRecibo));
+    if (importes.some(importe =>
+        !Number.isFinite(importe)
+        || importe < 0
+        || Math.abs(importe * 100 - Math.round(importe * 100)) > 1e-7
+        || (total > 0 && importe === 0)
+    )) {
+        return 'El plan contiene recibos con importes inválidos, negativos o en cero.';
+    }
+
+    const sumaCentavos = importes.reduce((suma, importe) => suma + Math.round(importe * 100), 0);
+    const totalCentavos = Math.round(total * 100);
+    const diferenciaCentavos = Math.abs(sumaCentavos - totalCentavos);
+    if (diferenciaCentavos > 1) {
+        return `La suma de los recibos no coincide con la Prima Total. Diferencia: $${(diferenciaCentavos / 100).toFixed(2)}; el máximo permitido es $0.01.`;
+    }
+
+    return null;
+};
+
 const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago, montoAbono, opciones = {}) => {
     const recibos = [];
     const duracionMeses = normalizarDuracionMeses(opciones.duracionMeses) || 12;
@@ -399,7 +430,8 @@ const regenerarRecibosPendientes = ({
     primaNeta,
     otrosServiciosContratados,
     gastosExpedicion,
-    emisionEnPrimerPago = false
+    emisionEnPrimerPago = false,
+    forzarRecalculo = false
 }) => {
     const duracionNormalizada = normalizarDuracionMeses(duracionMeses) || 12;
     const cantidadTotal = obtenerNumeroRecibosPorTipo(tipoPago, duracionNormalizada);
@@ -446,19 +478,89 @@ const regenerarRecibosPendientes = ({
 
     const fechaBase = normalizarFechaLocal(fechaInicio) || new Date(fechaInicio);
     const mesesIntervalo = obtenerIntervaloMeses(tipoPago);
-    return Array.from({ length: cantidadTotal }, (_, indicePlan) => {
+    const recibosRegenerados = Array.from({ length: cantidadTotal }, (_, indicePlan) => {
         const reciboActual = recibosPorIndice.get(indicePlan) || {};
+        const estadoRecibo = String(reciboActual.estadoRecibo || reciboActual.estado || 'pendiente').toLowerCase();
         const fechaVencimiento = sumarMesesSeguro(fechaBase, indicePlan * mesesIntervalo);
-        return {
+
+        if (!forzarRecalculo && estadoRecibo !== 'pendiente' && estadoRecibo !== 'atrasado') {
+            return reciboActual;
+        }
+
+        const reciboRegenerado = {
             ...reciboActual,
             numeroRecibo: reciboActual.numeroRecibo || `REC-${indicePlan + 1}`,
             periodoCobertura: `${indicePlan + 1}/${cantidadTotal}`,
             montoRecibo: montosPlan[indicePlan],
             montoPagoNeto: pagosNetosDistribuidos[indicePlan],
             fechaVencimientoRecibo: fechaVencimiento,
-            estadoRecibo: reciboActual.estadoRecibo || reciboActual.estado || 'pendiente'
+            estadoRecibo
         };
+
+        if (forzarRecalculo) {
+            reciboRegenerado.montoPagado = reciboActual.montoPagado !== undefined
+                && reciboActual.montoPagado !== null
+                ? Number(reciboActual.montoPagado)
+                : (estadoRecibo === 'pagado' ? Number(reciboActual.montoRecibo) || 0 : 0);
+        }
+
+        return reciboRegenerado;
     });
+
+    if (!forzarRecalculo) {
+        const recibosRecalculables = [];
+        let montoBloqueadoCentavos = 0;
+        let montoNetoBloqueadoCentavos = 0;
+        recibosRegenerados.forEach((recibo, indice) => {
+            const estado = String(recibo.estadoRecibo || recibo.estado || '').toLowerCase();
+            if (estado === 'pendiente' || estado === 'atrasado') {
+                recibosRecalculables.push(indice);
+            } else {
+                montoBloqueadoCentavos += Math.round((Number(recibo.montoRecibo) || 0) * 100);
+                montoNetoBloqueadoCentavos += Math.round((Number(recibo.montoPagoNeto) || 0) * 100);
+            }
+        });
+
+        const montoDisponibleCentavos = Math.round(costoTotal * 100) - montoBloqueadoCentavos;
+        const pesoTotal = recibosRecalculables.reduce(
+            (total, indice) => total + Math.max(0, Number(montosPlan[indice]) || 0),
+            0
+        );
+        const distribuirMonto = (totalCentavos, obtenerMonto, actualizarMonto) => {
+            let centavosDistribuidos = 0;
+            recibosRecalculables.forEach((indice, posicion) => {
+                const peso = Math.max(0, Number(obtenerMonto(indice)) || 0);
+                const centavos = posicion === recibosRecalculables.length - 1
+                    ? totalCentavos - centavosDistribuidos
+                    : Math.floor(
+                        totalCentavos
+                        * (pesoTotal > 0 ? peso / pesoTotal : 1 / recibosRecalculables.length)
+                    );
+                actualizarMonto(indice, centavos / 100);
+                centavosDistribuidos += centavos;
+            });
+        };
+
+        if (recibosRecalculables.length > 0) {
+            distribuirMonto(
+                montoDisponibleCentavos,
+                indice => montosPlan[indice],
+                (indice, monto) => { recibosRegenerados[indice].montoRecibo = monto; }
+            );
+            const montoNetoDisponibleCentavos = Math.round(
+                pagosNetosDistribuidos.reduce((total, monto) => total + (Number(monto) || 0), 0) * 100
+            ) - montoNetoBloqueadoCentavos;
+            if (montoNetoDisponibleCentavos >= 0) {
+                distribuirMonto(
+                    montoNetoDisponibleCentavos,
+                    indice => montosPlan[indice],
+                    (indice, monto) => { recibosRegenerados[indice].montoPagoNeto = monto; }
+                );
+            }
+        }
+    }
+
+    return recibosRegenerados;
 };
 
 const calcularPagoNeto = (
@@ -655,6 +757,10 @@ const crearPoliza = async (req, res) => {
                     emisionEnPrimerPago: nuevaPoliza.emisionEnPrimerPago
                 }
             );
+            const errorImportes = validarImportesRecibos(nuevaPoliza.recibos, nuevaPoliza.primaTotal);
+            if (errorImportes) {
+                return res.status(400).json({ error: errorImportes });
+            }
         }
         if (nuevaPoliza.recibos.length > 0) {
             const primerPendiente = nuevaPoliza.recibos.find(recibo =>
@@ -1315,7 +1421,10 @@ const actualizarPoliza = async (req, res) => {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
         }
 
+        const forzarRecalculo = req.body.forzarRecalculo === true;
         const datosActualizacion = { ...req.body };
+        delete datosActualizacion.forzarRecalculo;
+        delete datosActualizacion.recalcularRecibos;
         if (datosActualizacion.estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(datosActualizacion.estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
@@ -1379,6 +1488,7 @@ const actualizarPoliza = async (req, res) => {
             || cambioImportePlan
             || cambioEmisionEnPrimerPago
             || req.body.recalcularRecibos === true
+            || forzarRecalculo
         );
 
         if (fechasCambiaron || tipoPagoCambio) {
@@ -1444,8 +1554,13 @@ const actualizarPoliza = async (req, res) => {
                 primaNeta: datosActualizacion.primaNeta ?? polizaExistente.primaNeta,
                 otrosServiciosContratados: datosActualizacion.otrosServiciosContratados ?? polizaExistente.otrosServiciosContratados,
                 gastosExpedicion: datosActualizacion.gastosExpedicion ?? polizaExistente.gastosExpedicion,
-                emisionEnPrimerPago: datosActualizacion.emisionEnPrimerPago ?? polizaExistente.emisionEnPrimerPago
+                emisionEnPrimerPago: datosActualizacion.emisionEnPrimerPago ?? polizaExistente.emisionEnPrimerPago,
+                forzarRecalculo
             });
+            const errorImportes = validarImportesRecibos(datosActualizacion.recibos, primaTotal);
+            if (errorImportes) {
+                return res.status(400).json({ error: errorImportes });
+            }
             const recibosPendientes = datosActualizacion.recibos.filter(recibo => !esReciboPagado(recibo));
             datosActualizacion.saldoRestante = Number(recibosPendientes
                 .reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0)
@@ -1512,6 +1627,10 @@ const recalcularRecibos = async (req, res) => {
             gastosExpedicion: req.body.gastosExpedicion ?? poliza.gastosExpedicion,
             emisionEnPrimerPago
         });
+        const errorImportes = validarImportesRecibos(poliza.recibos, primaTotal);
+        if (errorImportes) {
+            return res.status(400).json({ error: errorImportes });
+        }
 
         poliza.primaTotal = primaTotal;
         if (req.body.primaNeta !== undefined) {
@@ -3619,6 +3738,10 @@ const renovarPoliza = async (req, res) => {
                     emisionEnPrimerPago: nuevaPoliza.emisionEnPrimerPago
                 }
             );
+            const errorImportes = validarImportesRecibos(nuevaPoliza.recibos, nuevaPoliza.primaTotal);
+            if (errorImportes) {
+                throw Object.assign(new Error(errorImportes), { statusCode: 400 });
+            }
         }
         const primerReciboPendiente = nuevaPoliza.recibos.find(
             recibo => recibo.estadoRecibo?.toLowerCase() === 'pendiente'
@@ -4945,6 +5068,7 @@ const resolverCobranzaConPago = async (req, res) => {
         const fechaPago = fechaSolicitada && !Number.isNaN(fechaSolicitada.getTime()) ? fechaSolicitada : new Date();
         const metodoPago = req.body?.metodoPago || 'efectivo';
         recibo.estadoRecibo = 'pagado';
+        recibo.montoPagado = (Number(recibo.montoPagado) || 0) + montoPagado;
         recibo.fechaPago = fechaPago;
         recibo.metodoPago = metodoPago;
         poliza.pagos.push({ fechaPago, monto: montoPagado, estado: 'pagado', metodoPago });
@@ -4969,31 +5093,46 @@ const resolverCobranzaConPago = async (req, res) => {
 
 
 async function actualizarPolizasVencidas(req, res) {
-    if (req && req.user?.role !== 'admin' && !req.user?.isSuperAdmin) {
-        return res.status(403).json({
-            success: false,
-            error: 'Acceso denegado. Solo administradores pueden actualizar pólizas vencidas.'
-        });
+    const ejecucionManual = Boolean(req || res);
+    let empresas;
+    if (ejecucionManual) {
+        const empresaId = req?.user?.empresaId || req?.empresaId;
+        if (req?.user?.role !== 'admin' || !empresaId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Acceso denegado. Solo administradores de una empresa pueden actualizar sus pólizas vencidas.'
+            });
+        }
+        empresas = [empresaId];
     }
 
     try {
-        const polizas = await Poliza.find({ estado: { $regex: /activa/i } });
+        if (!empresas) {
+            empresas = await Poliza.distinct('empresaId', {
+                empresaId: { $ne: null },
+                estado: { $regex: /^\s*activa\s*$/i },
+                deletedAt: null
+            });
+        }
+
         const hoy = new Date();
         let contador = 0;
 
-        for (const poliza of polizas) {
-            const valorFecha = poliza.fechas && poliza.fechas.vencimiento
-                ? poliza.fechas.vencimiento
-                : null;
-            if (!valorFecha) {
-                continue;
-            }
+        for (const empresaId of empresas) {
+            const polizas = await Poliza.find({
+                empresaId,
+                deletedAt: null,
+                estado: { $regex: /^\s*activa\s*$/i },
+                'fechas.vencimiento': { $lt: hoy }
+            });
 
-            const fechaObj = new Date(valorFecha);
-            if (!isNaN(fechaObj.getTime()) && fechaObj < hoy) {
-                poliza.estado = 'Vencida';
-                await poliza.save();
-                contador++;
+            for (const poliza of polizas) {
+                const fechaObj = new Date(poliza.fechas?.vencimiento);
+                if (!Number.isNaN(fechaObj.getTime())) {
+                    poliza.estado = 'Vencida';
+                    await poliza.save();
+                    contador++;
+                }
             }
         }
 

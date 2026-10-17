@@ -17,6 +17,10 @@ const reciboSchema = new mongoose.Schema({
         required: true,
         min: [0, 'El monto del recibo debe ser mayor o igual a 0']
     },
+    montoPagado: {
+        type: Number,
+        min: [0, 'El monto pagado del recibo debe ser mayor o igual a 0']
+    },
     montoPagoNeto: {
         type: Number,
         min: [0, 'El pago neto del recibo debe ser mayor o igual a 0']

@@ -14,9 +14,19 @@ const polizaController = require('../controllers/polizaController');
 const Poliza = require('../models/Poliza');
 const Notificacion = require('../models/Notificacion');
 
+const requireCompanyAdmin = (req, res, next) => {
+    if (req.user?.role !== 'admin' || !(req.user?.empresaId || req.empresaId)) {
+        return res.status(403).json({
+            success: false,
+            error: 'Acceso denegado. Solo administradores de una empresa pueden actualizar sus pólizas vencidas.'
+        });
+    }
+    return next();
+};
+
 router.get('/auditoria-fechas', auth, applyTenantFilter, polizaController.auditarFechasPolizas);
 router.get('/auditoria-vencidas-reales', auth, applyTenantFilter, polizaController.auditarVencidasReales);
-router.get('/limpieza-vencidas', auth, applyTenantFilter, polizaController.actualizarPolizasVencidas);
+router.post('/limpieza-vencidas', auth, requireCompanyAdmin, applyTenantFilter, polizaController.actualizarPolizasVencidas);
 
 /**
  * Normaliza el texto del PDF respetando saltos de línea vitales
