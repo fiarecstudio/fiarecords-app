@@ -3550,9 +3550,15 @@ let proyectoIdEnEdicion = null;
     let modoCorreoActual = 'reply';
     let archivosCorreoSeleccionados = [];
     let carpetaBandejaActual = 'INBOX';
+    let correosProgramados = [];
+    let correoProgramadoSeleccionado = null;
     let filtroBandejaNoLeidos = false;
     let busquedaCorreoTimeout = null;
     let secuenciaConsultaBandeja = 0;
+    let correoContextualSeleccionado = null;
+    let carpetasBandejaCache = null;
+    let importanciaCorreo = 'normal';
+    let seguimientoCorreo = false;
     const detallesCorreoCache = new Map();
 
     function obtenerFirmaCorreo() {
@@ -3597,6 +3603,14 @@ let proyectoIdEnEdicion = null;
         const lista = document.getElementById('bandeja-lista');
         if (!lista) return;
         const folder = options.folder || carpetaBandejaActual;
+        if (folder === 'PROGRAMADOS') {
+            carpetaBandejaActual = folder;
+            correoProgramadoSeleccionado = null;
+            document.getElementById('bandeja-vacio')?.classList.remove('d-none');
+            document.getElementById('bandeja-lectura')?.classList.add('d-none');
+            document.getElementById('bandeja-programado-detalle')?.classList.add('d-none');
+            return cargarCorreosProgramados();
+        }
         const requestId = ++secuenciaConsultaBandeja;
         const query = typeof options.query === 'string'
             ? options.query.trim()
@@ -3615,6 +3629,9 @@ let proyectoIdEnEdicion = null;
             if (query) params.set('q', query);
             const response = await fetchAPI(`/api/bandeja-entrada?${params.toString()}`);
             if (requestId !== secuenciaConsultaBandeja) return;
+            if (!Array.isArray(carpetasBandejaCache)) {
+                refrescarCarpetasBandeja().catch(error => console.error('[BandejaEntrada] No se pudieron cargar las carpetas:', error));
+            }
             const fetchedEmails = Array.isArray(response.emails) ? response.emails : [];
             const selectedId = correoBandejaSeleccionado?.id;
             if (query || folderChanged) {
@@ -3644,6 +3661,7 @@ let proyectoIdEnEdicion = null;
             actualizarEstadoSincronizacion(`Última actualización: ${now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`);
             mostrarCorreoSeleccionado();
             renderizarListaBandeja();
+            cargarContadorProgramados();
         } catch (error) {
             actualizarEstadoSincronizacion('No fue posible sincronizar. Se conserva la lista anterior.');
             showToast(error.message || 'No fue posible cargar la bandeja.', 'error');
@@ -3651,11 +3669,67 @@ let proyectoIdEnEdicion = null;
     }
 
     function mostrarCarpetaBandeja(folder) {
-        document.getElementById('bandeja-tab-inbox').className = `btn btn-sm ${folder === 'INBOX' ? 'btn-primary' : 'btn-outline-secondary'}`;
-        document.getElementById('bandeja-tab-inbox').setAttribute('aria-selected', String(folder === 'INBOX'));
-        document.getElementById('bandeja-tab-sent').className = `btn btn-sm ${folder !== 'INBOX' ? 'btn-primary' : 'btn-outline-secondary'}`;
-        document.getElementById('bandeja-tab-sent').setAttribute('aria-selected', String(folder !== 'INBOX'));
-        return cargarBandejaEntrada({ folder });
+        const tabs = [
+            ['INBOX', 'bandeja-tab-inbox'],
+            ['Sent', 'bandeja-tab-sent'],
+            ['PROGRAMADOS', 'bandeja-tab-scheduled'],
+            [carpetasBandejaCache?.find(item => item.role === 'spam')?.name, 'bandeja-tab-spam']
+        ];
+        tabs.forEach(([tabFolder, id]) => {
+            const button = document.getElementById(id);
+            if (!button) return;
+            const active = folder === tabFolder;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-selected', String(active));
+        });
+        renderizarCarpetasPersonalizadas();
+        return cargarBandejaEntrada({ folder }).finally(() => renderizarCarpetasPersonalizadas());
+    }
+
+    async function mostrarCarpetaEspecial(role) {
+        try {
+            const folders = Array.isArray(carpetasBandejaCache) ? carpetasBandejaCache : await refrescarCarpetasBandeja();
+            const folder = folders.find(item => item.role === role);
+            if (!folder) {
+                showToast('No se encontró una carpeta Spam/Junk en el servidor IMAP.', 'warning');
+                return;
+            }
+            return mostrarCarpetaBandeja(folder.name);
+        } catch (error) {
+            showToast(error.message || 'No fue posible cargar las carpetas IMAP.', 'error');
+        }
+    }
+
+    async function cargarContadorProgramados() {
+        try {
+            const response = await fetchAPI('/api/bandeja-entrada/programados');
+            const count = Number(response.count) || 0;
+            const badge = document.getElementById('bandeja-programados-count');
+            if (badge) badge.textContent = String(count);
+            correosProgramados = Array.isArray(response.scheduled) ? response.scheduled : correosProgramados;
+            if (carpetaBandejaActual === 'PROGRAMADOS') renderizarListaBandeja();
+        } catch (error) {
+            console.error('[BandejaEntrada] No se pudo actualizar el contador de programados:', error);
+        }
+    }
+
+    async function cargarCorreosProgramados() {
+        actualizarEstadoSincronizacion('⟳ Cargando correos programados...', true);
+        try {
+            const response = await fetchAPI('/api/bandeja-entrada/programados');
+            correosProgramados = Array.isArray(response.scheduled) ? response.scheduled : [];
+            const badge = document.getElementById('bandeja-programados-count');
+            if (badge) badge.textContent = String(Number(response.count) || 0);
+            correoProgramadoSeleccionado = null;
+            document.getElementById('bandeja-programado-detalle')?.classList.add('d-none');
+            document.getElementById('bandeja-vacio')?.classList.remove('d-none');
+            document.getElementById('bandeja-lectura')?.classList.add('d-none');
+            actualizarEstadoSincronizacion(`Programados: ${correosProgramados.length}`);
+            renderizarListaBandeja();
+        } catch (error) {
+            actualizarEstadoSincronizacion('No fue posible cargar los correos programados.');
+            showToast(error.message || 'No fue posible consultar los correos programados.', 'error');
+        }
     }
 
     function normalizarTextoCorreo(value) {
@@ -3685,8 +3759,42 @@ let proyectoIdEnEdicion = null;
         return date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
     }
 
+    function renderizarListaCorreosProgramados() {
+        const lista = document.getElementById('bandeja-lista');
+        const query = normalizarTextoCorreo(document.getElementById('buscarCorreo')?.value || '');
+        const matching = correosProgramados.filter(correo => [
+            correo.asunto,
+            ...(correo.destinatario || []),
+            correo.mensaje
+        ].map(normalizarTextoCorreo).join(' ').includes(query));
+        document.getElementById('bandeja-contador').textContent = `${matching.length} correos programados`;
+        if (!matching.length) {
+            lista.innerHTML = `<div class="bandeja-list-message text-muted">${query ? 'No hay correos programados que coincidan con la búsqueda.' : 'No hay correos programados.'}</div>`;
+            return;
+        }
+        lista.innerHTML = matching.map(correo => {
+            const recipients = (correo.destinatario || []).join(', ');
+            const snippet = String(correo.mensaje || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            return `<div class="scheduled-email-card">
+                <button type="button" class="scheduled-email-open" data-scheduled-open="${escapeHTML(String(correo._id))}">
+                    <span class="bandeja-email-row"><span class="bandeja-email-sender">${escapeHTML(recipients)}</span><time class="bandeja-email-time">${escapeHTML(formatoFechaListaCorreo(correo.fechaProgramada))}</time></span>
+                    <span class="bandeja-email-subject">${escapeHTML(String(correo.asunto || '(Sin asunto)'))}</span>
+                    <span class="bandeja-email-snippet">${escapeHTML(snippet)}</span>
+                </button>
+                <div class="scheduled-email-actions">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-scheduled-action="send-now" data-scheduled-id="${escapeHTML(String(correo._id))}" title="Enviar ahora"><i class="bi bi-send"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-scheduled-action="cancel" data-scheduled-id="${escapeHTML(String(correo._id))}" title="Cancelar"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     function renderizarListaBandeja() {
         const lista = document.getElementById('bandeja-lista');
+        if (carpetaBandejaActual === 'PROGRAMADOS') {
+            renderizarListaCorreosProgramados();
+            return;
+        }
         const query = document.getElementById('buscarCorreo')?.value || '';
         const matchingEmails = correosBandejaEntrada.filter(correo =>
             (!filtroBandejaNoLeidos || !correo.seen) && correoCoincideBusqueda(correo, query)
@@ -3716,7 +3824,7 @@ let proyectoIdEnEdicion = null;
             const id = String(correo.id);
             const renderKey = JSON.stringify([
                 senderLabel, correo.subject, correo.date, correo.snippet,
-                correo.seen, selected, correo.toEmails
+                correo.seen, correo.flagged, selected, correo.toEmails
             ]);
             let button = existing.get(id);
             if (!button) {
@@ -3726,6 +3834,15 @@ let proyectoIdEnEdicion = null;
                 button.addEventListener('click', () => {
                     const index = correosBandejaEntrada.findIndex(item => String(item.id) === id);
                     seleccionarCorreoBandeja(index);
+                });
+                button.addEventListener('dblclick', event => {
+                    event.preventDefault();
+                    const email = correosBandejaEntrada.find(item => String(item.id) === id);
+                    if (email) abrirCorreoPantallaCompleta(email);
+                });
+                button.addEventListener('contextmenu', event => {
+                    const email = correosBandejaEntrada.find(item => String(item.id) === id);
+                    if (email) abrirMenuContextualCorreo(event, email);
                 });
             }
             retained.add(id);
@@ -3739,6 +3856,7 @@ let proyectoIdEnEdicion = null;
                     </span>
                     <span class="bandeja-email-subject-row">
                         <span class="bandeja-email-subject">${escapeHTML(String(correo.subject || '(Sin asunto)'))}</span>
+                        ${correo.flagged ? '<i class="bi bi-flag-fill bandeja-email-flag" aria-label="Con seguimiento"></i>' : ''}
                     </span>
                     <span class="bandeja-email-snippet">${escapeHTML(String(correo.snippet || ''))}</span>
                 `;
@@ -3752,16 +3870,511 @@ let proyectoIdEnEdicion = null;
         }
     }
 
+    function mostrarCorreoProgramado(correo) {
+        correoProgramadoSeleccionado = correo;
+        document.getElementById('bandeja-vacio')?.classList.add('d-none');
+        document.getElementById('bandeja-lectura')?.classList.add('d-none');
+        const details = document.getElementById('bandeja-programado-detalle');
+        details?.classList.remove('d-none');
+        document.getElementById('bandeja-programado-asunto').textContent = correo.asunto || '(Sin asunto)';
+        document.getElementById('bandeja-programado-destinatario').textContent = `Para: ${(correo.destinatario || []).join(', ')}`;
+        document.getElementById('bandeja-programado-fecha').textContent = `Programado para ${new Date(correo.fechaProgramada).toLocaleString('es-MX')}`;
+        const parsedMessage = new DOMParser().parseFromString(String(correo.mensaje || ''), 'text/html');
+        document.getElementById('bandeja-programado-cuerpo').textContent = parsedMessage.body.textContent || '';
+        const attachmentNames = (correo.attachments || []).map(file => file.name).filter(Boolean);
+        document.getElementById('bandeja-programado-adjuntos').textContent = attachmentNames.length
+            ? `Adjuntos: ${attachmentNames.join(', ')}`
+            : 'Sin archivos adjuntos';
+        renderizarListaBandeja();
+    }
+
+    async function ejecutarAccionCorreoProgramado(action, id) {
+        const correoId = id || correoProgramadoSeleccionado?._id;
+        if (!correoId) return;
+        try {
+            if (action === 'cancel' && !window.confirm('¿Cancelar este correo programado?')) return;
+            const response = await fetchAPI(`/api/bandeja-entrada/programados/${encodeURIComponent(correoId)}${action === 'send-now' ? '/send-now' : ''}`, {
+                method: action === 'cancel' ? 'DELETE' : 'POST'
+            });
+            showToast(response.message || (action === 'cancel' ? 'Correo cancelado.' : 'Correo enviado.'), 'success');
+            await cargarCorreosProgramados();
+        } catch (error) {
+            showToast(error.message || 'No fue posible actualizar el correo programado.', 'error');
+        }
+    }
+
+    function cerrarMenuContextualCorreo() {
+        const menu = document.getElementById('bandeja-menu-contextual');
+        if (!menu) return;
+        menu.hidden = true;
+        menu.querySelector('[data-context-action="toggle-move"]')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('bandeja-menu-carpetas')?.classList.remove('is-open');
+        correoContextualSeleccionado = null;
+    }
+
+    async function cargarCarpetasMenuCorreo() {
+        if (!Array.isArray(carpetasBandejaCache)) {
+            const response = await fetchAPI('/api/bandeja-entrada/folders');
+            carpetasBandejaCache = Array.isArray(response.folders) ? response.folders : [];
+            renderizarCarpetasPersonalizadas();
+        }
+        const submenu = document.getElementById('bandeja-menu-carpetas');
+        if (!submenu) return;
+        submenu.replaceChildren();
+        const currentFolder = correoContextualSeleccionado?.folder;
+        const destinations = carpetasBandejaCache.filter(folder => folder.name !== currentFolder);
+        if (!destinations.length) {
+            const empty = document.createElement('span');
+            empty.className = 'bandeja-context-empty';
+            empty.textContent = 'No hay carpetas disponibles';
+            submenu.appendChild(empty);
+            return;
+        }
+        destinations.forEach(folder => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.role = 'menuitem';
+            button.dataset.contextFolder = folder.name;
+            button.textContent = folder.name;
+            submenu.appendChild(button);
+        });
+    }
+
+    function renderizarCarpetasPersonalizadas() {
+        const container = document.getElementById('bandeja-carpetas-personalizadas');
+        if (!container || !Array.isArray(carpetasBandejaCache)) return;
+        const customFolders = carpetasBandejaCache.filter(folder => folder.role === 'folder');
+        const spamButton = document.getElementById('bandeja-tab-spam');
+        if (spamButton) spamButton.hidden = !carpetasBandejaCache.some(folder => folder.role === 'spam');
+        container.replaceChildren();
+        customFolders.forEach(folder => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `btn btn-sm text-start w-100 ${carpetaBandejaActual === folder.name ? 'is-active' : ''}`;
+            button.innerHTML = '<i class="bi bi-folder me-2"></i>';
+            button.appendChild(document.createTextNode(folder.name));
+            button.addEventListener('click', () => mostrarCarpetaBandeja(folder.name));
+            container.appendChild(button);
+        });
+    }
+
+    async function refrescarCarpetasBandeja() {
+        const response = await fetchAPI('/api/bandeja-entrada/folders');
+        carpetasBandejaCache = Array.isArray(response.folders) ? response.folders : [];
+        renderizarCarpetasPersonalizadas();
+        return carpetasBandejaCache;
+    }
+
+    function abrirModalNuevaCarpeta() {
+        const input = document.getElementById('bandeja-nombre-carpeta');
+        input.value = '';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNuevaCarpetaCorreo')).show();
+        setTimeout(() => input.focus(), 150);
+    }
+
+    async function crearCarpetaBandeja() {
+        const input = document.getElementById('bandeja-nombre-carpeta');
+        const name = input.value.trim();
+        if (!name || /[\r\n\x00]/.test(name)) {
+            showToast('Escribe un nombre de carpeta válido.', 'error');
+            return;
+        }
+        const button = document.getElementById('bandeja-crear-carpeta');
+        button.disabled = true;
+        try {
+            await fetchAPI('/api/bandeja-entrada/carpetas', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            await refrescarCarpetasBandeja();
+            bootstrap.Modal.getInstance(document.getElementById('modalNuevaCarpetaCorreo'))?.hide();
+            showToast(`Carpeta "${name}" creada.`, 'success');
+        } catch (error) {
+            showToast(error.message || 'No fue posible crear la carpeta.', 'error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    function renderizarReglasCorreo(rules) {
+        const container = document.getElementById('bandeja-reglas-lista');
+        if (!container) return;
+        if (!rules.length) {
+            container.textContent = 'No hay reglas configuradas.';
+            return;
+        }
+        container.replaceChildren();
+        rules.forEach(rule => {
+            const row = document.createElement('div');
+            row.className = 'mail-management-row';
+            const text = document.createElement('span');
+            const condition = rule.condicion || {};
+            const actions = rule.acciones || {};
+            const actionLabels = [
+                actions.moverACarpeta ? `Mover a ${actions.moverACarpeta}` : '',
+                actions.marcarLeido ? 'Marcar leído' : '',
+                actions.marcarImportante ? 'Marcar importante' : ''
+            ].filter(Boolean).join(', ');
+            text.textContent = `${rule.nombre}: ${condition.campo} ${condition.operador} "${condition.valor}" → ${actionLabels}${rule.activa ? '' : ' (inactiva)'}`;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn btn-sm btn-outline-danger';
+            remove.dataset.deleteRule = rule._id;
+            remove.setAttribute('aria-label', `Eliminar regla ${rule.nombre}`);
+            remove.innerHTML = '<i class="bi bi-trash"></i>';
+            row.append(text, remove);
+            container.appendChild(row);
+        });
+    }
+
+    function renderizarListaNegra(entries) {
+        const container = document.getElementById('bandeja-lista-negra');
+        if (!container) return;
+        if (!entries.length) {
+            container.textContent = 'La lista negra está vacía.';
+            return;
+        }
+        container.replaceChildren();
+        entries.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'mail-management-row';
+            const text = document.createElement('span');
+            text.textContent = entry.emailODominio;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn btn-sm btn-outline-danger';
+            remove.dataset.deleteBlacklist = entry._id;
+            remove.setAttribute('aria-label', `Quitar ${entry.emailODominio} de la lista negra`);
+            remove.innerHTML = '<i class="bi bi-x-lg"></i>';
+            row.append(text, remove);
+            container.appendChild(row);
+        });
+    }
+
+    async function abrirModalReglasCorreo() {
+        return mostrarModalReglasCorreo(null);
+    }
+
+    async function mostrarModalReglasCorreo(remitente) {
+        try {
+            const [rulesResponse, blacklistResponse] = await Promise.all([
+                fetchAPI('/api/bandeja-entrada/reglas'),
+                fetchAPI('/api/bandeja-entrada/lista-negra')
+            ]);
+            renderizarReglasCorreo(Array.isArray(rulesResponse.rules) ? rulesResponse.rules : []);
+            renderizarListaNegra(Array.isArray(blacklistResponse.entries) ? blacklistResponse.entries : []);
+            const folders = await refrescarCarpetasBandeja().catch(error => {
+                console.error('[BandejaEntrada] No se pudieron cargar carpetas para las reglas:', error);
+                showToast(error.message || 'No se pudieron cargar las carpetas para las reglas.', 'warning');
+                return [];
+            });
+            const folderSelect = document.getElementById('regla-correo-carpeta');
+            folderSelect.replaceChildren(new Option('No mover', ''));
+            folders.filter(folder => !['spam', 'trash'].includes(folder.role)).forEach(folder => {
+                folderSelect.add(new Option(folder.name, folder.name));
+            });
+            if (remitente) {
+                const sender = String(remitente).trim();
+                document.getElementById('regla-correo-nombre').value = `Remitente: ${sender}`;
+                document.getElementById('regla-correo-campo').value = 'remitente';
+                document.getElementById('regla-correo-operador').value = 'es_igual';
+                document.getElementById('regla-correo-valor').value = sender;
+                document.getElementById('regla-correo-carpeta').value = '';
+                document.getElementById('regla-correo-leido').checked = false;
+                document.getElementById('regla-correo-importante').checked = false;
+            }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalReglasCorreo')).show();
+            if (remitente) {
+                document.getElementById('regla-correo-valor').focus();
+                showToast(`Condición precargada para ${remitente}. Elige al menos una acción y guarda la regla.`, 'info');
+            }
+        } catch (error) {
+            showToast(error.message || 'No fue posible cargar reglas y lista negra.', 'error');
+        }
+    }
+
+    async function guardarReglaCorreo(event) {
+        event.preventDefault();
+        const payload = {
+            nombre: document.getElementById('regla-correo-nombre').value.trim(),
+            activa: true,
+            condicion: {
+                campo: document.getElementById('regla-correo-campo').value,
+                operador: document.getElementById('regla-correo-operador').value,
+                valor: document.getElementById('regla-correo-valor').value.trim()
+            },
+            acciones: {
+                moverACarpeta: document.getElementById('regla-correo-carpeta').value,
+                marcarLeido: document.getElementById('regla-correo-leido').checked,
+                marcarImportante: document.getElementById('regla-correo-importante').checked
+            }
+        };
+        try {
+            await fetchAPI('/api/bandeja-entrada/reglas', { method: 'POST', body: JSON.stringify(payload) });
+            event.currentTarget.reset();
+            const response = await fetchAPI('/api/bandeja-entrada/reglas');
+            renderizarReglasCorreo(response.rules || []);
+            showToast('Regla de correo guardada.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No fue posible guardar la regla.', 'error');
+        }
+    }
+
+    async function cambiarElementoGestionCorreo(event) {
+        const ruleButton = event.target.closest('[data-delete-rule]');
+        const blacklistButton = event.target.closest('[data-delete-blacklist]');
+        try {
+            if (ruleButton) {
+                await fetchAPI(`/api/bandeja-entrada/reglas/${encodeURIComponent(ruleButton.dataset.deleteRule)}`, { method: 'DELETE' });
+                const response = await fetchAPI('/api/bandeja-entrada/reglas');
+                renderizarReglasCorreo(response.rules || []);
+                showToast('Regla eliminada.', 'success');
+            } else if (blacklistButton) {
+                await fetchAPI(`/api/bandeja-entrada/lista-negra/${encodeURIComponent(blacklistButton.dataset.deleteBlacklist)}`, { method: 'DELETE' });
+                const response = await fetchAPI('/api/bandeja-entrada/lista-negra');
+                renderizarListaNegra(response.entries || []);
+                showToast('Entrada quitada de la lista negra.', 'success');
+            }
+        } catch (error) {
+            showToast(error.message || 'No fue posible actualizar la configuración de correo.', 'error');
+        }
+    }
+
+    async function agregarListaNegraCorreo(event) {
+        event.preventDefault();
+        const input = document.getElementById('bandeja-lista-negra-valor');
+        try {
+            await fetchAPI('/api/bandeja-entrada/lista-negra', {
+                method: 'POST',
+                body: JSON.stringify({ emailODominio: input.value.trim() })
+            });
+            input.value = '';
+            const response = await fetchAPI('/api/bandeja-entrada/lista-negra');
+            renderizarListaNegra(response.entries || []);
+            showToast('Remitente o dominio agregado a la lista negra.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No fue posible agregar la entrada.', 'error');
+        }
+    }
+
+    async function abrirMenuContextualCorreo(event, correo) {
+        event.preventDefault();
+        correoContextualSeleccionado = correo;
+        const menu = document.getElementById('bandeja-menu-contextual');
+        if (!menu) return;
+        menu.hidden = false;
+        menu.querySelector('[data-context-action="seen"] span').textContent =
+            correo.seen ? 'Marcar como no leído' : 'Marcar como leído';
+        menu.querySelector('[data-context-action="flag"] span').textContent =
+            correo.flagged ? 'Quitar seguimiento' : 'Activar seguimiento';
+        const bounds = menu.getBoundingClientRect();
+        const left = event.clientX + bounds.width > window.innerWidth - 8
+            ? event.clientX - bounds.width
+            : event.clientX;
+        const top = event.clientY + bounds.height > window.innerHeight - 8
+            ? event.clientY - bounds.height
+            : event.clientY;
+        menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - bounds.width - 8))}px`;
+        menu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - bounds.height - 8))}px`;
+        try {
+            await cargarCarpetasMenuCorreo();
+        } catch (error) {
+            showToast(error.message || 'No se pudieron cargar las carpetas IMAP.', 'error');
+        }
+    }
+
+    async function cambiarEstadoCorreo(correo, seen) {
+        if (!correo || correo.seen === seen) return;
+        const endpoint = seen ? 'mark-read' : 'mark-unread';
+        const previousSeen = correo.seen;
+        correo.seen = seen;
+        if (String(correoBandejaSeleccionado?.id) === String(correo.id)) {
+            correoBandejaSeleccionado.seen = seen;
+            const button = document.getElementById('bandeja-marcar-no-leido');
+            if (button) button.disabled = !seen;
+        }
+        for (const [cacheKey, detail] of detallesCorreoCache) {
+            if (cacheKey.endsWith(`:${correo.id}`)) {
+                detallesCorreoCache.set(cacheKey, { ...detail, seen });
+            }
+        }
+        renderizarListaBandeja();
+        try {
+            await fetchAPI(`/api/bandeja-entrada/${endpoint}`, {
+                method: 'POST',
+                body: JSON.stringify({ id: correo.id, folder: correo.folder || carpetaBandejaActual })
+            });
+            actualizarIndicadorCorreos();
+        } catch (error) {
+            correo.seen = previousSeen;
+            if (String(correoBandejaSeleccionado?.id) === String(correo.id)) {
+                correoBandejaSeleccionado.seen = previousSeen;
+                const button = document.getElementById('bandeja-marcar-no-leido');
+                if (button) button.disabled = !previousSeen;
+            }
+            for (const [cacheKey, detail] of detallesCorreoCache) {
+                if (cacheKey.endsWith(`:${correo.id}`)) {
+                    detallesCorreoCache.set(cacheKey, { ...detail, seen: previousSeen });
+                }
+            }
+            renderizarListaBandeja();
+            showToast(error.message || 'No fue posible actualizar el estado del correo.', 'error');
+        }
+    }
+
+    async function ejecutarAccionMenuCorreo(action, correo, destination) {
+        if (!correo) return;
+        if (action === 'create-rule') {
+            const sender = String(correo.fromEmail || '').trim();
+            if (!sender) {
+                showToast('El correo seleccionado no tiene una dirección de remitente válida.', 'warning');
+                return;
+            }
+            await mostrarModalReglasCorreo(sender);
+            return;
+        }
+        if (action === 'copy') {
+            const text = `${correo.fromName || ''}${correo.fromEmail ? ` <${correo.fromEmail}>` : ''}\n${correo.subject || '(Sin asunto)'}`;
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const input = document.createElement('textarea');
+                    input.value = text;
+                    input.style.position = 'fixed';
+                    input.style.opacity = '0';
+                    document.body.appendChild(input);
+                    input.select();
+                    document.execCommand('copy');
+                    input.remove();
+                }
+                showToast('Remitente y asunto copiados.', 'success');
+            } catch (error) {
+                showToast('No fue posible copiar el correo.', 'error');
+            }
+            return;
+        }
+        if (action === 'print') {
+            window.print();
+            return;
+        }
+        if (action === 'reply' || action === 'replyAll' || action === 'forward') {
+            try {
+                const detail = await obtenerDetalleCorreo(correo);
+                const detailedEmail = { ...correo, ...detail };
+                const index = correosBandejaEntrada.findIndex(item => String(item.id) === String(correo.id));
+                if (index >= 0) correosBandejaEntrada[index] = detailedEmail;
+                correoBandejaSeleccionado = detailedEmail;
+                abrirRespuestaCorreo(action);
+            } catch (error) {
+                showToast(error.message || 'No fue posible abrir el mensaje para responder.', 'error');
+            }
+            return;
+        }
+        if (action === 'seen') {
+            await cambiarEstadoCorreo(correo, !correo.seen);
+            return;
+        }
+        if (action === 'flag') {
+            const flagged = !correo.flagged;
+            try {
+                await fetchAPI(`/api/bandeja-entrada/${encodeURIComponent(correo.id)}/flag`, {
+                    method: 'POST',
+                    body: JSON.stringify({ folder: correo.folder || carpetaBandejaActual, flagged })
+                });
+                correo.flagged = flagged;
+                if (String(correoBandejaSeleccionado?.id) === String(correo.id)) {
+                    correoBandejaSeleccionado.flagged = flagged;
+                }
+                for (const [cacheKey, detail] of detallesCorreoCache) {
+                    if (cacheKey.endsWith(`:${correo.id}`)) {
+                        detallesCorreoCache.set(cacheKey, { ...detail, flagged });
+                    }
+                }
+                renderizarListaBandeja();
+                showToast(flagged ? 'Seguimiento activado.' : 'Seguimiento quitado.', 'success');
+            } catch (error) {
+                showToast(error.message || 'No fue posible actualizar el seguimiento.', 'error');
+            }
+            return;
+        }
+        if (action === 'move' || action === 'spam' || action === 'delete') {
+            const path = action === 'move' ? 'move' : action;
+            const payload = { folder: correo.folder || carpetaBandejaActual };
+            if (action === 'move') payload.destination = destination;
+            try {
+                await fetchAPI(`/api/bandeja-entrada/${encodeURIComponent(correo.id)}/${path}`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                if (String(correoBandejaSeleccionado?.id) === String(correo.id)) {
+                    correoBandejaSeleccionado = null;
+                    mostrarCorreoSeleccionado();
+                }
+                await cargarBandejaEntrada();
+                showToast(action === 'delete' ? 'Correo movido a la papelera.' :
+                    action === 'spam' ? 'Correo movido a correo no deseado y el remitente fue agregado a la lista negra.' : 'Correo movido.', 'success');
+            } catch (error) {
+                showToast(error.message || 'No fue posible mover el correo.', 'error');
+            }
+        }
+    }
+
+    function manejarMenuContextualCorreo(event) {
+        const menu = document.getElementById('bandeja-menu-contextual');
+        if (!menu || menu.hidden) return;
+        const folderButton = event.target.closest('[data-context-folder]');
+        const actionButton = event.target.closest('[data-context-action]');
+        if (!menu.contains(event.target)) {
+            cerrarMenuContextualCorreo();
+            return;
+        }
+        if (folderButton && correoContextualSeleccionado) {
+            const correo = correoContextualSeleccionado;
+            const folder = folderButton.dataset.contextFolder;
+            cerrarMenuContextualCorreo();
+            ejecutarAccionMenuCorreo('move', correo, folder);
+            return;
+        }
+        if (!actionButton) return;
+        const action = actionButton.dataset.contextAction;
+        if (action === 'toggle-move') {
+            const submenu = document.getElementById('bandeja-menu-carpetas');
+            const isOpen = submenu?.classList.toggle('is-open');
+            actionButton.setAttribute('aria-expanded', String(Boolean(isOpen)));
+            return;
+        }
+        const correo = correoContextualSeleccionado;
+        cerrarMenuContextualCorreo();
+        ejecutarAccionMenuCorreo(action, correo);
+    }
+
     function toggleFiltroNoLeidos() {
         filtroBandejaNoLeidos = !filtroBandejaNoLeidos;
         const button = document.getElementById('bandeja-filtro-no-leidos');
+        const allButton = document.getElementById('bandeja-filtro-todos');
         button?.setAttribute('aria-pressed', String(filtroBandejaNoLeidos));
-        button?.classList.toggle('btn-primary', filtroBandejaNoLeidos);
-        button?.classList.toggle('btn-outline-secondary', !filtroBandejaNoLeidos);
+        button?.classList.toggle('is-active', filtroBandejaNoLeidos);
+        allButton?.classList.toggle('is-active', !filtroBandejaNoLeidos);
+        allButton?.setAttribute('aria-selected', String(!filtroBandejaNoLeidos));
+        button?.setAttribute('aria-selected', String(filtroBandejaNoLeidos));
         if (filtroBandejaNoLeidos && correoBandejaSeleccionado?.seen) {
             correoBandejaSeleccionado = null;
             mostrarCorreoSeleccionado();
         }
+        renderizarListaBandeja();
+    }
+
+    function mostrarTodosLosCorreos() {
+        if (!filtroBandejaNoLeidos) return;
+        filtroBandejaNoLeidos = false;
+        const button = document.getElementById('bandeja-filtro-no-leidos');
+        const allButton = document.getElementById('bandeja-filtro-todos');
+        button?.setAttribute('aria-pressed', 'false');
+        button?.setAttribute('aria-selected', 'false');
+        button?.classList.remove('is-active');
+        allButton?.setAttribute('aria-selected', 'true');
+        allButton?.classList.add('is-active');
         renderizarListaBandeja();
     }
 
@@ -3777,7 +4390,7 @@ let proyectoIdEnEdicion = null;
         const color = isDark ? '#f3f4f6' : '#111827';
         const background = isDark ? '#111827' : '#ffffff';
         const linkColor = isDark ? '#60a5fa' : '#2563eb';
-        return `body{font:15px/1.55 Arial,sans-serif;color:${color}!important;background-color:${background}!important;margin:16px;overflow-x:auto;word-wrap:break-word;overflow-wrap:anywhere}p,span,div,td,th,li,font{color:${color}!important}a{color:${linkColor}!important}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}`;
+        return `body{font:15px/1.55 Arial,sans-serif;color:${color}!important;background-color:${background}!important;margin:0;padding:15px 5px;overflow-x:auto;overflow-y:auto;word-wrap:break-word;overflow-wrap:anywhere}p,span,div,td,th,li,font{color:${color}!important}a{color:${linkColor}!important}img{max-width:100%!important;height:auto!important}table{max-width:100%!important;width:100%!important;table-layout:fixed}td,th{overflow-wrap:anywhere}pre{white-space:pre-wrap}`;
     }
 
     function actualizarTemaIframeCorreo(isDark = isDarkMode()) {
@@ -3862,15 +4475,138 @@ let proyectoIdEnEdicion = null;
         mostrarCorreoSeleccionado();
     }
 
+    function renderizarAdjuntosLecturaCorreo(emails) {
+        const container = document.getElementById('modalLecturaCorreoAdjuntos');
+        if (!container) return;
+        const attachments = emails.flatMap(email => (email.attachments || []).map(attachment => ({
+            ...attachment,
+            sender: email.fromName || email.fromEmail || 'Mensaje'
+        })));
+        container.replaceChildren();
+        container.classList.toggle('d-none', attachments.length === 0);
+        if (!attachments.length) return;
+
+        const heading = document.createElement('div');
+        heading.className = 'small fw-semibold mb-2';
+        heading.textContent = `Archivos adjuntos (${attachments.length})`;
+        container.appendChild(heading);
+        const list = document.createElement('div');
+        list.className = 'mail-attachment-list';
+        attachments.forEach(attachment => {
+            const link = document.createElement('a');
+            link.className = 'mail-attachment-item';
+            link.href = `data:${attachment.contentType || 'application/octet-stream'};base64,${attachment.content}`;
+            link.download = attachment.name || 'archivo';
+            link.title = `Descargar ${attachment.name || 'archivo'} (${attachment.sender})`;
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-paperclip';
+            const name = document.createElement('span');
+            name.textContent = attachment.name || 'archivo';
+            link.append(icon, name);
+            list.appendChild(link);
+        });
+        container.appendChild(list);
+    }
+
+    async function abrirCorreoPantallaCompleta(correo) {
+        const modal = document.getElementById('modalLecturaCorreo');
+        if (!modal || !correo) return;
+        correoBandejaSeleccionado = correo;
+        document.getElementById('modalLecturaCorreoTitulo').textContent = correo.subject || '(Sin asunto)';
+        document.getElementById('modalLecturaCorreoRemitente').textContent =
+            `${correo.fromName || correo.fromEmail || 'Remitente desconocido'}${correo.fromEmail ? ` <${correo.fromEmail}>` : ''}`;
+        document.getElementById('modalLecturaCorreoAdjuntos').replaceChildren();
+        document.getElementById('modalLecturaCorreoAdjuntos').classList.add('d-none');
+        document.getElementById('modalLecturaCorreoCuerpo').srcdoc =
+            '<!doctype html><html><body style="font:14px Arial,sans-serif;padding:20px;color:#6b7280">Cargando conversación…</body></html>';
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+        try {
+            const related = obtenerCorreosDelHilo(correo);
+            const details = await Promise.all(related.map(item => obtenerDetalleCorreo(item)));
+            const threadEmails = related.map((item, index) => {
+                const email = { ...item, ...details[index] };
+                const listIndex = correosBandejaEntrada.findIndex(value => String(value.id) === String(email.id));
+                if (listIndex >= 0) correosBandejaEntrada[listIndex] = email;
+                return email;
+            });
+            const selectedEmail = threadEmails.find(email => String(email.id) === String(correo.id)) || correo;
+            correoBandejaSeleccionado = selectedEmail;
+            document.getElementById('modalLecturaCorreoCuerpo').srcdoc = generarDocumentoCorreo({
+                ...selectedEmail,
+                html: undefined,
+                text: undefined
+            });
+            renderizarAdjuntosLecturaCorreo(threadEmails);
+            renderizarListaBandeja();
+        } catch (error) {
+            showToast(error.message || 'No fue posible cargar la conversación completa.', 'error');
+            bootstrap.Modal.getOrCreateInstance(modal).hide();
+        }
+    }
+
+    function ejecutarAccionLecturaCorreo(action) {
+        const correo = correoBandejaSeleccionado;
+        if (!correo) return;
+        if (action === 'print') {
+            document.getElementById('modalLecturaCorreoCuerpo')?.contentWindow?.print();
+            return;
+        }
+        if (action === 'delete') {
+            const modal = document.getElementById('modalLecturaCorreo');
+            fetchAPI(`/api/bandeja-entrada/${encodeURIComponent(correo.id)}/delete`, {
+                method: 'POST',
+                body: JSON.stringify({ folder: correo.folder || carpetaBandejaActual })
+            }).then(async () => {
+                bootstrap.Modal.getOrCreateInstance(modal).hide();
+                correoBandejaSeleccionado = null;
+                mostrarCorreoSeleccionado();
+                await cargarBandejaEntrada();
+                showToast('Correo movido a la papelera.', 'success');
+            }).catch(error => {
+                showToast(error.message || 'No fue posible mover el correo a la papelera.', 'error');
+            });
+            return;
+        }
+        if (['reply', 'replyAll', 'forward'].includes(action)) {
+            const modal = document.getElementById('modalLecturaCorreo');
+            modal.addEventListener('hidden.bs.modal', () => abrirRespuestaCorreo(action), { once: true });
+            bootstrap.Modal.getOrCreateInstance(modal).hide();
+        }
+    }
+
+    async function accionRapidaVisor(action) {
+        const correo = correoBandejaSeleccionado;
+        if (!correo) return;
+        if (['reply', 'replyAll', 'forward'].includes(action)) {
+            abrirRespuestaCorreo(action);
+            return;
+        }
+        if (action !== 'delete') return;
+        try {
+            await fetchAPI(`/api/bandeja-entrada/${encodeURIComponent(correo.id)}/delete`, {
+                method: 'POST',
+                body: JSON.stringify({ folder: correo.folder || carpetaBandejaActual })
+            });
+            correoBandejaSeleccionado = null;
+            mostrarCorreoSeleccionado();
+            await cargarBandejaEntrada();
+            showToast('Correo movido a la papelera.', 'success');
+        } catch (error) {
+            showToast(error.message || 'No fue posible mover el correo a la papelera.', 'error');
+        }
+    }
+
     function mostrarCorreoSeleccionado() {
         const correo = correoBandejaSeleccionado;
+        document.getElementById('bandeja-programado-detalle')?.classList.add('d-none');
         document.getElementById('bandeja-vacio').classList.toggle('d-none', Boolean(correo));
         document.getElementById('bandeja-lectura').classList.toggle('d-none', !correo);
         if (!correo) return;
 
         document.getElementById('bandeja-asunto').textContent = correo.subject || '(Sin asunto)';
         document.getElementById('bandeja-remitente-nombre').textContent = correo.fromName || correo.fromEmail || 'Remitente desconocido';
-        document.getElementById('bandeja-remitente-email').textContent = `<${correo.fromEmail || ''}>`;
+        document.getElementById('bandeja-remitente-email').textContent = correo.fromEmail || '';
+        document.getElementById('bandeja-destinatarios').textContent = (correo.toEmails || []).join(', ');
         document.getElementById('bandeja-avatar').textContent = crearInicialesRemitente(correo.fromName, correo.fromEmail);
         const fecha = document.getElementById('bandeja-fecha');
         fecha.textContent = correo.date ? new Date(correo.date).toLocaleString('es-MX', {
@@ -3880,9 +4616,7 @@ let proyectoIdEnEdicion = null;
         const emailFrame = document.getElementById('bandeja-cuerpo-email');
         emailFrame.onload = () => {
             try {
-                const content = emailFrame.contentDocument;
-                const height = Math.max(content.documentElement.scrollHeight, content.body.scrollHeight);
-                emailFrame.style.height = `${Math.min(Math.max(height, 440), window.innerHeight * 0.85)}px`;
+                emailFrame.style.height = '100%';
             } catch (error) {
                 console.warn('[BandejaEntrada] No fue posible ajustar la altura del mensaje.', error);
             }
@@ -3890,6 +4624,8 @@ let proyectoIdEnEdicion = null;
         emailFrame.srcdoc = generarDocumentoCorreo(correo);
         const unreadButton = document.getElementById('bandeja-marcar-no-leido');
         unreadButton.disabled = !correo.seen;
+        unreadButton.title = correo.seen ? 'Marcar como no leído' : 'El mensaje ya está marcado como no leído';
+        unreadButton.setAttribute('aria-label', unreadButton.title);
         renderizarListaBandeja();
     }
 
@@ -3912,11 +4648,71 @@ let proyectoIdEnEdicion = null;
     function programarBusquedaCorreo(value) {
         renderizarListaBandeja();
         if (busquedaCorreoTimeout) clearTimeout(busquedaCorreoTimeout);
+        if (carpetaBandejaActual === 'PROGRAMADOS') return;
         busquedaCorreoTimeout = setTimeout(() => {
             cargarBandejaEntrada({ query: value }).catch(error => {
                 console.error('[BandejaEntrada] Error en búsqueda remota:', error);
             });
         }, 450);
+    }
+
+    function seleccionarPestanaRedaccion(tabName) {
+        document.querySelectorAll('[data-compose-tab][role="tab"]').forEach(tab => {
+            const active = tab.dataset.composeTab === tabName;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', String(active));
+        });
+        document.querySelectorAll('[data-compose-panel]').forEach(panel => {
+            const active = panel.dataset.composePanel === tabName;
+            panel.hidden = !active;
+            panel.classList.toggle('d-none', !active);
+        });
+    }
+
+    function aplicarFormatoCorreo(command, value = null) {
+        const editor = document.getElementById('respuesta-mensaje');
+        if (!editor) return;
+        editor.focus();
+        document.execCommand(command, false, value);
+    }
+
+    function establecerImportanciaCorreo(value) {
+        importanciaCorreo = value;
+        document.querySelectorAll('[data-compose-importance]').forEach(button => {
+            const selected = button.dataset.composeImportance === value;
+            button.setAttribute('aria-pressed', String(selected));
+            button.classList.toggle('is-selected', selected);
+        });
+    }
+
+    function alternarSeguimientoRedaccion() {
+        seguimientoCorreo = !seguimientoCorreo;
+        document.querySelectorAll('[data-compose-followup]').forEach(button => {
+            button.setAttribute('aria-pressed', String(seguimientoCorreo));
+            button.classList.toggle('is-selected', seguimientoCorreo);
+        });
+    }
+
+    function insertarFirmaCorreo() {
+        insertarFirmaEnEditorCorreo();
+    }
+
+    function seleccionarAdjuntosCorreo(event) {
+        if (!event) {
+            document.getElementById('respuesta-adjuntos')?.click();
+            return;
+        }
+        const selected = Array.from(event.target.files || []);
+        const combined = [...archivosCorreoSeleccionados, ...selected];
+        const totalBytes = combined.reduce((total, file) => total + file.size, 0);
+        if (totalBytes > 10 * 1024 * 1024) {
+            showToast('El tamaño total de los adjuntos no puede exceder 10 MB.', 'warning');
+            event.target.value = '';
+            return;
+        }
+        archivosCorreoSeleccionados = combined;
+        event.target.value = '';
+        renderizarAdjuntosCorreo();
     }
 
     function abrirRespuestaCorreo(mode = 'reply') {
@@ -3931,6 +4727,16 @@ let proyectoIdEnEdicion = null;
         const correo = correoBandejaSeleccionado || {};
         modoCorreoActual = mode;
         archivosCorreoSeleccionados = [];
+        importanciaCorreo = 'normal';
+        seguimientoCorreo = false;
+        establecerImportanciaCorreo('normal');
+        document.querySelectorAll('[data-compose-followup]').forEach(button => {
+            button.setAttribute('aria-pressed', 'false');
+            button.classList.remove('is-selected');
+        });
+        document.getElementById('compose-read-receipt').checked = false;
+        document.getElementById('compose-read-receipt-options').checked = false;
+        seleccionarPestanaRedaccion('message');
         const destinatarios = mode === 'replyAll'
             ? (correo.replyAllEmails || [correo.fromEmail]).filter(Boolean)
             : mode === 'reply' ? [correo.fromEmail].filter(Boolean) : [];
@@ -3941,6 +4747,9 @@ let proyectoIdEnEdicion = null;
             ? 'Nuevo correo'
             : forward ? 'Reenviar correo' : mode === 'replyAll' ? 'Responder a todos' : 'Responder correo';
         document.getElementById('respuesta-destinatario').value = destinatarios.join(', ');
+        document.getElementById('respuesta-cc').value = '';
+        document.getElementById('respuesta-de').value =
+            configCache?.notificacionesEmail?.smtpUser || configCache?.email || '';
         document.getElementById('respuesta-asunto').value = isNew ? '' : forward
             ? (/^fwd?:/i.test(asunto) ? asunto : `Fwd: ${asunto}`)
             : (/^re:/i.test(asunto) ? asunto : `Re: ${asunto}`);
@@ -3953,7 +4762,7 @@ let proyectoIdEnEdicion = null;
         editor.innerHTML = `<div><br></div>${quotedMessage}`;
         insertarFirmaEnEditorCorreo();
         document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', isNew || forward || mode === 'reply');
-        document.getElementById('respuesta-enviar').textContent = isNew ? 'Enviar correo' : forward ? 'Reenviar' : 'Enviar respuesta';
+        document.getElementById('respuesta-enviar').querySelector('span').textContent = 'Enviar';
         document.getElementById('respuesta-adjuntos').value = '';
         renderizarAdjuntosCorreo();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
@@ -3961,6 +4770,77 @@ let proyectoIdEnEdicion = null;
 
     function abrirNuevoCorreo() {
         abrirRespuestaCorreo('new');
+    }
+
+    function formatoFechaLocalInput(date) {
+        const pad = value => String(value).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function establecerPresetProgramacion(preset) {
+        const date = new Date();
+        if (preset === 'monday') {
+            const daysUntilMonday = (8 - date.getDay()) % 7 || 7;
+            date.setDate(date.getDate() + daysUntilMonday);
+        } else {
+            date.setDate(date.getDate() + 1);
+        }
+        date.setHours(8, 0, 0, 0);
+        document.getElementById('correo-fecha-programada').value = formatoFechaLocalInput(date);
+    }
+
+    function abrirProgramacionCorreo() {
+        const minDate = new Date(Date.now() + 60 * 1000);
+        const input = document.getElementById('correo-fecha-programada');
+        input.min = formatoFechaLocalInput(minDate);
+        input.value = '';
+        document.querySelectorAll('[data-compose-schedule-menu]').forEach(menu => { menu.hidden = true; });
+        document.querySelector('[data-compose-schedule-toggle]')?.setAttribute('aria-expanded', 'false');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalProgramarCorreo')).show();
+    }
+
+    async function confirmarProgramarCorreo() {
+        const destinatarios = document.getElementById('respuesta-destinatario').value.split(/[;,]/).map(address => address.trim()).filter(Boolean);
+        const cc = document.getElementById('respuesta-cc').value.split(/[;,]/).map(address => address.trim()).filter(Boolean);
+        const asunto = document.getElementById('respuesta-asunto').value.trim();
+        const mensaje = document.getElementById('respuesta-mensaje').innerHTML;
+        const fechaProgramada = document.getElementById('correo-fecha-programada').value;
+        const scheduledDate = new Date(fechaProgramada);
+        if (!destinatarios.length
+            || destinatarios.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+            || cc.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+            || !asunto || !mensaje.trim() || Number.isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+            showToast('Revisa Para, CC, Asunto, mensaje y elige una fecha futura válida.', 'error');
+            return;
+        }
+        const confirmButton = document.getElementById('correo-confirmar-programacion');
+        confirmButton.disabled = true;
+        try {
+            const attachments = await convertirAdjuntosABase64(archivosCorreoSeleccionados);
+            const response = await fetchAPI('/api/bandeja-entrada/programar', {
+                method: 'POST',
+                body: JSON.stringify({
+                    destinatario: destinatarios.join(','),
+                    cc: cc.join(','),
+                    asunto,
+                    mensaje,
+                    fechaProgramada: scheduledDate.toISOString(),
+                    attachments,
+                    importance: importanciaCorreo,
+                    followUp: seguimientoCorreo,
+                    requestReadReceipt: document.getElementById('compose-read-receipt').checked
+                })
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalProgramarCorreo'))?.hide();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
+            showToast(response.message || 'Correo programado correctamente.', 'success');
+            await cargarContadorProgramados();
+            if (carpetaBandejaActual === 'PROGRAMADOS') await cargarCorreosProgramados();
+        } catch (error) {
+            showToast(error.message || 'No fue posible programar el correo.', 'error');
+        } finally {
+            confirmButton.disabled = false;
+        }
     }
 
     function pegarTextoPlanoCorreo(event) {
@@ -4016,20 +4896,6 @@ let proyectoIdEnEdicion = null;
         });
     }
 
-    function seleccionarAdjuntosCorreo(event) {
-        const selected = Array.from(event.target.files || []);
-        const combined = [...archivosCorreoSeleccionados, ...selected];
-        const totalBytes = combined.reduce((total, file) => total + file.size, 0);
-        if (totalBytes > 10 * 1024 * 1024) {
-            showToast('El tamaño total de los adjuntos no puede exceder 10 MB.', 'warning');
-            event.target.value = '';
-            return;
-        }
-        archivosCorreoSeleccionados = combined;
-        event.target.value = '';
-        renderizarAdjuntosCorreo();
-    }
-
     async function convertirAdjuntosABase64(files) {
         return Promise.all(files.map(file => new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -4057,7 +4923,12 @@ let proyectoIdEnEdicion = null;
         }
         renderizarListaBandeja();
         if (correoBandejaSeleccionado) {
-            document.getElementById('bandeja-marcar-no-leido').disabled = !correoBandejaSeleccionado.seen;
+            const unreadButton = document.getElementById('bandeja-marcar-no-leido');
+            unreadButton.disabled = !correoBandejaSeleccionado.seen;
+            unreadButton.title = correoBandejaSeleccionado.seen
+                ? 'Marcar como no leído'
+                : 'El mensaje ya está marcado como no leído';
+            unreadButton.setAttribute('aria-label', unreadButton.title);
         }
     }
 
@@ -4118,8 +4989,12 @@ let proyectoIdEnEdicion = null;
         try {
             const rawRecipients = document.getElementById('respuesta-destinatario').value;
             const validRecipients = rawRecipients.split(/[;,]/).map(address => address.trim()).filter(Boolean);
-            if (!validRecipients.length || validRecipients.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))) {
-                showToast('Ingresa direcciones de correo válidas.', 'error');
+            const rawCc = document.getElementById('respuesta-cc').value;
+            const validCc = rawCc.split(/[;,]/).map(address => address.trim()).filter(Boolean);
+            if (!validRecipients.length
+                || validRecipients.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+                || validCc.some(address => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))) {
+                showToast('Ingresa direcciones válidas para Para y CC.', 'error');
                 return;
             }
             const attachments = await convertirAdjuntosABase64(archivosCorreoSeleccionados);
@@ -4127,12 +5002,16 @@ let proyectoIdEnEdicion = null;
                 method: 'POST',
                 body: JSON.stringify({
                     destinatario: validRecipients.join(','),
+                    cc: validCc.join(','),
                     asunto: document.getElementById('respuesta-asunto').value,
                     mensaje: document.getElementById('respuesta-mensaje').innerHTML,
                     mensajeHtml: true,
                     tipo: modoCorreoActual,
                     originalMessageId: correoBandejaSeleccionado?.messageId || '',
-                    attachments
+                    attachments,
+                    importance: importanciaCorreo,
+                    followUp: seguimientoCorreo,
+                    requestReadReceipt: document.getElementById('compose-read-receipt').checked
                 })
             });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).hide();
@@ -13235,7 +14114,10 @@ Fecha de firma: {{FECHA}}`;
         compartirInvitacionWhatsApp, compartirInvitacionCorreo, mostrarAlertaUsuarioPendiente,
         guardarEdicionArtista, guardarEdicionServicio, guardarEdicionUsuario, generarReciboPDF,
         cerrarSesionConfirmacion, registrarNuevoArtistaDesdeFormulario,         generarCotizacion,
-        cargarBandejaEntrada, mostrarCarpetaBandeja, seleccionarCorreoBandeja, abrirRespuestaCorreo, abrirNuevoCorreo, marcarCorreoNoLeido, responderCorreo,
+        cargarBandejaEntrada, mostrarCarpetaBandeja, mostrarCarpetaEspecial, seleccionarCorreoBandeja, abrirRespuestaCorreo, abrirNuevoCorreo, marcarCorreoNoLeido, responderCorreo, accionRapidaVisor,
+        abrirModalNuevaCarpeta, abrirModalReglasCorreo, mostrarTodosLosCorreos,
+        ejecutarAccionCorreoProgramado,
+        insertarFirmaCorreo, seleccionarAdjuntosCorreo, aplicarFormatoCorreo,
         enviarAFlujoDirecto,
         nextProyectoWizardStep, prevProyectoWizardStep, resetProyectoWizard,
         toggleAuth, registerUser, recoverPassword, resetPassword,
@@ -13281,9 +14163,114 @@ Fecha de firma: {{FECHA}}`;
     });
     document.getElementById('respuesta-adjuntos')?.addEventListener('change', seleccionarAdjuntosCorreo);
     document.getElementById('respuesta-mensaje')?.addEventListener('paste', pegarTextoPlanoCorreo);
+    document.getElementById('bandeja-crear-carpeta')?.addEventListener('click', crearCarpetaBandeja);
+    document.getElementById('bandeja-nombre-carpeta')?.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            crearCarpetaBandeja();
+        }
+    });
+    document.getElementById('bandeja-form-regla')?.addEventListener('submit', guardarReglaCorreo);
+    document.getElementById('bandeja-form-lista-negra')?.addEventListener('submit', agregarListaNegraCorreo);
+    document.getElementById('modalReglasCorreo')?.addEventListener('click', cambiarElementoGestionCorreo);
+    document.querySelector('[data-compose-schedule-toggle]')?.addEventListener('click', event => {
+        const menu = document.querySelector('[data-compose-schedule-menu]');
+        const expanded = menu.hidden;
+        menu.hidden = !expanded;
+        event.currentTarget.setAttribute('aria-expanded', String(expanded));
+    });
+    document.querySelector('[data-compose-schedule-menu]')?.addEventListener('click', event => {
+        if (event.target.closest('[data-compose-schedule-action]')) abrirProgramacionCorreo();
+    });
+    document.addEventListener('click', event => {
+        const menu = document.querySelector('[data-compose-schedule-menu]');
+        const toggle = document.querySelector('[data-compose-schedule-toggle]');
+        if (menu && !menu.hidden && !menu.contains(event.target) && !toggle?.contains(event.target)) {
+            menu.hidden = true;
+            toggle?.setAttribute('aria-expanded', 'false');
+        }
+    });
+    document.querySelectorAll('[data-schedule-preset]').forEach(button => {
+        button.addEventListener('click', () => establecerPresetProgramacion(button.dataset.schedulePreset));
+    });
+    document.getElementById('correo-confirmar-programacion')?.addEventListener('click', confirmarProgramarCorreo);
+    document.getElementById('bandeja-lista')?.addEventListener('click', event => {
+        const actionButton = event.target.closest('[data-scheduled-action]');
+        if (actionButton) {
+            ejecutarAccionCorreoProgramado(actionButton.dataset.scheduledAction, actionButton.dataset.scheduledId);
+            return;
+        }
+        const openButton = event.target.closest('[data-scheduled-open]');
+        if (openButton) {
+            const scheduled = correosProgramados.find(correo => String(correo._id) === openButton.dataset.scheduledOpen);
+            if (scheduled) mostrarCorreoProgramado(scheduled);
+        }
+    });
+    document.getElementById('bandeja-programado-detalle')?.addEventListener('click', event => {
+        const action = event.target.closest('[data-scheduled-detail-action]')?.dataset.scheduledDetailAction;
+        if (action) ejecutarAccionCorreoProgramado(action);
+    });
     document.getElementById('buscarCorreo')?.addEventListener('input', event => programarBusquedaCorreo(event.target.value));
     document.getElementById('firma-correo-html')?.addEventListener('input', renderizarPreviewFirma);
     document.getElementById('firma-imagen-archivo')?.addEventListener('change', insertarImagenFirma);
+    document.querySelectorAll('[data-compose-tab][role="tab"]').forEach(tab => {
+        tab.addEventListener('click', () => seleccionarPestanaRedaccion(tab.dataset.composeTab));
+    });
+    document.querySelectorAll('[data-compose-tab-target]').forEach(button => {
+        button.addEventListener('click', () => seleccionarPestanaRedaccion(button.dataset.composeTabTarget));
+    });
+    document.querySelectorAll('[data-compose-format]').forEach(button => {
+        button.addEventListener('click', () => aplicarFormatoCorreo(button.dataset.composeFormat));
+    });
+    document.querySelectorAll('[data-compose-importance]').forEach(button => {
+        button.addEventListener('click', () => establecerImportanciaCorreo(button.dataset.composeImportance));
+    });
+    document.querySelectorAll('[data-compose-followup]').forEach(button => {
+        button.addEventListener('click', alternarSeguimientoRedaccion);
+    });
+    document.getElementById('compose-font-color')?.addEventListener('input', event => {
+        aplicarFormatoCorreo('foreColor', event.target.value);
+    });
+    ['compose-read-receipt', 'compose-read-receipt-options'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', event => {
+            document.getElementById('compose-read-receipt').checked = event.target.checked;
+            document.getElementById('compose-read-receipt-options').checked = event.target.checked;
+        });
+    });
+    document.getElementById('bandeja-menu-contextual')?.addEventListener('click', manejarMenuContextualCorreo);
+    document.addEventListener('click', event => {
+        const menu = document.getElementById('bandeja-menu-contextual');
+        if (menu && !menu.hidden && !menu.contains(event.target)) cerrarMenuContextualCorreo();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') cerrarMenuContextualCorreo();
+    });
+    document.querySelectorAll('[data-mail-modal-maximize]').forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = document.getElementById(button.dataset.mailModalMaximize);
+            if (!modal) return;
+            const maximized = modal.classList.toggle('mail-modal-maximized');
+            const icon = button.querySelector('i');
+            icon?.classList.toggle('bi-arrows-fullscreen', !maximized);
+            icon?.classList.toggle('bi-fullscreen-exit', maximized);
+            button.setAttribute('aria-label', maximized ? 'Restaurar ventana' : 'Maximizar ventana');
+            button.title = maximized ? 'Restaurar' : 'Maximizar';
+        });
+    });
+    ['modalResponderCorreo', 'modalLecturaCorreo'].forEach(id => {
+        document.getElementById(id)?.addEventListener('hidden.bs.modal', event => {
+            event.currentTarget.classList.remove('mail-modal-maximized');
+            const button = event.currentTarget.querySelector('[data-mail-modal-maximize]');
+            if (!button) return;
+            button.querySelector('i')?.classList.replace('bi-fullscreen-exit', 'bi-arrows-fullscreen');
+            button.setAttribute('aria-label', 'Maximizar ventana');
+            button.title = 'Maximizar';
+        });
+    });
+    document.getElementById('modalLecturaCorreo')?.addEventListener('click', event => {
+        const action = event.target.closest('[data-reading-action]')?.dataset.readingAction;
+        if (action) ejecutarAccionLecturaCorreo(action);
+    });
     const modalCorreo = document.getElementById('modalResponderCorreo');
     const botonMinimizarCorreo = document.getElementById('respuesta-minimizar');
     const actualizarBotonMinimizarCorreo = minimizado => {
@@ -13307,6 +14294,13 @@ Fecha de firma: {{FECHA}}`;
     }
     function toggleMinimizarCorreo() {
         if (!modalCorreo?.classList.contains('show')) return;
+        if (!modalCorreo.classList.contains('modal-correo-minimizado')) {
+            modalCorreo.classList.remove('mail-modal-maximized');
+            const maximizeButton = modalCorreo.querySelector('[data-mail-modal-maximize]');
+            maximizeButton?.querySelector('i')?.classList.replace('bi-fullscreen-exit', 'bi-arrows-fullscreen');
+            maximizeButton?.setAttribute('aria-label', 'Maximizar ventana');
+            if (maximizeButton) maximizeButton.title = 'Maximizar';
+        }
         if (modalCorreo.classList.contains('modal-correo-minimizado')) {
             restaurarModalCorreo();
             return;

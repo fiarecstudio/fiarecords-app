@@ -1,6 +1,6 @@
 const Empresa = require('../models/Empresa');
 
-async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo, attachments, headers }) {
+async function enviarEmail({ empresaId, destinatario, cc, asunto, cuerpo, replyTo, attachments, headers }) {
     const empresa = await Empresa.findById(empresaId);
     const configEmpresa = empresa?.notificaciones?.email;
     const config = configEmpresa?.enabled ? configEmpresa : {};
@@ -20,6 +20,9 @@ async function enviarEmail({ empresaId, destinatario, asunto, cuerpo, replyTo, a
         subject: asunto,
         htmlContent: cuerpo
     };
+    if (Array.isArray(cc) && cc.length) {
+        payload.cc = cc.map(email => ({ email }));
+    }
 
     if (replyTo) {
         payload.replyTo = { email: replyTo };

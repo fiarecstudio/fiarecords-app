@@ -203,6 +203,15 @@ mongoose.connect(process.env.MONGO_URI, mongooseOptions)
     const { iniciarCronNotificaciones } = require('./cron/cronNotificaciones');
     iniciarCronNotificaciones();
 
+    cron.schedule('* * * * *', async () => {
+      try {
+        await require('./controllers/bandejaEntradaController').procesarCorreosProgramados();
+      } catch (error) {
+        console.error('[CorreoProgramado] Error en el proceso de envíos programados:', error);
+      }
+    });
+    console.log('✅ Cron de correos programados activo (cada minuto)');
+
     cron.schedule('0 0 * * *', async () => {
       try {
         await actualizarPolizasVencidas();

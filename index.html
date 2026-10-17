@@ -1539,49 +1539,85 @@
             <section id="bandeja-entrada" class="section-view d-none">
                 <button class="btn-back-inline" onclick="app.irAlDashboard()"><i class="bi bi-arrow-left"></i> Volver</button>
                 <div class="card">
-                    <div class="card-header pt-3 pb-0 border-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                        <h2 class="mb-0"><i class="bi bi-inbox me-2"></i>Bandeja de Entrada</h2>
-                        <div class="d-flex gap-2 flex-wrap">
-                        <button type="button" class="btn btn-primary" onclick="app.abrirNuevoCorreo()">
-                            <i class="bi bi-plus-lg"></i> Nuevo Correo
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="app.cargarBandejaEntrada()">
-                            <i class="bi bi-arrow-clockwise"></i> Actualizar
-                        </button>
+                    <div class="card-header bandeja-main-header">
+                        <h2><i class="bi bi-inbox me-2"></i>Bandeja de Entrada</h2>
+                        <div class="bandeja-main-actions">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="app.abrirNuevoCorreo()">
+                                <i class="bi bi-plus-lg"></i> Nuevo Correo
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="app.cargarBandejaEntrada()">
+                                <i class="bi bi-arrow-clockwise"></i> Actualizar
+                            </button>
                         </div>
                     </div>
-                    <div class="card-body pt-2 pb-0">
+                    <div class="card-body bandeja-sync-row">
                         <span id="bandeja-sync-status" class="small text-muted" role="status" aria-live="polite">Aún no se ha actualizado</span>
                     </div>
-                    <div class="card-body pt-3">
+                    <div class="card-body bandeja-workspace-body">
                         <div class="bandeja-workspace">
-                            <aside class="bandeja-list-pane">
-                                <div class="bandeja-pane-heading">
-                                    <div>
-                                        <h3 class="h6 mb-0">Bandeja de entrada</h3>
-                                        <span id="bandeja-contador" class="small text-muted">Correos recientes</span>
-                                    </div>
-                                    <i class="bi bi-chevron-down text-muted" aria-hidden="true"></i>
-                                </div>
-                                <div class="d-flex gap-2 mb-2" role="tablist" aria-label="Carpetas de correo">
-                                    <button id="bandeja-tab-inbox" type="button" class="btn btn-sm btn-primary" onclick="app.mostrarCarpetaBandeja('INBOX')" role="tab" aria-selected="true">
-                                        <i class="bi bi-inbox"></i> Entrada
-                                    </button>
-                                    <button id="bandeja-tab-sent" type="button" class="btn btn-sm btn-outline-secondary" onclick="app.mostrarCarpetaBandeja('Sent')" role="tab" aria-selected="false">
-                                        <i class="bi bi-send"></i> Enviados
+                            <aside class="bandeja-folder-pane" aria-label="Carpetas de correo">
+                                <div class="bandeja-folder-heading">
+                                    <span>Carpetas</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0" onclick="app.abrirModalNuevaCarpeta()" title="Nueva carpeta" aria-label="Nueva carpeta">
+                                        <i class="bi bi-folder-plus"></i>
                                     </button>
                                 </div>
-                                <div class="d-flex gap-2 mb-2">
+                                <nav class="bandeja-folder-tree" role="tablist" aria-label="Carpetas">
+                                    <button id="bandeja-tab-inbox" type="button" class="bandeja-folder-link is-active" onclick="app.mostrarCarpetaBandeja('INBOX')" role="tab" aria-selected="true">
+                                        <i class="bi bi-inbox"></i><span>Entrada</span>
+                                    </button>
+                                    <button id="bandeja-tab-sent" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaBandeja('Sent')" role="tab" aria-selected="false">
+                                        <i class="bi bi-send"></i><span>Enviados</span>
+                                    </button>
+                                    <button id="bandeja-tab-scheduled" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaBandeja('PROGRAMADOS')" role="tab" aria-selected="false">
+                                        <i class="bi bi-clock"></i><span>Programados</span><span id="bandeja-programados-count" class="bandeja-folder-count">0</span>
+                                    </button>
+                                    <button id="bandeja-tab-spam" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaEspecial('spam')" role="tab" aria-selected="false">
+                                        <i class="bi bi-slash-circle"></i><span>Spam</span>
+                                    </button>
+                                </nav>
+                                <div class="bandeja-folder-heading bandeja-custom-heading">
+                                    <span>Carpetas personalizadas</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0" onclick="app.abrirModalReglasCorreo()" title="Reglas de correo">
+                                        <i class="bi bi-gear"></i><span class="visually-hidden">Reglas</span>
+                                    </button>
+                                </div>
+                                <div id="bandeja-carpetas-personalizadas" class="bandeja-custom-folders" aria-label="Carpetas personalizadas"></div>
+                            </aside>
+                            <section class="bandeja-list-pane" aria-label="Lista de mensajes">
+                                <div class="bandeja-list-toolbar">
                                     <label class="visually-hidden" for="buscarCorreo">Buscar correos</label>
-                                    <input id="buscarCorreo" class="form-control form-control-sm" type="search" placeholder="🔍 Buscar por asunto, correo o nombre...">
-                                    <button id="bandeja-filtro-no-leidos" type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap" onclick="app.toggleFiltroNoLeidos()" aria-pressed="false">
-                                        No leídos
-                                    </button>
+                                    <input id="buscarCorreo" class="form-control form-control-sm" type="search" placeholder="Buscar correo">
+                                    <div class="bandeja-message-tabs" role="tablist" aria-label="Filtro de mensajes">
+                                        <button id="bandeja-filtro-todos" type="button" class="is-active" onclick="app.mostrarTodosLosCorreos()" role="tab" aria-selected="true">Todo</button>
+                                        <button id="bandeja-filtro-no-leidos" type="button" onclick="app.toggleFiltroNoLeidos()" role="tab" aria-selected="false">No leídos</button>
+                                    </div>
+                                    <div class="bandeja-list-count"><span id="bandeja-contador" class="small text-muted">Correos recientes</span></div>
                                 </div>
                                 <div id="bandeja-lista" class="bandeja-email-list" aria-label="Correos recibidos">
                                     <div class="bandeja-list-message text-muted">Selecciona Actualizar para consultar los correos.</div>
                                 </div>
-                            </aside>
+                                <div id="bandeja-menu-contextual" class="bandeja-context-menu" role="menu" aria-label="Acciones del correo" hidden>
+                                    <button type="button" role="menuitem" data-context-action="copy"><i class="bi bi-clipboard"></i><span>Copiar remitente y asunto</span></button>
+                                    <button type="button" role="menuitem" data-context-action="print"><i class="bi bi-printer"></i><span>Impresión rápida</span></button>
+                                    <div class="bandeja-context-separator"></div>
+                                    <button type="button" role="menuitem" data-context-action="reply"><i class="bi bi-reply"></i><span>Responder</span></button>
+                                    <button type="button" role="menuitem" data-context-action="replyAll"><i class="bi bi-reply-all"></i><span>Responder a todos</span></button>
+                                    <button type="button" role="menuitem" data-context-action="forward"><i class="bi bi-forward"></i><span>Reenviar</span></button>
+                                    <button type="button" role="menuitem" data-context-action="seen"><i class="bi bi-envelope-check"></i><span>Marcar como leído/no leído</span></button>
+                                    <button type="button" role="menuitem" data-context-action="flag"><i class="bi bi-flag"></i><span>Activar seguimiento</span></button>
+                                    <div class="bandeja-context-submenu">
+                                        <button type="button" role="menuitem" data-context-action="toggle-move" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bi bi-folder"></i><span>Mover a</span><i class="bi bi-chevron-right ms-auto"></i>
+                                        </button>
+                                        <div id="bandeja-menu-carpetas" class="bandeja-context-submenu-items" role="menu" aria-label="Carpetas IMAP"></div>
+                                    </div>
+                                    <div class="bandeja-context-separator"></div>
+                                    <button type="button" role="menuitem" data-context-action="spam"><i class="bi bi-slash-circle"></i><span>Correo no deseado</span></button>
+                                    <button type="button" role="menuitem" data-context-action="create-rule"><i class="bi bi-gear"></i><span>Crear regla para este remitente...</span></button>
+                                    <button type="button" role="menuitem" data-context-action="delete" class="is-danger"><i class="bi bi-trash"></i><span>Eliminar (Papelera)</span></button>
+                                </div>
+                            </section>
                             <section class="bandeja-reading-pane" aria-label="Lectura del correo">
                                 <div id="bandeja-vacio" class="bandeja-empty-state">
                                     <i class="bi bi-envelope-open" aria-hidden="true"></i>
@@ -1591,32 +1627,40 @@
                                 <div id="bandeja-lectura" class="d-none">
                                     <header class="bandeja-message-header">
                                         <h2 id="bandeja-asunto" class="bandeja-message-subject"></h2>
-                                        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
-                                            <div class="d-flex align-items-center gap-3 min-w-0">
+                                        <div class="bandeja-reader-meta-row">
+                                            <div class="bandeja-reader-sender">
                                                 <div id="bandeja-avatar" class="bandeja-avatar" aria-hidden="true"></div>
-                                                <div class="min-w-0">
+                                                <div class="bandeja-reader-sender-details">
                                                     <div class="fw-bold text-truncate" id="bandeja-remitente-nombre"></div>
-                                                    <div class="small text-muted text-truncate" id="bandeja-remitente-email"></div>
+                                                    <div class="bandeja-reader-address"><span id="bandeja-remitente-email"></span><span id="bandeja-destinatarios" class="text-muted"></span></div>
                                                 </div>
                                             </div>
-                                            <time id="bandeja-fecha" class="small text-muted"></time>
+                                            <div class="bandeja-reader-actions">
+                                                <time id="bandeja-fecha" class="small text-muted"></time>
+                                                <div class="bandeja-toolbar" role="toolbar" aria-label="Acciones del correo">
+                                                    <button type="button" class="bandeja-icon-action" onclick="app.accionRapidaVisor('reply')" title="Responder" aria-label="Responder"><i class="bi bi-reply"></i></button>
+                                                    <button type="button" class="bandeja-icon-action" onclick="app.accionRapidaVisor('replyAll')" title="Responder a todos" aria-label="Responder a todos"><i class="bi bi-reply-all"></i></button>
+                                                    <button type="button" class="bandeja-icon-action" onclick="app.accionRapidaVisor('forward')" title="Reenviar" aria-label="Reenviar"><i class="bi bi-forward"></i></button>
+                                                    <button id="bandeja-marcar-no-leido" type="button" class="bandeja-icon-action" onclick="app.marcarCorreoNoLeido()" title="Marcar como no leído" aria-label="Marcar como no leído"><i class="bi bi-envelope"></i></button>
+                                                    <button type="button" class="bandeja-icon-action is-danger" onclick="app.accionRapidaVisor('delete')" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </header>
-                                    <div class="bandeja-toolbar" role="toolbar" aria-label="Acciones del correo">
-                                        <button type="button" class="btn btn-sm btn-primary" onclick="app.abrirRespuestaCorreo('reply')">
-                                            <i class="bi bi-reply"></i> Responder
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.abrirRespuestaCorreo('replyAll')">
-                                            <i class="bi bi-reply-all"></i> Responder a todos
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.abrirRespuestaCorreo('forward')">
-                                            <i class="bi bi-forward"></i> Reenviar
-                                        </button>
-                                        <button id="bandeja-marcar-no-leido" type="button" class="btn btn-sm btn-outline-secondary ms-lg-auto" onclick="app.marcarCorreoNoLeido()">
-                                            <i class="bi bi-envelope"></i> Marcar como no leído
-                                        </button>
-                                    </div>
                                     <iframe id="bandeja-cuerpo-email" class="bandeja-email-frame" title="Contenido del correo" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+                                </div>
+                                <div id="bandeja-programado-detalle" class="d-none">
+                                    <header class="bandeja-message-header">
+                                        <h2 id="bandeja-programado-asunto" class="bandeja-message-subject"></h2>
+                                        <div id="bandeja-programado-destinatario" class="small text-muted"></div>
+                                        <time id="bandeja-programado-fecha" class="small text-muted"></time>
+                                    </header>
+                                    <div class="bandeja-toolbar">
+                                        <button type="button" class="btn btn-sm btn-primary" data-scheduled-detail-action="send-now"><i class="bi bi-send"></i> Enviar ahora</button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-scheduled-detail-action="cancel"><i class="bi bi-trash"></i> Cancelar</button>
+                                    </div>
+                                    <div id="bandeja-programado-cuerpo" class="mail-scheduled-preview"></div>
+                                    <div id="bandeja-programado-adjuntos" class="small text-muted mt-3"></div>
                                 </div>
                             </section>
                         </div>
@@ -1625,35 +1669,231 @@
             </section>
 
             <div class="modal fade" id="modalResponderCorreo" tabindex="-1" aria-labelledby="modalResponderCorreoLabel" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <form class="modal-content" onsubmit="app.responderCorreo(event)">
+                <div class="modal-dialog mail-modal-dialog">
+                    <form class="modal-content mail-compose-form" onsubmit="app.responderCorreo(event)">
                         <div class="modal-header">
                             <h5 class="modal-title" id="modalResponderCorreoLabel">Responder correo</h5>
                             <div class="d-flex align-items-center gap-2">
                                 <button id="respuesta-minimizar" type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="app.toggleMinimizarCorreo()" aria-label="Minimizar correo" title="Minimizar">
                                     <i class="bi bi-dash-lg" aria-hidden="true"></i>
                                 </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" data-mail-modal-maximize="modalResponderCorreo" aria-label="Maximizar ventana" title="Maximizar">
+                                    <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                                </button>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                             </div>
                         </div>
-                        <div class="modal-body">
-                            <label for="respuesta-destinatario" class="form-label">Para</label>
-                            <input id="respuesta-destinatario" type="text" class="form-control mb-3" autocomplete="email" required>
-                            <div id="respuesta-destinatario-ayuda" class="form-text mb-3">Puedes separar varios destinatarios con comas.</div>
-                            <label for="respuesta-asunto" class="form-label">Asunto</label>
-                            <input id="respuesta-asunto" type="text" class="form-control mb-3" required>
-                            <label for="respuesta-mensaje" class="form-label">Mensaje</label>
-                            <div id="respuesta-mensaje" class="form-control mb-3" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mensaje del correo" style="min-height: 150px; overflow-y: auto;"></div>
-                            <label for="respuesta-adjuntos" class="form-label">Adjuntar archivos</label>
-                            <input id="respuesta-adjuntos" type="file" class="form-control" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
-                            <div id="respuesta-adjuntos-lista" class="mt-2" aria-live="polite"></div>
-                            <div class="form-text mt-2">La firma de la empresa se agregará automáticamente al enviar.</div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button id="respuesta-enviar" type="submit" class="btn btn-primary">Enviar respuesta</button>
+                        <div class="modal-body p-0 mail-compose-body">
+                            <div class="compose-ribbon" role="region" aria-label="Herramientas de redacción">
+                                <div class="compose-ribbon-tabs" role="tablist" aria-label="Pestañas de redacción">
+                                    <button type="button" class="active" id="compose-tab-message" role="tab" aria-selected="true" aria-controls="compose-panel-message" data-compose-tab="message">Mensaje</button>
+                                    <button type="button" id="compose-tab-insert" role="tab" aria-selected="false" aria-controls="compose-panel-insert" data-compose-tab="insert">Insertar</button>
+                                    <button type="button" id="compose-tab-options" role="tab" aria-selected="false" aria-controls="compose-panel-options" data-compose-tab="options">Opciones</button>
+                                </div>
+                                <div class="compose-ribbon-panel" id="compose-panel-message" role="tabpanel" aria-labelledby="compose-tab-message" data-compose-panel="message">
+                                    <div class="compose-ribbon-group">
+                                        <div class="compose-ribbon-controls">
+                                            <button type="button" title="Negrita" aria-label="Negrita" data-compose-format="bold"><strong>N</strong></button>
+                                            <button type="button" title="Cursiva" aria-label="Cursiva" data-compose-format="italic"><em>K</em></button>
+                                            <button type="button" title="Subrayado" aria-label="Subrayado" data-compose-format="underline"><u>S</u></button>
+                                            <label class="compose-color-control" title="Color de fuente" aria-label="Color de fuente"><i class="bi bi-palette"></i><input id="compose-font-color" type="color" value="#202124"></label>
+                                            <button type="button" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" data-compose-format="justifyLeft"><i class="bi bi-text-left"></i></button>
+                                            <button type="button" title="Centrar" aria-label="Centrar" data-compose-format="justifyCenter"><i class="bi bi-text-center"></i></button>
+                                            <button type="button" title="Alinear a la derecha" aria-label="Alinear a la derecha" data-compose-format="justifyRight"><i class="bi bi-text-right"></i></button>
+                                        </div>
+                                        <span>Texto básico</span>
+                                    </div>
+                                    <div class="compose-ribbon-group">
+                                        <div class="compose-ribbon-controls">
+                                            <button type="button" onclick="app.seleccionarAdjuntosCorreo()"><i class="bi bi-paperclip"></i> Adjuntar</button>
+                                            <button type="button" onclick="app.insertarFirmaCorreo()"><i class="bi bi-pen"></i> Firma</button>
+                                        </div>
+                                        <span>Incluir</span>
+                                    </div>
+                                    <div class="compose-ribbon-group">
+                                        <div class="compose-ribbon-controls">
+                                            <button type="button" data-compose-importance="high" aria-pressed="false"><i class="bi bi-exclamation-lg text-danger"></i> Importancia alta</button>
+                                            <button type="button" data-compose-importance="low" aria-pressed="false"><i class="bi bi-arrow-down"></i> Importancia baja</button>
+                                            <button type="button" data-compose-followup aria-pressed="false"><i class="bi bi-flag"></i> Seguimiento</button>
+                                        </div>
+                                        <span>Etiquetas</span>
+                                    </div>
+                                    <label class="compose-read-receipt"><input id="compose-read-receipt" type="checkbox"> Solicitar confirmación de lectura</label>
+                                </div>
+                                <div class="compose-ribbon-panel d-none" id="compose-panel-insert" role="tabpanel" aria-labelledby="compose-tab-insert" data-compose-panel="insert" hidden>
+                                    <div class="compose-ribbon-group">
+                                        <div class="compose-ribbon-controls">
+                                            <button type="button" onclick="app.seleccionarAdjuntosCorreo()"><i class="bi bi-paperclip"></i> Adjuntar archivo</button>
+                                            <button type="button" onclick="app.insertarFirmaCorreo()"><i class="bi bi-pen"></i> Firma</button>
+                                        </div>
+                                        <span>Incluir</span>
+                                    </div>
+                                </div>
+                                <div class="compose-ribbon-panel d-none" id="compose-panel-options" role="tabpanel" aria-labelledby="compose-tab-options" data-compose-panel="options" hidden>
+                                    <label class="compose-read-receipt"><input id="compose-read-receipt-options" type="checkbox"> Solicitar confirmación de lectura</label>
+                                    <button type="button" class="compose-ribbon-option" data-compose-followup aria-pressed="false"><i class="bi bi-flag"></i> Seguimiento</button>
+                                    <div class="compose-ribbon-group">
+                                        <div class="compose-ribbon-controls">
+                                            <button type="button" data-compose-importance="high" aria-pressed="false"><i class="bi bi-exclamation-lg text-danger"></i> Importancia alta</button>
+                                            <button type="button" data-compose-importance="low" aria-pressed="false"><i class="bi bi-arrow-down"></i> Importancia baja</button>
+                                        </div>
+                                        <span>Etiquetas</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="compose-fields">
+                                <div class="compose-send-split">
+                                    <button id="respuesta-enviar" type="submit" class="compose-send-button btn btn-primary">
+                                        <i class="bi bi-send-fill" aria-hidden="true"></i><span>Enviar</span>
+                                    </button>
+                                    <button type="button" class="compose-send-chevron btn btn-primary" data-compose-schedule-toggle aria-label="Opciones de envío" aria-expanded="false">
+                                        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="compose-send-menu" data-compose-schedule-menu hidden>
+                                        <button type="button" data-compose-schedule-action><i class="bi bi-clock me-2"></i>Programar envío</button>
+                                    </div>
+                                </div>
+                                <div class="compose-fields-main">
+                                    <div class="compose-field-row"><label for="respuesta-de">De</label><input id="respuesta-de" class="form-control" type="email" readonly aria-readonly="true"></div>
+                                    <div class="compose-field-row"><label for="respuesta-destinatario">Para</label><input id="respuesta-destinatario" type="text" class="form-control" autocomplete="email" required></div>
+                                    <div class="compose-field-row"><label for="respuesta-cc">CC</label><input id="respuesta-cc" type="text" class="form-control" autocomplete="email"></div>
+                                    <div id="respuesta-destinatario-ayuda" class="form-text compose-recipient-help">Puedes separar varios destinatarios con comas.</div>
+                                    <div class="compose-field-row"><label for="respuesta-asunto">Asunto</label><input id="respuesta-asunto" type="text" class="form-control" required></div>
+                                </div>
+                            </div>
+                            <div class="compose-attachments">
+                                <input id="respuesta-adjuntos" type="file" class="visually-hidden" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                <div id="respuesta-adjuntos-lista" aria-live="polite"></div>
+                            </div>
+                            <div id="respuesta-mensaje" class="compose-message-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mensaje del correo"></div>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modalProgramarCorreo" tabindex="-1" aria-labelledby="modalProgramarCorreoLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title fs-6" id="modalProgramarCorreoLabel">Programar envío</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-grid gap-2 mb-3">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-schedule-preset="tomorrow">Mañana a las 8:00 AM</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-schedule-preset="monday">Lunes a las 8:00 AM</button>
+                            </div>
+                            <label class="form-label" for="correo-fecha-programada">Elegir fecha y hora</label>
+                            <input id="correo-fecha-programada" type="datetime-local" class="form-control" required>
+                        </div>
+                        <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button id="correo-confirmar-programacion" type="button" class="btn btn-sm btn-primary">Programar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modalNuevaCarpetaCorreo" tabindex="-1" aria-labelledby="modalNuevaCarpetaCorreoLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title fs-6" id="modalNuevaCarpetaCorreoLabel">Nueva carpeta IMAP</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="bandeja-nombre-carpeta" class="form-label">Nombre de la carpeta</label>
+                            <input id="bandeja-nombre-carpeta" class="form-control" maxlength="120" autocomplete="off" required>
+                        </div>
+                        <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button id="bandeja-crear-carpeta" type="button" class="btn btn-sm btn-primary">Crear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modalReglasCorreo" tabindex="-1" aria-labelledby="modalReglasCorreoLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title fs-6" id="modalReglasCorreoLabel">Reglas de Correo</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="bandeja-form-regla" class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label for="regla-correo-nombre" class="form-label small">Nombre</label>
+                                    <input id="regla-correo-nombre" class="form-control form-control-sm" maxlength="120" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="regla-correo-campo" class="form-label small">Si</label>
+                                    <select id="regla-correo-campo" class="form-select form-select-sm">
+                                        <option value="remitente">Remitente</option><option value="asunto">Asunto</option><option value="cuerpo">Cuerpo</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="regla-correo-operador" class="form-label small">Operador</label>
+                                    <select id="regla-correo-operador" class="form-select form-select-sm">
+                                        <option value="contiene">Contiene</option><option value="es_igual">Es igual a</option><option value="empieza_con">Empieza con</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="regla-correo-valor" class="form-label small">Valor</label>
+                                    <input id="regla-correo-valor" class="form-control form-control-sm" maxlength="200" required>
+                                </div>
+                                <div class="col-md-5">
+                                    <label for="regla-correo-carpeta" class="form-label small">Mover a carpeta (opcional)</label>
+                                    <select id="regla-correo-carpeta" class="form-select form-select-sm"><option value="">No mover</option></select>
+                                </div>
+                                <div class="col-md-5 d-flex flex-wrap gap-3">
+                                    <label class="form-check-label small"><input id="regla-correo-leido" type="checkbox" class="form-check-input me-1">Marcar leído</label>
+                                    <label class="form-check-label small"><input id="regla-correo-importante" type="checkbox" class="form-check-input me-1">Marcar importante</label>
+                                </div>
+                                <div class="col-md-2"><button type="submit" class="btn btn-sm btn-primary w-100">Agregar regla</button></div>
+                            </form>
+                            <hr>
+                            <h6 class="small fw-semibold">Reglas activas</h6>
+                            <div id="bandeja-reglas-lista" class="mail-management-list"></div>
+                            <hr>
+                            <h6 class="small fw-semibold">Lista negra (remitentes y dominios)</h6>
+                            <form id="bandeja-form-lista-negra" class="d-flex gap-2 mb-2">
+                                <input id="bandeja-lista-negra-valor" class="form-control form-control-sm" placeholder="correo@dominio.com o dominio.com" maxlength="255" required>
+                                <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Agregar</button>
+                            </form>
+                            <div id="bandeja-lista-negra" class="mail-management-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modalLecturaCorreo" tabindex="-1" aria-labelledby="modalLecturaCorreoTitulo" aria-hidden="true">
+                <div class="modal-dialog mail-modal-dialog">
+                    <div class="modal-content mail-reading-content">
+                        <div class="modal-header">
+                            <div class="min-w-0">
+                                <h5 class="modal-title text-truncate" id="modalLecturaCorreoTitulo">Correo</h5>
+                                <div id="modalLecturaCorreoRemitente" class="small text-muted text-truncate"></div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" data-mail-modal-maximize="modalLecturaCorreo" aria-label="Maximizar ventana" title="Maximizar">
+                                    <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+                        </div>
+                        <div class="modal-body mail-reading-body">
+                            <div class="mail-reading-actions" role="toolbar" aria-label="Acciones rápidas del correo">
+                                <button type="button" class="btn btn-sm btn-primary" data-reading-action="reply"><i class="bi bi-reply"></i> Responder</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-reading-action="replyAll"><i class="bi bi-reply-all"></i> Responder a todos</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-reading-action="forward"><i class="bi bi-forward"></i> Reenviar</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-reading-action="print"><i class="bi bi-printer"></i> Imprimir</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-reading-action="delete"><i class="bi bi-trash"></i> Eliminar</button>
+                            </div>
+                            <div id="modalLecturaCorreoAdjuntos" class="mail-reading-attachments d-none" aria-label="Archivos adjuntos"></div>
+                            <iframe id="modalLecturaCorreoCuerpo" class="mail-reading-frame" title="Contenido completo del correo" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+                        </div>
+                    </div>
                 </div>
             </div>
 
