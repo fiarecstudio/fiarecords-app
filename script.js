@@ -636,8 +636,13 @@ let proyectoIdEnEdicion = null;
     };
 
     let paginaActualPolizas = 1;
-    const limitePolizas = 15;
+    const limitePolizas = 20;
     let polizasGlobales = [];
+    let polizasPaginacionServidor = null;
+    let polizasAseguradorasServidor = [];
+    let polizasAsesoresServidor = [];
+    let polizasSinAsesorServidor = false;
+    let debouncePolizasListado = null;
     let planRecibosCambio = [];
     let polizasCacheCargada = false;
     let polizasCacheAsesorId = '';
@@ -649,6 +654,7 @@ let proyectoIdEnEdicion = null;
     let filtroGlobalClientes = '';
     let cobranzaGlobales = [];
     let paginaActualCobranza = 1;
+    let cobranzaPaginacionServidor = null;
     let dashboardStatsCache = null;
     let dashboardCacheScope = null;
     const dashboardSegurosCache = new Map();
@@ -1701,7 +1707,7 @@ let proyectoIdEnEdicion = null;
         }
 
         try {
-            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            const polizas = await obtenerTodasLasPolizas({ silent: true });
             if (polizas?.offline) {
                 if (Array.isArray(respaldo)) return respaldo;
                 console.warn('[obtenerPolizasDashboard] La API no entregó pólizas y no hay respaldo local para aplicar los filtros.');
@@ -8102,7 +8108,7 @@ Fecha de firma: {{FECHA}}`;
         if (tieneCache && !navigator.onLine) return;
 
         try {
-            const polizas = await fetchAPI('/api/polizas', { silent: tieneCache });
+            const polizas = await obtenerTodasLasPolizas({ silent: tieneCache });
             if (polizas?.offline) {
                 tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 return;
@@ -8299,7 +8305,7 @@ Fecha de firma: {{FECHA}}`;
         window.paginaPendientes = 1;
 
         try {
-            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            const polizas = await obtenerTodasLasPolizas({ silent: true });
             const lista = Array.isArray(polizas) ? polizas : [];
             const pendientes = [];
 
@@ -8355,7 +8361,7 @@ Fecha de firma: {{FECHA}}`;
         window.paginaHistorial = 1;
 
         try {
-            const polizas = await fetchAPI('/api/polizas', { silent: true });
+            const polizas = await obtenerTodasLasPolizas({ silent: true });
             const lista = Array.isArray(polizas) ? polizas : [];
             const historial = [];
 
@@ -9598,7 +9604,7 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label" for="poliza-estado">Estado</label>
                         <select id="poliza-estado" name="estado" class="swal2-input">
                             <option value="Activa" ${estadoFormulario === 'Activa' ? 'selected' : ''}>Activa</option>
-                            <option value="PendienteRenovacion" ${estadoFormulario === 'PendienteRenovacion' ? 'selected' : ''}>PendienteRenovacion</option>
+                            <option value="PendienteRenovacion" ${estadoFormulario === 'PendienteRenovacion' ? 'selected' : ''}>Pendiente Renovación</option>
                             <option value="Vencida" ${estadoFormulario === 'Vencida' ? 'selected' : ''}>Vencida</option>
                             <option value="Cancelada" ${estadoFormulario === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
                         </select>
@@ -9769,10 +9775,10 @@ Fecha de firma: {{FECHA}}`;
                         </select>
                     </div>
                     ${editando ? `
-                    <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mt-3 p-3 bg-light rounded border">
+                    <div class="poliza-edit-actions">
                         <button type="button" id="btnRecalcularRecibos" class="btn btn-warning">Recalcular Recibos</button>
                         <button type="button" id="btnCancelarPoliza" class="btn btn-danger btn-sm">Cancelar Póliza</button>
-                        <label class="form-check d-flex align-items-start gap-2 mb-0">
+                        <label class="form-check poliza-restructure-option">
                             <input type="checkbox" id="poliza-forzar-recalculo" class="form-check-input mt-1">
                             <span class="form-check-label">⚠️ Reestructurar/Recalcular todos los recibos (Útil para corregir recibos en $0 o cargas de Excel)</span>
                         </label>
@@ -10115,6 +10121,25 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
+    async function obtenerTodasLasPolizas({ asesorId = '', silent = true } = {}) {
+        const polizas = [];
+        let page = 1;
+        let totalPages = 1;
+        do {
+            const params = new URLSearchParams({ page: String(page), limit: '100' });
+            if (asesorId) params.set('asesorId', asesorId);
+            const respuesta = await fetchAPI(`/api/polizas?${params.toString()}`, { silent });
+            if (respuesta?.offline) return respuesta;
+            if (!respuesta?.success || !Array.isArray(respuesta.data)) {
+                throw new Error('La respuesta de pólizas no tiene el formato esperado.');
+            }
+            polizas.push(...respuesta.data);
+            totalPages = Number(respuesta.totalPages) || 0;
+            page += 1;
+        } while (page <= totalPages);
+        return polizas;
+    }
+
     async function cargarPolizas(forzarRecarga = false) {
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) {
@@ -10127,6 +10152,11 @@ Fecha de firma: {{FECHA}}`;
         if (forzarRecarga) {
             polizasCacheCargada = false;
             polizasCacheScope = null;
+            polizasPaginacionServidor = null;
+            polizasAseguradorasServidor = [];
+            polizasAsesoresServidor = [];
+            polizasSinAsesorServidor = false;
+            paginaActualPolizas = 1;
             clientesCacheCargada = false;
             clientesCacheScope = null;
             dashboardStatsCache = null;
@@ -10139,13 +10169,18 @@ Fecha de firma: {{FECHA}}`;
             if (polizasCacheCargada && polizasCacheScope === scopeOffline && polizasCacheAsesorId === cacheAsesorId) return polizasGlobales;
             return leerRespaldoOffline('backup_polizas', cacheAsesorId || 'todos');
         };
+        const cargarCacheLocal = !polizasPaginacionServidor;
         let asesorSeleccionado = normalizarFiltroAsesor(document.getElementById('filtro-asesor')?.value);
         let filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
-        let polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
+        let polizasCacheadas = forzarRecarga || !cargarCacheLocal ? null : obtenerCachePolizas(asesorSeleccionado);
         let tieneCache = Array.isArray(polizasCacheadas);
 
         if (tieneCache) {
             polizasGlobales = polizasCacheadas;
+            polizasPaginacionServidor = null;
+            polizasAseguradorasServidor = [];
+            polizasAsesoresServidor = [];
+            polizasSinAsesorServidor = false;
             polizasCacheAsesorId = filtroAsesorCache;
             polizasCacheScope = scopeOffline;
             paginaActualPolizas = 1;
@@ -10170,10 +10205,12 @@ Fecha de firma: {{FECHA}}`;
         asesorSeleccionado = normalizarFiltroAsesor(document.getElementById('filtro-asesor')?.value);
         filtroAsesorCache = user.role === 'admin' ? asesorSeleccionado : '';
         if (!tieneCache || polizasCacheAsesorId !== filtroAsesorCache) {
-            polizasCacheadas = forzarRecarga ? null : obtenerCachePolizas(asesorSeleccionado);
+            polizasCacheadas = forzarRecarga || !cargarCacheLocal ? null : obtenerCachePolizas(asesorSeleccionado);
             tieneCache = Array.isArray(polizasCacheadas);
             if (tieneCache) {
                 polizasGlobales = polizasCacheadas;
+                polizasPaginacionServidor = null;
+                polizasAseguradorasServidor = [];
                 polizasCacheAsesorId = filtroAsesorCache;
                 polizasCacheScope = scopeOffline;
                 paginaActualPolizas = 1;
@@ -10187,26 +10224,60 @@ Fecha de firma: {{FECHA}}`;
         if (tieneCache && !navigator.onLine) return;
 
         try {
-            // Construir URL con parámetro de asesor si está seleccionado
-            let url = '/api/polizas';
+            const params = new URLSearchParams({
+                page: String(paginaActualPolizas),
+                limit: String(limitePolizas)
+            });
             if (user.role === 'admin' && asesorSeleccionado) {
-                url += `?asesorId=${asesorSeleccionado}`;
+                params.set('asesorId', asesorSeleccionado);
             }
+            const search = filtroGlobalPolizas.trim();
+            const estado = document.getElementById('filtro-estatus-polizas')?.value || '';
+            const aseguradora = document.getElementById('filtro-aseguradora-polizas')?.value || '';
+            const asesorNombre = document.getElementById('filtroAsesorPolizas')?.value || '';
+            const fechaDesde = document.getElementById('filtroFechaDesde')?.value || '';
+            const fechaHasta = document.getElementById('filtroFechaHasta')?.value || '';
+            if (search) params.set('search', search);
+            if (estado) params.set('estado', estado);
+            if (aseguradora) params.set('aseguradora', aseguradora);
+            if (asesorNombre) params.set('asesorNombre', asesorNombre);
+            if (fechaDesde) params.set('fechaDesde', fechaDesde);
+            if (fechaHasta) params.set('fechaHasta', fechaHasta);
 
-            const polizas = await fetchAPI(url, { silent: tieneCache });
-            if (polizas?.offline) {
+            const respuesta = await fetchAPI(`/api/polizas?${params.toString()}`, { silent: tieneCache });
+            if (respuesta?.offline) {
                 tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 return;
             }
-            polizasGlobales = Array.isArray(polizas) ? polizas : [];
-            guardarRespaldoOffline('backup_polizas', polizasGlobales, filtroAsesorCache || 'todos');
+            if (!respuesta?.success || !Array.isArray(respuesta.data)) {
+                throw new Error('La respuesta de pólizas no tiene el formato esperado.');
+            }
+            const totalPages = Number(respuesta.totalPages) || 0;
+            if (totalPages > 0 && paginaActualPolizas > totalPages) {
+                paginaActualPolizas = totalPages;
+                await cargarPolizas();
+                return;
+            }
+            polizasGlobales = respuesta.data;
+            polizasPaginacionServidor = {
+                total: Number(respuesta.total) || 0,
+                page: Number(respuesta.page) || paginaActualPolizas,
+                totalPages
+            };
+            polizasAseguradorasServidor = Array.isArray(respuesta.filters?.aseguradoras)
+                ? respuesta.filters.aseguradoras
+                : [];
+            polizasAsesoresServidor = Array.isArray(respuesta.filters?.asesores)
+                ? respuesta.filters.asesores
+                : [];
+            polizasSinAsesorServidor = respuesta.filters?.tienePolizasSinAsesor === true;
             polizasCacheAsesorId = filtroAsesorCache;
             polizasCacheScope = scopeOffline;
-            polizasCacheCargada = true;
-            paginaActualPolizas = 1;
+            polizasCacheCargada = false;
             renderizarPaginaPolizas();
         } catch (error) {
             polizasCacheCargada = false;
+            polizasPaginacionServidor = null;
             if (!esErrorOffline(error)) console.error('[cargarPolizas] Error al cargar pólizas:', error);
             if (tieneCache) return;
             const respaldo = leerRespaldoOffline('backup_polizas', filtroAsesorCache || 'todos');
@@ -10227,23 +10298,42 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) return;
 
-        actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
-        actualizarOpcionesFiltroAsesores(polizasGlobales);
-        const polizasFiltradas = obtenerPolizasFiltradas();
+        if (!polizasPaginacionServidor) {
+            actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
+            actualizarOpcionesFiltroAsesores(polizasGlobales);
+        } else {
+            actualizarOpcionesFiltroAseguradoras(
+                'filtro-aseguradora-polizas',
+                polizasAseguradorasServidor.map(aseguradora => ({ aseguradora }))
+            );
+            actualizarOpcionesFiltroAsesores([
+                ...polizasAsesoresServidor.map(asesorNombre => ({ asesorNombre })),
+                ...(polizasSinAsesorServidor ? [{}] : [])
+            ]);
+        }
+        const polizasFiltradas = polizasPaginacionServidor
+            ? polizasGlobales
+            : obtenerPolizasFiltradas();
 
         if (polizasFiltradas.length === 0) {
-            const mensaje = polizasGlobales.length === 0 ? 'No hay pólizas registradas' : 'No hay resultados para esta búsqueda';
+            const mensaje = polizasPaginacionServidor?.total === 0 || polizasGlobales.length === 0
+                ? 'No hay pólizas registradas'
+                : 'No hay resultados para esta búsqueda';
             tabla.innerHTML = `<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">${mensaje}</td></tr>`;
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
             return;
         }
 
-        const totalPaginas = Math.ceil(polizasFiltradas.length / limitePolizas);
+        const totalPaginas = polizasPaginacionServidor
+            ? polizasPaginacionServidor.totalPages
+            : Math.ceil(polizasFiltradas.length / limitePolizas);
         paginaActualPolizas = Math.min(Math.max(paginaActualPolizas, 1), totalPaginas);
         const inicio = (paginaActualPolizas - 1) * limitePolizas;
         const fin = inicio + limitePolizas;
-        const polizasPagina = polizasFiltradas.slice(inicio, fin);
+        const polizasPagina = polizasPaginacionServidor
+            ? polizasFiltradas
+            : polizasFiltradas.slice(inicio, fin);
 
         tabla.innerHTML = polizasPagina.map(p => {
             const fechaVencimiento = p.fechas?.vencimiento
@@ -10261,6 +10351,9 @@ Fecha de firma: {{FECHA}}`;
                 Cancelada: 'secondary',
                 Renovada: 'secondary'
             };
+            const etiquetaEstado = estado === 'PendienteRenovacion'
+                ? 'Pendiente Renovación'
+                : estado;
 
             const esPendienteRenovacion = estado === 'PendienteRenovacion';
             const btnRenovar = esPendienteRenovacion
@@ -10281,11 +10374,13 @@ Fecha de firma: {{FECHA}}`;
                     <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
                     <td data-label="Vencimiento">${fechaVencimiento}</td>
                     <td data-label="Próximo pago">${fechaProximoPago}</td>
-                    <td data-label="Estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}">${escapeHTML(estado)}</span></td>
-                    <td data-label="Notificaciones">
-                        <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
+                    <td data-label="Estado" class="polizas-col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}">${escapeHTML(etiquetaEstado)}</span></td>
+                    <td data-label="Notificaciones" class="polizas-col-notificaciones">
+                        <div class="polizas-notification-buttons">
+                            <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
+                        </div>
                     </td>
-                    <td data-label="Acciones" class="table-actions">
+                    <td data-label="Acciones" class="table-actions polizas-col-acciones">
                         ${btnRenovar}
                         <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos"><i class="bi bi-cash-coin"></i></button>
                         <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar"><i class="bi bi-bell"></i></button>
@@ -10303,8 +10398,12 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('paginacionPolizas');
         if (!contenedor) return;
 
-        const cantidadPolizas = obtenerPolizasFiltradas().length;
-        const totalPaginas = Math.ceil(cantidadPolizas / limitePolizas);
+        const cantidadPolizas = polizasPaginacionServidor
+            ? polizasPaginacionServidor.total
+            : obtenerPolizasFiltradas().length;
+        const totalPaginas = polizasPaginacionServidor
+            ? polizasPaginacionServidor.totalPages
+            : Math.ceil(cantidadPolizas / limitePolizas);
         if (totalPaginas === 0) {
             contenedor.innerHTML = '';
             return;
@@ -10324,9 +10423,12 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaPolizas(delta) {
-        const totalPaginas = Math.ceil(obtenerPolizasFiltradas().length / limitePolizas);
+        const totalPaginas = polizasPaginacionServidor
+            ? polizasPaginacionServidor.totalPages
+            : Math.ceil(obtenerPolizasFiltradas().length / limitePolizas);
         paginaActualPolizas = Math.min(Math.max(paginaActualPolizas + delta, 1), totalPaginas);
-        renderizarPaginaPolizas();
+        if (polizasPaginacionServidor) cargarPolizas();
+        else renderizarPaginaPolizas();
     }
 
     function obtenerPolizasFiltradas() {
@@ -10442,7 +10544,8 @@ Fecha de firma: {{FECHA}}`;
             ? query.toLocaleLowerCase('es')
             : (document.getElementById('filtro-busqueda-polizas')?.value || '').toLocaleLowerCase('es');
         paginaActualPolizas = 1;
-        renderizarPaginaPolizas();
+        if (debouncePolizasListado) clearTimeout(debouncePolizasListado);
+        debouncePolizasListado = setTimeout(() => cargarPolizas(), 250);
     }
 
     // Función para ver historial de notificaciones
@@ -10563,8 +10666,13 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function filtrarCobranzaUI() {
-        const registros = estadoCobranza[estadoCobranza.tabActiva] || [];
-        renderizarTablaCobranza(registros, estadoCobranza.tabActiva);
+        paginaActualCobranza = 1;
+        if (cobranzaPaginacionServidor) {
+            cargarCobranzaDiaria();
+        } else {
+            const registros = estadoCobranza[estadoCobranza.tabActiva] || [];
+            renderizarTablaCobranza(registros, estadoCobranza.tabActiva);
+        }
     }
 
     function initEventosCobranzaDiaria() {
@@ -10626,7 +10734,9 @@ Fecha de firma: {{FECHA}}`;
         if (!['vencidas', 'cobrosHoy', 'porVencer'].includes(tabActiva)) return;
         estadoCobranza.tabActiva = tabActiva;
         actualizarTabsActivasCobranza();
-        renderizarTablaCobranza(estadoCobranza[tabActiva] || [], tabActiva);
+        paginaActualCobranza = 1;
+        if (cobranzaPaginacionServidor) cargarCobranzaDiaria();
+        else renderizarTablaCobranza(estadoCobranza[tabActiva] || [], tabActiva);
     }
 
     function cambiarPestanaCobranza(pestaña) {
@@ -10659,6 +10769,7 @@ Fecha de firma: {{FECHA}}`;
                 estadoCobranza.vencidas = datos.vencidas || [];
                 estadoCobranza.cobrosHoy = datos.cobrosHoy || datos.polizas || [];
                 estadoCobranza.porVencer = datos.porVencer || [];
+                cobranzaPaginacionServidor = datos.pagination || null;
                 estadoCobranza.fecha = datos.fecha || null;
                 estadoCobranza.totales = datos.totales || {
                     vencidas: estadoCobranza.vencidas.length,
@@ -10670,7 +10781,10 @@ Fecha de firma: {{FECHA}}`;
                     ...estadoCobranza.cobrosHoy,
                     ...estadoCobranza.porVencer
                 ];
-                actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-cobranza', registrosCobranza);
+                const aseguradorasDisponibles = Array.isArray(datos.filters?.aseguradoras)
+                    ? datos.filters.aseguradoras.map(aseguradora => ({ aseguradora }))
+                    : registrosCobranza;
+                actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-cobranza', aseguradorasDisponibles);
                 cargarOpcionesAsesorCobranza().catch(error => {
                     if (!esErrorOffline(error)) console.warn('[Cobranza] No se pudieron cargar los asesores:', error);
                 });
@@ -10712,7 +10826,17 @@ Fecha de firma: {{FECHA}}`;
             }
 
             try {
-                const datos = await fetchAPI('/api/polizas/cobranza-diaria', { silent: tieneCache });
+                const params = new URLSearchParams({
+                    page: String(paginaActualCobranza),
+                    limit: String(limitePolizas)
+                });
+                const search = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim();
+                const aseguradora = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
+                const asesorId = document.getElementById('filtro-asesor-cobranza')?.value || '';
+                if (search) params.set('search', search);
+                if (aseguradora) params.set('aseguradora', aseguradora);
+                if (asesorId) params.set('asesorId', asesorId);
+                const datos = await fetchAPI(`/api/polizas/cobranza-diaria?${params.toString()}`, { silent: tieneCache });
                 if (datos?.offline) {
                     tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                     return;
@@ -10759,7 +10883,7 @@ Fecha de firma: {{FECHA}}`;
                 ? poliza.vencimiento
                 : poliza.reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago || poliza.vencimiento,
         ordenAscendente);
-        paginaActualCobranza = 1;
+        if (!cobranzaPaginacionServidor) paginaActualCobranza = 1;
         renderizarPaginaCobranza(tabActiva);
     }
 
@@ -10776,12 +10900,17 @@ Fecha de firma: {{FECHA}}`;
 
         if (!tabla) return;
 
-        const totalPaginas = Math.ceil(cobranzaGlobales.length / limitePolizas);
+        const paginacionTab = cobranzaPaginacionServidor?.[tabActiva];
+        const totalPaginas = paginacionTab
+            ? paginacionTab.totalPages
+            : Math.ceil(cobranzaGlobales.length / limitePolizas);
         paginaActualCobranza = totalPaginas
             ? Math.min(Math.max(paginaActualCobranza, 1), totalPaginas)
             : 1;
         const inicio = (paginaActualCobranza - 1) * limitePolizas;
-        const polizasPagina = cobranzaGlobales.slice(inicio, inicio + limitePolizas);
+        const polizasPagina = paginacionTab
+            ? cobranzaGlobales
+            : cobranzaGlobales.slice(inicio, inicio + limitePolizas);
 
         if (polizasPagina.length > 0) {
             tabla.innerHTML = polizasPagina.map(p => {
@@ -10885,14 +11014,17 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('paginacionCobranza');
         if (!contenedor) return;
 
-        const totalPaginas = Math.ceil(cobranzaGlobales.length / limitePolizas);
+        const paginacionTab = cobranzaPaginacionServidor?.[estadoCobranza.tabActiva];
+        const totalPaginas = paginacionTab
+            ? paginacionTab.totalPages
+            : Math.ceil(cobranzaGlobales.length / limitePolizas);
         if (totalPaginas === 0) {
             contenedor.innerHTML = '';
             return;
         }
 
         contenedor.innerHTML = `
-            <span class="small text-muted">Página ${paginaActualCobranza} de ${totalPaginas} (${cobranzaGlobales.length} registros)</span>
+            <span class="small text-muted">Página ${paginaActualCobranza} de ${totalPaginas} (${paginacionTab?.total ?? cobranzaGlobales.length} registros)</span>
             <div class="btn-group" role="group" aria-label="Paginación de cobranza">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaCobranza(-1)" ${paginaActualCobranza <= 1 ? 'disabled' : ''} aria-label="Página anterior">Anterior</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaCobranza(1)" ${paginaActualCobranza >= totalPaginas ? 'disabled' : ''} aria-label="Página siguiente">Siguiente</button>
@@ -10901,9 +11033,11 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaCobranza(delta) {
-        const totalPaginas = Math.ceil(cobranzaGlobales.length / limitePolizas);
+        const totalPaginas = cobranzaPaginacionServidor?.[estadoCobranza.tabActiva]?.totalPages
+            ?? Math.ceil(cobranzaGlobales.length / limitePolizas);
         paginaActualCobranza = Math.min(Math.max(paginaActualCobranza + delta, 1), totalPaginas);
-        renderizarPaginaCobranza();
+        if (cobranzaPaginacionServidor) cargarCobranzaDiaria();
+        else renderizarPaginaCobranza();
     }
 
     function renderizarPestañaCobranza(pestaña) {

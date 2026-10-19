@@ -455,6 +455,8 @@ polizaSchema.index({ empresaId: 1, fechas: 1 });
 polizaSchema.index({ empresaId: 1, deletedAt: 1 });
 // Índices optimizados para cobranza diaria
 polizaSchema.index({ empresaId: 1, 'fechas.vencimiento': 1 }, { partialFilterExpression: { deletedAt: null } });
+polizaSchema.index({ empresaId: 1, estado: 1, 'fechas.vencimiento': 1 });
+polizaSchema.index({ empresaId: 1, aseguradora: 1 });
 polizaSchema.index({ empresaId: 1, proximoPago: 1 }, { partialFilterExpression: { deletedAt: null } });
 // FASE 1: Índices para nuevos campos
 polizaSchema.index({ empresaId: 1, fechaLimiteRenovacion: 1 }, { partialFilterExpression: { deletedAt: null } });

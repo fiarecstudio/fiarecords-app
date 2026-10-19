@@ -942,7 +942,7 @@ function prepararSalidaCorreo({ empresa, mensaje, importance, requestReadReceipt
 }
 
 async function enviarCorreoProgramado(correo) {
-    const empresa = await Empresa.findById(correo.empresaId);
+    const empresa = await Empresa.findById(correo.empresaId).lean();
     if (!empresa) throw new Error('La empresa asociada al correo programado ya no existe.');
     const replyTo = process.env.IMAP_USER || empresa.email;
     if (!replyTo) throw new Error('Configura IMAP_USER o el correo de la empresa para recibir respuestas.');
@@ -1211,7 +1211,7 @@ async function replyEmail(req, res) {
 
     try {
         const empresaId = req.tenantFilter?.empresaId || req.user.empresaId || null;
-        const empresa = empresaId ? await Empresa.findById(empresaId) : null;
+        const empresa = empresaId ? await Empresa.findById(empresaId).lean() : null;
         const replyTo = process.env.IMAP_USER || empresa?.email;
         if (!replyTo) {
             return res.status(503).json({

@@ -51,4 +51,6 @@ const notificacionSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+notificacionSchema.index({ empresaId: 1, polizaId: 1, numeroRecibo: 1, fechaEnvio: -1 });
+
 module.exports = mongoose.model('Notificacion', notificacionSchema);

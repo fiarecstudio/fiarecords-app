@@ -1219,6 +1219,30 @@ body.dark-mode .project-card:hover {
         overflow-wrap: anywhere;
         word-break: break-word;
     }
+    #tablaPolizas tbody td.polizas-col-estado {
+        width: auto;
+        min-width: 0;
+        padding-right: 15px;
+        white-space: nowrap;
+        text-align: left;
+    }
+    #tablaPolizas tbody td.polizas-col-estado .badge {
+        flex-shrink: 0;
+    }
+    #tablaPolizas tbody td.polizas-col-notificaciones {
+        width: auto;
+        min-width: 0;
+        justify-content: flex-end;
+        text-align: center;
+    }
+    #tablaPolizas tbody td.polizas-col-acciones {
+        width: auto;
+        min-width: 0;
+        text-align: center;
+    }
+    #tablaPolizas .polizas-notification-buttons {
+        justify-content: flex-end;
+    }
     #tablaPolizas .poliza-cliente-detalles {
         flex: 0 1 55%;
         min-width: 0;
@@ -2703,7 +2727,76 @@ body.dark-mode #modalResponderCorreo .btn-close,
     gap: 0 15px;
 }
 
+.poliza-edit-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    width: 100%;
+    margin-top: 15px;
+}
+
+.poliza-edit-actions > #btnRecalcularRecibos,
+.poliza-edit-actions > #btnCancelarPoliza {
+    white-space: nowrap;
+    width: auto;
+    min-width: 120px;
+    padding: 10px 16px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.poliza-restructure-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1 1 320px;
+    min-width: 250px;
+    margin: 0 0 0 auto;
+    padding: 8px 12px;
+}
+
+.poliza-restructure-option .form-check-input {
+    flex: 0 0 auto;
+    margin: 3px 0 0;
+}
+
+.poliza-restructure-option .form-check-label {
+    min-width: 0;
+}
+
+#tablaPolizas .polizas-notification-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+@media (min-width: 992px) {
+    #tablaPolizas .polizas-col-estado {
+        min-width: 180px;
+        padding-right: 15px;
+        white-space: nowrap;
+        text-align: left;
+    }
+
+    #tablaPolizas .polizas-col-notificaciones {
+        min-width: 110px;
+        text-align: center;
+    }
+
+    #tablaPolizas .polizas-col-acciones {
+        min-width: 130px;
+        text-align: center;
+    }
+}
+
 .poliza-form-grid > .row,
+.poliza-form-grid > .poliza-edit-actions,
 .poliza-form-grid > .poliza-payment-fields,
 .poliza-form-grid > .poliza-status-field,
 .poliza-form-grid > .poliza-financial-fields,
@@ -2816,6 +2909,7 @@ body.dark-mode #modalResponderCorreo .btn-close,
     }
 
     .poliza-form-grid > .row,
+    .poliza-form-grid > .poliza-edit-actions,
     .poliza-form-grid > .poliza-payment-fields,
     .poliza-form-grid > .poliza-status-field,
     .poliza-form-grid > .poliza-financial-fields,

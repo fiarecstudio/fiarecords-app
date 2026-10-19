@@ -1353,6 +1353,51 @@ const obtenerPolizas = async (req, res) => {
         const empresaId = req.user.empresaId;
         const userRole = req.user.role;
         const userId = req.user._id || req.user.id;
+        const page = req.query.page === undefined ? 1 : Number(req.query.page);
+        const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);
+        const search = String(req.query.search || '').trim();
+        const estadoSolicitado = String(req.query.estado || '').trim();
+        const aseguradora = String(req.query.aseguradora || '').trim();
+        const asesorNombre = String(req.query.asesorNombre || '').trim();
+        const fechaDesde = String(req.query.fechaDesde || '').trim();
+        const fechaHasta = String(req.query.fechaHasta || '').trim();
+        const fechaISOValida = fecha => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
+            const fechaNormalizada = new Date(`${fecha}T00:00:00.000Z`);
+            return !Number.isNaN(fechaNormalizada.getTime())
+                && fechaNormalizada.toISOString().slice(0, 10) === fecha;
+        };
+        const estadosPermitidos = new Set([
+            'Activa',
+            'PendienteRenovacion',
+            'Vencida',
+            'Por Vencer',
+            'Cancelada',
+            'Renovada'
+        ]);
+
+        if (!Number.isSafeInteger(page) || page < 1
+            || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+            return res.status(400).json({ success: false, error: 'La página debe ser positiva y el límite debe estar entre 1 y 100.' });
+        }
+        if (search.length > 100 || estadoSolicitado.length > 50
+            || aseguradora.length > 120 || asesorNombre.length > 120) {
+            return res.status(400).json({ success: false, error: 'Uno de los filtros excede la longitud permitida.' });
+        }
+        if (estadoSolicitado && !estadosPermitidos.has(estadoSolicitado)) {
+            return res.status(400).json({ success: false, error: 'El estado seleccionado no es válido.' });
+        }
+        const asesorSolicitado = String(req.query.asesorId || '').trim();
+        if (userRole === 'admin' && asesorSolicitado
+            && !['todos', 'all', 'null', 'undefined'].includes(asesorSolicitado.toLowerCase())
+            && !mongoose.Types.ObjectId.isValid(asesorSolicitado)) {
+            return res.status(400).json({ success: false, error: 'El asesor seleccionado no es válido.' });
+        }
+        if ((fechaDesde && !fechaISOValida(fechaDesde))
+            || (fechaHasta && !fechaISOValida(fechaHasta))
+            || (fechaDesde && fechaHasta && fechaDesde > fechaHasta)) {
+            return res.status(400).json({ success: false, error: 'El rango de fechas no es válido.' });
+        }
         
         // Construir filtro base
         let filtro = {
@@ -1364,7 +1409,6 @@ const obtenerPolizas = async (req, res) => {
         // RBAC: Si el usuario es admin, puede ver todas las pólizas de la empresa
         // Si viene un query param asesorId, filtra por ese asesor específico
         if (userRole === 'admin') {
-            const asesorSolicitado = String(req.query.asesorId || '').trim();
             if (asesorSolicitado && !['todos', 'all', 'null', 'undefined'].includes(asesorSolicitado.toLowerCase())) {
                 filtro.asesorId = asesorSolicitado;
             }
@@ -1372,39 +1416,135 @@ const obtenerPolizas = async (req, res) => {
             // Si no es admin, SOLO puede ver sus propias pólizas
             filtro.asesorId = userId;
         }
-        
-        const polizas = await Poliza.find(filtro)
-            .populate('asesorId', 'username')
-            .sort({ 'fechas.inicio': -1, createdAt: -1 })
-            .lean();
-        const polizasActivasEmpresa = await Poliza.find({
-            empresaId,
-            deletedAt: null,
-            estado: { $regex: /^\s*activa\s*$/i },
-            numeroSerie: { $nin: ['', null] }
-        }).select('numeroSerie').lean();
-        const conteoSeries = new Map();
-        for (const poliza of polizasActivasEmpresa) {
-            const serieNormalizada = String(poliza.numeroSerie || '').trim().toLocaleUpperCase();
-            if (serieNormalizada) {
-                conteoSeries.set(serieNormalizada, (conteoSeries.get(serieNormalizada) || 0) + 1);
-            }
+
+        if (estadoSolicitado) {
+            filtro.estado = estadoSolicitado === 'Vencida'
+                ? { $in: ['Vencida', 'Por Vencer'] }
+                : estadoSolicitado;
         }
+        if (aseguradora) filtro.aseguradora = aseguradora;
+        const filtrosCompuestos = [];
+        if (asesorNombre === '__sin_asesor__') {
+            filtrosCompuestos.push({
+                $or: [
+                    { asesorNombre: { $in: ['', null] } },
+                    { asesorId: { $exists: false } },
+                    { asesorId: null }
+                ]
+            });
+        } else if (asesorNombre) {
+            const asesor = await Usuario.findOne({
+                empresaId,
+                $or: [{ username: asesorNombre }, { nombre: asesorNombre }]
+            }).select('_id').lean();
+            filtrosCompuestos.push({
+                $or: [
+                    { asesorNombre },
+                    ...(asesor ? [{ asesorId: asesor._id }] : [])
+                ]
+            });
+        }
+        if (search) {
+            const textoEscapado = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const busqueda = new RegExp(textoEscapado, 'i');
+            filtrosCompuestos.push({
+                $or: [
+                    { numeroPoliza: busqueda },
+                    { cliente: busqueda },
+                    { numeroSerie: busqueda },
+                    { descripcionVehiculo: busqueda },
+                    { vehiculo: busqueda },
+                    { asesorNombre: busqueda }
+                ]
+            });
+        }
+        if (filtrosCompuestos.length) filtro.$and = filtrosCompuestos;
+        if (fechaDesde || fechaHasta) {
+            filtro['fechas.inicio'] = {};
+            if (fechaDesde) filtro['fechas.inicio'].$gte = new Date(`${fechaDesde}T00:00:00.000Z`);
+            if (fechaHasta) filtro['fechas.inicio'].$lte = new Date(`${fechaHasta}T23:59:59.999Z`);
+        }
+
+        const filtroAsesores = { empresaId, deletedAt: null };
+        if (userRole !== 'admin') filtroAsesores.asesorId = userId;
+        const filtroUsuarios = { empresaId };
+        if (userRole !== 'admin') filtroUsuarios._id = userId;
+
+        const [polizas, total, seriesDuplicadas, aseguradoras, nombresAsesores, usuariosAsesores, tienePolizasSinAsesor] = await Promise.all([
+            Poliza.find(filtro)
+                .populate('asesorId', 'username')
+                .sort({ 'fechas.inicio': -1, createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean(),
+            Poliza.countDocuments(filtro),
+            Poliza.aggregate([
+                {
+                    $match: {
+                        empresaId,
+                        deletedAt: null,
+                        estado: { $regex: /^\s*activa\s*$/i },
+                        numeroSerie: { $exists: true, $nin: ['', null] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            $toUpper: {
+                                $trim: { input: { $toString: { $ifNull: ['$numeroSerie', ''] } } }
+                            }
+                        },
+                        total: { $sum: 1 }
+                    }
+                },
+                { $match: { total: { $gt: 1 } } }
+            ]),
+            Poliza.distinct('aseguradora', { empresaId, deletedAt: null }),
+            Poliza.distinct('asesorNombre', filtroAsesores),
+            Usuario.find(filtroUsuarios).select('username nombre').lean(),
+            userRole === 'admin'
+                ? Poliza.exists({
+                    empresaId,
+                    deletedAt: null,
+                    $or: [
+                        { asesorNombre: { $in: ['', null] } },
+                        { asesorId: { $exists: false } },
+                        { asesorId: null }
+                    ]
+                })
+                : Promise.resolve(false)
+        ]);
+        const seriesDuplicadasSet = new Set(seriesDuplicadas.map(serie => serie._id));
+        const asesoresDisponibles = [...new Set([
+            ...nombresAsesores,
+            ...usuariosAsesores.map(asesor => asesor.username || asesor.nombre)
+        ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
         
-        res.json(polizas.map(poliza => {
+        const data = polizas.map(poliza => {
             const asesor = poliza.asesorId;
             const serieNormalizada = String(poliza.numeroSerie || '').trim().toLocaleUpperCase();
             return {
                 ...poliza,
                 asesorNombre: asesor?.username || poliza.asesorNombre || '',
                 asesorId: asesor?._id || asesor,
-                tieneSerieDuplicada: Boolean(
-                    serieNormalizada
+                tieneSerieDuplicada: Boolean(serieNormalizada
                     && /^activa$/i.test(String(poliza.estado || '').trim())
-                    && conteoSeries.get(serieNormalizada) > 1
-                )
+                    && seriesDuplicadasSet.has(serieNormalizada))
             };
-        }));
+        });
+
+        res.json({
+            success: true,
+            data,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            filters: {
+                aseguradoras: aseguradoras.filter(Boolean).sort((a, b) => a.localeCompare(b, 'es')),
+                asesores: asesoresDisponibles,
+                tienePolizasSinAsesor: Boolean(tienePolizasSinAsesor)
+            }
+        });
     } catch (error) {
         console.error('Error al obtener pólizas:', error);
         res.status(500).json({ error: 'Error al obtener las pólizas', details: error.message });
@@ -1738,7 +1878,8 @@ const obtenerPolizaPorId = async (req, res) => {
         // Buscar por id, empresaId y que no esté eliminada, con populate de clienteId
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
             .populate('clienteId', 'nombre telefono email')
-            .populate('asesorId', 'username nombre email');
+            .populate('asesorId', 'username nombre email')
+            .lean();
         
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
@@ -1905,14 +2046,14 @@ const enviarRecordatorioManual = async (req, res) => {
         const { canal, tipo } = req.body;
         const empresaId = req.user.empresaId;
 
-        const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null }).lean();
         if (!poliza) return res.status(404).json({ error: 'Póliza no encontrada' });
 
         // PRIORIDAD: Usar datos del modelo Cliente si existe clienteId, fallback a campos de póliza
         let destinatario;
         if (poliza.clienteId) {
             const Cliente = require('../models/Cliente');
-            const cliente = await Cliente.findById(poliza.clienteId);
+            const cliente = await Cliente.findById(poliza.clienteId).lean();
             if (cliente) {
                 destinatario = canal === 'email'
                     ? (cliente.email || poliza.clienteEmail || 'prueba_correo@ejemplo.com')
@@ -2617,7 +2758,7 @@ const enviarRecordatorioCorreo = async (req, res) => {
             // PRIORIDAD: Usar correo del modelo Cliente si existe clienteId
             if (poliza.clienteId) {
                 const Cliente = require('../models/Cliente');
-                const cliente = await Cliente.findById(poliza.clienteId);
+                const cliente = await Cliente.findById(poliza.clienteId).lean();
                 if (cliente && cliente.email) {
                     destinatarioFinal = cliente.email;
                     console.log('[enviarRecordatorioCorreo] Email desde modelo Cliente:', destinatarioFinal);
@@ -2736,6 +2877,22 @@ const obtenerCobranzaDiaria = async (req, res) => {
         const empresaId = req.user.empresaId;
         const userRole = req.user.role;
         const userId = req.user._id || req.user.id;
+        const page = req.query.page === undefined ? 1 : Number(req.query.page);
+        const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);
+        const search = String(req.query.search || '').trim();
+        const aseguradora = String(req.query.aseguradora || '').trim();
+        const asesorId = String(req.query.asesorId || '').trim();
+        if (!Number.isSafeInteger(page) || page < 1
+            || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+            return res.status(400).json({ success: false, error: 'La página debe ser positiva y el límite debe estar entre 1 y 100.' });
+        }
+        if (search.length > 100 || aseguradora.length > 120) {
+            return res.status(400).json({ success: false, error: 'Uno de los filtros excede la longitud permitida.' });
+        }
+        if (userRole === 'admin' && asesorId && !mongoose.Types.ObjectId.isValid(asesorId)) {
+            return res.status(400).json({ success: false, error: 'El asesor seleccionado no es válido.' });
+        }
+        const skipCount = (page - 1) * limit;
 
         const hoyString = new Intl.DateTimeFormat('en-CA', { timeZone: COBRANZA_TZ }).format(new Date());
         const hoyInicio = { $dateFromString: { dateString: hoyString, timezone: COBRANZA_TZ } };
@@ -2747,6 +2904,25 @@ const obtenerCobranzaDiaria = async (req, res) => {
         };
         if (userRole !== 'admin') {
             matchInicial.asesorId = new mongoose.Types.ObjectId(userId);
+        } else if (asesorId) {
+            matchInicial.asesorId = new mongoose.Types.ObjectId(asesorId);
+        }
+        if (aseguradora) matchInicial.aseguradora = aseguradora;
+        if (search) {
+            const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = new RegExp(escapedSearch, 'i');
+            matchInicial.$and = [
+                { $or: matchInicial.$or },
+                {
+                    $or: [
+                        { numeroPoliza: searchRegex },
+                        { cliente: searchRegex },
+                        { numeroSerie: searchRegex },
+                        { descripcionVehiculo: searchRegex }
+                    ]
+                }
+            ];
+            delete matchInicial.$or;
         }
 
         const pipeline = [
@@ -2894,7 +3070,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     vencidas: [
                         { $match: { diasRestantes: { $lt: 0 } } },
                         { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
+                        { $skip: skipCount },
+                        { $limit: limit },
                         {
                             $project: {
                                 _id: 1,
@@ -2936,7 +3113,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     cobrosHoy: [
                         { $match: { diasRestantes: 0 } },
                         { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
+                        { $skip: skipCount },
+                        { $limit: limit },
                         {
                             $project: {
                                 _id: 1,
@@ -2978,7 +3156,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     porVencer: [
                         { $match: { diasRestantes: { $gt: 0, $lte: 7 } } },
                         { $sort: { diasRestantes: 1 } },
-                        { $limit: 100 },
+                        { $skip: skipCount },
+                        { $limit: limit },
                         {
                             $project: {
                                 _id: 1,
@@ -3016,12 +3195,35 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 historialNotificaciones: 1
                             }
                         }
+                    ],
+                    vencidasCount: [
+                        { $match: { diasRestantes: { $lt: 0 } } },
+                        { $count: 'total' }
+                    ],
+                    cobrosHoyCount: [
+                        { $match: { diasRestantes: 0 } },
+                        { $count: 'total' }
+                    ],
+                    porVencerCount: [
+                        { $match: { diasRestantes: { $gt: 0, $lte: 7 } } },
+                        { $count: 'total' }
                     ]
                 }
             }
         ];
 
-        const resultado = await Poliza.aggregate(pipeline);
+        const filtroAseguradoras = {
+            empresaId: new mongoose.Types.ObjectId(empresaId),
+            estado: { $regex: /^Activa$/i },
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+        };
+        if (userRole !== 'admin') {
+            filtroAseguradoras.asesorId = new mongoose.Types.ObjectId(userId);
+        }
+        const [resultado, aseguradoras] = await Promise.all([
+            Poliza.aggregate(pipeline),
+            Poliza.distinct('aseguradora', filtroAseguradoras)
+        ]);
         console.log('[obtenerCobranzaDiaria] Raw facet counts:', {
             vencidas: resultado[0]?.vencidas?.length ?? 0,
             cobrosHoy: resultado[0]?.cobrosHoy?.length ?? 0,
@@ -3066,13 +3268,32 @@ const obtenerCobranzaDiaria = async (req, res) => {
         const resultados = {
             success: true,
             fecha: hoyString,
+            filters: {
+                aseguradoras: aseguradoras.filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'))
+            },
             vencidas,
             cobrosHoy,
             porVencer,
             totales: {
-                vencidas: vencidas.length,
-                cobrosHoy: cobrosHoy.length,
-                porVencer: porVencer.length
+                vencidas: datos.vencidasCount?.[0]?.total || 0,
+                cobrosHoy: datos.cobrosHoyCount?.[0]?.total || 0,
+                porVencer: datos.porVencerCount?.[0]?.total || 0
+            },
+            pagination: {
+                page,
+                limit,
+                vencidas: {
+                    total: datos.vencidasCount?.[0]?.total || 0,
+                    totalPages: Math.ceil((datos.vencidasCount?.[0]?.total || 0) / limit)
+                },
+                cobrosHoy: {
+                    total: datos.cobrosHoyCount?.[0]?.total || 0,
+                    totalPages: Math.ceil((datos.cobrosHoyCount?.[0]?.total || 0) / limit)
+                },
+                porVencer: {
+                    total: datos.porVencerCount?.[0]?.total || 0,
+                    totalPages: Math.ceil((datos.porVencerCount?.[0]?.total || 0) / limit)
+                }
             }
         };
 
@@ -3132,7 +3353,7 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
         let destinatario = poliza.clienteEmail || 'correo_prueba@ejemplo.com';
         if (poliza.clienteId) {
             const Cliente = require('../models/Cliente');
-            const cliente = await Cliente.findById(poliza.clienteId);
+            const cliente = await Cliente.findById(poliza.clienteId).lean();
             if (cliente && cliente.email) {
                 destinatario = cliente.email;
             }
@@ -4213,7 +4434,7 @@ const obtenerReporteCobranza = async (req, res) => {
             if (!mongoose.Types.ObjectId.isValid(req.query.asesorId)) {
                 return res.status(400).json({ success: false, error: 'El asesor seleccionado no es válido.' });
             }
-            const asesor = await Usuario.findOne({ _id: req.query.asesorId, empresaId }).select('_id');
+            const asesor = await Usuario.findOne({ _id: req.query.asesorId, empresaId }).select('_id').lean();
             if (!asesor) {
                 return res.status(404).json({ success: false, error: 'Asesor no encontrado en esta empresa.' });
             }
@@ -4415,7 +4636,7 @@ const exportarReporteExcel = async (req, res) => {
             if (!mongoose.Types.ObjectId.isValid(asesorIdSolicitado)) {
                 return res.status(400).json({ error: 'El asesor seleccionado no es válido' });
             }
-            asesorExportado = await Usuario.findOne({ _id: asesorIdSolicitado, empresaId }).select('username');
+            asesorExportado = await Usuario.findOne({ _id: asesorIdSolicitado, empresaId }).select('username').lean();
             if (!asesorExportado) {
                 return res.status(404).json({ error: 'Asesor no encontrado en esta empresa' });
             }
@@ -4678,7 +4899,7 @@ const exportarReportePDF = async (req, res) => {
             if (!mongoose.Types.ObjectId.isValid(asesorIdSolicitado)) {
                 return res.status(400).json({ error: 'El asesor seleccionado no es válido' });
             }
-            asesorExportado = await Usuario.findOne({ _id: asesorIdSolicitado, empresaId }).select('username');
+            asesorExportado = await Usuario.findOne({ _id: asesorIdSolicitado, empresaId }).select('username').lean();
             if (!asesorExportado) {
                 return res.status(404).json({ error: 'Asesor no encontrado en esta empresa' });
             }
@@ -5216,7 +5437,7 @@ async function auditarVencidasReales(req, res) {
         const polizas = await Poliza.find({
             ...(req.tenantFilter || {}),
             estado: { $regex: /activa/i }
-        }).populate('clienteId', 'nombre');
+        }).populate('clienteId', 'nombre').lean();
         const hoy = new Date();
         const vencidas = [];
 
