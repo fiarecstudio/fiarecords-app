@@ -9,6 +9,7 @@ const PDFParse = pdfParseModule.PDFParse || (pdfParseModule.default && pdfParseM
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
+const financialCalculator = require('../services/financialCalculator');
 
 const ESTADOS_POLIZA_VALIDOS = [
     'Activa',
@@ -184,34 +185,17 @@ function calcularProximoPago(fechaBase, tipoPago) {
 }
 
 const normalizarDuracionMeses = duracionMeses => {
-    if (duracionMeses === undefined || duracionMeses === null || duracionMeses === '') return 12;
-    const valor = Number(duracionMeses);
-    return Number.isInteger(valor) && valor >= 1 ? valor : null;
+    return financialCalculator.normalizarDuracionMeses(duracionMeses);
 };
 
-const obtenerIntervaloMeses = tipoPago => ({
-    mensual: 1,
-    trimestral: 3,
-    semestral: 6,
-    anual: 12
-}[String(tipoPago || '').toLowerCase()] || 12);
+const obtenerIntervaloMeses = tipoPago => financialCalculator.obtenerIntervaloMeses(tipoPago);
 
 const obtenerNumeroRecibosPorTipo = (tipoPago, duracionMeses = 12) => {
-    const duracion = normalizarDuracionMeses(duracionMeses) || 12;
-    return Math.ceil(duracion / obtenerIntervaloMeses(tipoPago));
+    return financialCalculator.obtenerNumeroRecibosPorTipo(tipoPago, duracionMeses);
 };
 
 const calcularPagosNetosDistribuidos = (primaNeta, numeroPagos) => {
-    const pagos = Math.max(1, Number(numeroPagos) || 1);
-    const primaNetaTotal = Number(primaNeta) || 0;
-    const primaNetaSubsecuente = Math.floor((primaNetaTotal / pagos) * 100) / 100;
-    const primaNetaRecibo1 = Number((
-        primaNetaTotal - (primaNetaSubsecuente * (pagos - 1))
-    ).toFixed(2));
-
-    return Array.from({ length: pagos }, (_, indice) => indice === 0
-        ? primaNetaRecibo1
-        : primaNetaSubsecuente);
+    return financialCalculator.calcularPagosNetosDistribuidos(primaNeta, numeroPagos);
 };
 
 const calcularPagosNetosConAbonosManuales = ({
@@ -224,70 +208,34 @@ const calcularPagosNetosConAbonosManuales = ({
     emisionEnPrimerPago,
     numeroPagos
 }) => {
-    const primaNetaTotal = Number(primaNeta) || 0;
-    const primaNetaCobrable = primaNetaTotal + (Number(otrosServiciosContratados) || 0);
-    const abonoManual = Number(montoAbono) || 0;
-    const pagos = Math.max(1, Number(numeroPagos) || 1);
-
-    if (abonoManual > 0) {
-        const gastosTotales = Number(gastosExpedicion) || 0;
-        const gastosSubsecuente = emisionEnPrimerPago
-            ? 0
-            : gastosTotales / pagos;
-        const subtotalAbono = abonoManual / 1.16;
-        const recargos = (Number(primaTotal) || 0) / 1.16
-            - primaNetaCobrable
-            - gastosTotales;
-        const totalPrimaRecargos = primaNetaCobrable + recargos;
-        const baseImponibleSubsecuente = subtotalAbono - gastosSubsecuente;
-        const ratioPrima = totalPrimaRecargos > 0
-            ? primaNetaCobrable / totalPrimaRecargos
-            : 1;
-        const pagoNetoSubsecuente = Math.max(0, Number((
-            baseImponibleSubsecuente * ratioPrima
-        ).toFixed(2)));
-        const pagoNetoRecibo1 = Math.max(0, Number((
-            primaNetaCobrable - (pagoNetoSubsecuente * (pagos - 1))
-        ).toFixed(2)));
-
-        return Array.from({ length: pagos }, (_, indice) => indice === 0
-            ? pagoNetoRecibo1
-            : pagoNetoSubsecuente);
-    }
-
-    return calcularPagosNetosDistribuidos(primaNetaCobrable, pagos);
+    return financialCalculator.calcularPagosNetosConAbonosManuales({
+        primaNeta,
+        otrosServiciosContratados,
+        primaTotal,
+        gastosExpedicion,
+        montoAbono,
+        emisionEnPrimerPago,
+        numeroPagos
+    });
 };
 
 const generarMontosConEmisionEnPrimerPago = (primaTotal, primaNeta, otrosServiciosContratados, gastosExpedicion, cantidadRecibos) => {
     if (cantidadRecibos <= 0) return [];
-    const redondearCentavos = monto => Number((Number(monto) || 0).toFixed(2));
-    const costoTotal = redondearCentavos(Math.max(0, Number(primaTotal) || 0));
-    const primaNetaCobrable = (Number(primaNeta) || 0) + (Number(otrosServiciosContratados) || 0);
-    const subtotalPoliza = costoTotal / 1.16;
-    const emisionTotal = Math.max(0, Number(gastosExpedicion) || 0);
-    const recargosTotales = subtotalPoliza - primaNetaCobrable - emisionTotal;
-    const basePorRecibo = (primaNetaCobrable + recargosTotales) / cantidadRecibos;
-    const montos = Array.from({ length: cantidadRecibos }, (_, indice) => {
-        const subtotal = basePorRecibo + (indice === 0 ? emisionTotal : 0);
-        return redondearCentavos(subtotal * 1.16);
+    return financialCalculator.calcularMontosRecibos({
+        primaTotal,
+        primaNeta,
+        otrosServiciosContratados,
+        gastosExpedicion,
+        emisionEnPrimerPago: true,
+        numeroPagos: cantidadRecibos
     });
-    const sumaRecibos = redondearCentavos(montos.reduce((total, monto) => total + monto, 0));
-    montos[0] = redondearCentavos(montos[0] + costoTotal - sumaRecibos);
-
-    return montos;
 };
 
 const distribuirMontoTotalPorRecibos = (montoTotal, cantidadRecibos) => {
-    const total = Number(montoTotal) || 0;
-    const cantidad = Math.max(1, Number(cantidadRecibos) || 1);
-    const montoSubsecuente = Number((total / cantidad).toFixed(2));
-    const montoPrimerRecibo = Number((
-        total - (montoSubsecuente * (cantidad - 1))
-    ).toFixed(2));
-
-    return Array.from({ length: cantidad }, (_, indice) => indice === 0
-        ? montoPrimerRecibo
-        : montoSubsecuente);
+    return financialCalculator.calcularMontosRecibos({
+        primaTotal: montoTotal,
+        numeroPagos: cantidadRecibos
+    });
 };
 
 const calcularMontosRecibos = ({
@@ -300,62 +248,20 @@ const calcularMontosRecibos = ({
     emisionEnPrimerPago,
     numeroPagos
 }) => {
-    const pagos = Math.max(1, Number(numeroPagos) || 1);
-    const costoTotal = Number(primaTotal) || 0;
-    const abonoManual = Number(montoAbono) || 0;
-    if (abonoManual > 0) {
-        const primerPagoManual = Number(primerPago) || 0;
-        const montoPrimerRecibo = primerPagoManual > 0
-            ? primerPagoManual
-            : Number((costoTotal - (abonoManual * (pagos - 1))).toFixed(2));
-
-        return Array.from({ length: pagos }, (_, indice) => Number(
-            indice === 0 ? montoPrimerRecibo : abonoManual
-        ));
-    }
-
-    if (emisionEnPrimerPago !== true) {
-        return distribuirMontoTotalPorRecibos(costoTotal, pagos);
-    }
-
-    return generarMontosConEmisionEnPrimerPago(
-        costoTotal,
+    return financialCalculator.calcularMontosRecibos({
+        primaTotal,
         primaNeta,
         otrosServiciosContratados,
         gastosExpedicion,
-        pagos
-    );
+        montoAbono,
+        primerPago,
+        emisionEnPrimerPago,
+        numeroPagos
+    });
 };
 
 const validarImportesRecibos = (recibos, primaTotal) => {
-    const total = Number(primaTotal);
-    if (!Number.isFinite(total) || total <= 0) {
-        return 'La Prima Total debe ser mayor a cero para generar recibos fraccionados.';
-    }
-
-    const recibosValidos = Array.isArray(recibos) && recibos.length > 0;
-    if (!recibosValidos) {
-        return 'No se generaron recibos para el plan de pagos.';
-    }
-
-    const importes = recibos.map(recibo => Number(recibo?.montoRecibo));
-    if (importes.some(importe =>
-        !Number.isFinite(importe)
-        || importe < 0
-        || Math.abs(importe * 100 - Math.round(importe * 100)) > 1e-7
-        || (total > 0 && importe === 0)
-    )) {
-        return 'El plan contiene recibos con importes inválidos, negativos o en cero.';
-    }
-
-    const sumaCentavos = importes.reduce((suma, importe) => suma + Math.round(importe * 100), 0);
-    const totalCentavos = Math.round(total * 100);
-    const diferenciaCentavos = Math.abs(sumaCentavos - totalCentavos);
-    if (diferenciaCentavos > 1) {
-        return `La suma de los recibos no coincide con la Prima Total. Diferencia: $${(diferenciaCentavos / 100).toFixed(2)}; el máximo permitido es $0.01.`;
-    }
-
-    return null;
+    return financialCalculator.validarImportesRecibos(recibos, primaTotal);
 };
 
 const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago, montoAbono, opciones = {}) => {
@@ -371,16 +277,21 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
             ? Math.min(totalRecibos, Math.max(0, opciones.cantidadRecibos))
             : totalRecibos }, (_, index) => indiceInicial + index);
     
-    const montosPlan = calcularMontosRecibos({
+    const tablaRecibos = financialCalculator.generarTablaRecibos({
         primaTotal,
+        tipoPago,
+        duracionMeses,
+        fechaInicio,
         primaNeta: opciones.primaNeta,
         otrosServiciosContratados: opciones.otrosServiciosContratados,
         gastosExpedicion: opciones.gastosExpedicion,
         montoAbono,
         primerPago,
         emisionEnPrimerPago: opciones.emisionEnPrimerPago,
-        numeroPagos: totalRecibos
+        forzarDerechoPrimerPago: opciones.emisionEnPrimerPago,
+        derechoEmision: opciones.gastosExpedicion
     });
+    const montosPlan = tablaRecibos.map(recibo => recibo.montoRecibo);
     const pagosNetosDistribuidos = calcularPagosNetosConAbonosManuales({
         primaNeta: opciones.primaNeta,
         otrosServiciosContratados: opciones.otrosServiciosContratados,
@@ -2120,6 +2031,104 @@ const enviarRecordatorioManual = async (req, res) => {
     }
 };
 
+const calcularVistaPreviaPoliza = async (req, res) => {
+    try {
+        const usuario = req.user || {};
+        const empresaId = usuario.empresaId || req.tenantFilter?.empresaId;
+        if (!empresaId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+
+        const body = req.body || {};
+        const primaTotal = Number(body.primaTotal);
+        const primaNeta = Number(body.primaNeta) || 0;
+        const derechoEmision = Number(body.derechoEmision ?? body.gastosExpedicion) || 0;
+        const otrosServicios = Number(body.otrosServicios ?? body.otrosServiciosContratados) || 0;
+        const ivaPct = body.ivaPct === undefined ? 16 : Number(body.ivaPct);
+        const duracionMeses = normalizarDuracionMeses(body.duracionMeses);
+        const tiposPagoPermitidos = new Set(['anual', 'semestral', 'trimestral', 'mensual']);
+        if (!Number.isFinite(primaTotal) || primaTotal <= 0
+            || !Number.isFinite(primaNeta) || primaNeta < 0
+            || !Number.isFinite(derechoEmision) || derechoEmision < 0
+            || !Number.isFinite(otrosServicios) || otrosServicios < 0
+            || !Number.isFinite(ivaPct) || ivaPct < 0
+            || !tiposPagoPermitidos.has(String(body.tipoPago || '').toLowerCase())
+            || !duracionMeses || duracionMeses > 600
+            || typeof body.fechaInicio !== 'string' || !body.fechaInicio.trim()) {
+            return res.status(400).json({ success: false, error: 'Los importes, duración o fecha para calcular la vista previa no son válidos.' });
+        }
+
+        const subtotalDeseado = financialCalculator.roundMoney(primaTotal / (1 + ivaPct / 100));
+        const recargo = body.recargo === undefined
+            ? financialCalculator.roundMoney(subtotalDeseado - primaNeta - derechoEmision - otrosServicios)
+            : Number(body.recargo);
+        if (!Number.isFinite(recargo)) {
+            return res.status(400).json({ success: false, error: 'El recargo indicado no es válido.' });
+        }
+        const desglose = financialCalculator.calcularDesglosePrima({
+            primaNeta,
+            derechoEmision,
+            recargo,
+            otrosServicios,
+            ivaPct
+        });
+        const recibos = regenerarRecibosPendientes({
+            recibosActuales: Array.isArray(body.recibos) ? body.recibos : [],
+            primaTotal,
+            fechaInicio: body.fechaInicio,
+            tipoPago: body.tipoPago,
+            duracionMeses,
+            primerPago: body.primerPago,
+            montoAbono: body.montoAbono,
+            primaNeta,
+            otrosServiciosContratados: otrosServicios,
+            gastosExpedicion: derechoEmision,
+            emisionEnPrimerPago: body.forzarDerechoPrimerPago === true
+                || body.emisionEnPrimerPago === true,
+            forzarRecalculo: body.forzarRecalculo === true
+        });
+        const errorImportes = validarImportesRecibos(recibos, primaTotal);
+        if (errorImportes) {
+            return res.status(400).json({ success: false, error: errorImportes });
+        }
+        const resumenFinanciero = {
+            primaNeta,
+            otrosServiciosContratados: otrosServicios,
+            primaNetaCobrable: financialCalculator.roundMoney(primaNeta + otrosServicios),
+            recargos: desglose.recargo,
+            emision: derechoEmision,
+            iva: desglose.iva,
+            total: primaTotal
+        };
+        const sumaPagados = financialCalculator.roundMoney(recibos
+            .filter(recibo => esReciboPagado(recibo))
+            .reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0));
+        const saldoRestante = financialCalculator.roundMoney(recibos
+            .filter(recibo => ['pendiente', 'atrasado'].includes(
+                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+            ))
+            .reduce((total, recibo) => total + (Number(recibo.montoRecibo) || 0), 0));
+        const cuotasPendientes = recibos.filter(recibo =>
+            ['pendiente', 'atrasado'].includes(String(recibo.estadoRecibo || recibo.estado || '').toLowerCase())
+        ).length;
+        return res.json({
+            success: true,
+            desglose,
+            recibos,
+            sumaPagados,
+            saldoRestante,
+            cuotasPendientes,
+            resumenFinanciero
+        });
+    } catch (error) {
+        console.error('[calcularVistaPreviaPoliza] Error:', error);
+        return res.status(400).json({
+            success: false,
+            error: error.message || 'No fue posible calcular la vista previa financiera.'
+        });
+    }
+};
+
 // FASE 6: MÉTRICAS DEL DASHBOARD DE SEGUROS
 const obtenerMetricasSeguros = async (req, res) => {
     try {
@@ -2461,6 +2470,247 @@ const migrarFechasAgenda = async (req, res) => {
 };
 
 // ENDPOINT: Obtener eventos de pólizas para el calendario (Módulo de Seguros)
+const obtenerMetricasDashboardPredictivo = async (req, res) => {
+    try {
+        const usuario = req.user || {};
+        const empresaId = usuario.empresaId || req.tenantFilter?.empresaId;
+        if (!empresaId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        const filtroBase = {
+            ...(req.tenantFilter || { empresaId }),
+            deletedAt: null
+        };
+        if (!req.tenantFilter?.empresaId) filtroBase.empresaId = empresaId;
+        const esAdmin = usuario.role === 'admin' || usuario.isSuperAdmin === true;
+        if (!esAdmin) {
+            const asesorId = usuario._id || usuario.id;
+            if (!mongoose.Types.ObjectId.isValid(asesorId)) {
+                return res.status(403).json({ success: false, error: 'No se pudo determinar el asesor del usuario.' });
+            }
+            filtroBase.asesorId = new mongoose.Types.ObjectId(asesorId);
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const sumarDias = dias => {
+            const fecha = new Date(hoy);
+            fecha.setDate(fecha.getDate() + dias);
+            return fecha;
+        };
+        const fecha30 = sumarDias(30);
+        const fecha60 = sumarDias(60);
+        const fecha90 = sumarDias(90);
+        const pipeline = [
+            { $match: filtroBase },
+            {
+                $facet: {
+                    proyeccion: [
+                        {
+                            $project: {
+                                moneda: { $ifNull: ['$moneda', 'MXN'] },
+                                partidas: {
+                                    $cond: [
+                                        { $gt: [{ $size: { $ifNull: ['$recibos', []] } }, 0] },
+                                        {
+                                            $map: {
+                                                input: { $ifNull: ['$recibos', []] },
+                                                as: 'recibo',
+                                                in: {
+                                                    fecha: {
+                                                        $convert: {
+                                                            input: {
+                                                                $ifNull: [
+                                                                    '$$recibo.fechaVencimientoRecibo',
+                                                                    '$$recibo.fechaVencimiento'
+                                                                ]
+                                                            },
+                                                            to: 'date',
+                                                            onError: null,
+                                                            onNull: null
+                                                        }
+                                                    },
+                                                    monto: { $ifNull: ['$$recibo.montoRecibo', 0] },
+                                                    estado: {
+                                                        $toLower: {
+                                                            $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado']
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            $cond: [
+                                                { $ne: [{ $ifNull: ['$proximoPago', null] }, null] },
+                                                [{
+                                                    fecha: {
+                                                        $convert: {
+                                                            input: '$proximoPago',
+                                                            to: 'date',
+                                                            onError: null,
+                                                            onNull: null
+                                                        }
+                                                    },
+                                                    monto: {
+                                                        $cond: [
+                                                            { $gt: [{ $ifNull: ['$montoAbono', 0] }, 0] },
+                                                            '$montoAbono',
+                                                            {
+                                                                $cond: [
+                                                                    { $gt: [{ $ifNull: ['$saldoRestante', 0] }, 0] },
+                                                                    '$saldoRestante',
+                                                                    { $ifNull: ['$primaTotal', 0] }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    estado: 'pendiente'
+                                                }],
+                                                []
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        { $unwind: '$partidas' },
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $ne: ['$partidas.fecha', null] },
+                                        { $lte: ['$partidas.fecha', fecha90] },
+                                        { $not: [{ $in: ['$partidas.estado', ['pagado', 'cancelado']] }] }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: '$moneda',
+                                dias30: {
+                                    $sum: { $cond: [{ $lte: ['$partidas.fecha', fecha30] }, '$partidas.monto', 0] }
+                                },
+                                dias60: {
+                                    $sum: { $cond: [{ $lte: ['$partidas.fecha', fecha60] }, '$partidas.monto', 0] }
+                                },
+                                dias90: { $sum: '$partidas.monto' }
+                            }
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                moneda: '$_id',
+                                dias30: 1,
+                                dias60: 1,
+                                dias90: 1
+                            }
+                        },
+                        { $sort: { moneda: 1 } }
+                    ],
+                    renovaciones: [
+                        {
+                            $match: {
+                                'fechas.vencimiento': { $gte: hoy, $lte: fecha60 }
+                            }
+                        },
+                        {
+                            $project: {
+                                estado: {
+                                    $toLower: {
+                                        $ifNull: [
+                                            '$estadoRenovacion',
+                                            { $ifNull: [{ $arrayElemAt: ['$renovaciones.estadoRenovacion', -1] }, '$estado'] }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            $project: {
+                                categoria: {
+                                    $switch: {
+                                        branches: [
+                                            { case: { $in: ['$estado', ['renovada', 'renovado', 'completada', 'completado']] }, then: 'Renovada' },
+                                            { case: { $in: ['$estado', ['cancelada', 'cancelado']] }, then: 'Cancelada' },
+                                            { case: { $in: ['$estado', ['contactado', 'contactada']] }, then: 'Contactado' }
+                                        ],
+                                        default: 'En Proceso'
+                                    }
+                                }
+                            }
+                        },
+                        { $group: { _id: '$categoria', total: { $sum: 1 } } }
+                    ],
+                    aseguradoras: [
+                        { $match: { estado: { $regex: /^activa$/i } } },
+                        {
+                            $group: {
+                                _id: {
+                                    aseguradora: { $ifNull: ['$aseguradora', 'Sin aseguradora'] },
+                                    moneda: { $ifNull: ['$moneda', 'MXN'] }
+                                },
+                                primaTotal: { $sum: { $ifNull: ['$primaTotal', 0] } },
+                                polizas: { $sum: 1 }
+                            }
+                        },
+                        { $sort: { primaTotal: -1, '_id.aseguradora': 1, '_id.moneda': 1 } },
+                        {
+                            $project: {
+                                _id: 0,
+                                aseguradora: '$_id.aseguradora',
+                                moneda: '$_id.moneda',
+                                primaTotal: 1,
+                                polizas: 1
+                            }
+                        }
+                    ],
+                    asesores: [
+                        {
+                            $group: {
+                                _id: {
+                                    asesor: { $ifNull: ['$asesorId', '$asesorNombre'] },
+                                    moneda: { $ifNull: ['$moneda', 'MXN'] }
+                                },
+                                asesor: { $first: { $ifNull: ['$asesorNombre', 'Asesor sin nombre'] } },
+                                primaGestionada: { $sum: { $ifNull: ['$primaTotal', 0] } },
+                                polizasAsignadas: { $sum: 1 }
+                            }
+                        },
+                        { $sort: { primaGestionada: -1, asesor: 1, '_id.moneda': 1 } },
+                        {
+                            $project: {
+                                _id: 0,
+                                asesorId: '$_id.asesor',
+                                asesor: 1,
+                                moneda: '$_id.moneda',
+                                primaGestionada: 1,
+                                polizasAsignadas: 1
+                            }
+                        }
+                    ]
+                }
+            }
+        ];
+        const [result = {}] = await Poliza.aggregate(pipeline);
+        const renovaciones = { 'En Proceso': 0, Contactado: 0, Renovada: 0, Cancelada: 0 };
+        for (const item of result.renovaciones || []) renovaciones[item._id] = item.total;
+        return res.json({
+            success: true,
+            proyeccionCobranza: result.proyeccion || [],
+            prediccionRenovaciones: renovaciones,
+            distribucionAseguradoras: result.aseguradoras || [],
+            rendimientoAsesores: result.asesores || []
+        });
+    } catch (error) {
+        console.error('[obtenerMetricasDashboardPredictivo] Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'No fue posible calcular las métricas predictivas del dashboard.'
+        });
+    }
+};
+
 const obtenerEventosAgenda = async (req, res) => {
     try {
         const empresaId = req.user.empresaId;
@@ -5486,7 +5736,9 @@ module.exports = {
     exportarReporteExcel,
     exportarReportePDF,
     enviarRecordatorioManual,
+    calcularVistaPreviaPoliza,
     obtenerMetricasSeguros,
+    obtenerMetricasDashboardPredictivo,
     obtenerEventosAgenda,
     migrarFechasAgenda,
     renovarPago,

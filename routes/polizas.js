@@ -53,6 +53,7 @@ const upload = multer({
 // RUTAS DE PÓLIZAS
 // ==========================================
 router.post('/importar-excel', auth, applyTenantFilter, upload.single('archivo'), polizaController.importarPolizasExcel);
+router.post('/calcular-vista-previa', auth, applyTenantFilter, polizaController.calcularVistaPreviaPoliza);
 router.post('/', auth, applyTenantFilter, polizaController.crearPoliza);
 router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
 
@@ -60,6 +61,7 @@ router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
 // RUTAS ESPECÍFICAS - DEBEN IR ANTES DE /:id
 // ==========================================
 router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
+router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
 router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
 router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
 router.put('/cobranza-diaria/:polizaId/resolver', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);

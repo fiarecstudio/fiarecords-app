@@ -10,6 +10,9 @@ const { enviarEmail } = require('../services/notificationService');
 
 const MAX_INBOX_MESSAGES = 50;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_EMAIL_SOURCE_BYTES = 15 * 1024 * 1024;
+const IMAP_CONNECT_TIMEOUT_MS = 10000;
+const IMAP_READ_TIMEOUT_MS = 30000;
 const EMAIL_HTML_OPTIONS = {
     allowedTags: [
         'a', 'b', 'blockquote', 'br', 'caption', 'center', 'div', 'em', 'font',
@@ -52,7 +55,9 @@ function getImapConfig() {
             host: IMAP_HOST,
             port,
             tls: true,
-            authTimeout: 10000,
+            connTimeout: IMAP_CONNECT_TIMEOUT_MS,
+            authTimeout: IMAP_CONNECT_TIMEOUT_MS,
+            socketTimeout: IMAP_READ_TIMEOUT_MS,
             tlsOptions: { servername: IMAP_HOST }
         }
     };
@@ -87,11 +92,22 @@ function fetchByUids(connection, uids, options) {
                 });
                 message.on('body', (stream, info) => {
                     let body = '';
+                    let bodyBytes = 0;
+                    let bodyTooLarge = false;
                     stream.on('data', chunk => {
+                        bodyBytes += chunk.length;
+                        if (bodyBytes > MAX_EMAIL_SOURCE_BYTES) {
+                            bodyTooLarge = true;
+                            return;
+                        }
                         body += chunk.toString('utf8');
                     });
                     stream.once('error', rejectMessage);
                     stream.once('end', () => {
+                        if (bodyTooLarge) {
+                            rejectMessage(new Error('El correo excede el tamaño máximo permitido para lectura.'));
+                            return;
+                        }
                         const part = { which: info.which, size: info.size, body };
                         if (/^HEADER/i.test(part.which)) part.body = Imap.parseHeader(part.body);
                         parts.push(part);
@@ -158,11 +174,14 @@ async function resolveMailbox(connection, requestedFolder) {
 }
 
 function getMailboxRole(name, attributes = []) {
-    const key = `${name} ${attributes.join(' ')}`.toLowerCase();
-    if (/\\junk|spam|junk|correo no deseado/.test(key)) return 'spam';
-    if (/\\trash|\\deleted|trash|papelera|deleted|eliminados/.test(key)) return 'trash';
-    if (/\\sent|sent|enviados/.test(key)) return 'sent';
-    if (/\\inbox|inbox|entrada/.test(key)) return 'inbox';
+    const flags = attributes.map(attribute => String(attribute).toLowerCase());
+    const key = String(name).toLowerCase();
+    const leaf = key.split(/[./]/).pop();
+    if (flags.includes('\\junk') || /^(spam|junk|correo no deseado)$/.test(leaf)) return 'spam';
+    if (flags.includes('\\trash') || flags.includes('\\deleted')
+        || /^(trash|papelera|deleted|eliminados)$/.test(leaf)) return 'trash';
+    if (flags.includes('\\sent') || /^(sent|sent items|enviados|elementos enviados)$/.test(leaf)) return 'sent';
+    if (flags.includes('\\inbox') || key === 'inbox') return 'inbox';
     return 'folder';
 }
 
@@ -187,16 +206,32 @@ async function getFolders(req, res) {
 }
 
 async function createFolder(req, res) {
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    if (!name || name.length > 120 || /[\r\n\x00]/.test(name) || name.startsWith('/') || name.endsWith('/')) {
+    const requestedName = typeof req.body?.name === 'string' ? req.body.name : '';
+    const name = requestedName
+        .replace(/[^\p{L}\p{N} _-]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^[-_]+|[-_]+$/g, '');
+    if (!name || name.length > 120) {
         return res.status(400).json({ success: false, error: 'Indica un nombre de carpeta válido (máximo 120 caracteres).' });
     }
     let connection;
     try {
         connection = await imaps.connect(getImapConfig());
         connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
-        await connection.addBox(name);
-        return res.status(201).json({ success: true, folder: name });
+        let fullPath = name;
+        try {
+            await connection.addBox(fullPath);
+        } catch (directError) {
+            fullPath = `INBOX.${name}`;
+            try {
+                await connection.addBox(fullPath);
+            } catch (fallbackError) {
+                fallbackError.cause = directError;
+                throw fallbackError;
+            }
+        }
+        return res.status(201).json({ success: true, folderName: name, fullPath });
     } catch (error) {
         console.error('[BandejaEntrada] Error al crear carpeta IMAP:', error);
         const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;
@@ -584,12 +619,22 @@ async function getEmailDetail(req, res) {
             connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
             const mailbox = await resolveMailbox(connection, String(req.query.folder || 'INBOX'));
             await connection.openBox(mailbox);
-            const messages = await connection.search([['UID', String(uid)]], { bodies: [''], markSeen: false });
+            const messages = await fetchByUids(connection, [uid], { bodies: [''], markSeen: false });
             const message = messages.find(item => String(item.attributes.uid) === String(uid));
             const sourcePart = message && getTextPart(message);
             if (!sourcePart) return res.status(404).json({ success: false, error: 'El correo ya no existe en esa carpeta.' });
 
             const parsed = await simpleParser(sourcePart.body);
+            const attachmentBytes = (parsed.attachments || []).reduce(
+                (total, attachment) => total + (Number(attachment.size) || 0),
+                0
+            );
+            if (attachmentBytes > MAX_ATTACHMENT_BYTES) {
+                return res.status(413).json({
+                    success: false,
+                    error: 'Los adjuntos del correo exceden el tamaño máximo permitido de 10 MB.'
+                });
+            }
             const fromValue = parsed.from?.value?.[0];
             const recipients = addresses => (addresses?.value || []).map(({ address }) => address).filter(Boolean);
             const replyAllEmails = [
@@ -628,6 +673,7 @@ async function getEmailDetail(req, res) {
         } catch (error) {
             console.error('[BandejaEntrada] Error al consultar detalle:', error);
             const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503
+                : /excede el tamaño máximo/.test(error.message) ? 413
                 : /no está permitida|no existe en el servidor IMAP/.test(error.message) ? 400 : 502;
             return res.status(status).json({
                 success: false,
