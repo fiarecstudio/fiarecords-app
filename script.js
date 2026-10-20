@@ -786,6 +786,58 @@ let proyectoIdEnEdicion = null;
         return n.toFixed(2);
     }
 
+    function formatCurrency(amount, currency = 'MXN') {
+        const value = Number(amount);
+        return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency
+        }).format(Number.isFinite(value) ? value : 0);
+    }
+
+    function createEmptyStateMarkup({ icon, title, message, actionLabel, actionKey }) {
+        const actionMarkup = actionLabel && actionKey
+            ? `<button type="button" class="btn btn-primary btn-sm" data-empty-action="${escapeHTML(actionKey)}">${escapeHTML(actionLabel)}</button>`
+            : '';
+        return `<div class="empty-state">
+            <i class="bi ${escapeHTML(icon)} empty-state-icon" aria-hidden="true"></i>
+            <h3 class="empty-state-title">${escapeHTML(title)}</h3>
+            <p class="empty-state-message">${escapeHTML(message)}</p>
+            ${actionMarkup}
+        </div>`;
+    }
+
+    function bindEmptyStateAction(container, actionKey, handler) {
+        container.querySelector(`[data-empty-action="${actionKey}"]`)?.addEventListener('click', handler);
+    }
+
+    function renderTableSkeleton(tbody, labels, rowCount = 4) {
+        const widths = [48, 68, 38, 58, 74, 44, 62, 52, 35];
+        tbody.setAttribute('aria-busy', 'true');
+        tbody.innerHTML = Array.from({ length: rowCount }, (_, rowIndex) => `
+            <tr aria-hidden="true">
+                ${labels.map((label, columnIndex) => {
+                    const width = widths[(rowIndex * 3 + columnIndex) % widths.length];
+                    return `<td data-label="${escapeHTML(label)}"><span class="skeleton" style="width:${width}%"></span></td>`;
+                }).join('')}
+            </tr>
+        `).join('');
+    }
+
+    function renderEmailListSkeleton(list, rowCount = 4) {
+        const widths = [54, 72, 43, 64];
+        list.setAttribute('aria-busy', 'true');
+        list.innerHTML = Array.from({ length: rowCount }, (_, index) => `
+            <div class="email-skeleton-row" aria-hidden="true">
+                <div class="email-skeleton-heading">
+                    <span class="skeleton" style="width:${widths[index % widths.length]}%"></span>
+                    <span class="skeleton email-skeleton-time"></span>
+                </div>
+                <span class="skeleton email-skeleton-subject" style="width:${widths[(index + 1) % widths.length]}%"></span>
+                <span class="skeleton email-skeleton-snippet" style="width:${widths[(index + 2) % widths.length]}%"></span>
+            </div>
+        `).join('');
+    }
+
     function safeString(str, defaultVal = '') {
         if (!str) return defaultVal;
         return escapeHTML(str);
@@ -3724,6 +3776,8 @@ let proyectoIdEnEdicion = null;
             document.getElementById('bandeja-vacio')?.classList.remove('d-none');
             document.getElementById('bandeja-lectura')?.classList.add('d-none');
         }
+        const hasVisibleMessages = Boolean(lista.querySelector('[data-email-id], .scheduled-email-card'));
+        if (!hasVisibleMessages) renderEmailListSkeleton(lista);
         actualizarEstadoSincronizacion('⟳ Sincronizando...', true);
 
         try {
@@ -3765,7 +3819,21 @@ let proyectoIdEnEdicion = null;
             renderizarListaBandeja();
             cargarContadorProgramados();
         } catch (error) {
+            if (requestId !== secuenciaConsultaBandeja) return;
             actualizarEstadoSincronizacion('No fue posible sincronizar. Se conserva la lista anterior.');
+            lista.removeAttribute('aria-busy');
+            if (correosBandejaEntrada.length) {
+                renderizarListaBandeja();
+            } else {
+                lista.innerHTML = `<div class="bandeja-list-message">${createEmptyStateMarkup({
+                    icon: 'bi-cloud-slash',
+                    title: 'No se pudo cargar la bandeja',
+                    message: 'Comprueba tu conexión e inténtalo de nuevo.',
+                    actionLabel: 'Reintentar',
+                    actionKey: 'reload-inbox'
+                })}</div>`;
+                bindEmptyStateAction(lista, 'reload-inbox', () => cargarBandejaEntrada({ folder }));
+            }
             showToast(error.message || 'No fue posible cargar la bandeja.', 'error');
         }
     }
@@ -3816,6 +3884,8 @@ let proyectoIdEnEdicion = null;
     }
 
     async function cargarCorreosProgramados() {
+        const lista = document.getElementById('bandeja-lista');
+        if (lista && !lista.querySelector('.scheduled-email-card')) renderEmailListSkeleton(lista);
         actualizarEstadoSincronizacion('⟳ Cargando correos programados...', true);
         try {
             const response = await fetchAPI('/api/bandeja-entrada/programados');
@@ -3830,6 +3900,17 @@ let proyectoIdEnEdicion = null;
             renderizarListaBandeja();
         } catch (error) {
             actualizarEstadoSincronizacion('No fue posible cargar los correos programados.');
+            if (lista) {
+                lista.removeAttribute('aria-busy');
+                lista.innerHTML = `<div class="bandeja-list-message">${createEmptyStateMarkup({
+                    icon: 'bi-cloud-slash',
+                    title: 'No se pudieron cargar los programados',
+                    message: 'Comprueba tu conexión e inténtalo de nuevo.',
+                    actionLabel: 'Reintentar',
+                    actionKey: 'reload-scheduled'
+                })}</div>`;
+                bindEmptyStateAction(lista, 'reload-scheduled', () => cargarCorreosProgramados());
+            }
             showToast(error.message || 'No fue posible consultar los correos programados.', 'error');
         }
     }
@@ -3870,8 +3951,16 @@ let proyectoIdEnEdicion = null;
             correo.mensaje
         ].map(normalizarTextoCorreo).join(' ').includes(query));
         document.getElementById('bandeja-contador').textContent = `${matching.length} correos programados`;
+        lista.removeAttribute('aria-busy');
         if (!matching.length) {
-            lista.innerHTML = `<div class="bandeja-list-message text-muted">${query ? 'No hay correos programados que coincidan con la búsqueda.' : 'No hay correos programados.'}</div>`;
+            const emptyMessage = query
+                ? 'No hay correos programados que coincidan con la búsqueda.'
+                : 'Aquí aparecerán los mensajes que hayas programado para envío.';
+            lista.innerHTML = `<div class="bandeja-list-message">${createEmptyStateMarkup({
+                icon: 'bi-send-check',
+                title: query ? 'Sin coincidencias' : 'No hay correos programados',
+                message: emptyMessage
+            })}</div>`;
             return;
         }
         lista.innerHTML = matching.map(correo => {
@@ -3893,6 +3982,7 @@ let proyectoIdEnEdicion = null;
 
     function renderizarListaBandeja() {
         const lista = document.getElementById('bandeja-lista');
+        lista.removeAttribute('aria-busy');
         if (carpetaBandejaActual === 'PROGRAMADOS') {
             renderizarListaCorreosProgramados();
             return;
@@ -3908,12 +3998,17 @@ let proyectoIdEnEdicion = null;
                 ? 'No hay correos no leídos en esta carpeta.'
                 : query ? 'No hay correos que coincidan con la búsqueda.' : 'No hay mensajes en esta carpeta.';
             if (!lista.querySelector('.bandeja-list-message') || lista.querySelector('.bandeja-list-message').textContent !== message) {
-                lista.innerHTML = `<div class="bandeja-list-message text-muted">${message}</div>`;
+                lista.innerHTML = `<div class="bandeja-list-message">${createEmptyStateMarkup({
+                    icon: query ? 'bi-search' : 'bi-envelope-open',
+                    title: query ? 'Sin coincidencias' : 'Bandeja vacía',
+                    message
+                })}</div>`;
             }
             return;
         }
 
         lista.querySelector('.bandeja-list-message')?.remove();
+        lista.querySelectorAll('.email-skeleton-row').forEach(row => row.remove());
         const existing = new Map(Array.from(lista.querySelectorAll('[data-email-id]'))
             .map(button => [button.dataset.emailId, button]));
         const retained = new Set();
@@ -7102,10 +7197,10 @@ Fecha de firma: {{FECHA}}`;
                 if (polizas && polizas.length > 0) {
                     tablaPolizas.innerHTML = polizas.map(p => {
                         const fechaEliminacion = p.deletedAt
-                            ? new Date(p.deletedAt).toLocaleDateString()
+                            ? new Date(p.deletedAt).toLocaleDateString('es-MX')
                             : 'N/A';
                         const fechaVencimiento = p.fechas?.vencimiento
-                            ? new Date(p.fechas.vencimiento).toLocaleDateString()
+                            ? new Date(p.fechas.vencimiento).toLocaleDateString('es-MX')
                             : 'N/A';
 
                         const pagosArray = p.pagos || [];
@@ -7116,7 +7211,7 @@ Fecha de firma: {{FECHA}}`;
                         if (cantidadPagos > 0) {
                             pagosHTML = `
                                 <span class="badge bg-primary">${cantidadPagos} pago${cantidadPagos > 1 ? 's' : ''}</span>
-                                <span class="small text-success fw-bold">$${totalPagado.toFixed(2)}</span>
+                                <span class="small text-success fw-bold currency-value">${formatCurrency(totalPagado, p.moneda || 'MXN')}</span>
                             `;
                         }
 
@@ -7125,9 +7220,9 @@ Fecha de firma: {{FECHA}}`;
                                 <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                                 <td>${escapeHTML(p.cliente || 'N/A')}</td>
                                 <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
-                                <td>${fechaVencimiento}</td>
+                                <td class="date-value">${fechaVencimiento}</td>
                                 <td>${pagosHTML}</td>
-                                <td>${fechaEliminacion}</td>
+                                <td class="date-value">${fechaEliminacion}</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-success" onclick="app.restaurarPoliza('${p._id}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="app.borrarPermanente('${p._id}')" title="Eliminar definitivamente"><i class="bi bi-trash"></i></button>
@@ -8164,8 +8259,8 @@ Fecha de firma: {{FECHA}}`;
         const polizasPagina = polizasFiltradas.slice(inicio, fin);
 
         tabla.innerHTML = polizasPagina.map(p => {
-            const fechaProximoPago = p.proximoPago 
-                ? new Date(p.proximoPago).toLocaleDateString() 
+            const fechaProximoPago = p.proximoPago
+                ? new Date(p.proximoPago).toLocaleDateString('es-MX')
                 : 'N/A';
             const estado = calcularEstadoPago(p.proximoPago);
             
@@ -8182,9 +8277,9 @@ Fecha de firma: {{FECHA}}`;
                     <td>${escapeHTML(p.cliente || 'N/A')}</td>
                     <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                     <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
-                    <td>$${primaTotal.toFixed(2)} ${escapeHTML(moneda)}</td>
-                    <td>$${montoPagado.toFixed(2)} ${escapeHTML(moneda)}</td>
-                    <td>$${saldoRestante.toFixed(2)} ${escapeHTML(moneda)}</td>
+                    <td class="currency-value">${formatCurrency(primaTotal, moneda)}</td>
+                    <td class="currency-value">${formatCurrency(montoPagado, moneda)}</td>
+                    <td class="currency-value">${formatCurrency(saldoRestante, moneda)}</td>
                     <td>
                         <button class="btn btn-sm btn-success" onclick="app.registrarPagoRapido('${p._id}')" title="Registrar Pago"><i class="bi bi-cash"></i> Pagar</button>
                         <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Ver Historial"><i class="bi bi-clock-history"></i></button>
@@ -9719,11 +9814,11 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <input type="hidden" id="poliza-cliente-id" value="${escapeHTML(clienteId || '')}">
                     <div class="mb-3">
-                        <label class="form-label">Número de Póliza *</label>
+                        <label class="form-label" for="poliza-numero">Número de Póliza *</label>
                         <input id="poliza-numero" class="swal2-input" value="${escapeHTML(datosPrellenados.numeroPoliza || '')}" placeholder="Ej: POL-2024-001">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Cliente *</label>
+                        <label class="form-label" for="poliza-cliente">Cliente *</label>
                         <input id="poliza-cliente" class="swal2-input" value="${escapeHTML(datosPrellenados.cliente || '')}" placeholder="Nombre del cliente" ${clienteId ? 'readonly' : ''}>
                     </div>
                     <div class="row">
@@ -9752,16 +9847,16 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
-                            <label class="form-label">Correo Electrónico</label>
+                            <label class="form-label" for="poliza-email">Correo Electrónico</label>
                             <input id="poliza-email" type="email" class="swal2-input" value="${escapeHTML(datosPrellenados.clienteEmail || '')}" placeholder="cliente@ejemplo.com">
                         </div>
                         <div class="col-6 mb-3">
-                            <label class="form-label">Teléfono</label>
+                            <label class="form-label" for="poliza-telefono">Teléfono</label>
                             <input id="poliza-telefono" type="tel" class="swal2-input" value="${escapeHTML(datosPrellenados.clienteTelefono || '')}" placeholder="5512345678">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Frecuencia de Pago</label>
+                        <label class="form-label" for="poliza-tipo-pago">Frecuencia de Pago</label>
                         <select id="poliza-tipo-pago" class="swal2-input">
                             <option value="anual" ${datosPrellenados.tipoPago === 'anual' ? 'selected' : ''}>Anual</option>
                             <option value="semestral" ${datosPrellenados.tipoPago === 'semestral' ? 'selected' : ''}>Semestral</option>
@@ -9778,19 +9873,19 @@ Fecha de firma: {{FECHA}}`;
                         <input type="number" id="duracionMeses" class="form-control" value="${escapeHTML(datosPrellenados.duracionMeses || 12)}" min="1" step="1" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Aseguradora *</label>
+                        <label class="form-label" for="poliza-aseguradora">Aseguradora *</label>
                         <input id="poliza-aseguradora" class="swal2-input" value="${escapeHTML(datosPrellenados.aseguradora || '')}" placeholder="Ej: GNP, AXA, Qualitas">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Inciso</label>
+                        <label class="form-label" for="poliza-inciso">Inciso</label>
                         <input id="poliza-inciso" class="swal2-input" value="${escapeHTML(datosPrellenados.inciso || '1')}" placeholder="1">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Paquete / Cobertura</label>
+                        <label class="form-label" for="poliza-paquete">Paquete / Cobertura</label>
                         <input id="poliza-paquete" class="swal2-input" value="${escapeHTML(datosPrellenados.paquete || datosPrellenados.tipoSeguro || '')}" placeholder="Ej: AMPLIA">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Tipo de Seguro *</label>
+                        <label class="form-label" for="poliza-tipo">Tipo de Seguro *</label>
                         <select id="poliza-tipo" class="swal2-input">
                             <option value="">Seleccionar...</option>
                             <option value="Vehicular" ${datosPrellenados.tipoSeguro === 'Vehicular' ? 'selected' : ''}>Vehicular</option>
@@ -9801,11 +9896,11 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
-                            <label class="form-label">Fecha Inicio *</label>
+                            <label class="form-label" for="poliza-inicio">Fecha Inicio *</label>
                             <input id="poliza-inicio" type="date" class="swal2-input" value="${escapeHTML(datosPrellenados.fechaInicio || '')}">
                         </div>
                         <div class="col-6 mb-3">
-                            <label class="form-label">Fecha Vencimiento *</label>
+                            <label class="form-label" for="poliza-vencimiento">Fecha Vencimiento *</label>
                             <input id="poliza-vencimiento" type="date" class="swal2-input" value="${escapeHTML(datosPrellenados.fechaVencimiento || '')}">
                         </div>
                     </div>
@@ -9857,26 +9952,26 @@ Fecha de firma: {{FECHA}}`;
                     </div>
                     <div id="poliza-payment-fields" class="row poliza-payment-fields">
                         <div class="col-6 mb-3">
-                            <label class="form-label">Monto de Abono</label>
+                            <label class="form-label" for="poliza-monto-abono">Monto de Abono</label>
                             <input id="poliza-monto-abono" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.montoAbono || '')}" placeholder="0.00">
                         </div>
                         <div class="col-6 mb-3">
-                            <label class="form-label">Primer Pago (si aplica)</label>
+                            <label class="form-label" for="poliza-primer-pago">Primer Pago (si aplica)</label>
                             <input id="poliza-primer-pago" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.primerPago || '')}" placeholder="0.00">
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
-                            <label class="form-label">Días Anticipación Aviso</label>
+                            <label class="form-label" for="poliza-dias-aviso">Días Anticipación Aviso</label>
                             <input id="poliza-dias-aviso" type="number" class="swal2-input" value="${escapeHTML(datosPrellenados.diasAnticipacionAviso || 3)}" placeholder="3">
                         </div>
                         <div class="col-6 mb-3">
-                            <label class="form-label">Días de Gracia</label>
+                            <label class="form-label" for="poliza-dias-gracia">Días de Gracia</label>
                             <input id="poliza-dias-gracia" type="number" class="swal2-input" value="${escapeHTML(datosPrellenados.diasGracia || 30)}" placeholder="30">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Asesor</label>
+                        <label class="form-label" for="poliza-asesor">Asesor</label>
                         <select id="poliza-asesor" class="swal2-input">
                             <option value="">${editando ? 'Mantener asesor actual' : 'Seleccionar asesor...'}</option>
                             ${asesoresOptions}
@@ -9886,7 +9981,7 @@ Fecha de firma: {{FECHA}}`;
                     <div class="poliza-edit-actions">
                         <button type="button" id="btnRecalcularRecibos" class="btn btn-warning">Recalcular Recibos</button>
                         <button type="button" id="btnCancelarPoliza" class="btn btn-danger btn-sm">Cancelar Póliza</button>
-                        <label class="form-check poliza-restructure-option">
+                        <label class="form-check poliza-restructure-option" for="poliza-forzar-recalculo">
                             <input type="checkbox" id="poliza-forzar-recalculo" class="form-check-input mt-1">
                             <span class="form-check-label">⚠️ Reestructurar/Recalcular todos los recibos (Útil para corregir recibos en $0 o cargas de Excel)</span>
                         </label>
@@ -9973,29 +10068,27 @@ Fecha de firma: {{FECHA}}`;
                     if (requestId !== solicitudVistaPrevia) return false;
                     planRecibosCambio = resultadoPreview.recibos;
                     recibosRecalculados = true;
+                    const moneda = document.getElementById('poliza-moneda').value || 'MXN';
                     document.getElementById('tablaVistaPreviaRecibos').innerHTML = planRecibosCambio.map(recibo => `
                         <tr>
                             <td>${escapeHTML(recibo.numeroRecibo)}</td>
                             <td>${escapeHTML(recibo.periodoCobertura)}</td>
-                            <td>$${Number(recibo.montoRecibo).toFixed(2)} ${escapeHTML(document.getElementById('poliza-moneda').value || 'MXN')}</td>
-                            <td>$${Number(recibo.montoPagoNeto).toFixed(2)} ${escapeHTML(document.getElementById('poliza-moneda').value || 'MXN')}</td>
-                            <td>${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()}</td>
+                            <td class="currency-value">${formatCurrency(recibo.montoRecibo, moneda)}</td>
+                            <td class="currency-value">${formatCurrency(recibo.montoPagoNeto, moneda)}</td>
+                            <td class="date-value">${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString('es-MX')}</td>
                             <td>${escapeHTML(recibo.estadoRecibo)}</td>
                         </tr>`).join('');
                     document.getElementById('resumenVistaPreviaRecibos').textContent =
-                        `Pagado corregido: $${resultadoPreview.sumaPagados.toFixed(2)} ${document.getElementById('poliza-moneda').value || 'MXN'} · Saldo: $${resultadoPreview.saldoRestante.toFixed(2)} ${document.getElementById('poliza-moneda').value || 'MXN'}`;
+                        `Pagado corregido: ${formatCurrency(resultadoPreview.sumaPagados, moneda)} · Saldo: ${formatCurrency(resultadoPreview.saldoRestante, moneda)}`;
                     document.getElementById('vistaPreviaRecibos').hidden = false;
-                    const moneda = document.getElementById('poliza-moneda').value || 'MXN';
-                    const formatoMoneda = monto =>
-                        `$${new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(monto)} ${moneda}`;
                     const resumen = resultadoPreview.resumenFinanciero;
-                    document.getElementById('resumenPrimaNeta').textContent = formatoMoneda(resumen.primaNeta);
-                    document.getElementById('resumenOtrosServicios').textContent = formatoMoneda(resumen.otrosServiciosContratados);
-                    document.getElementById('resumenPrimaNetaCobrable').textContent = formatoMoneda(resumen.primaNetaCobrable);
-                    document.getElementById('resumenRecargos').textContent = formatoMoneda(resumen.recargos);
-                    document.getElementById('resumenEmision').textContent = formatoMoneda(resumen.emision);
-                    document.getElementById('resumenIva').textContent = formatoMoneda(resumen.iva);
-                    document.getElementById('resumenPrimaTotal').textContent = formatoMoneda(resumen.total);
+                    document.getElementById('resumenPrimaNeta').textContent = formatCurrency(resumen.primaNeta, moneda);
+                    document.getElementById('resumenOtrosServicios').textContent = formatCurrency(resumen.otrosServiciosContratados, moneda);
+                    document.getElementById('resumenPrimaNetaCobrable').textContent = formatCurrency(resumen.primaNetaCobrable, moneda);
+                    document.getElementById('resumenRecargos').textContent = formatCurrency(resumen.recargos, moneda);
+                    document.getElementById('resumenEmision').textContent = formatCurrency(resumen.emision, moneda);
+                    document.getElementById('resumenIva').textContent = formatCurrency(resumen.iva, moneda);
+                    document.getElementById('resumenPrimaTotal').textContent = formatCurrency(resumen.total, moneda);
                     document.getElementById('resumenFinancieroPoliza').hidden = false;
                     return true;
                 };
@@ -10341,7 +10434,7 @@ Fecha de firma: {{FECHA}}`;
         }
 
         if (!tieneCache) {
-            tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center">Cargando...</td></tr>';
+            renderTableSkeleton(tabla, ['Número', 'Cliente', 'Asesor', 'Aseguradora', 'Vencimiento', 'Próximo pago', 'Estado', 'Notificaciones', 'Acciones']);
         }
         if (tieneCache && !navigator.onLine) return;
 
@@ -10368,6 +10461,7 @@ Fecha de firma: {{FECHA}}`;
 
             const respuesta = await fetchAPI(`/api/polizas?${params.toString()}`, { silent: tieneCache });
             if (respuesta?.offline) {
+                tabla.removeAttribute('aria-busy');
                 tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 return;
             }
@@ -10411,6 +10505,7 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
             tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+            tabla.removeAttribute('aria-busy');
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
         }
@@ -10419,6 +10514,7 @@ Fecha de firma: {{FECHA}}`;
     function renderizarPaginaPolizas() {
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) return;
+        tabla.removeAttribute('aria-busy');
 
         if (!polizasPaginacionServidor) {
             actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
@@ -10438,10 +10534,21 @@ Fecha de firma: {{FECHA}}`;
             : obtenerPolizasFiltradas();
 
         if (polizasFiltradas.length === 0) {
-            const mensaje = polizasPaginacionServidor?.total === 0 || polizasGlobales.length === 0
-                ? 'No hay pólizas registradas'
-                : 'No hay resultados para esta búsqueda';
-            tabla.innerHTML = `<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">${mensaje}</td></tr>`;
+            const sinRegistros = polizasPaginacionServidor?.total === 0 || polizasGlobales.length === 0;
+            const title = sinRegistros ? 'No hay pólizas registradas' : 'No hay resultados para esta búsqueda';
+            const message = sinRegistros
+                ? 'Registra una póliza para comenzar a dar seguimiento a tus asegurados.'
+                : 'Prueba ajustar los filtros o el texto de búsqueda.';
+            tabla.innerHTML = `<tr><td colspan="9" class="empty-state-cell">${createEmptyStateMarkup({
+                icon: sinRegistros ? 'bi-shield-plus' : 'bi-search',
+                title,
+                message,
+                actionLabel: sinRegistros ? '+ Registrar póliza' : null,
+                actionKey: sinRegistros ? 'create-policy' : null
+            })}</td></tr>`;
+            if (sinRegistros) {
+                bindEmptyStateAction(tabla, 'create-policy', () => abrirModalNuevaPoliza());
+            }
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
             return;
@@ -10459,10 +10566,10 @@ Fecha de firma: {{FECHA}}`;
 
         tabla.innerHTML = polizasPagina.map(p => {
             const fechaVencimiento = p.fechas?.vencimiento
-                ? new Date(p.fechas.vencimiento).toLocaleDateString()
+                ? new Date(p.fechas.vencimiento).toLocaleDateString('es-MX')
                 : 'N/A';
             const fechaProximoPago = p.proximoPago
-                ? new Date(p.proximoPago).toLocaleDateString()
+                ? new Date(p.proximoPago).toLocaleDateString('es-MX')
                 : 'N/A';
             const estado = p.estado || 'Activa';
             const clasesEstado = {
@@ -10479,12 +10586,12 @@ Fecha de firma: {{FECHA}}`;
 
             const esPendienteRenovacion = estado === 'PendienteRenovacion';
             const btnRenovar = esPendienteRenovacion
-                ? `<button class="btn btn-sm btn-warning" onclick="app.renovarPoliza('${p._id}')" title="Renovar Póliza"><i class="bi bi-arrow-repeat"></i> Renovar</button>`
+                ? `<button class="btn btn-sm btn-warning poliza-renew-button" onclick="app.renovarPoliza('${p._id}')" title="Renovar Póliza" aria-label="Renovar póliza"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button>`
                 : '';
 
             return `
                 <tr>
-                    <td data-label="Número">${escapeHTML(p.numeroPoliza || 'N/A')}</td>
+                    <td data-label="Número" class="numeric-value">${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                     <td data-label="Cliente">
                         <div>${escapeHTML(p.cliente || 'N/A')}</div>
                         <div class="poliza-cliente-detalles">
@@ -10494,20 +10601,22 @@ Fecha de firma: {{FECHA}}`;
                     </td>
                     <td data-label="Asesor">${escapeHTML(obtenerNombreAsesorPoliza(p) || 'Sin Asesor')}</td>
                     <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
-                    <td data-label="Vencimiento">${fechaVencimiento}</td>
-                    <td data-label="Próximo pago">${fechaProximoPago}</td>
-                    <td data-label="Estado" class="polizas-col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}">${escapeHTML(etiquetaEstado)}</span></td>
+                    <td data-label="Vencimiento" class="date-value">${fechaVencimiento}</td>
+                    <td data-label="Próximo pago" class="date-value">${fechaProximoPago}</td>
+                    <td data-label="Estado" class="polizas-col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}${clasesEstado[estado] === 'warning' ? ' text-dark' : ''}">${escapeHTML(etiquetaEstado)}</span></td>
                     <td data-label="Notificaciones" class="polizas-col-notificaciones">
                         <div class="polizas-notification-buttons">
                             <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
                         </div>
                     </td>
                     <td data-label="Acciones" class="table-actions polizas-col-acciones">
-                        ${btnRenovar}
-                        <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos"><i class="bi bi-cash-coin"></i></button>
-                        <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar"><i class="bi bi-bell"></i></button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('${p._id}')" title="Editar"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPoliza('${p._id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+                        <div class="polizas-action-buttons" role="group" aria-label="Acciones de póliza">
+                            ${btnRenovar}
+                            <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos" aria-label="Pagos"><i class="bi bi-cash-coin" aria-hidden="true"></i></button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar" aria-label="Notificar"><i class="bi bi-bell" aria-hidden="true"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('${p._id}')" title="Editar" aria-label="Editar"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPoliza('${p._id}')" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -10678,8 +10787,11 @@ Fecha de firma: {{FECHA}}`;
             if (!notificaciones || notificaciones.length === 0) {
                 await Swal.fire({
                     title: 'Historial de Notificaciones',
-                    text: 'No hay notificaciones registradas para esta póliza',
-                    icon: 'info'
+                    html: createEmptyStateMarkup({
+                        icon: 'bi-bell-slash',
+                        title: 'Sin notificaciones',
+                        message: 'Aún no hay notificaciones registradas para esta póliza.'
+                    })
                 });
                 return;
             }
@@ -10931,7 +11043,7 @@ Fecha de firma: {{FECHA}}`;
             if (tieneCache) {
                 renderizar(datosCacheados);
             } else {
-                tabla.innerHTML = '<tr><td colspan="7" class="text-center">Cargando datos de cobranza...</td></tr>';
+                renderTableSkeleton(tabla, ['Cliente', 'Tipo de Póliza', 'Monto a Pagar', 'Vencimiento', 'Estado', 'Días Restantes', 'Acciones']);
                 cobranzaGlobales = [];
                 paginaActualCobranza = 1;
                 if (paginacion) paginacion.innerHTML = '';
@@ -10940,6 +11052,7 @@ Fecha de firma: {{FECHA}}`;
 
             if (!navigator.onLine) {
                 if (!tieneCache) {
+                    tabla.removeAttribute('aria-busy');
                     tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 } else {
                     showToast('Modo Offline: Mostrando cobranza guardada.', 'info');
@@ -10960,6 +11073,7 @@ Fecha de firma: {{FECHA}}`;
                 if (asesorId) params.set('asesorId', asesorId);
                 const datos = await fetchAPI(`/api/polizas/cobranza-diaria?${params.toString()}`, { silent: tieneCache });
                 if (datos?.offline) {
+                    tabla.removeAttribute('aria-busy');
                     tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                     return;
                 }
@@ -10970,6 +11084,7 @@ Fecha de firma: {{FECHA}}`;
                     showToast('Modo Offline: Mostrando cobranza guardada.', 'info');
                     return;
                 }
+                tabla.removeAttribute('aria-busy');
                 tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 cobranzaGlobales = [];
                 paginaActualCobranza = 1;
@@ -11021,6 +11136,7 @@ Fecha de firma: {{FECHA}}`;
         const sinCobranza = document.getElementById('sin-cobranza');
 
         if (!tabla) return;
+        tabla.removeAttribute('aria-busy');
 
         const paginacionTab = cobranzaPaginacionServidor?.[tabActiva];
         const totalPaginas = paginacionTab
@@ -11044,7 +11160,7 @@ Fecha de firma: {{FECHA}}`;
                 const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
                 const montoPagar = reciboPendiente?.montoRecibo ?? p.montoPagar ?? 0;
                 const moneda = p.moneda || 'MXN';
-                const montoFormateado = '$' + Number(montoPagar).toFixed(2) + ' ' + moneda;
+                const montoFormateado = formatCurrency(montoPagar, moneda);
 
                 let estadoClase = 'bg-secondary';
                 if (p.estado === 'Activa') estadoClase = 'bg-success';
@@ -11111,20 +11227,33 @@ Fecha de firma: {{FECHA}}`;
                 const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info cobranza-icon-button" onclick="app.agregarEnlacePago(\'' + polizaIdAttr + '\')" title="Agregar Enlace de Pago" aria-label="Agregar enlace de pago"><i class="bi bi-link-45deg" aria-hidden="true"></i></button>';
                 const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success cobranza-icon-button" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Registrar Pago y Resolver" aria-label="Registrar pago y resolver"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
 
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento">' + escapeHTML(fechaMostrar) + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
+                const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value">' + escapeHTML(fechaMostrar) + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';
         } else {
             tabla.innerHTML = '';
             if (sinCobranza) {
-                const mensajes = {
-                    vencidas: 'No hay pólizas vencidas en este momento.',
-                    cobrosHoy: 'No hay cobros programados para hoy.',
-                    porVencer: 'No hay pólizas por vencer en los próximos 7 días.'
+                const estadosVacios = {
+                    vencidas: {
+                        title: 'Sin pólizas vencidas',
+                        message: 'No hay pólizas vencidas que requieran seguimiento en este momento.',
+                        icon: 'bi-check-circle'
+                    },
+                    cobrosHoy: {
+                        title: 'Sin cobros pendientes hoy',
+                        message: 'No hay cobros programados para hoy. La lista se actualizará cuando haya pólizas por gestionar.',
+                        icon: 'bi-calendar-check'
+                    },
+                    porVencer: {
+                        title: 'Sin pólizas por vencer',
+                        message: 'No hay pólizas que venzan en los próximos 7 días.',
+                        icon: 'bi-calendar-check'
+                    }
                 };
-                const msgEl = sinCobranza.querySelector('p');
-                if (msgEl) msgEl.textContent = mensajes[tabActiva] || mensajes.cobrosHoy;
+                const emptyState = estadosVacios[tabActiva] || estadosVacios.cobrosHoy;
+                sinCobranza.innerHTML = createEmptyStateMarkup(emptyState);
                 sinCobranza.style.display = 'block';
             }
         }
@@ -11522,20 +11651,20 @@ Fecha de firma: {{FECHA}}`;
                             const montoRecibo = Number(recibo.montoRecibo) || 0;
                             const pagoNeto = Number(recibo.montoPagoNeto) || 0;
                             const fechaVencimiento = recibo.fechaVencimientoRecibo
-                                ? new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()
+                                ? new Date(recibo.fechaVencimientoRecibo).toLocaleDateString('es-MX')
                                 : 'N/A';
                             return `<tr>
-                                <td>${escapeHTML(recibo.numeroRecibo || 'N/A')}</td>
+                                <td class="numeric-value">${escapeHTML(recibo.numeroRecibo || 'N/A')}</td>
                                 <td>${escapeHTML(recibo.periodoCobertura || 'N/A')}</td>
-                                <td>$${montoRecibo.toFixed(2)} ${escapeHTML(moneda)}</td>
-                                <td>$${pagoNeto.toFixed(2)} ${escapeHTML(moneda)}</td>
-                                <td>${fechaVencimiento}</td>
+                                <td class="currency-value">${formatCurrency(montoRecibo, moneda)}</td>
+                                <td class="currency-value">${formatCurrency(pagoNeto, moneda)}</td>
+                                <td class="date-value">${fechaVencimiento}</td>
                                 <td>${escapeHTML(recibo.estadoRecibo || 'pendiente')}</td>
                             </tr>`;
                         }).join('');
                         document.getElementById('resumenVistaPreviaRecibos').textContent =
-                            `Costo: $${nuevoCostoTotal.toFixed(2)} ${moneda} · Pagado: $${resultadoPreview.sumaPagados.toFixed(2)} ${moneda} · `
-                            + `Saldo restante: $${resultadoPreview.saldoRestante.toFixed(2)} ${moneda} · `
+                            `Costo: ${formatCurrency(nuevoCostoTotal, moneda)} · Pagado: ${formatCurrency(resultadoPreview.sumaPagados, moneda)} · `
+                            + `Saldo restante: ${formatCurrency(resultadoPreview.saldoRestante, moneda)} · `
                             + `${recibosPagados} pagados · ${resultadoPreview.cuotasPendientes} cuotas pendientes · `
                             + `${recibosPendientes} recibos generados`;
                         document.getElementById('vistaPreviaRecibos').hidden = false;
@@ -12028,10 +12157,10 @@ Fecha de firma: {{FECHA}}`;
                 if (polizas && polizas.length > 0) {
                     tabla.innerHTML = polizas.map(p => {
                         const fechaEliminacion = p.deletedAt 
-                            ? new Date(p.deletedAt).toLocaleDateString() 
+                            ? new Date(p.deletedAt).toLocaleDateString('es-MX')
                             : 'N/A';
                         const fechaVencimiento = p.fechas?.vencimiento 
-                            ? new Date(p.fechas.vencimiento).toLocaleDateString() 
+                            ? new Date(p.fechas.vencimiento).toLocaleDateString('es-MX')
                             : 'N/A';
                         
                         // Calcular resumen de pagos
@@ -12044,7 +12173,7 @@ Fecha de firma: {{FECHA}}`;
                         if (cantidadPagos > 0) {
                             pagosHTML = `
                                 <span class="badge bg-primary">${cantidadPagos} pago${cantidadPagos > 1 ? 's' : ''}</span>
-                                <span class="small text-success fw-bold">$${totalPagado.toFixed(2)}</span>
+                                <span class="small text-success fw-bold currency-value">${formatCurrency(totalPagado, p.moneda || 'MXN')}</span>
                             `;
                         }
                         
@@ -12053,9 +12182,9 @@ Fecha de firma: {{FECHA}}`;
                                 <td>${escapeHTML(p.numeroPoliza || 'N/A')}</td>
                                 <td>${escapeHTML(p.cliente || 'N/A')}</td>
                                 <td>${escapeHTML(p.aseguradora || 'N/A')}</td>
-                                <td>${fechaVencimiento}</td>
+                                <td class="date-value">${fechaVencimiento}</td>
                                 <td>${pagosHTML}</td>
-                                <td>${fechaEliminacion}</td>
+                                <td class="date-value">${fechaEliminacion}</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-success" onclick="app.restaurarPoliza('${p._id}')" title="Restaurar"><i class="bi bi-arrow-counterclockwise"></i></button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="app.borrarPermanente('${p._id}')" title="Eliminar definitivamente"><i class="bi bi-trash"></i></button>
@@ -12183,17 +12312,17 @@ Fecha de firma: {{FECHA}}`;
                 const estadoRecibo = (r.estadoRecibo || '').toLowerCase();
                 const estadoClass = estadoRecibo === 'pagado' ? 'success' : 
                                    estadoRecibo === 'atrasado' ? 'danger' : 'warning';
-                const fechaVencimiento = r.fechaVencimientoRecibo ? new Date(r.fechaVencimientoRecibo).toLocaleDateString() : 'N/A';
-                const fechaPago = r.fechaPago ? new Date(r.fechaPago).toLocaleDateString() : '-';
+                const fechaVencimiento = r.fechaVencimientoRecibo ? new Date(r.fechaVencimientoRecibo).toLocaleDateString('es-MX') : 'N/A';
+                const fechaPago = r.fechaPago ? new Date(r.fechaPago).toLocaleDateString('es-MX') : '-';
                 
                 return `
                     <tr>
-                        <td><strong>${escapeHTML(r.numeroRecibo || 'N/A')}</strong></td>
-                        <td>${indiceVista + 1}/${recibosOrdenados.length}</td>
-                        <td>$${r.montoRecibo?.toFixed(2) || '0.00'} ${escapeHTML(poliza.moneda || 'MXN')}</td>
-                        <td>$${calcularPagoNeto(r.montoRecibo, indiceVista).toFixed(2)} ${escapeHTML(poliza.moneda || 'MXN')}</td>
-                        <td>${fechaVencimiento}</td>
-                        <td>${fechaPago}</td>
+                        <td class="numeric-value"><strong>${escapeHTML(r.numeroRecibo || 'N/A')}</strong></td>
+                        <td class="numeric-value">${indiceVista + 1}/${recibosOrdenados.length}</td>
+                        <td class="currency-value">${formatCurrency(r.montoRecibo, poliza.moneda || 'MXN')}</td>
+                        <td class="currency-value">${formatCurrency(calcularPagoNeto(r.montoRecibo, indiceVista), poliza.moneda || 'MXN')}</td>
+                        <td class="date-value">${fechaVencimiento}</td>
+                        <td class="date-value">${fechaPago}</td>
                         <td><span class="badge bg-${estadoClass}">${escapeHTML(r.estadoRecibo || 'N/A')}</span></td>
                         <td>
                             ${estadoRecibo === 'pendiente' ? 
@@ -12211,7 +12340,7 @@ Fecha de firma: {{FECHA}}`;
         const proximoPagoHTML = poliza.proximoPago 
             ? `<div class="alert alert-info mb-3 d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>Próximo pago:</strong> <span id="proximo-pago-fecha">${new Date(poliza.proximoPago).toLocaleDateString()}</span>
+                    <strong>Próximo pago:</strong> <span id="proximo-pago-fecha" class="date-value">${new Date(poliza.proximoPago).toLocaleDateString('es-MX')}</span>
                 </div>
                 <button class="btn btn-sm btn-outline-primary" onclick="app.editarProximoPago('${escapeHTML(poliza._id)}')" title="Editar Próximo Pago"><i class="bi bi-pencil"></i></button>
                </div>`
@@ -12275,8 +12404,8 @@ Fecha de firma: {{FECHA}}`;
             html: `
                 <div class="text-start">
                     <p><strong>Periodo:</strong> ${escapeHTML(recibo.periodoCobertura)}</p>
-                    <p><strong>Monto a pagar:</strong> $${recibo.montoRecibo?.toFixed(2)} ${escapeHTML(poliza.moneda || 'MXN')}</p>
-                    <p><strong>Vencimiento:</strong> ${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString()}</p>
+                    <p><strong>Monto a pagar:</strong> <span class="currency-value">${formatCurrency(recibo.montoRecibo, poliza.moneda || 'MXN')}</span></p>
+                    <p><strong>Vencimiento:</strong> <span class="date-value">${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString('es-MX')}</span></p>
                     <hr>
                     <label class="form-label fw-bold">Método de Pago</label>
                     <select id="pago-metodo" class="swal2-input">

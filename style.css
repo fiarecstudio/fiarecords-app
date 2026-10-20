@@ -2,6 +2,8 @@
    1. VARIABLES & RESET
    ========================================= */
 :root {
+  --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
   --primary-color: #6366f1; 
   --primary-hover: #4f46e5;
   --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
@@ -52,6 +54,48 @@ body.dark-mode {
     --bs-border-color: #333333;
 }
 
+.skeleton {
+    display: inline-block;
+    height: 0.75rem;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+}
+
+.email-skeleton-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.email-skeleton-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.email-skeleton-time { width: 2.5rem; flex: 0 0 2.5rem; }
+.email-skeleton-subject { height: 0.7rem; }
+.email-skeleton-snippet { height: 0.6rem; }
+
+body.dark-mode .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 200% 100%;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+}
+
 body { font-family: 'Inter', sans-serif; background-color: var(--background-color); color: var(--text-color-dark); font-size: 15px; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; margin: 0; }
 h1, h2, h3, h4, h5 { font-family: 'Poppins', sans-serif; color: var(--text-color-dark); }
 
@@ -68,13 +112,15 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .form-check-input:checked { background-color: var(--primary-color); border-color: var(--primary-color); }
 .form-check-label { color: var(--text-color-dark) !important; }
 .permisos-container { background-color: var(--input-bg) !important; border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; color: var(--text-color-dark); }
-.btn { border-radius: 10px; font-weight: 600; padding: 0.6rem 1.2rem; transition: all 0.2s; border: none; }
+.btn { border-radius: 10px; font-weight: 600; padding: 0.6rem 1.2rem; transition: var(--transition-fast); border: none; }
 .btn-primary { background: var(--primary-gradient); color: white; }
 .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
-.btn-success { background: var(--success-gradient); color: white; }
+.btn-success { background: linear-gradient(135deg, #047857 0%, #065f46 100%); color: white; }
 .btn-danger { background: var(--danger-gradient); color: white; }
 .btn-secondary, .btn-light { background: var(--secondary-button-bg); color: var(--secondary-button-text); border: 1px solid var(--border-color); }
 .btn-secondary:hover { background: var(--secondary-button-hover-bg); color: var(--text-color-dark); border-color: var(--text-color-light); }
+.badge.bg-warning { color: #111827 !important; font-weight: 600; }
+.badge.bg-info { color: #0f172a !important; }
 .modal-content { background-color: var(--card-background); color: var(--text-color-dark); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-lg); }
 .modal-header { border-bottom: 1px solid var(--border-color); }
 .modal-footer { border-top: 1px solid var(--border-color); }
@@ -148,9 +194,15 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 
 /* --- ESTILOS DE TABLA (NORMAL) --- */
 .table { --bs-table-bg: transparent; --bs-table-color: var(--text-color-dark); --bs-table-border-color: var(--border-color); }
+.table-hover tbody tr { transition: var(--transition-fast); }
 .table-hover tbody tr:hover { background-color: var(--secondary-button-bg); }
 .table thead th { background-color: var(--secondary-button-bg); color: var(--text-color-light); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid var(--border-color); }
 .table td { vertical-align: middle; }
+.numeric-value,
+.currency-value,
+.date-value,
+.poliza-financial-summary strong { font-variant-numeric: tabular-nums; }
+.currency-value { white-space: nowrap; }
 .table-actions .dropdown { position: static; }
 .table-actions .dropdown-menu { z-index: 1050; }
 #tablaPolizas {
@@ -182,7 +234,8 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 #cobranza-diaria .table-responsive {
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 #cobranza-diaria .table-responsive > table {
     width: 100%;
@@ -408,7 +461,7 @@ body.dark-mode #canvas-firma {
 .sidebar { width: 280px; background-color: var(--sidebar-background); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem 1rem; height: 100%; z-index: 1000; transition: width 0.25s ease, flex-basis 0.25s ease, padding 0.25s ease, transform 0.3s ease; flex-shrink: 0; }
 .sidebar-header { text-align: center; margin-bottom: 2rem; }
 .sidebar-nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
-.sidebar .nav-link-sidebar { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 4px; color: #6c757d; text-decoration: none; font-weight: 500; transition: all 0.3s ease; cursor: pointer; }
+.sidebar .nav-link-sidebar { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 4px; color: #6c757d; text-decoration: none; font-weight: 500; transition: var(--transition-fast); cursor: pointer; }
 .sidebar .nav-link-sidebar:hover,
 .sidebar .nav-link-sidebar.active { background-color: rgba(13, 110, 253, 0.08); color: #0d6efd !important; font-weight: 600; }
 body.dark-mode .sidebar .nav-link-sidebar { color: var(--text-color-light); }
@@ -718,8 +771,10 @@ body.dark-mode .main-footer .bi-heart-fill {
     .config-grid .card { margin-bottom: 0; }
 }
 
-.kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.kpi-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; cursor: pointer; transition: var(--transition-fast); }
 .kpi-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); }
+.insurance-kpi-card { transition: var(--transition-fast); }
+.insurance-kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
 
 .kanban-board { display: flex; overflow-x: auto; gap: 1.25rem; padding: 1rem 0.5rem 1.5rem 0.5rem; min-height: 400px; align-items: flex-start; scroll-snap-type: x mandatory; }
 
@@ -1206,6 +1261,11 @@ body.dark-mode .project-card:hover {
     #app-wrapper { height: 100dvh; }
     main { padding: 1rem; overflow-x: hidden; }
     .table-responsive { border: none; overflow: hidden; }
+    #cobranza-diaria .table-responsive {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
 
     .grid-container { grid-template-columns: 1fr; gap: 1rem; }
     .kpi-card { min-height: 100px; padding: 1rem; }
@@ -1705,6 +1765,13 @@ body.dark-mode .insurance-kpi-card.border-warning { border-left-color: #ffc107 !
     padding: 1rem;
     font-size: 0.875rem;
 }
+.bandeja-list-message .empty-state {
+    min-height: 180px;
+    padding: 1rem;
+    border: 0;
+    background: transparent;
+}
+.bandeja-list-message .empty-state-icon { font-size: 1.75rem; }
 .bandeja-email-item {
     position: relative;
     display: block;
@@ -2666,20 +2733,46 @@ body.dark-mode .fc-day-today {
     background-color: rgba(13, 110, 253, 0.1) !important;
 }
 
-/* Matte modal surfaces */
+/* Modal surfaces follow the active color theme. */
 .modal-content,
-.swal2-popup:not(.swal2-toast),
+.swal2-popup:not(.swal2-toast) {
+    background-color: var(--card-background) !important;
+    color: var(--text-color-dark) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px;
+}
+
+.modal.show .modal-content {
+    animation: modalFadeIn 0.24s var(--transition-easing) both;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal.show .modal-content { animation: none; }
+}
+
 body.dark-mode .modal-content,
 body.dark-mode .swal2-popup:not(.swal2-toast),
-[data-bs-theme="dark"] .modal-content {
+[data-bs-theme="dark"] .modal-content,
+[data-bs-theme="dark"] .swal2-popup:not(.swal2-toast) {
     background-color: #1a1a1a !important;
     color: #f1f1f1 !important;
     border: 1px solid #333 !important;
-    border-radius: 12px;
 }
 
 .modal-header,
 .modal-footer {
+    border-color: var(--border-color) !important;
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer,
+[data-bs-theme="dark"] .modal-header,
+[data-bs-theme="dark"] .modal-footer {
     border-color: #333 !important;
 }
 
@@ -2703,11 +2796,26 @@ body.dark-mode #modalResponderCorreo .btn-close,
 .swal2-html-container,
 .swal2-popup label,
 .swal2-popup .form-label {
+    color: var(--text-color-dark) !important;
+}
+
+body.dark-mode .modal-title,
+body.dark-mode .swal2-title,
+body.dark-mode .swal2-html-container,
+body.dark-mode .swal2-popup label,
+body.dark-mode .swal2-popup .form-label,
+[data-bs-theme="dark"] .modal-title,
+[data-bs-theme="dark"] .swal2-title,
+[data-bs-theme="dark"] .swal2-html-container,
+[data-bs-theme="dark"] .swal2-popup label,
+[data-bs-theme="dark"] .swal2-popup .form-label {
     color: #f1f1f1 !important;
 }
 
-.swal2-popup .text-muted,
-.swal2-popup .text-secondary {
+body.dark-mode .swal2-popup .text-muted,
+body.dark-mode .swal2-popup .text-secondary,
+[data-bs-theme="dark"] .swal2-popup .text-muted,
+[data-bs-theme="dark"] .swal2-popup .text-secondary {
     color: #b7b7b7 !important;
 }
 
@@ -2716,6 +2824,21 @@ body.dark-mode #modalResponderCorreo .btn-close,
 .swal2-popup input,
 .swal2-popup select,
 .swal2-popup textarea {
+    background-color: var(--input-bg) !important;
+    color: var(--text-color-dark) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+body.dark-mode .swal2-popup .swal2-input,
+body.dark-mode .swal2-popup .swal2-select,
+body.dark-mode .swal2-popup input,
+body.dark-mode .swal2-popup select,
+body.dark-mode .swal2-popup textarea,
+[data-bs-theme="dark"] .swal2-popup .swal2-input,
+[data-bs-theme="dark"] .swal2-popup .swal2-select,
+[data-bs-theme="dark"] .swal2-popup input,
+[data-bs-theme="dark"] .swal2-popup select,
+[data-bs-theme="dark"] .swal2-popup textarea {
     background-color: #242424 !important;
     color: #f1f1f1 !important;
     border: 1px solid #3a3a3a !important;
@@ -2725,6 +2848,50 @@ body.dark-mode #modalResponderCorreo .btn-close,
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 15px;
+}
+
+.empty-state {
+    display: flex;
+    min-height: 220px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    padding: 1.5rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    background: var(--card-background);
+    color: var(--text-color-light);
+    text-align: center;
+}
+
+.empty-state-icon {
+    color: var(--primary-color);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.empty-state-title {
+    margin: 0;
+    color: var(--text-color-dark);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.empty-state-message {
+    max-width: 34rem;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.empty-state .btn { margin-top: 0.25rem; }
+
+@media (max-width: 768px) {
+    #tablaPolizas tbody td.empty-state-cell {
+        display: block;
+        padding: 0.5rem;
+        text-align: center;
+    }
 }
 
 .poliza-edit-actions {
@@ -2776,6 +2943,28 @@ body.dark-mode #modalResponderCorreo .btn-close,
     gap: 10px;
 }
 
+#tablaPolizas .polizas-action-buttons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+}
+
+#tablaPolizas .polizas-action-buttons > .btn {
+    display: inline-flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+#tablaPolizas .polizas-action-buttons .poliza-renew-button {
+    border-radius: 999px;
+}
+
 @media (min-width: 992px) {
     #tablaPolizas .polizas-col-estado {
         min-width: 180px;
@@ -2790,8 +2979,8 @@ body.dark-mode #modalResponderCorreo .btn-close,
     }
 
     #tablaPolizas .polizas-col-acciones {
-        min-width: 130px;
-        text-align: center;
+        min-width: 190px;
+        text-align: right;
     }
 }
 
