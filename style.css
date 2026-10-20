@@ -205,30 +205,81 @@ body.dark-mode .logo-dinamico { filter: brightness(0) invert(1); }
 .currency-value { white-space: nowrap; }
 .table-actions .dropdown { position: static; }
 .table-actions .dropdown-menu { z-index: 1050; }
+.dropdown-menu .dropdown-item {
+    color: var(--text-color-dark) !important;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus,
+.dropdown-menu .dropdown-item:active {
+    background-color: var(--secondary-button-hover-bg) !important;
+    color: var(--text-color-dark) !important;
+}
+.dropdown-menu .dropdown-item.text-danger:hover,
+.dropdown-menu .dropdown-item.text-danger:focus {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #b91c1c !important;
+}
+body.dark-mode .dropdown-menu {
+    --bs-dropdown-bg: #1e1e1e;
+    --bs-dropdown-link-color: #e5e7eb;
+    --bs-dropdown-link-hover-bg: rgba(255, 255, 255, 0.12);
+    --bs-dropdown-link-hover-color: #ffffff;
+}
+body.dark-mode .dropdown-menu .dropdown-item {
+    color: #e5e7eb !important;
+}
+body.dark-mode .dropdown-menu .dropdown-item:hover,
+body.dark-mode .dropdown-menu .dropdown-item:focus,
+body.dark-mode .dropdown-menu .dropdown-item:active {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+}
+body.dark-mode .dropdown-menu .dropdown-item.text-danger:hover,
+body.dark-mode .dropdown-menu .dropdown-item.text-danger:focus {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #f87171 !important;
+}
 #tablaPolizas {
     width: 100%;
     table-layout: fixed;
 }
-#tablaPolizas th:nth-child(1) { width: 10%; }
-#tablaPolizas th:nth-child(2) { width: 22%; }
-#tablaPolizas th:nth-child(3) { width: 11%; }
-#tablaPolizas th:nth-child(4) { width: 11%; }
-#tablaPolizas th:nth-child(5) { width: 8%; }
+#tablaPolizas th:nth-child(1) { width: 32%; }
+#tablaPolizas th:nth-child(2) { width: 10%; }
+#tablaPolizas th:nth-child(3) { width: 12%; }
+#tablaPolizas th:nth-child(4) { width: 12%; }
+#tablaPolizas th:nth-child(5) { width: 12%; }
 #tablaPolizas th:nth-child(6) { width: 10%; }
-#tablaPolizas th:nth-child(7) { width: 9%; }
-#tablaPolizas th:nth-child(8) { width: 7%; }
-#tablaPolizas th:nth-child(9) { width: 12%; }
+#tablaPolizas th:nth-child(7) { width: 12%; }
 .poliza-cliente-detalles {
     min-width: 0;
     max-width: 100%;
     color: var(--text-color-light);
     font-size: 0.85em;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 #tablaPolizas td {
+    display: table-cell;
     min-width: 0;
-    overflow-wrap: anywhere;
+    vertical-align: middle;
+}
+#tablaPolizas .col-cliente {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#tablaPolizas .date-value {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+#tablaPolizas .poliza-row-clickable {
+    cursor: pointer;
 }
 
 #cobranza-diaria .table-responsive {
@@ -1274,6 +1325,7 @@ body.dark-mode .project-card:hover {
     .table tbody tr { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.5rem; background: var(--card-background); box-shadow: var(--shadow-sm); }
     .table tbody td { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding: 0.75rem 0.5rem; text-align: right; }
     #tablaPolizas tbody td {
+        display: flex;
         min-width: 0;
         max-width: 100%;
         overflow-wrap: anywhere;
@@ -1289,27 +1341,26 @@ body.dark-mode .project-card:hover {
     #tablaPolizas tbody td.polizas-col-estado .badge {
         flex-shrink: 0;
     }
-    #tablaPolizas tbody td.polizas-col-notificaciones {
-        width: auto;
-        min-width: 0;
-        justify-content: flex-end;
-        text-align: center;
-    }
-    #tablaPolizas tbody td.polizas-col-acciones {
+    #tablaPolizas tbody td.col-acciones {
         width: auto;
         min-width: 0;
         text-align: center;
     }
-    #tablaPolizas .polizas-notification-buttons {
-        justify-content: flex-end;
+    #tablaPolizas tbody td.col-cliente {
+        display: block;
+        max-width: 100%;
+        text-align: left;
+        white-space: normal;
     }
-    #tablaPolizas .poliza-cliente-detalles {
+    #tablaPolizas .poliza-cliente-detalles,
+    #tablaPolizas .poliza-cliente-serie {
         flex: 0 1 55%;
         min-width: 0;
         max-width: 55%;
         text-align: right;
         overflow-wrap: anywhere;
         word-break: break-word;
+        white-space: normal;
     }
     .table tbody td:last-child { border-bottom: none; }
     .table tbody td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--text-color-light); flex-shrink: 0; }
@@ -2936,22 +2987,17 @@ body.dark-mode .swal2-popup textarea,
     min-width: 0;
 }
 
-#tablaPolizas .polizas-notification-buttons {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
 #tablaPolizas .polizas-action-buttons {
     display: flex;
-    gap: 6px;
     align-items: center;
     justify-content: flex-end;
+    gap: 6px;
+    width: 100%;
+    min-height: 36px;
     flex-wrap: nowrap;
 }
 
-#tablaPolizas .polizas-action-buttons > .btn {
+#tablaPolizas .poliza-actions-toggle {
     display: inline-flex;
     flex: 0 0 32px;
     align-items: center;
@@ -2959,28 +3005,92 @@ body.dark-mode .swal2-popup textarea,
     width: 32px;
     height: 32px;
     padding: 0;
+    border-radius: 6px;
 }
 
 #tablaPolizas .polizas-action-buttons .poliza-renew-button {
-    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+#tablaPolizas .poliza-actions-toggle::after {
+    display: none;
+}
+
+#tablaPolizas .poliza-actions-toggle + .dropdown-menu {
+    min-width: 250px;
 }
 
 @media (min-width: 992px) {
-    #tablaPolizas .polizas-col-estado {
-        min-width: 180px;
-        padding-right: 15px;
+    #polizas .table-responsive {
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    #tablaPolizas {
+        width: 100% !important;
+        table-layout: fixed;
+    }
+
+    #tablaPolizas th,
+    #tablaPolizas td {
+        padding: 8px 6px;
+        min-width: 0;
         white-space: nowrap;
+    }
+
+    #tablaPolizas th.col-cliente { width: 32%; }
+    #tablaPolizas th.col-asesor { width: 10%; }
+    #tablaPolizas th.col-aseguradora { width: 12%; }
+    #tablaPolizas th.col-vencimiento { width: 12%; }
+    #tablaPolizas th.col-proximo-pago { width: 12%; }
+    #tablaPolizas th.col-estado { width: 10%; }
+    #tablaPolizas th.col-acciones { width: 12%; }
+
+    #tablaPolizas td.col-cliente {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #tablaPolizas td.col-cliente > div {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #tablaPolizas td.date-value {
+        padding: 8px 6px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+    #tablaPolizas .col-asesor {
         text-align: left;
     }
 
-    #tablaPolizas .polizas-col-notificaciones {
-        min-width: 110px;
+    #tablaPolizas .col-aseguradora {
+        text-align: left;
+    }
+
+    #tablaPolizas .col-vencimiento,
+    #tablaPolizas .col-proximo-pago {
         text-align: center;
     }
 
-    #tablaPolizas .polizas-col-acciones {
-        min-width: 190px;
-        text-align: right;
+    #tablaPolizas .col-estado {
+        white-space: nowrap;
+        text-align: center;
+    }
+
+    #tablaPolizas .col-acciones {
+        text-align: center;
     }
 }
 

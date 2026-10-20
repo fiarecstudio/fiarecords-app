@@ -10462,7 +10462,7 @@ Fecha de firma: {{FECHA}}`;
             const respuesta = await fetchAPI(`/api/polizas?${params.toString()}`, { silent: tieneCache });
             if (respuesta?.offline) {
                 tabla.removeAttribute('aria-busy');
-                tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="7" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                 return;
             }
             if (!respuesta?.success || !Array.isArray(respuesta.data)) {
@@ -10504,7 +10504,7 @@ Fecha de firma: {{FECHA}}`;
                 notificarDatosOffline();
                 return;
             }
-            tabla.innerHTML = '<tr><td colspan="9" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
+            tabla.innerHTML = '<tr><td colspan="7" data-label="Pólizas" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
             tabla.removeAttribute('aria-busy');
             const paginacion = document.getElementById('paginacionPolizas');
             if (paginacion) paginacion.innerHTML = '';
@@ -10515,6 +10515,46 @@ Fecha de firma: {{FECHA}}`;
         const tabla = document.getElementById('tablaPolizasBody');
         if (!tabla) return;
         tabla.removeAttribute('aria-busy');
+
+        if (tabla.dataset.rowNavigationBound !== 'true') {
+            tabla.addEventListener('click', event => {
+                const target = event.target instanceof Element ? event.target : event.target.parentElement;
+                if (!target) return;
+
+                const action = target.closest('[data-poliza-action]');
+                if (action) {
+                    const polizaId = action.dataset.polizaId;
+                    switch (action.dataset.polizaAction) {
+                        case 'renew':
+                            renovarPoliza(polizaId);
+                            break;
+                        case 'email':
+                            enviarRecordatorioCorreo(polizaId);
+                            break;
+                        case 'reminder':
+                            enviarNotificacionManual(polizaId);
+                            break;
+                        case 'payments':
+                            abrirPagosPolizaDesdeTabla(polizaId);
+                            break;
+                        case 'edit':
+                            editarPoliza(polizaId);
+                            break;
+                        case 'delete':
+                            eliminarPoliza(polizaId);
+                            break;
+                        default:
+                            return;
+                    }
+                    return;
+                }
+
+                if (target.closest('.dropdown, button, a, input, select, textarea')) return;
+                const row = target.closest('tr[data-policy-id]');
+                if (row) editarPoliza(row.dataset.policyId);
+            });
+            tabla.dataset.rowNavigationBound = 'true';
+        }
 
         if (!polizasPaginacionServidor) {
             actualizarOpcionesFiltroAseguradoras('filtro-aseguradora-polizas', polizasGlobales);
@@ -10539,7 +10579,7 @@ Fecha de firma: {{FECHA}}`;
             const message = sinRegistros
                 ? 'Registra una póliza para comenzar a dar seguimiento a tus asegurados.'
                 : 'Prueba ajustar los filtros o el texto de búsqueda.';
-            tabla.innerHTML = `<tr><td colspan="9" class="empty-state-cell">${createEmptyStateMarkup({
+            tabla.innerHTML = `<tr><td colspan="7" class="empty-state-cell">${createEmptyStateMarkup({
                 icon: sinRegistros ? 'bi-shield-plus' : 'bi-search',
                 title,
                 message,
@@ -10581,41 +10621,43 @@ Fecha de firma: {{FECHA}}`;
                 Renovada: 'secondary'
             };
             const etiquetaEstado = estado === 'PendienteRenovacion'
-                ? 'Pendiente Renovación'
+                ? 'Renov.'
                 : estado;
 
             const esPendienteRenovacion = estado === 'PendienteRenovacion';
             const btnRenovar = esPendienteRenovacion
-                ? `<button class="btn btn-sm btn-warning poliza-renew-button" onclick="app.renovarPoliza('${p._id}')" title="Renovar Póliza" aria-label="Renovar póliza"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button>`
+                ? `<button type="button" class="btn btn-sm btn-warning py-0 px-2 poliza-renew-button" style="font-size: 0.75rem;" data-poliza-action="renew" data-poliza-id="${escapeHTML(p._id)}" title="Renovar póliza">↻ Renovar</button>`
                 : '';
+            const polizaId = escapeHTML(p._id);
 
             return `
-                <tr>
-                    <td data-label="Número" class="numeric-value">${escapeHTML(p.numeroPoliza || 'N/A')}</td>
-                    <td data-label="Cliente">
-                        <div>${escapeHTML(p.cliente || 'N/A')}</div>
-                        <div class="poliza-cliente-detalles">
-                            ${p.descripcionVehiculo ? `<small class="d-block">${escapeHTML(p.descripcionVehiculo)}</small>` : ''}
-                            ${p.numeroSerie ? `<small class="d-block">Serie: ${escapeHTML(p.numeroSerie)}${p.tieneSerieDuplicada ? ' <span class="badge bg-danger ms-1">⚠️ Serie Duplicada</span>' : ''}</small>` : ''}
-                        </div>
+                <tr data-policy-id="${polizaId}" class="poliza-row-clickable">
+                    <td data-label="Cliente" class="col-cliente">
+                        <div class="poliza-cliente-nombre fw-bold">${escapeHTML(p.cliente || 'N/A')}</div>
+                        <div class="poliza-cliente-detalles text-muted">Póliza: ${escapeHTML(p.numeroPoliza || 'N/A')}${p.descripcionVehiculo ? ` • ${escapeHTML(p.descripcionVehiculo)}` : ''}</div>
+                        ${p.numeroSerie ? `<div class="poliza-cliente-serie small text-muted">Serie: ${escapeHTML(p.numeroSerie)}${p.tieneSerieDuplicada ? ' <span class="badge bg-danger ms-1">⚠️ Serie Duplicada</span>' : ''}</div>` : ''}
                     </td>
-                    <td data-label="Asesor">${escapeHTML(obtenerNombreAsesorPoliza(p) || 'Sin Asesor')}</td>
-                    <td data-label="Aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
-                    <td data-label="Vencimiento" class="date-value">${fechaVencimiento}</td>
-                    <td data-label="Próximo pago" class="date-value">${fechaProximoPago}</td>
-                    <td data-label="Estado" class="polizas-col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}${clasesEstado[estado] === 'warning' ? ' text-dark' : ''}">${escapeHTML(etiquetaEstado)}</span></td>
-                    <td data-label="Notificaciones" class="polizas-col-notificaciones">
-                        <div class="polizas-notification-buttons">
-                            <button class="btn btn-sm btn-outline-info" onclick="app.verHistorialNotificaciones('${p._id}')" title="Historial de Notificaciones"><i class="bi bi-envelope"></i></button>
-                        </div>
-                    </td>
-                    <td data-label="Acciones" class="table-actions polizas-col-acciones">
-                        <div class="polizas-action-buttons" role="group" aria-label="Acciones de póliza">
+                    <td data-label="Asesor" class="col-asesor">${escapeHTML(obtenerNombreAsesorPoliza(p) || 'Sin Asesor')}</td>
+                    <td data-label="Aseguradora" class="col-aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
+                    <td data-label="Venc." class="date-value col-vencimiento">${fechaVencimiento}</td>
+                    <td data-label="Próx. Pago" class="date-value col-proximo-pago">${fechaProximoPago}</td>
+                    <td data-label="Estado" class="polizas-col-estado col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}${clasesEstado[estado] === 'warning' ? ' text-dark' : ''}">${escapeHTML(etiquetaEstado)}</span></td>
+                    <td data-label="Acciones" class="table-actions col-acciones">
+                        <div class="polizas-action-buttons">
                             ${btnRenovar}
-                            <button class="btn btn-sm btn-outline-success" onclick="app.abrirModalPagos(${JSON.stringify(p).replace(/"/g, '&quot;')})" title="Pagos" aria-label="Pagos"><i class="bi bi-cash-coin" aria-hidden="true"></i></button>
-                            <button class="btn btn-sm btn-outline-warning" onclick="app.enviarNotificacionManual('${p._id}')" title="Notificar" aria-label="Notificar"><i class="bi bi-bell" aria-hidden="true"></i></button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="app.editarPoliza('${p._id}')" title="Editar" aria-label="Editar"><i class="bi bi-pencil" aria-hidden="true"></i></button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="app.eliminarPoliza('${p._id}')" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon btn-outline-secondary dropdown-toggle poliza-actions-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Más acciones">
+                                    <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><button type="button" class="dropdown-item" data-poliza-action="email" data-poliza-id="${polizaId}">✉️ Enviar Notificación por Correo</button></li>
+                                    <li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>
+                                    <li><button type="button" class="dropdown-item" data-poliza-action="payments" data-poliza-id="${polizaId}">💳 Ver / Registrar Pagos</button></li>
+                                    <li><button type="button" class="dropdown-item" data-poliza-action="edit" data-poliza-id="${polizaId}">✏️ Editar Póliza</button></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><button type="button" class="dropdown-item text-danger" data-poliza-action="delete" data-poliza-id="${polizaId}">🗑️ Eliminar Póliza</button></li>
+                                </ul>
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -10623,6 +10665,16 @@ Fecha de firma: {{FECHA}}`;
         }).join('');
 
         renderizarControlesPaginacion();
+    }
+
+    async function abrirPagosPolizaDesdeTabla(polizaId) {
+        try {
+            const poliza = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            await abrirModalPagos(poliza);
+        } catch (error) {
+            console.error('[abrirPagosPolizaDesdeTabla] Error al cargar póliza:', error);
+            await Swal.fire('Error', error.message || 'No se pudieron cargar los pagos de la póliza.', 'error');
+        }
     }
 
     function renderizarControlesPaginacion() {
