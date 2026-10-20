@@ -161,13 +161,17 @@ function generarTablaRecibos({
     const difference = totalCents - amounts.reduce((sum, amount) => sum + amount, 0);
     amounts[0] += difference;
 
-    return amounts.map((amount, index) => ({
-        numeroRecibo: `REC-${index + 1}`,
-        montoRecibo: fromCents(amount),
-        fechaVencimientoRecibo: addMonthsSafe(startDate, index * interval),
-        estadoRecibo: 'pendiente',
-        periodoCobertura: `${index + 1}/${count}`
-    }));
+    return amounts.map((amount, index) => {
+        const fechaVencimientoRecibo = addMonthsSafe(startDate, index * interval);
+        return {
+            numeroRecibo: `REC-${index + 1}`,
+            montoRecibo: fromCents(amount),
+            fechaVencimientoRecibo,
+            fechaFinGraciaRecibo: new Date(fechaVencimientoRecibo.getTime() + 30 * 24 * 60 * 60 * 1000),
+            estadoRecibo: 'pendiente',
+            periodoCobertura: `${index + 1}/${count}`
+        };
+    });
 }
 
 function calcularPagosNetosDistribuidos(primaNeta, numeroPagos) {

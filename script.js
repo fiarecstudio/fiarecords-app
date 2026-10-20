@@ -9588,13 +9588,15 @@ Fecha de firma: {{FECHA}}`;
             recibosOrigenPorIndice[indicePlan] = reciboActual;
             const montoRecibo = montosPlan[indicePlan];
             const numeroPeriodo = indicePlan + 1;
+            const fechaVencimientoRecibo = sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo);
             const reciboCalculado = {
                 ...(reciboActual || {}),
                 numeroRecibo: `REC-${numeroPeriodo}`,
                 periodoCobertura: `${numeroPeriodo}/${totalCuotas}`,
                 montoRecibo,
                 montoPagoNeto: pagosNetosDistribuidos[indicePlan],
-                fechaVencimientoRecibo: sumarMesesSeguro(fechaInicio, indicePlan * mesesIntervalo),
+                fechaVencimientoRecibo,
+                fechaFinGraciaRecibo: new Date(fechaVencimientoRecibo.getTime() + 30 * 24 * 60 * 60 * 1000),
                 estadoRecibo: reciboActual?.estadoRecibo || reciboActual?.estado || 'pendiente'
             };
             if (forzarRecalculo) {
@@ -11155,6 +11157,23 @@ Fecha de firma: {{FECHA}}`;
         if (badgePorVencer) badgePorVencer.textContent = totales.porVencer || 0;
     }
 
+    function obtenerFechaFinGraciaCobranza(poliza) {
+        const recibo = poliza.reciboPendiente;
+        const fechaFinExistente = recibo?.fechaFinGraciaRecibo || poliza.fechaFinGraciaRecibo;
+        if (fechaFinExistente) {
+            const fechaFin = new Date(fechaFinExistente);
+            if (!Number.isNaN(fechaFin.getTime())) return fechaFin;
+        }
+
+        const fechaVencimiento = recibo?.fechaVencimientoRecibo
+            || recibo?.fechaVencimiento
+            || poliza.proximoPago;
+        const fechaBase = fechaVencimiento ? new Date(fechaVencimiento) : null;
+        return fechaBase && !Number.isNaN(fechaBase.getTime())
+            ? new Date(fechaBase.getTime() + 30 * 24 * 60 * 60 * 1000)
+            : null;
+    }
+
     function renderizarTablaCobranza(polizas, tabActiva) {
         const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
@@ -11170,7 +11189,7 @@ Fecha de firma: {{FECHA}}`;
         cobranzaGlobales = ordenarPorFecha(filtradas, poliza =>
             poliza.tipoGestion === 'vencimiento_poliza'
                 ? poliza.vencimiento
-                : poliza.reciboPendiente?.fechaVencimientoRecibo || poliza.proximoPago || poliza.vencimiento,
+                : obtenerFechaFinGraciaCobranza(poliza) || poliza.proximoPago || poliza.vencimiento,
         ordenAscendente);
         if (!cobranzaPaginacionServidor) paginaActualCobranza = 1;
         renderizarPaginaCobranza(tabActiva);
@@ -11206,10 +11225,24 @@ Fecha de firma: {{FECHA}}`;
             tabla.innerHTML = polizasPagina.map(p => {
                 const polizaIdAttr = escapeHTML(String(p.polizaId || ''));
                 const reciboPendiente = p.reciboPendiente || null;
+                const fechaFinGracia = obtenerFechaFinGraciaCobranza(p);
                 const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString('es-MX') : 'N/A';
-                const fechaProximoPagoValor = reciboPendiente?.fechaVencimientoRecibo || p.proximoPago;
+                const fechaProximoPagoValor = fechaFinGracia || p.proximoPago;
                 const fechaProximoPago = fechaProximoPagoValor ? new Date(fechaProximoPagoValor).toLocaleDateString('es-MX') : 'N/A';
                 const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
+                const diasRestantesGracia = p.diasRestantesGracia !== null
+                    && p.diasRestantesGracia !== undefined
+                    && Number.isFinite(Number(p.diasRestantesGracia))
+                    ? Number(p.diasRestantesGracia)
+                    : fechaFinGracia
+                        ? Math.round((
+                            new Date(fechaFinGracia.getFullYear(), fechaFinGracia.getMonth(), fechaFinGracia.getDate())
+                            - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())
+                        ) / (24 * 60 * 60 * 1000))
+                        : null;
+                const indicadorGracia = fechaFinGracia && (reciboPendiente || p.tipoGestion === 'pago_pendiente')
+                    ? `<small class="d-block text-muted cobranza-grace-indicator">Vence gracia: ${escapeHTML(fechaFinGracia.toLocaleDateString('es-MX'))} • ${diasRestantesGracia > 0 ? `Faltan ${diasRestantesGracia} días` : diasRestantesGracia === 0 ? 'Vence hoy' : `Gracia vencida hace ${Math.abs(diasRestantesGracia)} días`}</small>`
+                    : '';
                 const montoPagar = reciboPendiente?.montoRecibo ?? p.montoPagar ?? 0;
                 const moneda = p.moneda || 'MXN';
                 const montoFormateado = formatCurrency(montoPagar, moneda);
@@ -11280,7 +11313,7 @@ Fecha de firma: {{FECHA}}`;
                 const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success cobranza-icon-button" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Registrar Pago y Resolver" aria-label="Registrar pago y resolver"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
 
                 const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value">' + escapeHTML(fechaMostrar) + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';

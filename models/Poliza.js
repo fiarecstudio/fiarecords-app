@@ -33,6 +33,9 @@ const reciboSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
+    fechaFinGraciaRecibo: {
+        type: Date
+    },
     fechaPago: {
         type: Date,
         default: null

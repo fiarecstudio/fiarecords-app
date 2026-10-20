@@ -10,6 +10,22 @@ const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
 const financialCalculator = require('../services/financialCalculator');
+const DIAS_GRACIA_RECIBO_MS = 30 * 24 * 60 * 60 * 1000;
+
+function obtenerFechaFinGraciaRecibo(recibo, fechaVencimientoFallback = null) {
+    const fechaFinExistente = recibo?.fechaFinGraciaRecibo
+        ? new Date(recibo.fechaFinGraciaRecibo)
+        : null;
+    if (fechaFinExistente && !Number.isNaN(fechaFinExistente.getTime())) return fechaFinExistente;
+
+    const fechaVencimiento = recibo?.fechaVencimientoRecibo
+        || recibo?.fechaVencimiento
+        || fechaVencimientoFallback;
+    const fechaBase = fechaVencimiento ? new Date(fechaVencimiento) : null;
+    return fechaBase && !Number.isNaN(fechaBase.getTime())
+        ? new Date(fechaBase.getTime() + DIAS_GRACIA_RECIBO_MS)
+        : null;
+}
 
 const ESTADOS_POLIZA_VALIDOS = [
     'Activa',
@@ -320,6 +336,7 @@ const generarCalendarioRecibos = (primaTotal, fechaInicio, tipoPago, primerPago,
             montoRecibo: montoDelMes,
             montoPagoNeto: pagosNetosDistribuidos[indicePlan],
             fechaVencimientoRecibo: fechaVencimiento,
+            fechaFinGraciaRecibo: new Date(fechaVencimiento.getTime() + DIAS_GRACIA_RECIBO_MS),
             estadoRecibo: 'pendiente',
             periodoCobertura: `${i + 1}/${totalRecibos}`
         });
@@ -405,6 +422,7 @@ const regenerarRecibosPendientes = ({
             montoRecibo: montosPlan[indicePlan],
             montoPagoNeto: pagosNetosDistribuidos[indicePlan],
             fechaVencimientoRecibo: fechaVencimiento,
+            fechaFinGraciaRecibo: new Date(fechaVencimiento.getTime() + DIAS_GRACIA_RECIBO_MS),
             estadoRecibo
         };
 
@@ -2177,6 +2195,13 @@ const obtenerMetricasSeguros = async (req, res) => {
             const poliza = p.toObject ? p.toObject() : p;
             if (poliza.estado === 'Renovada' || poliza.estado === 'Cancelada') return poliza;
             const estadoOriginal = poliza.estado;
+            const reciboPendiente = (poliza.recibos || []).find(recibo =>
+                ['pendiente', 'atrasado'].includes(
+                    String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+                )
+            );
+            const fechaFinGraciaRecibo = obtenerFechaFinGraciaRecibo(reciboPendiente, poliza.proximoPago);
+            if (fechaFinGraciaRecibo) poliza.fechaFinGraciaRecibo = fechaFinGraciaRecibo;
 
             const vencimiento = poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento) : null;
             const diasGracia = Number(poliza.diasGracia ?? 30);
@@ -2192,7 +2217,7 @@ const obtenerMetricasSeguros = async (req, res) => {
                 }
             }
 
-            const fechaPago = poliza.proximoPago ? new Date(poliza.proximoPago) : null;
+            const fechaPago = fechaFinGraciaRecibo;
             if (estadoOriginal === 'Activa' && fechaPago && !Number.isNaN(fechaPago.getTime())
                 && fechaPago < hoy && poliza.estadoPago !== 'pagado_completo') {
                 poliza.estado = 'Vencida';
@@ -2220,7 +2245,8 @@ const obtenerMetricasSeguros = async (req, res) => {
             return p.estado !== 'Cancelada' && vencimiento && vencimiento >= hoy && vencimiento <= limiteVencimientos;
         }).length;
         const pagosPendientes = polizasFormateadas.filter(p =>
-            p.estado !== 'Cancelada' && p.estadoPago !== 'pagado_completo' && p.proximoPago && new Date(p.proximoPago) < hoy
+            p.estado !== 'Cancelada' && p.estadoPago !== 'pagado_completo'
+            && p.fechaFinGraciaRecibo && new Date(p.fechaFinGraciaRecibo) < hoy
         ).length;
 
         let totalRecaudado = 0;
@@ -2253,8 +2279,8 @@ const obtenerMetricasSeguros = async (req, res) => {
                     const estadoR = (recibo.estadoRecibo || recibo.estado || '').toLowerCase();
 
                     if (estadoR === 'pendiente') {
-                        const fechaR = new Date(recibo.fechaVencimientoRecibo || recibo.fechaVencimiento);
-                        if (fechaR.getMonth() === mesActual && fechaR.getFullYear() === añoActual) {
+                        const fechaR = obtenerFechaFinGraciaRecibo(recibo);
+                        if (fechaR && fechaR.getMonth() === mesActual && fechaR.getFullYear() === añoActual) {
                             sumarProyeccion(
                                 recibo.montoRecibo || poliza.montoAbono || (poliza.primaTotal / 12) || 0
                             );
@@ -2364,7 +2390,9 @@ const obtenerMetricasSeguros = async (req, res) => {
             });
 
             if (poliza.proximoPago) {
-                const fechaPagoPendiente = new Date(poliza.proximoPago);
+                const fechaPagoPendiente = obtenerFechaFinGraciaRecibo(
+                    { estadoRecibo: 'pendiente', fechaVencimientoRecibo: poliza.proximoPago }
+                );
                 const indicePeriodo = obtenerIndicePeriodo(fechaPagoPendiente);
                 if (indicePeriodo >= 0) {
                     const numeroPagos = numeroPagosPorTipo[poliza.tipoPago] || 1;
@@ -2521,8 +2549,22 @@ const obtenerMetricasDashboardPredictivo = async (req, res) => {
                                                         $convert: {
                                                             input: {
                                                                 $ifNull: [
-                                                                    '$$recibo.fechaVencimientoRecibo',
-                                                                    '$$recibo.fechaVencimiento'
+                                                                    '$$recibo.fechaFinGraciaRecibo',
+                                                                    {
+                                                                        $add: [{
+                                                                            $convert: {
+                                                                                input: {
+                                                                                    $ifNull: [
+                                                                                        '$$recibo.fechaVencimientoRecibo',
+                                                                                        '$$recibo.fechaVencimiento'
+                                                                                    ]
+                                                                                },
+                                                                                to: 'date',
+                                                                                onError: null,
+                                                                                onNull: null
+                                                                            }
+                                                                        }, DIAS_GRACIA_RECIBO_MS]
+                                                                    }
                                                                 ]
                                                             },
                                                             to: 'date',
@@ -2545,7 +2587,16 @@ const obtenerMetricasDashboardPredictivo = async (req, res) => {
                                                 [{
                                                     fecha: {
                                                         $convert: {
-                                                            input: '$proximoPago',
+                                                            input: {
+                                                                $add: [{
+                                                                    $convert: {
+                                                                        input: '$proximoPago',
+                                                                        to: 'date',
+                                                                        onError: null,
+                                                                        onNull: null
+                                                                    }
+                                                                }, DIAS_GRACIA_RECIBO_MS]
+                                                            },
                                                             to: 'date',
                                                             onError: null,
                                                             onNull: null
@@ -3192,7 +3243,67 @@ const obtenerCobranzaDiaria = async (req, res) => {
                             then: { $toDate: '$proximoPago' },
                             else: null
                         }
+                    },
+                    _reciboPendiente: {
+                        $arrayElemAt: [{
+                            $filter: {
+                                input: { $ifNull: ['$recibos', []] },
+                                as: 'recibo',
+                                cond: {
+                                    $in: [
+                                        { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
+                                        ['pendiente', 'atrasado']
+                                    ]
+                                }
+                            }
+                        }, 0]
                     }
+                }
+            },
+            {
+                $addFields: {
+                    _fechaVencimientoReciboPendiente: {
+                        $convert: {
+                            input: {
+                                $ifNull: [
+                                    '$_reciboPendiente.fechaVencimientoRecibo',
+                                    { $ifNull: ['$_reciboPendiente.fechaVencimiento', '$proximoPago'] }
+                                ]
+                            },
+                            to: 'date',
+                            onError: null,
+                            onNull: null
+                        }
+                    },
+                    _fechaFinGraciaPersistida: {
+                        $convert: {
+                            input: '$_reciboPendiente.fechaFinGraciaRecibo',
+                            to: 'date',
+                            onError: null,
+                            onNull: null
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    _fechaFinGraciaRecibo: {
+                        $ifNull: [
+                            '$_fechaFinGraciaPersistida',
+                            {
+                                $cond: [
+                                    { $ne: ['$_fechaVencimientoReciboPendiente', null] },
+                                    { $add: ['$_fechaVencimientoReciboPendiente', DIAS_GRACIA_RECIBO_MS] },
+                                    null
+                                ]
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    _fechaProximoPago: { $ifNull: ['$_fechaFinGraciaRecibo', '$_fechaProximoPago'] }
                 }
             },
             {
@@ -3218,6 +3329,20 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 $dateDiff: {
                                     startDate: hoyInicio,
                                     endDate: '$_fechaProximoPago',
+                                    unit: 'day',
+                                    timezone: COBRANZA_TZ
+                                }
+                            },
+                            else: null
+                        }
+                    },
+                    diasRestantesGracia: {
+                        $cond: {
+                            if: { $ne: ['$_fechaFinGraciaRecibo', null] },
+                            then: {
+                                $dateDiff: {
+                                    startDate: hoyInicio,
+                                    endDate: '$_fechaFinGraciaRecibo',
                                     unit: 'day',
                                     timezone: COBRANZA_TZ
                                 }
@@ -3335,19 +3460,19 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
-                                    $arrayElemAt: [{
-                                        $filter: {
-                                            input: { $ifNull: ['$recibos', []] },
-                                            as: 'recibo',
-                                            cond: {
-                                                $eq: [
-                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
-                                                    'pendiente'
-                                                ]
-                                            }
-                                        }
-                                    }, 0]
+                                    $cond: [
+                                        { $ne: ['$_reciboPendiente', null] },
+                                        {
+                                            $mergeObjects: [
+                                                '$_reciboPendiente',
+                                                { fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo' }
+                                            ]
+                                        },
+                                        null
+                                    ]
                                 },
+                                fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
+                                diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -3378,19 +3503,19 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
-                                    $arrayElemAt: [{
-                                        $filter: {
-                                            input: { $ifNull: ['$recibos', []] },
-                                            as: 'recibo',
-                                            cond: {
-                                                $eq: [
-                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
-                                                    'pendiente'
-                                                ]
-                                            }
-                                        }
-                                    }, 0]
+                                    $cond: [
+                                        { $ne: ['$_reciboPendiente', null] },
+                                        {
+                                            $mergeObjects: [
+                                                '$_reciboPendiente',
+                                                { fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo' }
+                                            ]
+                                        },
+                                        null
+                                    ]
                                 },
+                                fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
+                                diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -3421,19 +3546,19 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 moneda: 1,
                                 montoCalculado: 1,
                                 reciboPendiente: {
-                                    $arrayElemAt: [{
-                                        $filter: {
-                                            input: { $ifNull: ['$recibos', []] },
-                                            as: 'recibo',
-                                            cond: {
-                                                $eq: [
-                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
-                                                    'pendiente'
-                                                ]
-                                            }
-                                        }
-                                    }, 0]
+                                    $cond: [
+                                        { $ne: ['$_reciboPendiente', null] },
+                                        {
+                                            $mergeObjects: [
+                                                '$_reciboPendiente',
+                                                { fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo' }
+                                            ]
+                                        },
+                                        null
+                                    ]
                                 },
+                                fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
+                                diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
                                 proximoPago: '$_fechaProximoPago',
                                 estado: 1,
@@ -3498,7 +3623,11 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     montoRecibo: reciboPendiente.montoRecibo,
                     periodoCobertura: reciboPendiente.periodoCobertura,
                     fechaVencimientoRecibo: reciboPendiente.fechaVencimientoRecibo
+                        || reciboPendiente.fechaVencimiento,
+                    fechaFinGraciaRecibo: reciboPendiente.fechaFinGraciaRecibo
                 } : null,
+                fechaFinGraciaRecibo: poliza.fechaFinGraciaRecibo,
+                diasRestantesGracia: poliza.diasRestantesGracia,
                 vencimiento: poliza.vencimiento,
                 proximoPago: poliza.proximoPago,
                 estado: poliza.estado,
@@ -4571,6 +4700,7 @@ function obtenerFilasReporteCobranza(polizas, mes = null, opciones = {}) {
             ? recibos.map((recibo, indice) => ({
                 indice,
                 fecha: recibo.fechaVencimientoRecibo || recibo.fechaVencimiento || fechasEsperadas[indice],
+                fechaFinGraciaRecibo: obtenerFechaFinGraciaRecibo(recibo),
                 monto: Number(recibo.montoRecibo) || 0,
                 estado: String(recibo.estadoRecibo || recibo.estado || '').toLowerCase(),
                 fechaPago: recibo.fechaPago || null,
@@ -4593,6 +4723,10 @@ function obtenerFilasReporteCobranza(polizas, mes = null, opciones = {}) {
                 return {
                     indice,
                     fecha,
+                    fechaFinGraciaRecibo: obtenerFechaFinGraciaRecibo(
+                        { estadoRecibo: estado, fechaVencimientoRecibo: fecha },
+                        fecha
+                    ),
                     monto: Number(pagoRegistrado?.monto ?? montoConfigurado) || 0,
                     estado,
                     fechaPago: pagoRegistrado?.fechaPago || null,
@@ -4649,6 +4783,9 @@ function obtenerFilasReporteCobranza(polizas, mes = null, opciones = {}) {
                 esReciboPersistido: pago.esReciboPersistido,
                 estadoRecibo,
                 fechaVencimientoOriginal: fechaLimite,
+                fechaFinGraciaRecibo: ['pendiente', 'atrasado'].includes(estadoRecibo)
+                    ? pago.fechaFinGraciaRecibo
+                    : null,
                 fechaPagoOriginal: pago.fechaPago
             });
         });
