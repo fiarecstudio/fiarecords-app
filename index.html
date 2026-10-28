@@ -1472,23 +1472,15 @@
                     <div class="card-body pt-3">
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            Esta sección muestra las pólizas que requieren gestión hoy según la configuración de recordatorios de cada póliza.
+                            Gestiona vencimientos, próximos pagos, notas de seguimiento y promesas de pago en un solo lugar.
                         </div>
                         
-                        <!-- Botones de pestañas para Cobranza Diaria -->
-                        <div class="btn-group mb-3" role="group" id="cobranza-tabs">
-                            <button type="button" id="tab-vencidas" class="btn btn-outline-danger" data-cobranza-tab="vencidas" aria-pressed="false">
-                                <i class="bi bi-exclamation-triangle me-1"></i> Vencidas
-                                <span class="badge bg-danger ms-1" id="badge-vencidas">0</span>
-                            </button>
-                            <button type="button" id="tab-hoy" class="btn btn-outline-success active" data-cobranza-tab="cobrosHoy" aria-pressed="true">
-                                <i class="bi bi-calendar-check me-1"></i> Cobros de Hoy
-                                <span class="badge bg-success ms-1" id="badge-hoy">0</span>
-                            </button>
-                            <button type="button" id="tab-por-vencer" class="btn btn-outline-warning" data-cobranza-tab="porVencer" aria-pressed="false">
-                                <i class="bi bi-clock me-1"></i> Por Vencer
-                                <span class="badge bg-warning ms-1" id="badge-por-vencer">0</span>
-                            </button>
+                        <div class="d-flex flex-wrap gap-2 mb-3" id="filtrosRapidosCobranza" role="group" aria-label="Filtrar cobranza por días restantes">
+                            <button type="button" class="btn btn-outline-primary btn-sm active" data-filtro-dias="todos" aria-pressed="true">Todos</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-filtro-dias="urgentes" aria-pressed="false">🔴 Urgentes (&le; 7 días)</button>
+                            <button type="button" class="btn btn-outline-warning btn-sm" data-filtro-dias="atencion" aria-pressed="false">Atención (8 - 15 días)</button>
+                            <button type="button" class="btn btn-outline-success btn-sm" data-filtro-dias="gracia" aria-pressed="false">En Gracia (16 - 45 días)</button>
+                            <span id="contadorCobranza" class="small text-muted align-self-center ms-auto" aria-live="polite">Cargando pólizas...</span>
                         </div>
 
                         <div class="row g-2 align-items-end mb-3" id="filtrosCobranzaUI">

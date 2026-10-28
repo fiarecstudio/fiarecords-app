@@ -125,6 +125,7 @@ router.get('/migrar-asesor-historico', auth, async (req, res) => {
 // FASE 9: COBRANZA DIARIA (DEBE ESTAR ANTES DE /:id)
 // ==========================================
 router.get('/reporte-cobranza', auth, applyTenantFilter, polizaController.obtenerReporteCobranza);
+router.put('/:id/recibos/:reciboIndex/nota', auth, applyTenantFilter, polizaController.guardarNotaCobranza);
 router.put('/:id/recibos/:reciboIndex/estatus', auth, applyTenantFilter, polizaController.actualizarEstatusReciboReporte);
 router.put('/:id/enlace-pago', auth, applyTenantFilter, polizaController.actualizarEnlacePago);
 

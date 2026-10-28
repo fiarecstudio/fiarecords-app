@@ -3183,12 +3183,16 @@ const obtenerCobranzaDiaria = async (req, res) => {
         const search = String(req.query.search || '').trim();
         const aseguradora = String(req.query.aseguradora || '').trim();
         const asesorId = String(req.query.asesorId || '').trim();
+        const filtroDias = String(req.query.filtroDias || 'todos').trim();
         if (!Number.isSafeInteger(page) || page < 1
             || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
             return res.status(400).json({ success: false, error: 'La página debe ser positiva y el límite debe estar entre 1 y 100.' });
         }
         if (search.length > 100 || aseguradora.length > 120) {
             return res.status(400).json({ success: false, error: 'Uno de los filtros excede la longitud permitida.' });
+        }
+        if (!['todos', 'urgentes', 'atencion', 'gracia'].includes(filtroDias)) {
+            return res.status(400).json({ success: false, error: 'El filtro de días seleccionado no es válido.' });
         }
         if (userRole === 'admin' && asesorId && !mongoose.Types.ObjectId.isValid(asesorId)) {
             return res.status(400).json({ success: false, error: 'El asesor seleccionado no es válido.' });
@@ -3274,6 +3278,18 @@ const obtenerCobranzaDiaria = async (req, res) => {
                             onError: null,
                             onNull: null
                         }
+                    },
+                    reciboPendienteIndex: {
+                        $indexOfArray: [
+                            {
+                                $map: {
+                                    input: { $ifNull: ['$recibos', []] },
+                                    as: 'recibo',
+                                    in: '$$recibo._id'
+                                }
+                            },
+                            '$_reciboPendiente._id'
+                        ]
                     },
                     _fechaFinGraciaPersistida: {
                         $convert: {
@@ -3439,9 +3455,75 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     }
                 }
             },
-            { $match: { diasRestantes: { $ne: null, $lte: 7 } } },
+            { $match: { diasRestantes: { $ne: null, $lte: 45 } } },
             {
                 $facet: {
+                    registros: [
+                        {
+                            $match: {
+                                diasRestantes: {
+                                    ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
+                                    ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
+                                    ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
+                                    ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                }
+                            }
+                        },
+                        { $sort: { diasRestantes: 1 } },
+                        { $skip: skipCount },
+                        { $limit: limit },
+                        {
+                            $project: {
+                                _id: 1,
+                                asesorId: 1,
+                                numeroPoliza: 1,
+                                cliente: 1,
+                                clienteTelefono: 1,
+                                clienteEmail: 1,
+                                tipoSeguro: 1,
+                                tipoPago: 1,
+                                moneda: 1,
+                                montoCalculado: 1,
+                                reciboPendiente: {
+                                    $cond: [
+                                        { $ne: ['$_reciboPendiente', null] },
+                                        {
+                                            $mergeObjects: [
+                                                '$_reciboPendiente',
+                                                { fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo' }
+                                            ]
+                                        },
+                                        null
+                                    ]
+                                },
+                                reciboPendienteIndex: 1,
+                                fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
+                                diasRestantesGracia: 1,
+                                vencimiento: '$_fechaVencimiento',
+                                proximoPago: '$_fechaProximoPago',
+                                estado: 1,
+                                estadoPago: 1,
+                                tipoGestion: 1,
+                                diasRestantes: 1,
+                                aseguradora: 1,
+                                enlacePago: 1,
+                                historialNotificaciones: 1
+                            }
+                        }
+                    ],
+                    registrosCount: [
+                        {
+                            $match: {
+                                diasRestantes: {
+                                    ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
+                                    ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
+                                    ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
+                                    ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                }
+                            }
+                        },
+                        { $count: 'total' }
+                    ],
                     vencidas: [
                         { $match: { diasRestantes: { $lt: 0 } } },
                         { $sort: { diasRestantes: 1 } },
@@ -3529,7 +3611,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         }
                     ],
                     porVencer: [
-                        { $match: { diasRestantes: { $gt: 0, $lte: 7 } } },
+                        { $match: { diasRestantes: { $gt: 0, $lte: 45 } } },
                         { $sort: { diasRestantes: 1 } },
                         { $skip: skipCount },
                         { $limit: limit },
@@ -3580,7 +3662,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         { $count: 'total' }
                     ],
                     porVencerCount: [
-                        { $match: { diasRestantes: { $gt: 0, $lte: 7 } } },
+                        { $match: { diasRestantes: { $gt: 0, $lte: 45 } } },
                         { $count: 'total' }
                     ]
                 }
@@ -3624,8 +3706,10 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     periodoCobertura: reciboPendiente.periodoCobertura,
                     fechaVencimientoRecibo: reciboPendiente.fechaVencimientoRecibo
                         || reciboPendiente.fechaVencimiento,
-                    fechaFinGraciaRecibo: reciboPendiente.fechaFinGraciaRecibo
+                    fechaFinGraciaRecibo: reciboPendiente.fechaFinGraciaRecibo,
+                    comentarioCobranza: reciboPendiente.comentarioCobranza || ''
                 } : null,
+                reciboPendienteIndex: poliza.reciboPendienteIndex,
                 fechaFinGraciaRecibo: poliza.fechaFinGraciaRecibo,
                 diasRestantesGracia: poliza.diasRestantesGracia,
                 vencimiento: poliza.vencimiento,
@@ -3643,6 +3727,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
         const vencidas = (datos.vencidas || []).map(mapPolizaRespuesta);
         const cobrosHoy = (datos.cobrosHoy || []).map(mapPolizaRespuesta);
         const porVencer = (datos.porVencer || []).map(mapPolizaRespuesta);
+        const registros = (datos.registros || []).map(mapPolizaRespuesta);
+        const totalRegistros = datos.registrosCount?.[0]?.total || 0;
 
         const resultados = {
             success: true,
@@ -3653,6 +3739,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
             vencidas,
             cobrosHoy,
             porVencer,
+            registros,
             totales: {
                 vencidas: datos.vencidasCount?.[0]?.total || 0,
                 cobrosHoy: datos.cobrosHoyCount?.[0]?.total || 0,
@@ -3661,6 +3748,10 @@ const obtenerCobranzaDiaria = async (req, res) => {
             pagination: {
                 page,
                 limit,
+                registros: {
+                    total: totalRegistros,
+                    totalPages: Math.ceil(totalRegistros / limit)
+                },
                 vencidas: {
                     total: datos.vencidasCount?.[0]?.total || 0,
                     totalPages: Math.ceil((datos.vencidasCount?.[0]?.total || 0) / limit)
@@ -4840,6 +4931,57 @@ const obtenerReporteCobranza = async (req, res) => {
     }
 };
 
+const guardarNotaCobranza = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.tenantFilter?.empresaId;
+        const userId = req.user?._id || req.user?.id;
+        const { id, reciboIndex } = req.params;
+        const indiceRecibo = Number(reciboIndex);
+        const comentarioCobranza = req.body?.comentarioCobranza;
+
+        if (!empresaId || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, error: 'La póliza indicada no es válida.' });
+        }
+        if (!/^\d+$/.test(reciboIndex) || !Number.isSafeInteger(indiceRecibo)) {
+            return res.status(400).json({ success: false, error: 'El número de recibo no es válido.' });
+        }
+        if (typeof comentarioCobranza !== 'string' || comentarioCobranza.trim().length === 0) {
+            return res.status(400).json({ success: false, error: 'El comentario de cobranza es obligatorio.' });
+        }
+        if (comentarioCobranza.trim().length > 10000) {
+            return res.status(400).json({ success: false, error: 'El historial de cobranza no puede exceder 10000 caracteres.' });
+        }
+
+        const filtro = { _id: id, empresaId, deletedAt: null };
+        if (req.user.role !== 'admin') filtro.asesorId = userId;
+        const poliza = await Poliza.findOne(excluirPolizasCanceladas(filtro));
+        if (!poliza) {
+            return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        }
+
+        const recibo = poliza.recibos?.[indiceRecibo];
+        if (!recibo) {
+            return res.status(404).json({ success: false, error: 'Recibo no encontrado.' });
+        }
+
+        recibo.comentarioCobranza = comentarioCobranza.trim();
+        recibo.gestorCobranza = userId;
+        await poliza.save();
+
+        return res.json({
+            success: true,
+            comentarioCobranza: recibo.comentarioCobranza,
+            reciboIndex: indiceRecibo
+        });
+    } catch (error) {
+        console.error('[guardarNotaCobranza] Error:', error);
+        return res.status(500).json({ success: false, error: 'Error al guardar la nota de cobranza.' });
+    }
+};
+
 const actualizarEstatusReciboReporte = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.tenantFilter?.empresaId;
@@ -5628,9 +5770,22 @@ const actualizarEnlacePago = async (req, res) => {
 const resolverCobranzaConPago = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const tipoGestor = String(req.body?.tipoGestor || 'asesor').trim();
+        const comentarioSolicitado = req.body?.comentarioCobranza;
+        if (comentarioSolicitado !== undefined && typeof comentarioSolicitado !== 'string') {
+            return res.status(400).json({ success: false, error: 'El comentario de cobranza debe ser texto.' });
+        }
+        const comentarioCobranza = comentarioSolicitado?.trim() || '';
         const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
         if (!filtroTenant) {
             return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar el usuario que registra el pago.' });
+        }
+        if (!['asesor', 'cobranza'].includes(tipoGestor)) {
+            return res.status(400).json({ success: false, error: 'El tipo de gestor seleccionado no es válido.' });
         }
 
         const polizaId = req.params.id || req.params.polizaId;
@@ -5671,6 +5826,7 @@ const resolverCobranzaConPago = async (req, res) => {
             return res.status(409).json({ success: false, error: 'No hay recibos pendientes para esta póliza.' });
         }
 
+        const gestorCobranza = tipoGestor === 'asesor' ? poliza.asesorId : userId;
         const montoPagado = Number(recibo.montoRecibo) || 0;
         const fechaSolicitada = req.body?.fechaPago ? new Date(req.body.fechaPago) : null;
         const fechaPago = fechaSolicitada && !Number.isNaN(fechaSolicitada.getTime()) ? fechaSolicitada : new Date();
@@ -5679,6 +5835,9 @@ const resolverCobranzaConPago = async (req, res) => {
         recibo.montoPagado = (Number(recibo.montoPagado) || 0) + montoPagado;
         recibo.fechaPago = fechaPago;
         recibo.metodoPago = metodoPago;
+        recibo.registradoPor = userId;
+        recibo.gestorCobranza = gestorCobranza;
+        recibo.comentarioCobranza = comentarioCobranza;
         poliza.pagos.push({ fechaPago, monto: montoPagado, estado: 'pagado', metodoPago });
 
         const saldoActual = Number(poliza.saldoRestante) || 0;
@@ -5885,6 +6044,7 @@ module.exports = {
     renovarPoliza,
     obtenerCobranzaDiaria,
     obtenerReporteCobranza,
+    guardarNotaCobranza,
     actualizarEstatusReciboReporte,
     marcarCobranzaResuelta,
     enviarCorreoCobranzaDiaria,

@@ -58,6 +58,18 @@ const reciboSchema = new mongoose.Schema({
         trim: true,
         default: null
     },
+    comentarioCobranza: {
+        type: String,
+        trim: true
+    },
+    gestorCobranza: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Usuario'
+    },
+    registradoPor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Usuario'
+    },
     historialNotificaciones: [{
         fecha: {
             type: Date,

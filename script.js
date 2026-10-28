@@ -10925,11 +10925,9 @@ Fecha de firma: {{FECHA}}`;
     // Cobranza Diaria: estado en memoria y UI
     let debounceCobranzaDiaria;
     let cobranzaDiariaEventosListos = false;
+    let filtroDiasCobranza = 'todos';
     let estadoCobranza = {
-        vencidas: [],
-        cobrosHoy: [],
-        porVencer: [],
-        tabActiva: 'cobrosHoy',
+        registros: [],
         fecha: null,
         totales: { vencidas: 0, cobrosHoy: 0, porVencer: 0 }
     };
@@ -10958,8 +10956,7 @@ Fecha de firma: {{FECHA}}`;
         if (cobranzaPaginacionServidor) {
             cargarCobranzaDiaria();
         } else {
-            const registros = estadoCobranza[estadoCobranza.tabActiva] || [];
-            renderizarTablaCobranza(registros, estadoCobranza.tabActiva);
+            renderizarTablaCobranza(estadoCobranza.registros);
         }
     }
 
@@ -10979,24 +10976,82 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
-            const tabBtn = e.target.closest('[data-cobranza-tab]');
-            if (tabBtn) {
+            const filtroDiasBtn = e.target.closest('[data-filtro-dias]');
+            if (filtroDiasBtn) {
                 e.preventDefault();
-                const tab = tabBtn.getAttribute('data-cobranza-tab');
-                if (tab) seleccionarTabCobranza(tab);
+                const filtro = filtroDiasBtn.getAttribute('data-filtro-dias');
+                if (['todos', 'urgentes', 'atencion', 'gracia'].includes(filtro)) {
+                    filtroDiasCobranza = filtro;
+                    actualizarFiltrosDiasCobranza();
+                    paginaActualCobranza = 1;
+                    cargarCobranzaDiaria();
+                }
                 return;
+            }
+
+            const recordatorioBtn = e.target.closest('[data-cobranza-log-channel]');
+            if (recordatorioBtn) {
+                const polizaId = recordatorioBtn.getAttribute('data-poliza-id');
+                const reciboIndex = Number(recordatorioBtn.getAttribute('data-recibo-index'));
+                const canal = recordatorioBtn.getAttribute('data-cobranza-log-channel');
+                let comentarioPrevio = '';
+                try {
+                    comentarioPrevio = decodeURIComponent(recordatorioBtn.getAttribute('data-comentario') || '');
+                } catch (error) {
+                    console.error('[Cobranza] No se pudo leer el historial previo del recibo:', error);
+                }
+                if (polizaId && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0) {
+                    registrarEventoRecordatorioCobranza(polizaId, reciboIndex, canal, comentarioPrevio)
+                        .catch(error => {
+                            console.error('[Cobranza] No se pudo registrar el recordatorio:', error);
+                            showToast('El recordatorio se abrió, pero no se pudo guardar en el historial.', 'warning');
+                        });
+                }
             }
 
             const actionBtn = e.target.closest('[data-cobranza-action]');
             if (!actionBtn) return;
 
             e.preventDefault();
+            const notasBtn = e.target.closest('.btn-notas-cobranza');
+            if (notasBtn) {
+                const polizaId = notasBtn.getAttribute('data-id');
+                const reciboIndex = Number(notasBtn.getAttribute('data-index'));
+                let comentarioPrevio = '';
+                try {
+                    comentarioPrevio = decodeURIComponent(notasBtn.dataset.notas || '');
+                } catch (error) {
+                    console.error('[Cobranza] No se pudo leer el comentario previo:', error);
+                }
+                if (polizaId && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0) {
+                    gestionarNotaCobranza(polizaId, reciboIndex, comentarioPrevio);
+                }
+                return;
+            }
             const action = actionBtn.getAttribute('data-cobranza-action');
             const polizaId = actionBtn.getAttribute('data-poliza-id');
             if (!polizaId) return;
 
-            if (action === 'correo') enviarCorreoCobranza(polizaId);
+            const reciboIndexValor = actionBtn.getAttribute('data-recibo-index');
+            const reciboIndex = reciboIndexValor ? Number(reciboIndexValor) : -1;
+            let comentarioPrevio = '';
+            try {
+                comentarioPrevio = decodeURIComponent(actionBtn.getAttribute('data-comentario') || '');
+            } catch (error) {
+                console.error('[Cobranza] No se pudo leer el historial previo del recibo:', error);
+            }
+            if (action === 'correo') {
+                enviarCorreoCobranza(polizaId, reciboIndex, comentarioPrevio);
+            } else if (action === 'correo-confirmado') {
+                enviarCorreoCobranzaConfirmado(polizaId, reciboIndex, comentarioPrevio);
+            }
             else if (action === 'resolver') marcarCobranzaResuelta(polizaId);
+            else if (action === 'nota') {
+                const reciboIndex = Number(actionBtn.getAttribute('data-recibo-index'));
+                if (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0) {
+                    gestionarNotaCobranza(polizaId, reciboIndex, actionBtn.getAttribute('data-comentario') || '');
+                }
+            }
             else if (action === 'editar') editarPoliza(polizaId);
         });
 
@@ -11009,30 +11064,12 @@ Fecha de firma: {{FECHA}}`;
         cobranzaDiariaEventosListos = true;
     }
 
-    function actualizarTabsActivasCobranza() {
-        document.querySelectorAll('[data-cobranza-tab]').forEach((btn) => {
-            const tab = btn.getAttribute('data-cobranza-tab');
-            const activo = tab === estadoCobranza.tabActiva;
+    function actualizarFiltrosDiasCobranza() {
+        document.querySelectorAll('[data-filtro-dias]').forEach((btn) => {
+            const activo = btn.getAttribute('data-filtro-dias') === filtroDiasCobranza;
             btn.classList.toggle('active', activo);
             btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
         });
-    }
-
-    function seleccionarTabCobranza(tabActiva) {
-        if (!['vencidas', 'cobrosHoy', 'porVencer'].includes(tabActiva)) return;
-        estadoCobranza.tabActiva = tabActiva;
-        actualizarTabsActivasCobranza();
-        paginaActualCobranza = 1;
-        if (cobranzaPaginacionServidor) cargarCobranzaDiaria();
-        else renderizarTablaCobranza(estadoCobranza[tabActiva] || [], tabActiva);
-    }
-
-    function cambiarPestanaCobranza(pestaña) {
-        seleccionarTabCobranza(pestaña);
-    }
-
-    function cambiarPestañaCobranza(pestaña) {
-        cambiarPestanaCobranza(pestaña);
     }
 
     async function cargarCobranzaDiaria() {
@@ -11054,21 +11091,18 @@ Fecha de firma: {{FECHA}}`;
 
             const paginacion = document.getElementById('paginacionCobranza');
             const renderizar = datos => {
-                estadoCobranza.vencidas = datos.vencidas || [];
-                estadoCobranza.cobrosHoy = datos.cobrosHoy || datos.polizas || [];
-                estadoCobranza.porVencer = datos.porVencer || [];
-                cobranzaPaginacionServidor = datos.pagination || null;
+                estadoCobranza.registros = datos.registros
+                    || [...(datos.vencidas || []), ...(datos.cobrosHoy || []), ...(datos.porVencer || [])];
+                cobranzaPaginacionServidor = datos.pagination?.registros
+                    ? datos.pagination
+                    : null;
                 estadoCobranza.fecha = datos.fecha || null;
                 estadoCobranza.totales = datos.totales || {
-                    vencidas: estadoCobranza.vencidas.length,
-                    cobrosHoy: estadoCobranza.cobrosHoy.length,
-                    porVencer: estadoCobranza.porVencer.length
+                    vencidas: 0,
+                    cobrosHoy: 0,
+                    porVencer: 0
                 };
-                const registrosCobranza = [
-                    ...estadoCobranza.vencidas,
-                    ...estadoCobranza.cobrosHoy,
-                    ...estadoCobranza.porVencer
-                ];
+                const registrosCobranza = estadoCobranza.registros;
                 const aseguradorasDisponibles = Array.isArray(datos.filters?.aseguradoras)
                     ? datos.filters.aseguradoras.map(aseguradora => ({ aseguradora }))
                     : registrosCobranza;
@@ -11085,14 +11119,15 @@ Fecha de firma: {{FECHA}}`;
                     });
                 }
 
-                actualizarContadoresCobranza(estadoCobranza.totales);
-                actualizarTabsActivasCobranza();
-                renderizarTablaCobranza(estadoCobranza[estadoCobranza.tabActiva] || [], estadoCobranza.tabActiva);
+                actualizarFiltrosDiasCobranza();
+                renderizarTablaCobranza(estadoCobranza.registros);
                 const kpiCobranzaHoy = document.getElementById('kpi-cobranza-hoy');
                 if (kpiCobranzaHoy) kpiCobranzaHoy.textContent = estadoCobranza.totales.cobrosHoy || 0;
             };
 
-            const datosCacheados = leerRespaldoOffline('backup_cobranza_diaria');
+            const claveCacheCobranza = `backup_cobranza_diaria_${filtroDiasCobranza}`;
+            const datosCacheados = leerRespaldoOffline(claveCacheCobranza)
+                || (filtroDiasCobranza === 'todos' ? leerRespaldoOffline('backup_cobranza_diaria') : null);
             const tieneCache = datosCacheados && typeof datosCacheados === 'object';
             if (tieneCache) {
                 renderizar(datosCacheados);
@@ -11117,7 +11152,8 @@ Fecha de firma: {{FECHA}}`;
             try {
                 const params = new URLSearchParams({
                     page: String(paginaActualCobranza),
-                    limit: String(limitePolizas)
+                    limit: String(limitePolizas),
+                    filtroDias: filtroDiasCobranza
                 });
                 const search = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim();
                 const aseguradora = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
@@ -11131,7 +11167,7 @@ Fecha de firma: {{FECHA}}`;
                     tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
                     return;
                 }
-                guardarRespaldoOffline('backup_cobranza_diaria', datos);
+                guardarRespaldoOffline(claveCacheCobranza, datos);
                 renderizar(datos);
             } catch (error) {
                 if (tieneCache) {
@@ -11145,16 +11181,6 @@ Fecha de firma: {{FECHA}}`;
                 if (paginacion) paginacion.innerHTML = '';
             }
         }, 500);
-    }
-
-    function actualizarContadoresCobranza(totales) {
-        const badgeVencidas = document.getElementById('badge-vencidas');
-        const badgeHoy = document.getElementById('badge-hoy');
-        const badgePorVencer = document.getElementById('badge-por-vencer');
-
-        if (badgeVencidas) badgeVencidas.textContent = totales.vencidas || 0;
-        if (badgeHoy) badgeHoy.textContent = totales.cobrosHoy || 0;
-        if (badgePorVencer) badgePorVencer.textContent = totales.porVencer || 0;
     }
 
     function obtenerFechaFinGraciaCobranza(poliza) {
@@ -11174,7 +11200,7 @@ Fecha de firma: {{FECHA}}`;
             : null;
     }
 
-    function renderizarTablaCobranza(polizas, tabActiva) {
+    function renderizarTablaCobranza(polizas) {
         const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
         const textoBusqueda = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim().toLowerCase();
@@ -11192,7 +11218,7 @@ Fecha de firma: {{FECHA}}`;
                 : obtenerFechaFinGraciaCobranza(poliza) || poliza.proximoPago || poliza.vencimiento,
         ordenAscendente);
         if (!cobranzaPaginacionServidor) paginaActualCobranza = 1;
-        renderizarPaginaCobranza(tabActiva);
+        renderizarPaginaCobranza();
     }
 
     function crearMensajeCobranzaDiaria({ cliente, tipoSeguro, monto, periodo, enlacePago, moneda = 'MXN' }) {
@@ -11202,24 +11228,29 @@ Fecha de firma: {{FECHA}}`;
         return mensaje;
     }
 
-    function renderizarPaginaCobranza(tabActiva = estadoCobranza.tabActiva) {
+    function renderizarPaginaCobranza() {
         const tabla = document.getElementById('tablaCobranzaDiariaBody');
         const sinCobranza = document.getElementById('sin-cobranza');
 
         if (!tabla) return;
         tabla.removeAttribute('aria-busy');
 
-        const paginacionTab = cobranzaPaginacionServidor?.[tabActiva];
-        const totalPaginas = paginacionTab
-            ? paginacionTab.totalPages
+        const paginacionRegistros = cobranzaPaginacionServidor?.registros;
+        const totalPaginas = paginacionRegistros
+            ? paginacionRegistros.totalPages
             : Math.ceil(cobranzaGlobales.length / limitePolizas);
         paginaActualCobranza = totalPaginas
             ? Math.min(Math.max(paginaActualCobranza, 1), totalPaginas)
             : 1;
         const inicio = (paginaActualCobranza - 1) * limitePolizas;
-        const polizasPagina = paginacionTab
+        const polizasPagina = paginacionRegistros
             ? cobranzaGlobales
             : cobranzaGlobales.slice(inicio, inicio + limitePolizas);
+        const contadorCobranza = document.getElementById('contadorCobranza');
+        if (contadorCobranza) {
+            const totalRegistros = paginacionRegistros?.total ?? cobranzaGlobales.length;
+            contadorCobranza.textContent = `${totalRegistros} ${totalRegistros === 1 ? 'póliza' : 'pólizas'}`;
+        }
 
         if (polizasPagina.length > 0) {
             tabla.innerHTML = polizasPagina.map(p => {
@@ -11289,8 +11320,13 @@ Fecha de firma: {{FECHA}}`;
 
                 const whatsappUrl = telefonoValido ? 'https://wa.me/52' + telefonoLimpio + '?text=' + mensajeWhatsApp : '#';
 
+                const comentarioPrevioCodificado = encodeURIComponent(reciboPendiente?.comentarioCobranza || '');
+                const reciboIndex = Number(p.reciboPendienteIndex ?? p.indiceRecibo);
+                const atributosHistorial = reciboPendiente && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+                    ? ' data-cobranza-log-channel="whatsapp" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndex + '" data-comentario="' + comentarioPrevioCodificado + '"'
+                    : '';
                 const whatsappButton = telefonoValido
-                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success cobranza-icon-button" title="WhatsApp" aria-label="WhatsApp"><i class="bi bi-whatsapp" aria-hidden="true"></i></a>'
+                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success cobranza-icon-button" title="WhatsApp" aria-label="WhatsApp"' + atributosHistorial + '><i class="bi bi-whatsapp" aria-hidden="true"></i></a>'
                     : '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="' + escapeHTML(telefonoLimpio ? 'WhatsApp: formato de teléfono inválido (requiere 10 dígitos)' : 'WhatsApp: sin teléfono registrado') + '" aria-label="WhatsApp no disponible"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>';
 
                 // Verificar si ya se envió un correo recientemente (últimos 7 días)
@@ -11304,41 +11340,38 @@ Fecha de firma: {{FECHA}}`;
                 
                 let botonCorreo;
                 if (tieneCorreoReciente) {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" onclick="app.enviarCorreoCobranzaConfirmado(\'' + polizaIdAttr + '\')" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" data-cobranza-action="correo-confirmado" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" data-comentario="' + comentarioPrevioCodificado + '" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
                 } else {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" onclick="app.enviarCorreoCobranza(\'' + polizaIdAttr + '\')" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" data-cobranza-action="correo" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" data-comentario="' + comentarioPrevioCodificado + '" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
                 }
                 const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary cobranza-icon-button" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza" aria-label="Editar póliza"><i class="bi bi-pencil" aria-hidden="true"></i></button>';
                 const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info cobranza-icon-button" onclick="app.agregarEnlacePago(\'' + polizaIdAttr + '\')" title="Agregar Enlace de Pago" aria-label="Agregar enlace de pago"><i class="bi bi-link-45deg" aria-hidden="true"></i></button>';
-                const botonResolver = '<button type="button" class="btn btn-sm btn-outline-success cobranza-icon-button" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Registrar Pago y Resolver" aria-label="Registrar pago y resolver"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
+                const botonResolver = '<button type="button" class="btn btn-sm btn-warning btn-pagar-cobranza cobranza-icon-button ms-1" data-id="' + polizaIdAttr + '" data-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Pagar" aria-label="Pagar"><i class="bi bi-currency-dollar text-dark" aria-hidden="true"></i></button>';
+                const botonNotas = reciboPendiente && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+                    ? '<button type="button" class="btn btn-sm btn-info btn-notas-cobranza cobranza-icon-button ms-1" data-cobranza-action="nota" data-id="' + polizaIdAttr + '" data-index="' + reciboIndex + '" data-notas="' + comentarioPrevioCodificado + '" title="Historial y Notas" aria-label="Historial y Notas"><i class="bi bi-chat-dots-fill text-white" aria-hidden="true"></i></button>'
+                    : '';
+                const botonesPago = '<div class="d-flex align-items-center justify-content-center flex-wrap gap-2">' + botonResolver + botonNotas + '</div>';
+                const lineasComentario = String(reciboPendiente?.comentarioCobranza || '')
+                    .split('\n')
+                    .filter(linea => linea.trim() !== '');
+                const ultimaNota = lineasComentario[lineasComentario.length - 1] || '';
+                const comentarioCobranza = ultimaNota
+                    ? '<div class="text-muted mt-1 text-truncate" style="max-width: 250px; font-size: 0.75rem;" title="Clic en Notas para ver historial"><i class="fas fa-history text-info"></i> <em>' + escapeHTML(ultimaNota) + '</em></div>'
+                    : '';
 
                 const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small></td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonResolver + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';
         } else {
             tabla.innerHTML = '';
             if (sinCobranza) {
-                const estadosVacios = {
-                    vencidas: {
-                        title: 'Sin pólizas vencidas',
-                        message: 'No hay pólizas vencidas que requieran seguimiento en este momento.',
-                        icon: 'bi-check-circle'
-                    },
-                    cobrosHoy: {
-                        title: 'Sin cobros pendientes hoy',
-                        message: 'No hay cobros programados para hoy. La lista se actualizará cuando haya pólizas por gestionar.',
-                        icon: 'bi-calendar-check'
-                    },
-                    porVencer: {
-                        title: 'Sin pólizas por vencer',
-                        message: 'No hay pólizas que venzan en los próximos 7 días.',
-                        icon: 'bi-calendar-check'
-                    }
-                };
-                const emptyState = estadosVacios[tabActiva] || estadosVacios.cobrosHoy;
-                sinCobranza.innerHTML = createEmptyStateMarkup(emptyState);
+                sinCobranza.innerHTML = createEmptyStateMarkup({
+                    title: 'Sin pólizas para este filtro',
+                    message: 'No hay pólizas que coincidan con el rango de días y los filtros seleccionados.',
+                    icon: 'bi-check-circle'
+                });
                 sinCobranza.style.display = 'block';
             }
         }
@@ -11350,9 +11383,9 @@ Fecha de firma: {{FECHA}}`;
         const contenedor = document.getElementById('paginacionCobranza');
         if (!contenedor) return;
 
-        const paginacionTab = cobranzaPaginacionServidor?.[estadoCobranza.tabActiva];
-        const totalPaginas = paginacionTab
-            ? paginacionTab.totalPages
+        const paginacionRegistros = cobranzaPaginacionServidor?.registros;
+        const totalPaginas = paginacionRegistros
+            ? paginacionRegistros.totalPages
             : Math.ceil(cobranzaGlobales.length / limitePolizas);
         if (totalPaginas === 0) {
             contenedor.innerHTML = '';
@@ -11360,7 +11393,7 @@ Fecha de firma: {{FECHA}}`;
         }
 
         contenedor.innerHTML = `
-            <span class="small text-muted">Página ${paginaActualCobranza} de ${totalPaginas} (${paginacionTab?.total ?? cobranzaGlobales.length} registros)</span>
+            <span class="small text-muted">Página ${paginaActualCobranza} de ${totalPaginas} (${paginacionRegistros?.total ?? cobranzaGlobales.length} registros)</span>
             <div class="btn-group" role="group" aria-label="Paginación de cobranza">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaCobranza(-1)" ${paginaActualCobranza <= 1 ? 'disabled' : ''} aria-label="Página anterior">Anterior</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.cambiarPaginaCobranza(1)" ${paginaActualCobranza >= totalPaginas ? 'disabled' : ''} aria-label="Página siguiente">Siguiente</button>
@@ -11369,15 +11402,11 @@ Fecha de firma: {{FECHA}}`;
     }
 
     function cambiarPaginaCobranza(delta) {
-        const totalPaginas = cobranzaPaginacionServidor?.[estadoCobranza.tabActiva]?.totalPages
+        const totalPaginas = cobranzaPaginacionServidor?.registros?.totalPages
             ?? Math.ceil(cobranzaGlobales.length / limitePolizas);
         paginaActualCobranza = Math.min(Math.max(paginaActualCobranza + delta, 1), totalPaginas);
         if (cobranzaPaginacionServidor) cargarCobranzaDiaria();
         else renderizarPaginaCobranza();
-    }
-
-    function renderizarPestañaCobranza(pestaña) {
-        renderizarTablaCobranza(estadoCobranza[pestaña] || [], pestaña);
     }
 
     // Función para eliminar póliza
@@ -14658,14 +14687,12 @@ Fecha de firma: {{FECHA}}`;
         verHistorialNotificaciones,
         cargarCobranzaDiaria,
         initEventosCobranzaDiaria,
-        seleccionarTabCobranza,
         renderizarTablaCobranza,
         enviarCorreoCobranza,
         enviarCorreoCobranzaConfirmado,
         agregarEnlacePago,
+        gestionarNotaCobranza,
         marcarCobranzaResuelta,
-        cambiarPestanaCobranza,
-        cambiarPestañaCobranza,
         resolverCobranzaConPago: marcarCobranzaResuelta,
         previewPDF, previewReciboPDF, previewContratoPDF, cerrarModalPreview, descargarPDFDesdePreview,
         zoomPDF, resetZoomPDF, imprimirPDF, imprimirDocumentoPDF, cerrarIframePrint,
@@ -15051,7 +15078,7 @@ Fecha de firma: {{FECHA}}`;
     capturarEmpresaInvitacionDesdeUrl();
 
     // Función para enviar correo manual desde Cobranza Diaria
-    async function enviarCorreoCobranzaConfirmado(polizaId) {
+    async function enviarCorreoCobranzaConfirmado(polizaId, reciboIndex, comentarioPrevio = '') {
         const { value: confirmar } = await Swal.fire({
             title: '¿Reenviar correo?',
             text: 'Este cliente ya recibió un recordatorio recientemente. ¿Estás seguro de que deseas enviarlo de nuevo?',
@@ -15063,11 +15090,11 @@ Fecha de firma: {{FECHA}}`;
         });
         
         if (confirmar) {
-            await enviarCorreoCobranza(polizaId);
+            await enviarCorreoCobranza(polizaId, reciboIndex, comentarioPrevio);
         }
     }
     
-    async function enviarCorreoCobranza(polizaId) {
+    async function enviarCorreoCobranza(polizaId, reciboIndex, comentarioPrevio = '') {
         try {
             const { value: confirmar } = await Swal.fire({
                 title: '¿Enviar correo manual?',
@@ -15098,6 +15125,19 @@ Fecha de firma: {{FECHA}}`;
             });
             
             if (resultado.success) {
+                if (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0) {
+                    try {
+                        await registrarEventoRecordatorioCobranza(
+                            polizaId,
+                            reciboIndex,
+                            'Correo',
+                            comentarioPrevio
+                        );
+                    } catch (error) {
+                        console.error('[enviarCorreoCobranza] No se pudo guardar el evento de seguimiento:', error);
+                        showToast('El correo se envió, pero no se pudo agregar al historial del recibo.', 'warning');
+                    }
+                }
                 await Swal.fire({
                     title: '✅ Correo Enviado',
                     text: 'El correo ha sido enviado manualmente y marcado en el historial.',
@@ -15174,6 +15214,89 @@ Fecha de firma: {{FECHA}}`;
         }
     }
     
+    async function gestionarNotaCobranza(polizaId, reciboIndex, comentarioActual = '') {
+        try {
+            const historialDecodificado = String(comentarioActual || '');
+            const { value: nuevaNota } = await Swal.fire({
+                title: 'Historial de Gestión',
+                html: `
+                    <div style="max-height: 120px; overflow-y: auto; text-align: left; font-size: 0.8rem; background: rgba(0,0,0,0.1); padding: 8px; border-radius: 5px; margin-bottom: 15px; white-space: pre-wrap;">${escapeHTML(historialDecodificado || 'Sin historial previo.')}</div>
+                    <textarea id="swal-nueva-nota" class="swal2-textarea" placeholder="Escribe un nuevo comentario o promesa de pago..." style="font-size: 0.9rem; height: 70px; margin: 0;"></textarea>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Guardar Nota',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const comentario = document.getElementById('swal-nueva-nota')?.value.trim() || '';
+                    if (comentario.length > 1000) {
+                        Swal.showValidationMessage('La nota no puede exceder 1000 caracteres.');
+                        return false;
+                    }
+                    return comentario;
+                }
+            });
+
+            if (nuevaNota === undefined || nuevaNota === '') return;
+            await guardarEntradaHistorialCobranza(polizaId, reciboIndex, nuevaNota, historialDecodificado);
+
+            showToast('Nota de seguimiento guardada.', 'success');
+        } catch (error) {
+            console.error('[gestionarNotaCobranza] Error:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: error.message || 'No se pudo guardar la nota de cobranza.',
+                icon: 'error'
+            });
+        }
+    }
+
+    function crearNotaConFecha(texto) {
+        const ahora = new Date();
+        const fecha = new Intl.DateTimeFormat('es-MX', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        }).format(ahora);
+        const hora = new Intl.DateTimeFormat('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(ahora);
+        return `[${fecha} ${hora}] ${String(texto || '').trim()}`;
+    }
+
+    async function guardarEntradaHistorialCobranza(polizaId, reciboIndex, texto, comentarioPrevio = '') {
+        const nuevaEntrada = crearNotaConFecha(texto);
+        const historialActualizado = [String(comentarioPrevio || '').trim(), nuevaEntrada]
+            .filter(Boolean)
+            .join('\n');
+        if (historialActualizado.length > 10000) {
+            throw new Error('El historial de notas alcanzó el límite permitido de 10000 caracteres.');
+        }
+
+        const resultado = await fetchAPI(
+            `/api/polizas/${encodeURIComponent(polizaId)}/recibos/${encodeURIComponent(reciboIndex)}/nota`,
+            {
+                method: 'PUT',
+                body: JSON.stringify({ comentarioCobranza: historialActualizado })
+            }
+        );
+        if (!resultado?.success) {
+            throw new Error(resultado?.error || 'No se pudo guardar la nota de cobranza.');
+        }
+        cargarCobranzaDiaria();
+        return resultado;
+    }
+
+    async function registrarEventoRecordatorioCobranza(polizaId, reciboIndex, canal, comentarioPrevio = '') {
+        await guardarEntradaHistorialCobranza(
+            polizaId,
+            reciboIndex,
+            `Recordatorio enviado por ${canal}`,
+            comentarioPrevio
+        );
+    }
+
     async function marcarCobranzaResuelta(polizaId, montoPagar) {
         try {
             const montoFormateado = new Intl.NumberFormat('es-MX', {
@@ -15192,6 +15315,18 @@ Fecha de firma: {{FECHA}}`;
                             <option value="efectivo">Efectivo</option>
                             <option value="tarjeta">Tarjeta</option>
                         </select>
+                        <fieldset style="border: 0; padding: 0; margin: 16px 0;">
+                            <legend style="font-size: 1rem; font-weight: bold;">Gestión de Cobro</legend>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipoGestor" id="swal-gestor-asesor" value="asesor" checked>
+                                <label class="form-check-label" for="swal-gestor-asesor">Lo gestionó el Asesor</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipoGestor" id="swal-gestor-cobranza" value="cobranza">
+                                <label class="form-check-label" for="swal-gestor-cobranza">Lo gestionó Cobranza Interna</label>
+                            </div>
+                        </fieldset>
+                        <textarea id="swal-comentario" class="swal2-textarea" placeholder="Notas de gestión (ej. Promesa de pago el viernes)..." style="font-size: 0.9rem; height: 80px;"></textarea>
                     </div>
                 `,
                 focusConfirm: false,
@@ -15201,11 +15336,17 @@ Fecha de firma: {{FECHA}}`;
                 confirmButtonColor: '#28a745',
                 preConfirm: () => {
                     const metodoPago = document.getElementById('metodoPago').value;
+                    const tipoGestor = document.querySelector('input[name="tipoGestor"]:checked')?.value;
+                    const comentarioCobranza = document.getElementById('swal-comentario').value.trim();
                     if (!metodoPago) {
                         Swal.showValidationMessage('Por favor selecciona un método de pago');
                         return false;
                     }
-                    return { monto: montoPagar, metodoPago };
+                    if (!tipoGestor) {
+                        Swal.showValidationMessage('Por favor selecciona quién gestionó el cobro');
+                        return false;
+                    }
+                    return { monto: montoPagar, metodoPago, tipoGestor, comentarioCobranza };
                 }
             });
 
