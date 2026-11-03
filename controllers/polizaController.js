@@ -200,6 +200,10 @@ function calcularProximoPago(fechaBase, tipoPago) {
     return proximoPago;
 }
 
+function obtenerDiasGraciaPoliza(poliza) {
+    return Number(poliza?.diasGracia ?? 30);
+}
+
 const normalizarDuracionMeses = duracionMeses => {
     return financialCalculator.normalizarDuracionMeses(duracionMeses);
 };
@@ -768,6 +772,8 @@ const importarPolizasExcel = async (req, res) => {
             aseguradora: ['ASEGURADORA', 'COMPANIA'],
             primaTotal: ['P TOTAL', 'PRIMA TOTAL'],
             primaNeta: ['P NETA', 'PRIMA NETA'],
+            primerPago: ['PRIMER PAGO'],
+            gastosExpedicion: ['COSTO EMISION', 'COSTO EMISIÓN', 'GASTOS DE EXPEDICION', 'GASTOS DE EXPEDICIÓN'],
             numeroRecibo: ['RECIBO', 'NO RECIBO', 'NUMERO DE RECIBO'],
             fechaLimite: ['FECHA LIMITE DE PAGO', 'FECHA LIMITE PAGO', 'FECHA VENCIMIENTO', 'FECHA VENCIMIENTO RECIBO', 'VENCIMIENTO RECIBO'],
             estatus: ['ESTATUS', 'ESTADO', 'ESTATUS RECIBO'],
@@ -879,6 +885,8 @@ const importarPolizasExcel = async (req, res) => {
                 estado: texto(leer(row, 'estatus')),
                 primaTotal: primaTotalExcel,
                 primaNeta: primaNetaExcel,
+                primerPago: convertirImporte(leer(row, 'primerPago')),
+                gastosExpedicion: convertirImporte(leer(row, 'gastosExpedicion')),
                 tipoSeguro: texto(leer(row, 'tipoSeguro'))
             };
             for (const [key, value] of Object.entries(datosFila)) {
@@ -942,24 +950,15 @@ const importarPolizasExcel = async (req, res) => {
                 const numeroPolizaTrim = numeroPoliza.trim();
                 const filtroPoliza = { empresaId, numeroPoliza: numeroPolizaTrim, deletedAt: null };
                 let poliza = await Poliza.findOne(filtroPoliza);
+                const cambiosImportados = {};
                 if (poliza) {
-                    const cambiosVehiculo = {};
-                    for (const campo of ['numeroSerie', 'descripcionVehiculo']) {
+                    for (const campo of ['numeroSerie', 'descripcionVehiculo', 'primerPago', 'gastosExpedicion']) {
                         const valorImportado = grupo.datos[campo];
-                        if (valorImportado && valorImportado !== poliza[campo]) {
-                            cambiosVehiculo[campo] = valorImportado;
+                        if (valorImportado != null && valorImportado !== '' && valorImportado !== poliza[campo]) {
+                            cambiosImportados[campo] = valorImportado;
+                            poliza[campo] = valorImportado;
                         }
                     }
-                    if (Object.keys(cambiosVehiculo).length > 0) {
-                        await Poliza.updateOne(
-                            { _id: poliza._id, empresaId },
-                            { $set: cambiosVehiculo }
-                        );
-                        actualizadas++;
-                    } else {
-                        sinCambios++;
-                    }
-                    continue;
                 }
                 const primaTotal = Number(poliza?.primaTotal) > 0
                     ? poliza.primaTotal
@@ -970,7 +969,7 @@ const importarPolizasExcel = async (req, res) => {
                     vencimiento: grupo.datos.vencimiento || poliza?.fechas?.vencimiento
                 };
                 const cliente = poliza?.cliente || grupo.datos.cliente;
-                if (!cliente || !fechas.inicio || !fechas.vencimiento || primaTotal == null) {
+                if (!cliente || (!poliza && (!fechas.inicio || !fechas.vencimiento || primaTotal == null))) {
                     throw new Error('Faltan cliente, vigencias o prima total.');
                 }
 
@@ -1078,6 +1077,8 @@ const importarPolizasExcel = async (req, res) => {
                         fechas,
                         primaTotal,
                         primaNeta: grupo.datos.primaNeta ?? 0,
+                        primerPago: grupo.datos.primerPago ?? 0,
+                        gastosExpedicion: grupo.datos.gastosExpedicion ?? 0,
                         estado: estadoImportado || 'Activa',
                         saldoRestante: primaTotal,
                         pagos: [],
@@ -1205,6 +1206,32 @@ const importarPolizasExcel = async (req, res) => {
                     datosUpsert.saldoRestante = poliza.saldoRestante;
                     datosUpsert.proximoPago = poliza.proximoPago;
                     datosUpsert.estadoPago = poliza.estadoPago;
+                }
+                if (!esNueva) {
+                    if (esCobranza) {
+                        Object.assign(cambiosImportados, {
+                            recibos: datosUpsert.recibos,
+                            pagos: datosUpsert.pagos,
+                            saldoRestante: datosUpsert.saldoRestante,
+                            proximoPago: datosUpsert.proximoPago,
+                            estadoPago: datosUpsert.estadoPago
+                        });
+                    }
+                    if (Object.keys(cambiosImportados).length > 0) {
+                        const resultadoActualizacion = await Poliza.updateOne(
+                            { _id: poliza._id, empresaId },
+                            { $set: cambiosImportados },
+                            { runValidators: true }
+                        );
+                        if (!resultadoActualizacion.matchedCount) {
+                            throw new Error('La póliza dejó de existir durante la importación.');
+                        }
+                        if (resultadoActualizacion.modifiedCount > 0) actualizadas++;
+                        else sinCambios++;
+                    } else {
+                        sinCambios++;
+                    }
+                    continue;
                 }
                 const opcionesUpsert = {
                     upsert: true,
@@ -2204,7 +2231,7 @@ const obtenerMetricasSeguros = async (req, res) => {
             if (fechaFinGraciaRecibo) poliza.fechaFinGraciaRecibo = fechaFinGraciaRecibo;
 
             const vencimiento = poliza.fechas?.vencimiento ? new Date(poliza.fechas.vencimiento) : null;
-            const diasGracia = Number(poliza.diasGracia ?? 30);
+            const diasGracia = obtenerDiasGraciaPoliza(poliza);
             const fechaLimite = poliza.fechaLimiteRenovacion
                 ? new Date(poliza.fechaLimiteRenovacion)
                 : vencimiento && new Date(vencimiento.getTime() + diasGracia * 86400000);
@@ -3201,11 +3228,42 @@ const obtenerCobranzaDiaria = async (req, res) => {
 
         const hoyString = new Intl.DateTimeFormat('en-CA', { timeZone: COBRANZA_TZ }).format(new Date());
         const hoyInicio = { $dateFromString: { dateString: hoyString, timezone: COBRANZA_TZ } };
+        const estadoPendienteRenovacionRegex =
+            /^(?:pendiente(?:[\s_-]*de)?[\s_-]*renovaci[oó]n|en[\s_-]*renovaci[oó]n|renovaci[oó]n)$/i;
 
         const matchInicial = {
             empresaId: new mongoose.Types.ObjectId(empresaId),
-            estado: { $regex: /^Activa$/i },
+            estado: {
+                $in: [
+                    /^activa/i,
+                    /^pendiente.*renovaci[oó]n/i,
+                    /^pendienterenovacion/i,
+                    /^renovaci[oó]n/i
+                ]
+            },
             $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+        };
+        matchInicial.$expr = {
+            $and: [
+                { $ne: [{ $ifNull: ['$fechas.vencimiento', null] }, null] },
+                {
+                    $gte: [
+                        {
+                            $ifNull: [
+                                '$fechaLimiteRenovacion',
+                                {
+                                    $dateAdd: {
+                                        startDate: '$fechas.vencimiento',
+                                        unit: 'day',
+                                        amount: { $ifNull: ['$diasGracia', 30] }
+                                    }
+                                }
+                            ]
+                        },
+                        hoyInicio
+                    ]
+                }
+            ]
         };
         if (userRole !== 'admin') {
             matchInicial.asesorId = new mongoose.Types.ObjectId(userId);
@@ -3254,10 +3312,12 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 input: { $ifNull: ['$recibos', []] },
                                 as: 'recibo',
                                 cond: {
-                                    $in: [
-                                        { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
-                                        ['pendiente', 'atrasado']
-                                    ]
+                                    $not: [{
+                                        $in: [
+                                            { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
+                                            ['pagado', 'cancelado']
+                                        ]
+                                    }]
                                 }
                             }
                         }, 0]
@@ -3455,18 +3515,30 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     }
                 }
             },
-            { $match: { diasRestantes: { $ne: null, $lte: 45 } } },
+            {
+                $match: {
+                    $or: [
+                        { diasRestantes: { $ne: null, $lte: 45 } },
+                        { estado: { $regex: estadoPendienteRenovacionRegex } }
+                    ]
+                }
+            },
             {
                 $facet: {
                     registros: [
                         {
                             $match: {
-                                diasRestantes: {
-                                    ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
-                                    ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
-                                    ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
-                                    ...(filtroDias === 'todos' ? { $lte: 45 } : {})
-                                }
+                                $or: [
+                                    {
+                                        diasRestantes: {
+                                            ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
+                                            ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
+                                            ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
+                                            ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                        }
+                                    },
+                                    { estado: { $regex: estadoPendienteRenovacionRegex } }
+                                ]
                             }
                         },
                         { $sort: { diasRestantes: 1 } },
@@ -3514,12 +3586,17 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     registrosCount: [
                         {
                             $match: {
-                                diasRestantes: {
-                                    ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
-                                    ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
-                                    ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
-                                    ...(filtroDias === 'todos' ? { $lte: 45 } : {})
-                                }
+                                $or: [
+                                    {
+                                        diasRestantes: {
+                                            ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
+                                            ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
+                                            ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
+                                            ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                        }
+                                    },
+                                    { estado: { $regex: estadoPendienteRenovacionRegex } }
+                                ]
                             }
                         },
                         { $count: 'total' }
@@ -3671,7 +3748,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
 
         const filtroAseguradoras = {
             empresaId: new mongoose.Types.ObjectId(empresaId),
-            estado: { $regex: /^Activa$/i },
+            estado: { $not: /^Cancelada$/i },
             $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
         };
         if (userRole !== 'admin') {
@@ -5877,30 +5954,60 @@ async function actualizarPolizasVencidas(req, res) {
         if (!empresas) {
             empresas = await Poliza.distinct('empresaId', {
                 empresaId: { $ne: null },
-                estado: { $regex: /^\s*activa\s*$/i },
-                deletedAt: null
+                estado: {
+                    $in: [
+                        /^\s*activa\s*$/i,
+                        /^\s*por\s+vencer\s*$/i,
+                        /^\s*pendiente(?:\s+de)?\s+renovaci[oó]n\s*$/i,
+                        /^\s*pendienterenovacion\s*$/i,
+                        /^\s*en\s+renovaci[oó]n\s*$/i
+                    ]
+                },
+                $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
             });
         }
 
-        const hoy = new Date();
+        const hoyString = new Intl.DateTimeFormat('en-CA', { timeZone: COBRANZA_TZ }).format(new Date());
+        const hoyInicio = { $dateFromString: { dateString: hoyString, timezone: COBRANZA_TZ } };
         let contador = 0;
 
         for (const empresaId of empresas) {
-            const polizas = await Poliza.find({
+            const resultado = await Poliza.updateMany({
                 empresaId,
-                deletedAt: null,
-                estado: { $regex: /^\s*activa\s*$/i },
-                'fechas.vencimiento': { $lt: hoy }
-            });
-
-            for (const poliza of polizas) {
-                const fechaObj = new Date(poliza.fechas?.vencimiento);
-                if (!Number.isNaN(fechaObj.getTime())) {
-                    poliza.estado = 'Vencida';
-                    await poliza.save();
-                    contador++;
+                estado: {
+                    $in: [
+                        /^\s*activa\s*$/i,
+                        /^\s*por\s+vencer\s*$/i,
+                        /^\s*pendiente(?:\s+de)?\s+renovaci[oó]n\s*$/i,
+                        /^\s*pendienterenovacion\s*$/i,
+                        /^\s*en\s+renovaci[oó]n\s*$/i
+                    ]
+                },
+                $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+                $expr: {
+                    $and: [
+                        { $ne: [{ $ifNull: ['$fechas.vencimiento', null] }, null] },
+                        {
+                            $lt: [
+                                {
+                                    $ifNull: [
+                                        '$fechaLimiteRenovacion',
+                                        {
+                                            $dateAdd: {
+                                                startDate: '$fechas.vencimiento',
+                                                unit: 'day',
+                                                amount: { $ifNull: ['$diasGracia', 30] }
+                                            }
+                                        }
+                                    ]
+                                },
+                                hoyInicio
+                            ]
+                        }
+                    ]
                 }
-            }
+            }, { $set: { estado: 'Vencida' } });
+            contador += resultado.modifiedCount;
         }
 
         const respuesta = {
@@ -6052,6 +6159,7 @@ module.exports = {
     generarCalendarioRecibos,
     resolverCobranzaConPago,
     actualizarPolizasVencidas,
+    obtenerDiasGraciaPoliza,
     auditarFechasPolizas,
     auditarVencidasReales
 };

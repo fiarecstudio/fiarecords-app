@@ -4,7 +4,10 @@ const Cliente = require('../models/Cliente');
 const Empresa = require('../models/Empresa');
 const Notificacion = require('../models/Notificacion');
 const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
-const { construirCorreoCobranza } = require('../controllers/polizaController');
+const {
+    construirCorreoCobranza,
+    obtenerDiasGraciaPoliza
+} = require('../controllers/polizaController');
 
 const TIMEZONE_MEXICO = 'America/Monterrey';
 const formatoFechaMexico = new Intl.DateTimeFormat('en-US', {
@@ -80,6 +83,52 @@ function obtenerRangoMesMexico(fecha = new Date()) {
         inicio: fechaLocalMexicoAUTC(year, month, 1),
         fin: fechaLocalMexicoAUTC(nextMonthYear, nextMonth, 1)
     };
+}
+
+function obtenerRangoRenovacionMexico(fecha = new Date()) {
+    const partes = Object.fromEntries(formatoFechaMexico
+        .formatToParts(fecha)
+        .map(({ type, value }) => [type, value]));
+    const year = Number(partes.year);
+    const month = Number(partes.month);
+    const day = Number(partes.day);
+    const inicioUmbralUtc = new Date(Date.UTC(year, month - 1, day + 46));
+
+    return {
+        inicioHoy: fechaLocalMexicoAUTC(year, month, day),
+        inicioMasDe45Dias: fechaLocalMexicoAUTC(
+            inicioUmbralUtc.getUTCFullYear(),
+            inicioUmbralUtc.getUTCMonth() + 1,
+            inicioUmbralUtc.getUTCDate()
+        )
+    };
+}
+
+async function procesarEstatusRenovacionDiario() {
+    const { inicioHoy, inicioMasDe45Dias } = obtenerRangoRenovacionMexico();
+    const filtroPolizasActivas = {
+        deletedAt: null,
+        'fechas.vencimiento': { $gte: inicioHoy, $lt: inicioMasDe45Dias }
+    };
+    const filtroPendientesLejanas = {
+        deletedAt: null,
+        'fechas.vencimiento': { $gte: inicioMasDe45Dias }
+    };
+
+    const resultadoPendientes = await Poliza.updateMany(
+        { ...filtroPolizasActivas, estado: 'Activa' },
+        { $set: { estado: 'PendienteRenovacion' } }
+    );
+    const resultadoActivas = await Poliza.updateMany(
+        { ...filtroPendientesLejanas, estado: 'PendienteRenovacion' },
+        { $set: { estado: 'Activa' } }
+    );
+
+    console.log(
+        `[Cron Estatus Pólizas] Actualización completada: `
+        + `${resultadoPendientes.modifiedCount} pendientes de renovación, `
+        + `${resultadoActivas.modifiedCount} reactivadas.`
+    );
 }
 
 async function procesarNotificacionesDiarias() {
@@ -170,16 +219,21 @@ async function procesarNotificacionesDiarias() {
                     }
                 }
 
-                // FASE 4: CANCELACIÓN POR EXPIRACIÓN DE PERIODO DE GRACIA
-                if (poliza.fechas?.vencimiento && poliza.fechaLimiteRenovacion) {
-                    const diaLimiteMexico = obtenerDiaCalendarioMexico(poliza.fechaLimiteRenovacion);
+                // Marcar vencida cuando termina el periodo de gracia para renovar.
+                if (poliza.fechas?.vencimiento && !['Cancelada', 'Renovada'].includes(poliza.estado)) {
+                    const diasGracia = obtenerDiasGraciaPoliza(poliza);
+                    const fechaLimiteRenovacion = poliza.fechaLimiteRenovacion
+                        || new Date(
+                            new Date(poliza.fechas.vencimiento).getTime()
+                            + diasGracia * 86400000
+                        );
+                    const diaLimiteMexico = obtenerDiaCalendarioMexico(fechaLimiteRenovacion);
 
-                    if (diaLimiteMexico !== null && hoyMexico > diaLimiteMexico) {
-                        if (poliza.estado !== 'Cancelada') {
-                            console.log(`[Cron Notificaciones] Cancelando póliza ${poliza.numeroPoliza} - periodo de gracia expirado`);
-                            poliza.estado = 'Cancelada';
-                            await poliza.save();
-                        }
+                    if (diaLimiteMexico !== null && hoyMexico > diaLimiteMexico
+                        && poliza.estado !== 'Vencida') {
+                        console.log(`[Cron Notificaciones] Marcando póliza ${poliza.numeroPoliza} como vencida - periodo de gracia expirado`);
+                        poliza.estado = 'Vencida';
+                        await poliza.save();
                     }
                 }
             }
@@ -305,6 +359,19 @@ function iniciarCronNotificaciones() {
         await procesarNotificacionesDiarias();
     }, { timezone: TIMEZONE_MEXICO });
     console.log('✅ Cron de Notificaciones programado a las 9:00 AM');
+
+    cron.schedule('0 1 * * *', async () => {
+        try {
+            await procesarEstatusRenovacionDiario();
+        } catch (error) {
+            console.error('[Cron Estatus Pólizas] Error al actualizar estatus de renovación:', error);
+        }
+    }, { timezone: TIMEZONE_MEXICO });
+    console.log('✅ Cron de estatus de pólizas programado diariamente a la 1:00 AM');
 }
 
-module.exports = { iniciarCronNotificaciones, procesarNotificacionesDiarias };
+module.exports = {
+    iniciarCronNotificaciones,
+    procesarNotificacionesDiarias,
+    procesarEstatusRenovacionDiario
+};

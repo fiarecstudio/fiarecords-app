@@ -9776,7 +9776,8 @@ Fecha de firma: {{FECHA}}`;
             emisionEnPrimerPago: poliza.emisionEnPrimerPago === true,
             fechaInicio: poliza.fechas?.inicio ? formatDateForInput(poliza.fechas.inicio) : '',
             fechaVencimiento: poliza.fechas?.vencimiento ? formatDateForInput(poliza.fechas.vencimiento) : '',
-            gastosExpedicion: poliza.gastosExpedicion || 0,
+            primerPago: poliza.primerPago ?? 0,
+            gastosExpedicion: poliza.gastosExpedicion ?? 0,
             otrosServiciosContratados: poliza.otrosServiciosContratados || 0,
             duracionMeses: poliza.duracionMeses || 12,
             clienteId: poliza.clienteId?._id || poliza.clienteId || null
@@ -9928,7 +9929,7 @@ Fecha de firma: {{FECHA}}`;
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="gastosExpedicion">Gastos de Expedición / Recibo (Opc.)</label>
-                            <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.gastosExpedicion || '')}" placeholder="66.58">
+                            <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.gastosExpedicion ?? 0)}" placeholder="0.00">
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="poliza-recargo-fraccionado">Recargo por Pago Fraccionado</label>
@@ -9959,7 +9960,7 @@ Fecha de firma: {{FECHA}}`;
                         </div>
                         <div class="col-6 mb-3">
                             <label class="form-label" for="poliza-primer-pago">Primer Pago (si aplica)</label>
-                            <input id="poliza-primer-pago" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.primerPago || '')}" placeholder="0.00">
+                            <input id="poliza-primer-pago" type="number" min="0" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.primerPago ?? 0)}" placeholder="0.00">
                         </div>
                     </div>
                     <div class="row">
@@ -11531,10 +11532,10 @@ Fecha de firma: {{FECHA}}`;
                 primaTotal: poliza.primaTotal || 0,
                 primaNeta: poliza.primaNeta || 0,
                 otrosServiciosContratados: poliza.otrosServiciosContratados || 0,
-                gastosExpedicion: poliza.gastosExpedicion || 0,
+                gastosExpedicion: poliza.gastosExpedicion ?? 0,
                 emisionEnPrimerPago: poliza.emisionEnPrimerPago === true,
                 montoAbono: poliza.montoAbono || 0,
-                primerPago: poliza.primerPago || 0,
+                primerPago: poliza.primerPago ?? 0,
                 diasAnticipacionAviso: poliza.diasAnticipacionAviso || 3,
                 diasGracia: poliza.diasGracia || 30,
                 enlacePago: poliza.enlacePago || ''
@@ -11648,7 +11649,7 @@ Fecha de firma: {{FECHA}}`;
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Gastos de Expedición / Recibo (Opc.)</label>
-                                    <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.gastosExpedicion)}" placeholder="66.58">
+                                    <input id="gastosExpedicion" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.gastosExpedicion ?? 0)}" placeholder="0.00">
                                 </div>
                                 <div class="form-check mb-3 poliza-emision-check">
                                     <input class="form-check-input" type="checkbox" id="emisionEnPrimerPago" name="emisionEnPrimerPago" ${datosPrellenados.emisionEnPrimerPago ? 'checked' : ''}>
@@ -11661,7 +11662,7 @@ Fecha de firma: {{FECHA}}`;
                                     </div>
                                     <div class="col-12 col-lg-6 mb-3">
                                         <label class="form-label">Primer Pago (si aplica)</label>
-                                        <input id="poliza-primer-pago" type="number" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.primerPago)}" placeholder="0.00">
+                                        <input id="poliza-primer-pago" type="number" min="0" step="0.01" class="swal2-input" value="${escapeHTML(datosPrellenados.primerPago ?? 0)}" placeholder="0.00">
                                     </div>
                                 </div>
                                 <div class="row g-2">
