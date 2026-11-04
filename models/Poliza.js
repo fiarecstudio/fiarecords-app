@@ -66,6 +66,16 @@ const reciboSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Usuario'
     },
+    historialComentarios: [{
+        texto: String,
+        fecha: { type: Date, default: Date.now },
+        gestor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+        tipo: {
+            type: String,
+            enum: ['pago', 'nota', 'recordatorio', 'correo', 'sistema'],
+            default: 'nota'
+        }
+    }],
     registradoPor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Usuario'
@@ -396,6 +406,32 @@ const polizaSchema = new mongoose.Schema({
             message: 'Los días de recordatorio deben ser mayores o iguales a 0'
         }
     },
+    recordatoriosPersonalizados: [{
+        fechaProgramada: { type: Date, required: true },
+        destinatario: { type: String, required: true, trim: true },
+        asunto: { type: String, required: true, trim: true },
+        mensaje: { type: String, required: true },
+        recurrencia: { type: String, enum: ['ninguna', 'mensual', 'mensual_personalizado'], default: 'ninguna' },
+        diaRecurrencia: { type: Number, min: 1, max: 31, default: null },
+        diasRecurrencia: [{ type: Number, min: 1, max: 31 }],
+        enviado: { type: Boolean, default: false },
+        creadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+        fechaCreacion: { type: Date, default: Date.now },
+        plantillaId: { type: mongoose.Schema.Types.ObjectId, ref: 'PlantillaCorreo', default: null },
+        procesandoHasta: { type: Date, default: null },
+        origenRecurrenciaId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        proximaFechaRecurrencia: { type: Date, default: null }
+    }],
+    historialComentarios: [{
+        texto: { type: String, required: true },
+        fecha: { type: Date, default: Date.now },
+        gestor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+        tipo: {
+            type: String,
+            enum: ['pago', 'nota', 'recordatorio', 'correo', 'sistema'],
+            default: 'nota'
+        }
+    }],
     ultimaNotificacionPago: {
         type: Date,
         default: null

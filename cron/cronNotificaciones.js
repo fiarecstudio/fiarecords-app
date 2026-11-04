@@ -4,6 +4,11 @@ const Cliente = require('../models/Cliente');
 const Empresa = require('../models/Empresa');
 const Notificacion = require('../models/Notificacion');
 const { enviarEmail, enviarWhatsApp } = require('../services/notificationService');
+const { saveSentCopy } = require('../controllers/bandejaEntradaController');
+const {
+    renderizarPlantillaCorreo,
+    sanitizarCuerpoCorreo
+} = require('../services/plantillaCorreoService');
 const {
     construirCorreoCobranza,
     obtenerDiasGraciaPoliza
@@ -354,7 +359,287 @@ async function generarYEnviarNotificacion({
     await poliza.save();
 }
 
+function calcularProximaFechaMensual(fechaBase, diaRecurrencia) {
+    const fecha = new Date(fechaBase);
+    const diaDelMes = Number(diaRecurrencia) || fecha.getUTCDate();
+    fecha.setUTCDate(1);
+    fecha.setUTCMonth(fecha.getUTCMonth() + 1);
+    const ultimoDiaDelMes = new Date(Date.UTC(
+        fecha.getUTCFullYear(),
+        fecha.getUTCMonth() + 1,
+        0
+    )).getUTCDate();
+    fecha.setUTCDate(Math.min(diaDelMes, ultimoDiaDelMes));
+    return fecha;
+}
+
+function calcularProximaFechaPersonalizada(fechaBase, diasRecurrencia) {
+    if (!Array.isArray(diasRecurrencia) || diasRecurrencia.length !== 2) return null;
+    const [dia1, dia2] = diasRecurrencia.map(Number).sort((a, b) => a - b);
+    if (![dia1, dia2].every(dia => Number.isInteger(dia) && dia >= 1 && dia <= 31) || dia1 === dia2) {
+        return null;
+    }
+
+    const fecha = new Date(fechaBase);
+    const crearFechaDelMes = (anio, mes, dia) => {
+        const ultimoDiaDelMes = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate();
+        return new Date(Date.UTC(
+            anio,
+            mes,
+            Math.min(dia, ultimoDiaDelMes),
+            fecha.getUTCHours(),
+            fecha.getUTCMinutes(),
+            fecha.getUTCSeconds(),
+            fecha.getUTCMilliseconds()
+        ));
+    };
+    const fechaDia2 = crearFechaDelMes(fecha.getUTCFullYear(), fecha.getUTCMonth(), dia2);
+    if (fechaDia2 > fecha) return fechaDia2;
+
+    const siguienteMes = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth() + 1, 1));
+    return crearFechaDelMes(siguienteMes.getUTCFullYear(), siguienteMes.getUTCMonth(), dia1);
+}
+
+async function asegurarSiguienteRecordatorio(poliza, recordatorio) {
+    if (!recordatorio.proximaFechaRecurrencia) return;
+    const proximaFecha = new Date(recordatorio.proximaFechaRecurrencia);
+    const resultado = await Poliza.updateOne(
+        {
+            _id: poliza._id,
+            empresaId: poliza.empresaId,
+            $and: [
+                {
+                    recordatoriosPersonalizados: {
+                        $elemMatch: {
+                            _id: recordatorio._id,
+                            enviado: true,
+                            recurrencia: { $in: ['mensual', 'mensual_personalizado'] },
+                            proximaFechaRecurrencia: proximaFecha
+                        }
+                    }
+                },
+                {
+                    recordatoriosPersonalizados: {
+                        $not: { $elemMatch: { origenRecurrenciaId: recordatorio._id } }
+                    }
+                }
+            ]
+        },
+        {
+            $push: {
+                recordatoriosPersonalizados: {
+                    fechaProgramada: proximaFecha,
+                    destinatario: recordatorio.destinatario,
+                    asunto: recordatorio.asunto,
+                    mensaje: recordatorio.mensaje,
+                    recurrencia: recordatorio.recurrencia,
+                    diaRecurrencia: recordatorio.diaRecurrencia || new Date(recordatorio.fechaProgramada).getUTCDate(),
+                    diasRecurrencia: recordatorio.diasRecurrencia || [],
+                    enviado: false,
+                    creadoPor: recordatorio.creadoPor,
+                    plantillaId: recordatorio.plantillaId || null,
+                    origenRecurrenciaId: recordatorio._id
+                }
+            }
+        }
+    );
+    if (resultado.modifiedCount > 0) {
+        console.log(`[Cron Recordatorios] Próxima recurrencia creada para póliza ${poliza._id}: ${proximaFecha.toISOString()}.`);
+    }
+}
+
+async function procesarRecordatoriosPersonalizados() {
+    const ahora = new Date();
+    const limiteLease = new Date(ahora.getTime() + 10 * 60 * 1000);
+    const polizas = await Poliza.find({
+        $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+        recordatoriosPersonalizados: {
+            $elemMatch: {
+                $or: [
+                    { enviado: false, fechaProgramada: { $lte: ahora } },
+                    {
+                        enviado: true,
+                        recurrencia: { $in: ['mensual', 'mensual_personalizado'] },
+                        proximaFechaRecurrencia: { $type: 'date' }
+                    }
+                ]
+            }
+        }
+    }).select('_id empresaId recordatoriosPersonalizados').lean();
+
+    for (const poliza of polizas) {
+        const recurrenciasPendientesDeCrear = (poliza.recordatoriosPersonalizados || [])
+            .filter(recordatorio => recordatorio.enviado
+                && ['mensual', 'mensual_personalizado'].includes(recordatorio.recurrencia)
+                && recordatorio.proximaFechaRecurrencia);
+        for (const recordatorio of recurrenciasPendientesDeCrear) {
+            try {
+                await asegurarSiguienteRecordatorio(poliza, recordatorio);
+            } catch (error) {
+                console.error(`[Cron Recordatorios] No se pudo crear la siguiente recurrencia ${recordatorio._id}:`, error);
+            }
+        }
+
+        const recordatoriosVencidos = (poliza.recordatoriosPersonalizados || [])
+            .filter(recordatorio => !recordatorio.enviado
+                && new Date(recordatorio.fechaProgramada) <= ahora);
+
+        for (const recordatorio of recordatoriosVencidos) {
+            const filtroRecordatorio = {
+                _id: recordatorio._id,
+                enviado: false,
+                fechaProgramada: { $lte: ahora },
+                $or: [
+                    { procesandoHasta: null },
+                    { procesandoHasta: { $exists: false } },
+                    { procesandoHasta: { $lte: ahora } }
+                ]
+            };
+            const polizaBloqueada = await Poliza.findOneAndUpdate(
+                {
+                    _id: poliza._id,
+                    empresaId: poliza.empresaId,
+                    recordatoriosPersonalizados: { $elemMatch: filtroRecordatorio }
+                },
+                { $set: { 'recordatoriosPersonalizados.$.procesandoHasta': limiteLease } },
+                { new: true }
+            );
+            if (!polizaBloqueada) continue;
+
+            const recordatorioBloqueado = polizaBloqueada.recordatoriosPersonalizados
+                .find(item => String(item._id) === String(recordatorio._id));
+            if (!recordatorioBloqueado) continue;
+
+            try {
+                const empresa = await Empresa.findById(polizaBloqueada.empresaId)
+                    .select('nombre notificaciones.email.firmaHTML notificaciones.email.signatureHtml notificaciones.email.smtpUser')
+                    .lean();
+                const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
+                    || empresa?.notificaciones?.email?.signatureHtml
+                    || process.env.EMAIL_SIGNATURE_HTML
+                    || `
+                        <br><br>
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                        <div style="font-family: Arial, sans-serif; color: #333; font-size: 12px;">
+                          <strong>Gestión de Cobranza</strong><br>
+                          EME Asesores<br>
+                          <a href="mailto:cobranza@masesores.mx">cobranza@masesores.mx</a> | +52 81 1585 1732<br>
+                        </div>
+                    `;
+                const correoRecordatorio = renderizarPlantillaCorreo({
+                    asunto: recordatorioBloqueado.asunto,
+                    cuerpo: recordatorioBloqueado.mensaje
+                }, {
+                    CLIENTE: polizaBloqueada.cliente || '',
+                    POLIZA: polizaBloqueada.numeroPoliza || 'S/N',
+                    MONTO: '',
+                    ASEGURADORA: polizaBloqueada.aseguradora || 'N/D'
+                });
+                const cuerpoConFirma = sanitizarCuerpoCorreo(`${correoRecordatorio.cuerpo}${firmaHTML}`);
+                await enviarEmail({
+                    empresaId: polizaBloqueada.empresaId,
+                    destinatario: recordatorioBloqueado.destinatario,
+                    asunto: correoRecordatorio.asunto,
+                    cuerpo: cuerpoConFirma
+                });
+                const sentCopySaved = await saveSentCopy({
+                    destinatarios: [recordatorioBloqueado.destinatario],
+                    asunto: correoRecordatorio.asunto,
+                    cuerpo: cuerpoConFirma,
+                    attachments: [],
+                    headers: {},
+                    empresa,
+                    followUp: false
+                });
+                if (!sentCopySaved) {
+                    console.warn(`[Cron Recordatorios] Recordatorio ${recordatorio._id} enviado, pero no se guardó en Enviados.`);
+                }
+            } catch (error) {
+                console.error(`[Cron Recordatorios] Error al enviar recordatorio ${recordatorio._id}:`, error);
+                try {
+                    await Poliza.updateOne(
+                        {
+                            _id: polizaBloqueada._id,
+                            empresaId: polizaBloqueada.empresaId,
+                            recordatoriosPersonalizados: {
+                                $elemMatch: { _id: recordatorio._id, enviado: false }
+                            }
+                        },
+                        { $set: { 'recordatoriosPersonalizados.$.procesandoHasta': null } }
+                    );
+                } catch (errorLiberacion) {
+                    console.error(`[Cron Recordatorios] No se pudo liberar el recordatorio ${recordatorio._id}:`, errorLiberacion);
+                }
+                continue;
+            }
+
+            try {
+                const proximaFechaRecurrencia = recordatorioBloqueado.recurrencia === 'mensual'
+                    ? calcularProximaFechaMensual(
+                        recordatorioBloqueado.fechaProgramada,
+                        recordatorioBloqueado.diaRecurrencia
+                    )
+                    : recordatorioBloqueado.recurrencia === 'mensual_personalizado'
+                        ? calcularProximaFechaPersonalizada(
+                            recordatorioBloqueado.fechaProgramada,
+                            recordatorioBloqueado.diasRecurrencia
+                        )
+                        : null;
+                const resultado = await Poliza.updateOne(
+                    {
+                        _id: polizaBloqueada._id,
+                        empresaId: polizaBloqueada.empresaId,
+                        recordatoriosPersonalizados: { $elemMatch: { _id: recordatorio._id, enviado: false } }
+                    },
+                    {
+                        $set: {
+                            'recordatoriosPersonalizados.$.enviado': true,
+                            'recordatoriosPersonalizados.$.procesandoHasta': null,
+                            'recordatoriosPersonalizados.$.proximaFechaRecurrencia': proximaFechaRecurrencia
+                        },
+                        $push: {
+                            historialComentarios: {
+                                texto: `Recordatorio personalizado enviado a ${recordatorioBloqueado.destinatario}: ${recordatorioBloqueado.asunto}`,
+                                fecha: new Date(),
+                                gestor: recordatorioBloqueado.creadoPor,
+                                tipo: 'recordatorio'
+                            }
+                        }
+                    }
+                );
+                if (resultado.modifiedCount === 0) {
+                    console.error(`[Cron Recordatorios] El correo se envió, pero no se pudo actualizar el recordatorio ${recordatorio._id}. Se conserva el lease para evitar un reintento inmediato.`);
+                    continue;
+                }
+                console.log(`[Cron Recordatorios] Recordatorio ${recordatorio._id} enviado para póliza ${polizaBloqueada._id}.`);
+                if (proximaFechaRecurrencia) {
+                    try {
+                        await asegurarSiguienteRecordatorio(polizaBloqueada, {
+                            ...recordatorioBloqueado.toObject(),
+                            enviado: true,
+                            proximaFechaRecurrencia
+                        });
+                    } catch (errorRecurrencia) {
+                        console.error(`[Cron Recordatorios] El correo se envió, pero no se pudo programar la siguiente recurrencia ${recordatorio._id}:`, errorRecurrencia);
+                    }
+                }
+            } catch (error) {
+                console.error(`[Cron Recordatorios] El correo se envió, pero no se pudo marcar el recordatorio ${recordatorio._id} como enviado. El lease expirará para permitir reintento:`, error);
+            }
+        }
+    }
+}
+
 function iniciarCronNotificaciones() {
+    cron.schedule('* * * * *', async () => {
+        try {
+            await procesarRecordatoriosPersonalizados();
+        } catch (error) {
+            console.error('[Cron Recordatorios] Error en el barrido de recordatorios personalizados:', error);
+        }
+    }, { timezone: TIMEZONE_MEXICO });
+    console.log('✅ Cron de recordatorios personalizados activo (cada minuto)');
+
     cron.schedule('0 9 * * *', async () => {
         await procesarNotificacionesDiarias();
     }, { timezone: TIMEZONE_MEXICO });
@@ -373,5 +658,8 @@ function iniciarCronNotificaciones() {
 module.exports = {
     iniciarCronNotificaciones,
     procesarNotificacionesDiarias,
-    procesarEstatusRenovacionDiario
+    procesarEstatusRenovacionDiario,
+    procesarRecordatoriosPersonalizados,
+    calcularProximaFechaMensual,
+    calcularProximaFechaPersonalizada
 };

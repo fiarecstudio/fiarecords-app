@@ -3,6 +3,25 @@ const Empresa = require('../models/Empresa');
 const BREVO_TIMEOUT_MS = 10000;
 const BREVO_MAX_RETRIES = 2;
 
+function normalizarAdjuntos(attachments) {
+    if (!Array.isArray(attachments) || !attachments.length) return [];
+    return attachments.map(attachment => {
+        const name = typeof attachment?.name === 'string'
+            ? attachment.name.trim().replace(/[\\/]/g, '_').slice(0, 255)
+            : '';
+        const rawContent = Buffer.isBuffer(attachment?.content)
+            ? attachment.content.toString('base64')
+            : attachment?.content;
+        const content = typeof rawContent === 'string'
+            ? rawContent.replace(/^data:[^;]+;base64,/i, '')
+            : '';
+        if (!name || !content || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(content)) {
+            throw new Error('El adjunto de correo no tiene un nombre o contenido Base64 válido.');
+        }
+        return { name, content };
+    });
+}
+
 function wait(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
@@ -34,8 +53,9 @@ async function enviarEmail({ empresaId, destinatario, cc, asunto, cuerpo, replyT
     if (replyTo) {
         payload.replyTo = { email: replyTo };
     }
-    if (Array.isArray(attachments) && attachments.length) {
-        payload.attachment = attachments.map(({ name, content }) => ({ name, content }));
+    const adjuntosNormalizados = normalizarAdjuntos(attachments);
+    if (adjuntosNormalizados.length) {
+        payload.attachment = adjuntosNormalizados;
     }
     if (headers && Object.keys(headers).length) {
         payload.headers = headers;

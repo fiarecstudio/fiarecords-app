@@ -63,6 +63,9 @@ router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
 router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
 router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
 router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
+router.post('/:id/enviar-aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPago);
+router.post('/:id/recordatorios', auth, applyTenantFilter, polizaController.programarRecordatorioPersonalizado);
+router.delete('/:id/recordatorios/:recordatorioId', auth, applyTenantFilter, polizaController.cancelarRecordatorioPersonalizado);
 router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
 router.put('/cobranza-diaria/:polizaId/resolver', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
 

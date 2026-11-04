@@ -3,13 +3,20 @@ const crypto = require('crypto');
 const Poliza = require('../models/Poliza');
 const Usuario = require('../models/Usuario');
 const Cliente = require('../models/Cliente');
+const Empresa = require('../models/Empresa');
 const Configuracion = require('../models/Configuracion');
+const PlantillaCorreo = require('../models/PlantillaCorreo');
 const pdfParseModule = require('pdf-parse');
 const PDFParse = pdfParseModule.PDFParse || (pdfParseModule.default && pdfParseModule.default.PDFParse) || pdfParseModule.default || pdfParseModule;
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
 const financialCalculator = require('../services/financialCalculator');
+const notificationService = require('../services/notificationService');
+const { saveSentCopy } = require('./bandejaEntradaController');
+const {
+    sanitizarCuerpoCorreo
+} = require('../services/plantillaCorreoService');
 const DIAS_GRACIA_RECIBO_MS = 30 * 24 * 60 * 60 * 1000;
 
 function obtenerFechaFinGraciaRecibo(recibo, fechaVencimientoFallback = null) {
@@ -5848,8 +5855,8 @@ const resolverCobranzaConPago = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
         const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
-        const tipoGestor = String(req.body?.tipoGestor || 'asesor').trim();
-        const comentarioSolicitado = req.body?.comentarioCobranza;
+        const tipoGestor = String(req.body?.gestor || req.body?.tipoGestor || 'asesor').trim();
+        const comentarioSolicitado = req.body?.comentario ?? req.body?.comentarioCobranza;
         if (comentarioSolicitado !== undefined && typeof comentarioSolicitado !== 'string') {
             return res.status(400).json({ success: false, error: 'El comentario de cobranza debe ser texto.' });
         }
@@ -5870,16 +5877,37 @@ const resolverCobranzaConPago = async (req, res) => {
         if (!poliza) {
             return res.status(404).json({ success: false, error: 'Póliza no encontrada' });
         }
-        
-        const reciboPendiente = poliza.recibos?.find(
-            recibo => recibo.estadoRecibo?.toLowerCase() === 'pendiente'
-        );
+        const reciboSolicitado = req.body?.reciboId ?? req.body?.reciboIndex;
+        let reciboPendiente;
+        if (reciboSolicitado !== undefined && reciboSolicitado !== null && String(reciboSolicitado).trim() !== '') {
+            const reciboSolicitadoString = String(reciboSolicitado).trim();
+            if (mongoose.Types.ObjectId.isValid(reciboSolicitadoString)) {
+                reciboPendiente = poliza.recibos?.find(
+                    recibo => String(recibo._id) === reciboSolicitadoString
+                );
+            } else if (/^\d+$/.test(reciboSolicitadoString)) {
+                reciboPendiente = poliza.recibos?.[Number(reciboSolicitadoString)];
+            } else {
+                return res.status(400).json({ success: false, error: 'El recibo seleccionado no es válido.' });
+            }
+            if (!reciboPendiente) {
+                return res.status(404).json({ success: false, error: 'Recibo no encontrado.' });
+            }
+            if (!['pendiente', 'atrasado'].includes(reciboPendiente.estadoRecibo?.toLowerCase())) {
+                return res.status(409).json({ success: false, error: 'El recibo seleccionado ya no está pendiente.' });
+            }
+        } else {
+            reciboPendiente = poliza.recibos?.find(
+                recibo => ['pendiente', 'atrasado'].includes(recibo.estadoRecibo?.toLowerCase())
+            );
+        }
         const saldoPendiente = Number(poliza.saldoRestante || poliza.primaTotal) || 0;
         if ((!poliza.recibos || poliza.recibos.length === 0 || !reciboPendiente) && saldoPendiente > 0) {
             const yaTienePagos = poliza.pagos && poliza.pagos.length > 0;
             const montoCobrado = Number(yaTienePagos
                 ? (poliza.montoAbono || poliza.primaTotal)
                 : (poliza.primerPago || poliza.montoAbono || poliza.primaTotal)) || 0;
+            const gestorLegacy = tipoGestor === 'asesor' ? poliza.asesorId : userId;
 
             poliza.pagos.push({
                 monto: montoCobrado,
@@ -5887,7 +5915,12 @@ const resolverCobranzaConPago = async (req, res) => {
                 metodoPago: req.body.metodoPago || 'transferencia',
                 estado: 'pagado'
             });
-
+            if (!Array.isArray(poliza.historialComentarios)) poliza.historialComentarios = [];
+            poliza.historialComentarios.push({
+                texto: comentarioCobranza || 'Pago aplicado',
+                gestor: gestorLegacy,
+                tipo: 'pago'
+            });
             poliza.saldoRestante = Math.max(0, saldoPendiente - montoCobrado);
             poliza.estado = 'Activa';
             if (poliza.fechas) {
@@ -5915,6 +5948,12 @@ const resolverCobranzaConPago = async (req, res) => {
         recibo.registradoPor = userId;
         recibo.gestorCobranza = gestorCobranza;
         recibo.comentarioCobranza = comentarioCobranza;
+        if (!Array.isArray(recibo.historialComentarios)) recibo.historialComentarios = [];
+        recibo.historialComentarios.push({
+            texto: comentarioCobranza || 'Pago aplicado',
+            gestor: gestorCobranza,
+            tipo: 'pago'
+        });
         poliza.pagos.push({ fechaPago, monto: montoPagado, estado: 'pagado', metodoPago });
 
         const saldoActual = Number(poliza.saldoRestante) || 0;
@@ -5932,6 +5971,309 @@ const resolverCobranzaConPago = async (req, res) => {
     } catch (error) {
         console.error('[RESCUE ERROR PAGO]:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const enviarAvisoPago = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+
+        const destinatario = typeof req.body?.destinatario === 'string'
+            ? req.body.destinatario.trim()
+            : '';
+        const asunto = typeof req.body?.asunto === 'string' ? req.body.asunto.trim() : '';
+        const cuerpo = typeof req.body?.cuerpo === 'string' ? req.body.cuerpo.trim() : '';
+        const archivoComprobante = req.body?.archivoComprobante;
+        if (!destinatario || destinatario.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+            return res.status(400).json({ success: false, error: 'El destinatario debe ser un correo válido.' });
+        }
+        if (!asunto || asunto.length > 200 || /[\r\n]/.test(asunto)) {
+            return res.status(400).json({ success: false, error: 'El asunto es obligatorio y no puede exceder 200 caracteres.' });
+        }
+        if (!cuerpo || cuerpo.length > 20000) {
+            return res.status(400).json({ success: false, error: 'El cuerpo es obligatorio y no puede exceder 20000 caracteres.' });
+        }
+
+        let attachments = [];
+        if (archivoComprobante !== undefined && archivoComprobante !== null) {
+            const tiposPermitidos = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+            const nombre = typeof archivoComprobante.name === 'string'
+                ? archivoComprobante.name.trim().replace(/[\\/]/g, '_').replace(/[^\w.-]/g, '_').slice(0, 120)
+                : '';
+            const contenido = typeof archivoComprobante.content === 'string'
+                ? archivoComprobante.content.replace(/^data:[^;]+;base64,/i, '')
+                : '';
+            if (!nombre || !tiposPermitidos.has(archivoComprobante.type) || !contenido
+                || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contenido)) {
+                return res.status(400).json({ success: false, error: 'El comprobante adjunto no es válido.' });
+            }
+            const buffer = Buffer.from(contenido, 'base64');
+            if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
+                return res.status(400).json({ success: false, error: 'El comprobante no debe exceder 5 MB.' });
+            }
+            const firmaValida = archivoComprobante.type === 'application/pdf'
+                ? buffer.subarray(0, 5).toString('ascii') === '%PDF-'
+                : archivoComprobante.type === 'image/png'
+                    ? buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+                    : buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+            if (!firmaValida) {
+                return res.status(400).json({ success: false, error: 'El tipo de archivo no coincide con el contenido del comprobante.' });
+            }
+            attachments = [{ name: nombre, content: contenido }];
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        const reciboSolicitado = req.body?.reciboId;
+        let recibo = null;
+        if (reciboSolicitado !== undefined && reciboSolicitado !== null && String(reciboSolicitado).trim()) {
+            const reciboId = String(reciboSolicitado).trim();
+            if (mongoose.Types.ObjectId.isValid(reciboId)) {
+                recibo = poliza.recibos?.id(reciboId) || null;
+            } else if (/^\d+$/.test(reciboId)) {
+                recibo = poliza.recibos?.[Number(reciboId)] || null;
+            } else {
+                return res.status(400).json({ success: false, error: 'El recibo seleccionado no es válido.' });
+            }
+        }
+
+        const empresa = await Empresa.findById(poliza.empresaId)
+            .select('nombre notificaciones.email.firmaHTML notificaciones.email.signatureHtml notificaciones.email.smtpUser')
+            .lean();
+        const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
+            || empresa?.notificaciones?.email?.signatureHtml
+            || process.env.EMAIL_SIGNATURE_HTML
+            || `
+                <br><br>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; color: #333; font-size: 12px;">
+                  <strong>Gestión de Cobranza</strong><br>
+                  EME Asesores<br>
+                  <a href="mailto:cobranza@masesores.mx">cobranza@masesores.mx</a> | +52 81 1585 1732<br>
+                </div>
+            `;
+        const cuerpoSeguro = sanitizarCuerpoCorreo(
+            `${cuerpo.replace(/\r?\n/g, '<br>')}${firmaHTML}`
+        );
+        await notificationService.enviarEmail({
+            empresaId: poliza.empresaId,
+            destinatario,
+            asunto,
+            cuerpo: cuerpoSeguro,
+            attachments
+        });
+        const sentCopySaved = await saveSentCopy({
+            destinatarios: [destinatario],
+            asunto,
+            cuerpo: cuerpoSeguro,
+            attachments,
+            headers: {},
+            empresa,
+            followUp: false
+        });
+
+        const entradaHistorial = {
+            texto: `Aviso de pago enviado a ${destinatario}: ${asunto}`,
+            gestor: userId,
+            tipo: 'correo'
+        };
+        if (!Array.isArray(poliza.historialComentarios)) poliza.historialComentarios = [];
+        poliza.historialComentarios.push(entradaHistorial);
+        if (recibo) {
+            if (!Array.isArray(recibo.historialComentarios)) recibo.historialComentarios = [];
+            recibo.historialComentarios.push(entradaHistorial);
+        }
+        await poliza.save();
+
+        return res.json({
+            success: true,
+            message: 'Aviso de pago enviado correctamente.',
+            sentCopySaved
+        });
+    } catch (error) {
+        console.error('[enviarAvisoPago] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo enviar el aviso de pago.' });
+    }
+};
+
+const programarRecordatorioPersonalizado = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+
+        const { fechaProgramada, destinatario, asunto, mensaje, plantillaId } = req.body || {};
+        const recurrencia = req.body?.recurrencia || 'ninguna';
+        const diasRecurrenciaEntrada = req.body?.diasRecurrencia;
+        const fecha = new Date(fechaProgramada);
+        const correo = typeof destinatario === 'string' ? destinatario.trim() : '';
+        const asuntoNormalizado = typeof asunto === 'string' ? asunto.trim() : '';
+        const mensajeNormalizado = typeof mensaje === 'string' ? mensaje.trim() : '';
+        if (!fechaProgramada || Number.isNaN(fecha.getTime()) || fecha <= new Date()) {
+            return res.status(400).json({ success: false, error: 'La fecha del recordatorio debe ser futura y válida.' });
+        }
+        if (correo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+            return res.status(400).json({ success: false, error: 'El correo destinatario no es válido.' });
+        }
+        if (!asuntoNormalizado || asuntoNormalizado.length > 200 || /[\r\n]/.test(asuntoNormalizado)) {
+            return res.status(400).json({ success: false, error: 'El asunto es obligatorio y no puede exceder 200 caracteres.' });
+        }
+        if (!mensajeNormalizado || mensajeNormalizado.length > 20000) {
+            return res.status(400).json({ success: false, error: 'El mensaje es obligatorio y no puede exceder 20000 caracteres.' });
+        }
+        if (!['ninguna', 'mensual', 'mensual_personalizado'].includes(recurrencia)) {
+            return res.status(400).json({ success: false, error: 'La recurrencia seleccionada no es válida.' });
+        }
+        let diasRecurrencia = [];
+        if (recurrencia === 'mensual_personalizado') {
+            if (!Array.isArray(diasRecurrenciaEntrada) || diasRecurrenciaEntrada.length !== 2) {
+                return res.status(400).json({ success: false, error: 'Selecciona exactamente dos días para la recurrencia mensual.' });
+            }
+            diasRecurrencia = diasRecurrenciaEntrada.map(Number);
+            if (diasRecurrencia.some(dia => !Number.isInteger(dia) || dia < 1 || dia > 31)
+                || diasRecurrencia[0] === diasRecurrencia[1]) {
+                return res.status(400).json({ success: false, error: 'Los dos días de recurrencia deben ser distintos y estar entre 1 y 31.' });
+            }
+            diasRecurrencia.sort((a, b) => a - b);
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        let plantilla = null;
+        if (plantillaId) {
+            if (!mongoose.Types.ObjectId.isValid(plantillaId)) {
+                return res.status(400).json({ success: false, error: 'La plantilla seleccionada no es válida.' });
+            }
+            plantilla = await PlantillaCorreo.findOne({
+                _id: plantillaId,
+                empresaId: poliza.empresaId
+            }).lean();
+            if (!plantilla) return res.status(404).json({ success: false, error: 'La plantilla no pertenece a esta empresa.' });
+        }
+
+        poliza.recordatoriosPersonalizados.push({
+            fechaProgramada: fecha,
+            destinatario: correo,
+            asunto: asuntoNormalizado,
+            mensaje: sanitizarCuerpoCorreo(mensajeNormalizado),
+            recurrencia,
+            diaRecurrencia: recurrencia === 'mensual' ? fecha.getUTCDate() : null,
+            diasRecurrencia,
+            creadoPor: userId,
+            plantillaId: plantilla?._id || null
+        });
+        await poliza.save();
+
+        const recordatorio = poliza.recordatoriosPersonalizados[poliza.recordatoriosPersonalizados.length - 1];
+        return res.status(201).json({
+            success: true,
+            message: 'Recordatorio programado correctamente.',
+            data: recordatorio
+        });
+    } catch (error) {
+        console.error('[programarRecordatorioPersonalizado] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo programar el recordatorio.' });
+    }
+};
+
+const cancelarRecordatorioPersonalizado = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        const { id, recordatorioId } = req.params;
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(recordatorioId)) {
+            return res.status(400).json({ success: false, error: 'El ID de póliza o recordatorio no es válido.' });
+        }
+
+        const ahora = new Date();
+        const polizaExistente = await Poliza.findOne({ _id: id, ...filtroTenant, deletedAt: null })
+            .select('recordatoriosPersonalizados')
+            .lean();
+        if (!polizaExistente) {
+            return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        }
+        const recordatorioExistente = (polizaExistente.recordatoriosPersonalizados || [])
+            .find(item => String(item._id) === String(recordatorioId));
+        if (!recordatorioExistente) {
+            return res.status(404).json({ success: false, error: 'Recordatorio no encontrado.' });
+        }
+        if (recordatorioExistente.enviado) {
+            return res.status(409).json({ success: false, error: 'El recordatorio ya fue enviado y no puede cancelarse.' });
+        }
+        if (recordatorioExistente.procesandoHasta && new Date(recordatorioExistente.procesandoHasta) > ahora) {
+            return res.status(409).json({ success: false, error: 'El recordatorio ya está en proceso de envío. Intenta de nuevo en unos minutos.' });
+        }
+
+        if (recordatorioExistente.origenRecurrenciaId) {
+            await Poliza.updateOne(
+                {
+                    _id: id,
+                    ...filtroTenant,
+                    deletedAt: null,
+                    recordatoriosPersonalizados: {
+                        $elemMatch: {
+                            _id: recordatorioExistente.origenRecurrenciaId,
+                            enviado: true
+                        }
+                    }
+                },
+                {
+                    $set: {
+                        'recordatoriosPersonalizados.$.recurrencia': 'ninguna',
+                        'recordatoriosPersonalizados.$.proximaFechaRecurrencia': null
+                    }
+                }
+            );
+        }
+
+        const filtroRecordatorioPendiente = {
+            _id: recordatorioId,
+            enviado: false,
+            $or: [
+                { procesandoHasta: null },
+                { procesandoHasta: { $exists: false } },
+                { procesandoHasta: { $lte: ahora } }
+            ]
+        };
+        const poliza = await Poliza.findOneAndUpdate(
+            {
+                _id: id,
+                ...filtroTenant,
+                deletedAt: null,
+                recordatoriosPersonalizados: { $elemMatch: filtroRecordatorioPendiente }
+            },
+            { $pull: { recordatoriosPersonalizados: filtroRecordatorioPendiente } },
+            { new: true }
+        );
+        if (poliza) {
+            return res.json({ success: true, message: 'Recordatorio cancelado correctamente.' });
+        }
+
+        return res.status(409).json({ success: false, error: 'No se pudo cancelar el recordatorio. Actualiza la lista e inténtalo de nuevo.' });
+    } catch (error) {
+        console.error('[cancelarRecordatorioPersonalizado] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo cancelar el recordatorio.' });
     }
 };
 
@@ -6158,6 +6500,9 @@ module.exports = {
     actualizarEnlacePago,
     generarCalendarioRecibos,
     resolverCobranzaConPago,
+    enviarAvisoPago,
+    programarRecordatorioPersonalizado,
+    cancelarRecordatorioPersonalizado,
     actualizarPolizasVencidas,
     obtenerDiasGraciaPoliza,
     auditarFechasPolizas,

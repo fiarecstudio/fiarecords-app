@@ -1376,5 +1376,6 @@ module.exports = {
     getScheduledEmails,
     cancelScheduledEmail,
     sendScheduledEmailNow,
-    procesarCorreosProgramados
+    procesarCorreosProgramados,
+    saveSentCopy
 };

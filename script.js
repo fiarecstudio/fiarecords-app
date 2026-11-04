@@ -10657,6 +10657,7 @@ Fecha de firma: {{FECHA}}`;
                                     <li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="payments" data-poliza-id="${polizaId}">💳 Ver / Registrar Pagos</button></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="edit" data-poliza-id="${polizaId}">✏️ Editar Póliza</button></li>
+                                    ${getUserRoleAndId().role === 'admin' ? '<li><a class="dropdown-item" href="#" onclick="abrirGestionPlantillasCorreo(); return false;"><i class="fas fa-envelope-open-text"></i> Gestionar Plantillas</a></li>' : ''}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><button type="button" class="dropdown-item text-danger" data-poliza-action="delete" data-poliza-id="${polizaId}">🗑️ Eliminar Póliza</button></li>
                                 </ul>
@@ -10679,6 +10680,46 @@ Fecha de firma: {{FECHA}}`;
             await Swal.fire('Error', error.message || 'No se pudieron cargar los pagos de la póliza.', 'error');
         }
     }
+
+    window.navegarADetallePoliza = async function(polizaId) {
+        if (!polizaId) {
+            console.error('[navegarADetallePoliza] Se requiere el ID de la póliza.');
+            return;
+        }
+
+        Swal.close();
+        await window.app.mostrarSeccion('polizas');
+        try {
+            let poliza = polizasGlobales.find(item => String(item._id) === String(polizaId));
+            if (!poliza) {
+                poliza = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            }
+            if (!poliza || poliza.offline) {
+                throw new Error('No se pudieron cargar los datos de la póliza seleccionada.');
+            }
+
+            const terminoBusqueda = poliza.numeroPoliza
+                || poliza.cliente?.nombre
+                || poliza.cliente
+                || '';
+            const campoBusqueda = document.getElementById('filtro-busqueda-polizas');
+            if (!campoBusqueda) {
+                throw new Error('No se encontró el campo de búsqueda de pólizas.');
+            }
+
+            ['filtro-estatus-polizas', 'filtro-aseguradora-polizas', 'filtroAsesorPolizas',
+                'filtroFechaDesde', 'filtroFechaHasta'].forEach(id => {
+                const filtro = document.getElementById(id);
+                if (filtro) filtro.value = '';
+            });
+            campoBusqueda.value = terminoBusqueda;
+            campoBusqueda.dispatchEvent(new Event('input', { bubbles: true }));
+            campoBusqueda.focus();
+        } catch (error) {
+            console.error('[navegarADetallePoliza] No se pudo filtrar la póliza:', error);
+            await Swal.fire('Error', error.message || 'No se pudo encontrar la póliza seleccionada.', 'error');
+        }
+    };
 
     function renderizarControlesPaginacion() {
         const contenedor = document.getElementById('paginacionPolizas');
@@ -11059,7 +11100,7 @@ Fecha de firma: {{FECHA}}`;
         seccion.addEventListener('dblclick', (e) => {
             const clientePoliza = e.target.closest('[data-cobranza-poliza-id]');
             const polizaId = clientePoliza?.getAttribute('data-cobranza-poliza-id');
-            if (polizaId) editarPoliza(polizaId);
+            if (polizaId) window.navegarADetallePoliza(polizaId);
         });
 
         cobranzaDiariaEventosListos = true;
@@ -11361,7 +11402,7 @@ Fecha de firma: {{FECHA}}`;
                     : '';
 
                 const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver o editar la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver pagos e historial de la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';
@@ -12391,6 +12432,437 @@ Fecha de firma: {{FECHA}}`;
     // ==================================================================
     let polizaActualPagos = null; // Variable global para guardar la póliza actual
 
+    async function obtenerPlantillasCorreo(tipo) {
+        const respuesta = await fetchAPI(`/api/plantillas?tipo=${encodeURIComponent(tipo)}`);
+        if (!respuesta?.success || !Array.isArray(respuesta.data)) {
+            throw new Error(respuesta?.error || 'No se pudieron cargar las plantillas de correo.');
+        }
+        return respuesta.data;
+    }
+
+    function renderizarValoresPlantillaCorreo(plantilla, poliza, monto = null) {
+        const cliente = poliza?.clienteId?.nombre
+            || (typeof poliza?.cliente === 'object' ? poliza.cliente?.nombre : poliza?.cliente)
+            || 'Cliente';
+        const valores = {
+            CLIENTE: cliente,
+            POLIZA: poliza?.numeroPoliza || 'S/N',
+            MONTO: formatCurrency(monto ?? poliza?.primaTotal ?? 0, poliza?.moneda || 'MXN'),
+            ASEGURADORA: poliza?.aseguradora || 'N/D'
+        };
+        const sustituir = texto => String(texto || '').replace(
+            /{{\s*(CLIENTE|POLIZA|MONTO|ASEGURADORA)\s*}}/gi,
+            (_match, variable) => String(valores[variable.toUpperCase()])
+        );
+        return {
+            asunto: sustituir(plantilla?.asunto),
+            cuerpo: sustituir(plantilla?.cuerpo)
+        };
+    }
+
+    function obtenerFechaHoraLocalInput(fecha) {
+        const fechaLocal = new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000);
+        return fechaLocal.toISOString().slice(0, 16);
+    }
+
+    async function editarPlantillaCorreo(plantilla = null) {
+        const { value: datos } = await Swal.fire({
+            title: plantilla ? 'Editar plantilla de correo' : 'Nueva plantilla de correo',
+            html: `
+                <div class="text-start">
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <label for="plantilla-nombre" style="display: block; font-weight: bold; margin-bottom: 5px;">Nombre</label>
+                        <input id="plantilla-nombre" maxlength="120" value="${escapeHTML(plantilla?.nombre || '')}" placeholder="Aviso de pago" style="width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <label for="plantilla-tipo" style="display: block; font-weight: bold; margin-bottom: 5px;">Tipo</label>
+                        <select id="plantilla-tipo" style="width: 100%; box-sizing: border-box;">
+                            <option value="general" ${plantilla?.tipo === 'general' ? 'selected' : ''}>General</option>
+                            <option value="pago" ${plantilla?.tipo === 'pago' ? 'selected' : ''}>Pago</option>
+                            <option value="recordatorio" ${plantilla?.tipo === 'recordatorio' ? 'selected' : ''}>Recordatorio</option>
+                        </select>
+                    </div>
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <label for="plantilla-asunto" style="display: block; font-weight: bold; margin-bottom: 5px;">Asunto</label>
+                        <input id="plantilla-asunto" maxlength="200" value="${escapeHTML(plantilla?.asunto || '')}" placeholder="Aviso para {{CLIENTE}} - Póliza {{POLIZA}}" style="width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <label for="plantilla-cuerpo" style="display: block; font-weight: bold; margin-bottom: 5px;">Cuerpo (texto o HTML permitido)</label>
+                        <textarea id="plantilla-cuerpo" maxlength="20000" rows="8" placeholder="Hola {{CLIENTE}}, ..." style="width: 100%; box-sizing: border-box;">${escapeHTML(plantilla?.cuerpo || '')}</textarea>
+                    </div>
+                    <small class="text-muted">Variables: {{CLIENTE}}, {{POLIZA}}, {{MONTO}}, {{ASEGURADORA}}</small>
+                </div>
+            `,
+            width: 'min(90vw, 700px)',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar plantilla',
+            cancelButtonText: 'Cancelar',
+            preConfirm: async () => {
+                const nombre = document.getElementById('plantilla-nombre')?.value.trim() || '';
+                const tipo = document.getElementById('plantilla-tipo')?.value || 'general';
+                const asunto = document.getElementById('plantilla-asunto')?.value.trim() || '';
+                const cuerpo = document.getElementById('plantilla-cuerpo')?.value.trim() || '';
+                if (!nombre || !asunto || !cuerpo) {
+                    Swal.showValidationMessage('Completa el nombre, el asunto y el cuerpo de la plantilla.');
+                    return false;
+                }
+                try {
+                    const url = plantilla
+                        ? `/api/plantillas/${encodeURIComponent(plantilla._id)}`
+                        : '/api/plantillas';
+                    const respuesta = await fetchAPI(url, {
+                        method: plantilla ? 'PUT' : 'POST',
+                        body: JSON.stringify({ nombre, tipo, asunto, cuerpo })
+                    });
+                    if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo guardar la plantilla.');
+                    return respuesta.data;
+                } catch (error) {
+                    Swal.showValidationMessage(error.message || 'No se pudo guardar la plantilla.');
+                    return false;
+                }
+            }
+        });
+        return datos;
+    }
+
+    async function abrirGestionPlantillasCorreo() {
+        try {
+            const plantillas = await obtenerPlantillasCorreo('');
+            const puedeEditar = getUserRoleAndId().role === 'admin';
+            const html = plantillas.length
+                ? `<div class="list-group text-start">${plantillas.map(plantilla => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                        <div class="min-w-0">
+                            <strong>${escapeHTML(plantilla.nombre)}</strong>
+                            <small class="d-block text-muted">${escapeHTML(plantilla.tipo)} · ${escapeHTML(plantilla.asunto)}</small>
+                        </div>
+                        ${puedeEditar ? `<div class="d-flex gap-1 flex-shrink-0">
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-plantilla-accion="editar" data-plantilla-id="${escapeHTML(plantilla._id)}">Editar</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-plantilla-accion="eliminar" data-plantilla-id="${escapeHTML(plantilla._id)}">Eliminar</button>
+                        </div>` : ''}
+                    </div>`).join('')}</div>`
+                : '<p class="text-muted">No hay plantillas disponibles para esta empresa.</p>';
+            const { isConfirmed } = await Swal.fire({
+                title: 'Plantillas de correo',
+                html,
+                width: 'min(90vw, 760px)',
+                showCancelButton: true,
+                showConfirmButton: puedeEditar,
+                confirmButtonText: 'Nueva plantilla',
+                cancelButtonText: 'Cerrar',
+                didOpen: popup => {
+                    popup.addEventListener('click', async event => {
+                        const boton = event.target.closest('[data-plantilla-accion]');
+                        if (!boton) return;
+                        const plantilla = plantillas.find(item => String(item._id) === boton.dataset.plantillaId);
+                        if (!plantilla) return;
+                        Swal.close();
+                        try {
+                            if (boton.dataset.plantillaAccion === 'editar') {
+                                await editarPlantillaCorreo(plantilla);
+                            } else {
+                                const confirmar = await Swal.fire({
+                                    title: '¿Eliminar plantilla?',
+                                    text: plantilla.nombre,
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Eliminar',
+                                    cancelButtonText: 'Cancelar',
+                                    confirmButtonColor: '#dc3545'
+                                });
+                                if (confirmar.isConfirmed) {
+                                    const respuesta = await fetchAPI(`/api/plantillas/${encodeURIComponent(plantilla._id)}`, { method: 'DELETE' });
+                                    if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo eliminar la plantilla.');
+                                }
+                            }
+                            await abrirGestionPlantillasCorreo();
+                        } catch (error) {
+                            console.error('[abrirGestionPlantillasCorreo] No se pudo actualizar la plantilla:', error);
+                            await Swal.fire('Error', error.message || 'No se pudo actualizar la plantilla.', 'error');
+                        }
+                    });
+                }
+            });
+            if (isConfirmed && puedeEditar) {
+                await editarPlantillaCorreo();
+                await abrirGestionPlantillasCorreo();
+            }
+        } catch (error) {
+            console.error('[abrirGestionPlantillasCorreo] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudieron administrar las plantillas.', 'error');
+        }
+    }
+
+    async function abrirModalProgramarRecordatorio(polizaId) {
+        try {
+            const respuestaPoliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
+                ? polizaActualPagos
+                : await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const poliza = respuestaPoliza?.poliza || respuestaPoliza?.data || respuestaPoliza;
+            if (!poliza || poliza.offline) throw new Error('No se pudieron cargar los datos de la póliza.');
+            const plantillas = await obtenerPlantillasCorreo('recordatorio');
+            const fechaInicial = obtenerFechaHoraLocalInput(new Date(Date.now() + 60 * 60 * 1000));
+            const { value: recordatorio } = await Swal.fire({
+                title: `Programar recordatorio · Póliza ${escapeHTML(poliza.numeroPoliza || '')}`,
+                width: 'min(90vw, 700px)',
+                html: `
+                    <div style="width: 100%; box-sizing: border-box;">
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="recordatorio-fecha" style="display: block; font-weight: bold; margin-bottom: 5px;">Fecha y hora</label>
+                            <input id="recordatorio-fecha" type="datetime-local" value="${fechaInicial}" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="recurrencia" style="display: block; font-weight: bold; margin-bottom: 5px;">Repetir</label>
+                            <select id="recurrencia" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                <option value="ninguna">Solo una vez</option>
+                                <option value="mensual">Mensual (Cada mes en este día)</option>
+                                <option value="mensual_personalizado">Mensual (Elegir 2 días)</option>
+                            </select>
+                        </div>
+                        <div id="diasPersonalizadosDiv" style="display: none; gap: 10px; margin-bottom: 15px;">
+                            <input type="number" id="diaRecurrencia1" min="1" max="31" placeholder="Día 1" aria-label="Primer día del mes" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                            <input type="number" id="diaRecurrencia2" min="1" max="31" placeholder="Día 2" aria-label="Segundo día del mes" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="recordatorio-destinatario" style="display: block; font-weight: bold; margin-bottom: 5px;">Correo destinatario</label>
+                            <input id="recordatorio-destinatario" type="email" value="${escapeHTML(poliza.clienteEmail || poliza.clienteId?.email || '')}" placeholder="cliente@ejemplo.com" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="selectPlantilla" style="display: block; font-weight: bold; margin-bottom: 5px;">Plantilla</label>
+                            <select id="selectPlantilla" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                <option value="">Sin plantilla</option>
+                                ${plantillas.map(plantilla => `<option value="${escapeHTML(plantilla._id)}">${escapeHTML(plantilla.nombre)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="recordatorio-asunto" style="display: block; font-weight: bold; margin-bottom: 5px;">Asunto</label>
+                            <input id="recordatorio-asunto" maxlength="200" placeholder="Asunto del recordatorio" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div style="text-align: left; margin-bottom: 15px;">
+                            <label for="recordatorio-mensaje" style="display: block; font-weight: bold; margin-bottom: 5px;">Mensaje</label>
+                            <textarea id="recordatorio-mensaje" rows="6" maxlength="20000" placeholder="Escribe el mensaje; puedes editar el texto de la plantilla." style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc; resize: vertical;"></textarea>
+                            <div style="font-size: 12px; color: #aaa; margin-top: 8px;">
+                                <div>Variables: {{CLIENTE}}, {{POLIZA}}, {{MONTO}}, {{ASEGURADORA}}, {{MES_ANTERIOR}}</div>
+                                ${getUserRoleAndId().role === 'admin' ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="gestionar-plantillas-recordatorio">Administrar plantillas</button>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Programar',
+                cancelButtonText: 'Cancelar',
+                didOpen: popup => {
+                    popup.querySelector('#recurrencia')?.addEventListener('change', event => {
+                        const diasDiv = popup.querySelector('#diasPersonalizadosDiv');
+                        if (diasDiv) diasDiv.style.display = event.target.value === 'mensual_personalizado' ? 'flex' : 'none';
+                    });
+                    popup.querySelector('#selectPlantilla')?.addEventListener('change', event => {
+                        const plantilla = plantillas.find(item => String(item._id) === event.target.value);
+                        if (!plantilla) return;
+                        const contenido = renderizarValoresPlantillaCorreo(
+                            plantilla,
+                            poliza,
+                            poliza.saldoRestante || poliza.primaTotal
+                        );
+                        popup.querySelector('#recordatorio-asunto').value = contenido.asunto;
+                        popup.querySelector('#recordatorio-mensaje').value = contenido.cuerpo;
+                    });
+                    popup.querySelector('#gestionar-plantillas-recordatorio')?.addEventListener('click', () => {
+                        Swal.close();
+                        abrirGestionPlantillasCorreo();
+                    });
+                },
+                preConfirm: async () => {
+                    const fecha = document.getElementById('recordatorio-fecha')?.value || '';
+                    const destinatario = document.getElementById('recordatorio-destinatario')?.value.trim() || '';
+                    const asunto = document.getElementById('recordatorio-asunto')?.value.trim() || '';
+                    const mensaje = document.getElementById('recordatorio-mensaje')?.value.trim() || '';
+                    const plantillaId = document.getElementById('selectPlantilla')?.value || '';
+                    const recurrencia = document.getElementById('recurrencia')?.value || 'ninguna';
+                    const diasRecurrencia = recurrencia === 'mensual_personalizado'
+                        ? [
+                            Number.parseInt(document.getElementById('diaRecurrencia1')?.value, 10),
+                            Number.parseInt(document.getElementById('diaRecurrencia2')?.value, 10)
+                        ]
+                        : [];
+                    const fechaProgramada = new Date(fecha);
+                    if (!fecha || Number.isNaN(fechaProgramada.getTime()) || fechaProgramada <= new Date()) {
+                        Swal.showValidationMessage('Selecciona una fecha y hora futuras.');
+                        return false;
+                    }
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+                        Swal.showValidationMessage('Ingresa un correo destinatario válido.');
+                        return false;
+                    }
+                    if (!asunto || !mensaje) {
+                        Swal.showValidationMessage('Completa el asunto y el mensaje.');
+                        return false;
+                    }
+                    if (recurrencia === 'mensual_personalizado'
+                        && (diasRecurrencia.some(dia => !Number.isInteger(dia) || dia < 1 || dia > 31)
+                            || diasRecurrencia[0] === diasRecurrencia[1])) {
+                        Swal.showValidationMessage('Selecciona dos días distintos entre 1 y 31.');
+                        return false;
+                    }
+                    try {
+                        const respuesta = await ejecutarOEncolar(`/api/polizas/${encodeURIComponent(polizaId)}/recordatorios`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                fechaProgramada: fechaProgramada.toISOString(),
+                                destinatario,
+                                asunto,
+                                mensaje,
+                                recurrencia,
+                                ...(recurrencia === 'mensual_personalizado' ? { diasRecurrencia } : {}),
+                                ...(plantillaId ? { plantillaId } : {})
+                            })
+                        });
+                        if (!respuesta?.success && !respuesta?.offline) {
+                            throw new Error(respuesta?.error || 'No se pudo programar el recordatorio.');
+                        }
+                        return respuesta;
+                    } catch (error) {
+                        Swal.showValidationMessage(error.message || 'No se pudo programar el recordatorio.');
+                        return false;
+                    }
+                }
+            });
+            if (recordatorio) {
+                await Swal.fire('Programado', 'El recordatorio se enviará en la fecha y hora indicadas.', 'success');
+            }
+        } catch (error) {
+            console.error('[abrirModalProgramarRecordatorio] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo abrir el programador de recordatorios.', 'error');
+        }
+    }
+
+    async function verHistorialComentariosPoliza(polizaId) {
+        try {
+            const respuestaPoliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
+                ? polizaActualPagos
+                : await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const poliza = respuestaPoliza?.poliza || respuestaPoliza?.data || respuestaPoliza;
+            if (!poliza || poliza.offline) throw new Error('No se pudo cargar el historial de la póliza.');
+            const comentarios = [
+                ...(poliza.historialComentarios || []).map(item => ({ ...item, recibo: null })),
+                ...(poliza.recibos || []).flatMap(recibo =>
+                    (recibo.historialComentarios || []).map(item => ({
+                        ...item,
+                        recibo: recibo.numeroRecibo || 'Sin número'
+                    }))
+                )
+            ].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+            const html = comentarios.length
+                ? `<div class="list-group text-start" style="max-height: 55vh; overflow-y: auto;">${comentarios.map(item => `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between gap-2">
+                            <strong>${escapeHTML(item.tipo || 'nota')}</strong>
+                            <small class="text-muted">${item.fecha ? new Date(item.fecha).toLocaleString('es-MX') : 'Sin fecha'}</small>
+                        </div>
+                        ${item.recibo ? `<small class="text-muted">Recibo ${escapeHTML(item.recibo)}</small>` : ''}
+                        <div>${escapeHTML(item.texto || '')}</div>
+                    </div>
+                `).join('')}</div>`
+                : '<p class="text-muted mb-0">Esta póliza todavía no tiene comentarios registrados.</p>';
+            await Swal.fire({
+                title: `Historial de comentarios · ${escapeHTML(poliza.numeroPoliza || 'Póliza')}`,
+                html,
+                width: 'min(90vw, 760px)',
+                confirmButtonText: 'Cerrar'
+            });
+        } catch (error) {
+            console.error('[verHistorialComentariosPoliza] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo mostrar el historial.', 'error');
+        }
+    }
+
+    async function cancelarRecordatorioPendiente(polizaId, recordatorioId) {
+        const confirmacion = await Swal.fire({
+            title: '¿Cancelar recordatorio?',
+            text: 'El correo programado ya no se enviará.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Cancelar envío',
+            cancelButtonText: 'Conservar',
+            confirmButtonColor: '#dc3545'
+        });
+        if (!confirmacion.isConfirmed) return;
+
+        try {
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}/recordatorios/${encodeURIComponent(recordatorioId)}`,
+                { method: 'DELETE' }
+            );
+            if (!respuesta?.success) {
+                throw new Error(respuesta?.error || 'No se pudo cancelar el recordatorio.');
+            }
+            showToast('Recordatorio cancelado.', 'success');
+            await verRecordatoriosPendientes(polizaId);
+        } catch (error) {
+            console.error('[cancelarRecordatorioPendiente] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo cancelar el recordatorio.', 'error');
+        }
+    }
+
+    async function verRecordatoriosPendientes(polizaId) {
+        try {
+            const respuestaPoliza = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const poliza = respuestaPoliza?.poliza || respuestaPoliza?.data || respuestaPoliza;
+            if (!poliza || poliza.offline) throw new Error('No se pudo cargar la póliza.');
+            const pendientes = (poliza.recordatoriosPersonalizados || [])
+                .filter(recordatorio => recordatorio.enviado === false);
+            const html = pendientes.length
+                ? `<div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle text-start" style="color: #fff;">
+                        <thead>
+                            <tr>
+                                <th style="color: #fff;">Fecha programada</th>
+                                <th style="color: #fff;">Asunto</th>
+                                <th style="color: #fff;">Destinatario</th>
+                                <th style="width: 60px; text-align: center; color: #fff;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pendientes.map(recordatorio => `
+                                <tr>
+                                    <td style="color: #fff;">${recordatorio.fechaProgramada ? new Date(recordatorio.fechaProgramada).toLocaleString('es-MX') : 'Sin fecha'}</td>
+                                    <td style="color: #fff;">${escapeHTML(recordatorio.asunto || '')}</td>
+                                    <td style="color: #fff;">${escapeHTML(recordatorio.destinatario || '')}</td>
+                                    <td style="width: 60px; text-align: center;">
+                                        <button type="button" class="btn btn-sm btn-danger" data-cancelar-recordatorio="${escapeHTML(recordatorio._id)}" title="Cancelar recordatorio" aria-label="Cancelar recordatorio" style="padding: 2px 8px;">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>`
+                : '<p class="text-muted mb-0">No hay recordatorios pendientes para esta póliza.</p>';
+
+            await Swal.fire({
+                title: `Recordatorios pendientes · ${escapeHTML(poliza.numeroPoliza || 'Póliza')}`,
+                html,
+                width: 'min(95vw, 900px)',
+                confirmButtonText: 'Cerrar',
+                didOpen: popup => {
+                    popup.addEventListener('click', event => {
+                        const boton = event.target.closest('[data-cancelar-recordatorio]');
+                        if (!boton) return;
+                        event.preventDefault();
+                        const recordatorioId = boton.dataset.cancelarRecordatorio;
+                        Swal.close();
+                        cancelarRecordatorioPendiente(polizaId, recordatorioId);
+                    });
+                }
+            });
+        } catch (error) {
+            console.error('[verRecordatoriosPendientes] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudieron cargar los recordatorios pendientes.', 'error');
+        }
+    }
+
     async function abrirModalPagos(poliza) {
         polizaActualPagos = poliza;
         
@@ -12494,7 +12966,12 @@ Fecha de firma: {{FECHA}}`;
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-success" onclick="app.enviarRecordatorioWhatsApp('${escapeHTML(poliza._id)}')"><i class="bi bi-whatsapp"></i> WhatsApp</button>
                             <button class="btn btn-sm btn-primary" onclick="app.enviarRecordatorioCorreo('${escapeHTML(poliza._id)}')"><i class="bi bi-envelope"></i> Correo</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalProgramarRecordatorio('${escapeHTML(poliza._id)}')"><i class="bi bi-clock"></i> Programar</button>
+                            <button class="btn btn-sm btn-warning" onclick="app.verRecordatoriosPendientes('${escapeHTML(poliza._id)}')"><i class="fas fa-clock"></i> Pendientes</button>
                         </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="app.verHistorialComentariosPoliza('${escapeHTML(poliza._id)}')"><i class="bi bi-chat-left-text"></i> Historial de comentarios</button>
                     </div>
                 </div>
             `,
@@ -12504,65 +12981,360 @@ Fecha de firma: {{FECHA}}`;
         });
     }
 
-    // FASE 3: Función para pagar un recibo específico
-    window.pagarRecibo = async function(polizaId, reciboIndex) {
-        const poliza = polizaActualPagos;
-        const recibo = poliza.recibos[reciboIndex];
-        
-        if (!recibo) {
-            Swal.fire('Error', 'Recibo no encontrado', 'error');
-            return;
+    async function abrirModalPagoUnificado(polizaId, reciboId, aseguradoraNombre, opciones = {}) {
+        let plantillasPago = [];
+        try {
+            plantillasPago = await obtenerPlantillasCorreo('pago');
+        } catch (error) {
+            console.error('[abrirModalPagoUnificado] No se pudieron cargar las plantillas:', error);
+            showToast('No se pudieron cargar las plantillas de correo.', 'warning');
         }
+        const aseguradoraNormalizada = String(aseguradoraNombre || '').trim().toLocaleLowerCase('es');
+        const scopeCorreo = obtenerScopeOffline();
+        const claveCorreoAseguradora = scopeCorreo && aseguradoraNormalizada
+            ? `correo_aseguradora_${scopeCorreo}_${encodeURIComponent(aseguradoraNormalizada)}`
+            : null;
+        let correoGuardado = '';
+        try {
+            correoGuardado = claveCorreoAseguradora
+                ? localStorage.getItem(claveCorreoAseguradora) || ''
+                : '';
+        } catch (error) {
+            console.warn('[abrirModalPagoUnificado] No se pudo leer el correo guardado:', error);
+        }
+        const enviarCorreoInicial = !['chubb', 'afirme'].some(nombre =>
+            aseguradoraNormalizada.includes(nombre)
+        );
+        const poliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
+            ? polizaActualPagos
+            : null;
+        const correoDefault = correoGuardado
+            || (aseguradoraNormalizada.includes('chubb')
+                ? 'pagos@chubb.com'
+                : aseguradoraNormalizada.includes('afirme')
+                    ? 'cobranza@afirme.com'
+                    : opciones.correoDestino
+                        || poliza?.clienteEmail
+                        || poliza?.clienteId?.email
+                        || '');
+        const recibo = poliza?.recibos?.find((item, index) =>
+            String(item._id) === String(reciboId) || String(index) === String(reciboId)
+        );
 
-        const { value: formValues } = await Swal.fire({
-            title: `Pagar Recibo ${escapeHTML(recibo.numeroRecibo)}`,
+        let correoPagoParaRevisar = null;
+        const { value: resultado } = await Swal.fire({
+            title: recibo?.numeroRecibo
+                ? `Pagar Recibo ${escapeHTML(recibo.numeroRecibo)}`
+                : '💳 Registrar Pago y Resolver Cobranza',
             html: `
-                <div class="text-start">
-                    <p><strong>Periodo:</strong> ${escapeHTML(recibo.periodoCobertura)}</p>
-                    <p><strong>Monto a pagar:</strong> <span class="currency-value">${formatCurrency(recibo.montoRecibo, poliza.moneda || 'MXN')}</span></p>
-                    <p><strong>Vencimiento:</strong> <span class="date-value">${new Date(recibo.fechaVencimientoRecibo).toLocaleDateString('es-MX')}</span></p>
-                    <hr>
-                    <label class="form-label fw-bold">Método de Pago</label>
-                    <select id="pago-metodo" class="swal2-input">
-                        <option value="efectivo">Efectivo</option>
+                <div style="text-align: left; overflow-x: hidden; width: 100%; box-sizing: border-box;">
+                    ${recibo ? `<p><strong>Periodo:</strong> ${escapeHTML(recibo.periodoCobertura || '')}</p>
+                    <p><strong>Monto a pagar:</strong> <span class="currency-value">${formatCurrency(recibo.montoRecibo, poliza?.moneda || 'MXN')}</span></p>` : ''}
+                    <label for="pago-metodo-unificado" style="display: block; font-weight: bold; margin-bottom: 5px;">Método de Pago</label>
+                    <select id="pago-metodo-unificado" class="swal2-input" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
                         <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
                         <option value="tarjeta">Tarjeta</option>
                         <option value="cheque">Cheque</option>
                     </select>
+                    <label for="pago-gestor-unificado" style="display: block; font-weight: bold; margin-bottom: 5px;">Gestor</label>
+                    <select id="pago-gestor-unificado" class="swal2-input" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+                        <option value="asesor">Asesor</option>
+                        <option value="cobranza">Cobranza Interna</option>
+                    </select>
+                    <div id="seccionCorreoDinamico" style="display: ${enviarCorreoInicial ? 'block' : 'none'};">
+                        <label for="correoDestino" style="display: block; font-weight: bold; margin-bottom: 5px;">Correo Destino</label>
+                        <div style="display: flex; align-items: stretch; gap: 8px; width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+                            <input type="email" id="correoDestino" value="${escapeHTML(correoDefault)}" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; margin: 0;">
+                            <button type="button" id="guardarCorreoAseguradora" class="swal2-styled" style="margin: 0; padding: 8px 12px; white-space: nowrap; background: #6c757d;">Guardar dirección</button>
+                        </div>
+                        <label for="archivoComprobante" style="display: block; font-weight: bold; margin-bottom: 5px;">Adjuntar Comprobante (Opcional)</label>
+                        <input type="file" id="archivoComprobante" accept=".pdf,.png,.jpg,.jpeg" style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 15px; color: #fff;">
+                        <label for="selectPlantilla" style="display: block; font-weight: bold; margin-bottom: 5px;">Plantilla de correo</label>
+                        <select id="selectPlantilla" class="swal2-input" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+                            <option value="">Aviso predeterminado</option>
+                            ${plantillasPago.map(plantilla => `<option value="${escapeHTML(plantilla._id)}">${escapeHTML(plantilla.nombre)}</option>`).join('')}
+                        </select>
+                        <label for="pago-correo-asunto" style="display: block; font-weight: bold; margin-bottom: 5px;">Asunto del correo</label>
+                        <input type="text" id="pago-correo-asunto" maxlength="200" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;" placeholder="Aviso de pago aplicado">
+                        <label for="pago-correo-cuerpo" style="display: block; font-weight: bold; margin-bottom: 5px;">Mensaje del correo</label>
+                        <textarea id="pago-correo-cuerpo" rows="4" maxlength="20000" style="width: 100%; box-sizing: border-box; margin-bottom: 15px; resize: vertical;" placeholder="Contenido del aviso de pago"></textarea>
+                        ${getUserRoleAndId().role === 'admin' ? '<button type="button" id="gestionar-plantillas-pago" class="btn btn-sm btn-outline-secondary mb-3">Administrar plantillas</button>' : ''}
+                    </div>
+                    <label for="pago-comentario-unificado" style="display: block; font-weight: bold; margin-bottom: 5px;">Comentarios</label>
+                    <textarea id="pago-comentario-unificado" class="swal2-textarea" rows="3" placeholder="Notas de gestión o pago..." style="width: 100%; box-sizing: border-box; margin: 0; padding: 10px; resize: none;"></textarea>
+                    <div style="margin: 15px 0 0 0; padding: 0; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="enviarCorreo" ${enviarCorreoInicial ? 'checked' : ''} style="margin: 0;">
+                        <label for="enviarCorreo" style="margin: 0;">¿Enviar comprobante de pago a la Aseguradora?</label>
+                    </div>
                 </div>
             `,
+            heightAuto: false,
             focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: 'Pagar',
+            confirmButtonText: '✅ Registrar Pago',
             cancelButtonText: 'Cancelar',
-            preConfirm: () => {
-                const metodoPago = document.getElementById('pago-metodo').value;
-                return { metodoPago };
+            confirmButtonColor: '#28a745',
+            didOpen: popup => {
+                const checkbox = document.getElementById('enviarCorreo');
+                if (checkbox) checkbox.checked = enviarCorreoInicial;
+                const seccionCorreoDinamico = popup.querySelector('#seccionCorreoDinamico');
+                const actualizarVisibilidadCorreo = () => {
+                    if (seccionCorreoDinamico) {
+                        seccionCorreoDinamico.style.display = checkbox?.checked ? 'block' : 'none';
+                    }
+                };
+                checkbox?.addEventListener('change', actualizarVisibilidadCorreo);
+                actualizarVisibilidadCorreo();
+                popup.querySelector('#selectPlantilla')?.addEventListener('change', event => {
+                    const plantilla = plantillasPago.find(item => String(item._id) === event.target.value);
+                    if (!plantilla) {
+                        popup.querySelector('#pago-correo-asunto').value = '';
+                        popup.querySelector('#pago-correo-cuerpo').value = '';
+                        return;
+                    }
+                    const contenido = renderizarValoresPlantillaCorreo(
+                        plantilla,
+                        poliza,
+                        opciones.monto ?? recibo?.montoRecibo
+                    );
+                    popup.querySelector('#pago-correo-asunto').value = contenido.asunto;
+                    popup.querySelector('#pago-correo-cuerpo').value = contenido.cuerpo;
+                });
+                popup.querySelector('#gestionar-plantillas-pago')?.addEventListener('click', () => {
+                    Swal.close();
+                    abrirGestionPlantillasCorreo();
+                });
+                document.getElementById('guardarCorreoAseguradora')?.addEventListener('click', () => {
+                    const correo = document.getElementById('correoDestino')?.value.trim() || '';
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+                        showToast('Ingresa una dirección de correo válida antes de guardarla.', 'warning');
+                        return;
+                    }
+                    if (!claveCorreoAseguradora) {
+                        showToast('No se pudo determinar la empresa activa o la aseguradora para guardar el correo.', 'error');
+                        return;
+                    }
+                    try {
+                        localStorage.setItem(claveCorreoAseguradora, correo);
+                        showToast(`Dirección guardada para ${aseguradoraNombre}.`, 'success');
+                    } catch (error) {
+                        console.error('[abrirModalPagoUnificado] No se pudo guardar el correo:', error);
+                        showToast('No se pudo guardar la dirección de correo.', 'error');
+                    }
+                });
+            },
+            preConfirm: async () => {
+                const popup = Swal.getPopup();
+                const metodoPago = popup.querySelector('#pago-metodo-unificado')?.value;
+                const gestor = popup.querySelector('#pago-gestor-unificado')?.value;
+                const correoDestino = popup.querySelector('#correoDestino')?.value.trim() || '';
+                const comentario = popup.querySelector('#pago-comentario-unificado')?.value.trim() || '';
+                const enviarCorreo = popup.querySelector('#enviarCorreo')?.checked === true;
+                const plantillaId = popup.querySelector('#selectPlantilla')?.value || '';
+                const correoAsunto = popup.querySelector('#pago-correo-asunto')?.value.trim() || '';
+                const correoCuerpo = popup.querySelector('#pago-correo-cuerpo')?.value.trim() || '';
+                const archivoSeleccionado = popup.querySelector('#archivoComprobante')?.files?.[0] || null;
+                if (!metodoPago || !gestor) {
+                    Swal.showValidationMessage('Selecciona el método de pago y el gestor.');
+                    return false;
+                }
+                if (enviarCorreo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoDestino)) {
+                    Swal.showValidationMessage('Ingresa un correo destino válido para enviar el aviso de pago.');
+                    return false;
+                }
+                if (enviarCorreo && (correoAsunto.length > 200 || correoCuerpo.length > 20000)) {
+                    Swal.showValidationMessage('El asunto o el mensaje del correo excede el límite permitido.');
+                    return false;
+                }
+                if (enviarCorreo && archivoSeleccionado) {
+                    if (archivoSeleccionado.size > 5 * 1024 * 1024) {
+                        Swal.showValidationMessage('El comprobante no debe exceder 5 MB.');
+                        return false;
+                    }
+                    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(archivoSeleccionado.type)) {
+                        Swal.showValidationMessage('Adjunta un comprobante PDF, PNG o JPEG.');
+                        return false;
+                    }
+                }
+
+                const body = {
+                    metodoPago,
+                    gestor,
+                    tipoGestor: gestor,
+                    comentario,
+                    comentarioCobranza: comentario
+                };
+                if (reciboId !== undefined && reciboId !== null && String(reciboId) !== '') {
+                    body.reciboId = String(reciboId);
+                }
+                if (Number.isFinite(Number(opciones.monto))) body.monto = Number(opciones.monto);
+                let archivoComprobante = null;
+                if (enviarCorreo && archivoSeleccionado) {
+                    try {
+                        const [adjunto] = await convertirAdjuntosABase64([archivoSeleccionado]);
+                        archivoComprobante = {
+                            ...adjunto,
+                            type: archivoSeleccionado.type
+                        };
+                    } catch (error) {
+                        Swal.showValidationMessage(error.message || 'No se pudo leer el comprobante.');
+                        return false;
+                    }
+                }
+                correoPagoParaRevisar = enviarCorreo
+                    ? { destinatario: correoDestino, asunto: correoAsunto, cuerpo: correoCuerpo, plantillaId, archivoComprobante }
+                    : null;
+
+                try {
+                    const response = await ejecutarOEncolar(`/api/polizas/${encodeURIComponent(polizaId)}/resolver-cobranza`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    if (!response?.success && !response?.offline) {
+                        throw new Error(response?.error || 'No se pudo registrar el pago.');
+                    }
+                    return response;
+                } catch (error) {
+                    correoPagoParaRevisar = null;
+                    Swal.showValidationMessage(error.message || 'No se pudo registrar el pago.');
+                    return false;
+                }
             }
         });
 
-        if (formValues) {
-            try {
-                const response = await ejecutarOEncolar(`/api/polizas/${polizaId}/resolver-cobranza`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        monto: recibo.montoRecibo,
-                        metodoPago: formValues.metodoPago
-                    })
+        if (!resultado) return;
+        let correoEnviado = false;
+        let errorEnvioCorreo = null;
+        if (resultado.offline) {
+            showToast('Pago guardado para sincronizar cuando vuelva la conexión.', 'info');
+        } else {
+            const polizaCorreo = resultado.poliza
+                || (polizaActualPagos && String(polizaActualPagos._id) === String(polizaId) ? polizaActualPagos : null)
+                || polizasGlobales.find(item => String(item._id) === String(polizaId))
+                || {};
+            const clienteCorreo = polizaCorreo.cliente?.nombre
+                || (typeof polizaCorreo.cliente === 'string' ? polizaCorreo.cliente : '')
+                || polizaCorreo.clienteId?.nombre
+                || 'Cliente';
+            const numeroPolizaCorreo = polizaCorreo.numeroPoliza || 'S/N';
+            const aseguradoraCorreo = aseguradoraNombre || polizaCorreo.aseguradora || '';
+
+            if (correoPagoParaRevisar) {
+                const asuntoSugerido = correoPagoParaRevisar.asunto
+                    || `Aplicación de pago // ${clienteCorreo} // POLIZA ${numeroPolizaCorreo} ${aseguradoraCorreo}`.trim();
+                const cuerpoSugerido = correoPagoParaRevisar.cuerpo
+                    || 'Hola,\n\n¿Me ayudas con la aplicación del pago en mención?\n\nAl pendiente, saludos.';
+                const { value: correoConfirmado } = await Swal.fire({
+                    title: 'Revisar y Enviar Correo',
+                    html: `
+                        <div style="text-align: left;">
+                            <label for="aviso-pago-destinatario" style="display: block; font-weight: bold; margin-bottom: 5px;">To</label>
+                            <input id="aviso-pago-destinatario" type="email" value="${escapeHTML(correoPagoParaRevisar.destinatario)}" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+                            <label for="aviso-pago-asunto" style="display: block; font-weight: bold; margin-bottom: 5px;">Asunto</label>
+                            <input id="aviso-pago-asunto" maxlength="200" value="${escapeHTML(asuntoSugerido)}" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+                            <label for="aviso-pago-cuerpo" style="display: block; font-weight: bold; margin-bottom: 5px;">Cuerpo</label>
+                            <textarea id="aviso-pago-cuerpo" rows="7" maxlength="20000" style="width: 100%; box-sizing: border-box; resize: vertical;">${escapeHTML(cuerpoSugerido)}</textarea>
+                            ${correoPagoParaRevisar.archivoComprobante ? `<div style="margin-top: 8px; color: #555;">Comprobante adjunto: ${escapeHTML(correoPagoParaRevisar.archivoComprobante.name)}</div>` : ''}
+                        </div>
+                    `,
+                    width: 'min(90vw, 700px)',
+                    showCancelButton: true,
+                    confirmButtonText: 'Enviar correo',
+                    cancelButtonText: 'No enviar',
+                    confirmButtonColor: '#0d6efd',
+                    preConfirm: () => {
+                        const destinatario = document.getElementById('aviso-pago-destinatario')?.value.trim() || '';
+                        const asunto = document.getElementById('aviso-pago-asunto')?.value.trim() || '';
+                        const cuerpo = document.getElementById('aviso-pago-cuerpo')?.value.trim() || '';
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+                            Swal.showValidationMessage('Ingresa un correo destinatario válido.');
+                            return false;
+                        }
+                        if (!asunto || asunto.length > 200 || /[\r\n]/.test(asunto)) {
+                            Swal.showValidationMessage('El asunto es obligatorio y no debe exceder 200 caracteres.');
+                            return false;
+                        }
+                        if (!cuerpo || cuerpo.length > 20000) {
+                            Swal.showValidationMessage('El cuerpo es obligatorio y no debe exceder 20000 caracteres.');
+                            return false;
+                        }
+                        return { destinatario, asunto, cuerpo };
+                    }
                 });
 
-                if (response.success) {
-                    Swal.fire('Éxito', 'Recibo pagado correctamente', 'success');
-                    await cargarPolizas(true);
-                } else {
-                    Swal.fire('Error', response.error || 'Error al pagar recibo', 'error');
+                if (correoConfirmado) {
+                    try {
+                        const responseCorreo = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}/enviar-aviso-pago`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ...correoConfirmado,
+                                ...(correoPagoParaRevisar.archivoComprobante
+                                    ? { archivoComprobante: correoPagoParaRevisar.archivoComprobante }
+                                    : {}),
+                                ...(reciboId !== undefined && reciboId !== null && String(reciboId) !== ''
+                                    ? { reciboId: String(reciboId) }
+                                    : {})
+                            })
+                        });
+                        if (!responseCorreo?.success) {
+                            throw new Error(responseCorreo?.error || 'No se pudo enviar el aviso de pago.');
+                        }
+                        correoEnviado = true;
+                    } catch (error) {
+                        console.error('[abrirModalPagoUnificado] No se pudo enviar el aviso:', error);
+                        errorEnvioCorreo = error;
+                    }
                 }
-            } catch (error) {
-                console.error('[pagarRecibo] Error:', error);
-                Swal.fire('Error', 'Error al pagar recibo', 'error');
+            }
+
+            if (errorEnvioCorreo) {
+                await Swal.fire({
+                    title: 'Pago registrado; correo no enviado',
+                    text: errorEnvioCorreo.message || 'No se pudo enviar el correo. El pago quedó registrado.',
+                    icon: 'error'
+                });
+            } else if (!correoEnviado) {
+                await Swal.fire({
+                    title: '✅ Pago Registrado',
+                    text: correoPagoParaRevisar
+                        ? 'El pago se registró. El correo no fue enviado.'
+                        : 'El pago se registró correctamente.',
+                    icon: 'success',
+                    confirmButtonColor: '#28a745'
+                });
+            } else {
+                await Swal.fire({
+                    title: '✅ Pago y correo registrados',
+                    text: 'El pago se registró y el aviso fue enviado.',
+                    icon: 'success',
+                    confirmButtonColor: '#28a745'
+                });
             }
         }
+        cargarCobranzaDiaria();
+        cargarPolizas(true);
     }
+
+    window.abrirModalPagoUnificado = abrirModalPagoUnificado;
+    window.abrirGestionPlantillasCorreo = abrirGestionPlantillasCorreo;
+    window.verRecordatoriosPendientes = verRecordatoriosPendientes;
+    window.pagarRecibo = async function(polizaId, reciboIndex) {
+        const poliza = polizaActualPagos;
+        const recibo = poliza?.recibos?.[reciboIndex];
+        if (!recibo) {
+            await Swal.fire('Error', 'Recibo no encontrado', 'error');
+            return;
+        }
+        return abrirModalPagoUnificado(
+            polizaId,
+            recibo._id || reciboIndex,
+            poliza.aseguradora,
+            { monto: recibo.montoRecibo }
+        );
+    };
 
     window.revertirPago = async function(polizaId, reciboIndex) {
         const poliza = polizaActualPagos;
@@ -14676,7 +15448,7 @@ Fecha de firma: {{FECHA}}`;
         recargarKanbanReactivo,
         mostrarOverlayKanban,
         toggleFiltroNoLeidos,
-        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         actualizarVistaReporteCobranza, cambiarMesReporteCobranza, filtrarReporteCobranza,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
@@ -15299,88 +16071,31 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function marcarCobranzaResuelta(polizaId, montoPagar) {
+        const registro = estadoCobranza.registros.find(item =>
+            String(item.polizaId) === String(polizaId)
+        );
+        const reciboIndex = Number(registro?.reciboPendienteIndex);
+        const reciboId = Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+            ? String(reciboIndex)
+            : null;
         try {
-            const montoFormateado = new Intl.NumberFormat('es-MX', {
-                style: 'currency',
-                currency: 'MXN'
-            }).format(montoPagar);
-
-            const { value: formValues } = await Swal.fire({
-                title: '💳 Registrar Pago y Resolver Cobranza',
-                html: `
-                    <div style="text-align: left; padding: 10px;">
-                        <p style="margin-bottom: 15px;"><strong>Monto a Pagar:</strong> <span style="color: #28a745; font-size: 18px; font-weight: bold;">${montoFormateado}</span></p>
-                        <label for="metodoPago" style="display: block; margin-bottom: 5px; font-weight: bold;">Método de Pago:</label>
-                        <select id="metodoPago" class="swal2-input" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="transferencia">Transferencia</option>
-                            <option value="efectivo">Efectivo</option>
-                            <option value="tarjeta">Tarjeta</option>
-                        </select>
-                        <fieldset style="border: 0; padding: 0; margin: 16px 0;">
-                            <legend style="font-size: 1rem; font-weight: bold;">Gestión de Cobro</legend>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="tipoGestor" id="swal-gestor-asesor" value="asesor" checked>
-                                <label class="form-check-label" for="swal-gestor-asesor">Lo gestionó el Asesor</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="tipoGestor" id="swal-gestor-cobranza" value="cobranza">
-                                <label class="form-check-label" for="swal-gestor-cobranza">Lo gestionó Cobranza Interna</label>
-                            </div>
-                        </fieldset>
-                        <textarea id="swal-comentario" class="swal2-textarea" placeholder="Notas de gestión (ej. Promesa de pago el viernes)..." style="font-size: 0.9rem; height: 80px;"></textarea>
-                    </div>
-                `,
-                focusConfirm: false,
-                showCancelButton: true,
-                confirmButtonText: '✅ Registrar Pago',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#28a745',
-                preConfirm: () => {
-                    const metodoPago = document.getElementById('metodoPago').value;
-                    const tipoGestor = document.querySelector('input[name="tipoGestor"]:checked')?.value;
-                    const comentarioCobranza = document.getElementById('swal-comentario').value.trim();
-                    if (!metodoPago) {
-                        Swal.showValidationMessage('Por favor selecciona un método de pago');
-                        return false;
-                    }
-                    if (!tipoGestor) {
-                        Swal.showValidationMessage('Por favor selecciona quién gestionó el cobro');
-                        return false;
-                    }
-                    return { monto: montoPagar, metodoPago, tipoGestor, comentarioCobranza };
-                }
-            });
-
-            if (!formValues) return;
-
-            const resultado = await ejecutarOEncolar('/api/polizas/' + polizaId + '/resolver-cobranza', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formValues)
-            });
-
-            if (resultado.success) {
-                await Swal.fire({
-                    title: '✅ Pago Registrado',
-                    text: 'El pago ha sido registrado correctamente y la póliza ha avanzado al siguiente ciclo.',
-                    icon: 'success',
-                    confirmButtonColor: '#28a745'
-                });
-
-                // Recargar la tabla
-                cargarCobranzaDiaria();
-                cargarPolizas(true);
-            } else {
-                throw new Error(resultado.error || 'Error al registrar pago');
+            const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
+            if (!poliza || poliza.offline || String(poliza._id) !== String(polizaId)) {
+                throw new Error('No se pudo cargar la póliza completa desde Cobranza Diaria.');
             }
-        } catch (error) {
-            console.error('[marcarCobranzaResuelta] Error:', error);
-            await Swal.fire({
-                title: '❌ Error',
-                text: error.message || 'Error al registrar pago',
-                icon: 'error',
-                confirmButtonColor: '#dc3545'
+            polizaActualPagos = poliza;
+            const indiceCache = polizasGlobales.findIndex(item => String(item._id) === String(polizaId));
+            if (indiceCache >= 0) polizasGlobales[indiceCache] = poliza;
+            const aseguradoraNombre = poliza.aseguradora || registro?.aseguradora || '';
+            const monto = montoPagar ?? registro?.montoPagar;
+            return abrirModalPagoUnificado(polizaId, reciboId, aseguradoraNombre, {
+                monto,
+                correoDestino: registro?.email || ''
             });
+        } catch (error) {
+            console.error('[marcarCobranzaResuelta] No se pudo cargar la póliza completa:', error);
+            await Swal.fire('Error', error.message || 'No se pudo abrir el pago desde Cobranza Diaria.', 'error');
         }
     }
 

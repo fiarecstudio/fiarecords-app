@@ -178,6 +178,7 @@ app.use('/api/drive', require('./routes/drive')); // Subida de archivos a Google
 app.use('/api/chat', require('./routes/chat')); // FASE 2: Sistema de Chat
 app.use('/api/bandeja-entrada', require('./routes/bandejaEntrada'));
 app.use('/api/polizas', require('./routes/polizas')); // Módulo de Seguros
+app.use('/api/plantillas', require('./routes/plantillas')); // Plantillas de correo por empresa
 app.use('/api/clientes', require('./routes/clientes')); // Módulo de Seguros - CRM
 app.use('/api/cobranza-temp', require('./routes/cobranza-temp')); // Ruta temporal para envio manual
 
