@@ -64,6 +64,10 @@ router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtene
 router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
 router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
 router.post('/:id/enviar-aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPago);
+router.post('/:id/endosos', auth, applyTenantFilter, polizaController.agregarEndoso);
+router.put('/:id/endosos/:endosoId/estatus', auth, applyTenantFilter, polizaController.actualizarEndosoPagado);
+router.delete('/:id/endosos/:endosoId', auth, applyTenantFilter, polizaController.eliminarEndoso);
+router.post('/:id/notas', auth, applyTenantFilter, polizaController.agregarNotaPoliza);
 router.post('/:id/recordatorios', auth, applyTenantFilter, polizaController.programarRecordatorioPersonalizado);
 router.delete('/:id/recordatorios/:recordatorioId', auth, applyTenantFilter, polizaController.cancelarRecordatorioPersonalizado);
 router.get('/cobranza-diaria', auth, applyTenantFilter, polizaController.obtenerCobranzaDiaria);
@@ -130,6 +134,7 @@ router.get('/migrar-asesor-historico', auth, async (req, res) => {
 router.get('/reporte-cobranza', auth, applyTenantFilter, polizaController.obtenerReporteCobranza);
 router.put('/:id/recibos/:reciboIndex/nota', auth, applyTenantFilter, polizaController.guardarNotaCobranza);
 router.put('/:id/recibos/:reciboIndex/estatus', auth, applyTenantFilter, polizaController.actualizarEstatusReciboReporte);
+router.delete('/:id/recibos/:reciboIndex/pago', auth, applyTenantFilter, polizaController.eliminarPago);
 router.put('/:id/enlace-pago', auth, applyTenantFilter, polizaController.actualizarEnlacePago);
 
 router.put('/:id/recalcular', auth, applyTenantFilter, polizaController.recalcularRecibos);

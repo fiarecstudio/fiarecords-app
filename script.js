@@ -10632,7 +10632,6 @@ Fecha de firma: {{FECHA}}`;
                 ? `<button type="button" class="btn btn-sm btn-warning py-0 px-2 poliza-renew-button" style="font-size: 0.75rem;" data-poliza-action="renew" data-poliza-id="${escapeHTML(p._id)}" title="Renovar póliza">↻ Renovar</button>`
                 : '';
             const polizaId = escapeHTML(p._id);
-
             return `
                 <tr data-policy-id="${polizaId}" class="poliza-row-clickable">
                     <td data-label="Cliente" class="col-cliente">
@@ -10655,7 +10654,11 @@ Fecha de firma: {{FECHA}}`;
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li><button type="button" class="dropdown-item" data-poliza-action="email" data-poliza-id="${polizaId}">✉️ Enviar Notificación por Correo</button></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>
-                                    <li><button type="button" class="dropdown-item" data-poliza-action="payments" data-poliza-id="${polizaId}">💳 Ver / Registrar Pagos</button></li>
+                                    <li><a class="dropdown-item" href="#" onclick="abrirModalPagos('${polizaId}'); return false;">💳 Ver / Registrar Pagos</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="agregarNotaPoliza('${polizaId}'); return false;">📝 Agregar Nota / Seguimiento</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="verHistorialPoliza('${polizaId}'); return false;">🕒 Ver Historial</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="abrirModalProgramarRecordatorio('${polizaId}'); return false;">🔔 Programar Recordatorios</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="verRecordatoriosPendientes('${polizaId}'); return false;">⏳ Recordatorios Pendientes</a></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="edit" data-poliza-id="${polizaId}">✏️ Editar Póliza</button></li>
                                     ${getUserRoleAndId().role === 'admin' ? '<li><a class="dropdown-item" href="#" onclick="abrirGestionPlantillasCorreo(); return false;"><i class="fas fa-envelope-open-text"></i> Gestionar Plantillas</a></li>' : ''}
                                     <li><hr class="dropdown-divider"></li>
@@ -11114,7 +11117,7 @@ Fecha de firma: {{FECHA}}`;
         });
     }
 
-    async function cargarCobranzaDiaria() {
+    async function cargarCobranzaDiaria(forzarRecarga = false) {
         initEventosCobranzaDiaria();
 
         if (debounceCobranzaDiaria) {
@@ -11168,8 +11171,10 @@ Fecha de firma: {{FECHA}}`;
             };
 
             const claveCacheCobranza = `backup_cobranza_diaria_${filtroDiasCobranza}`;
-            const datosCacheados = leerRespaldoOffline(claveCacheCobranza)
-                || (filtroDiasCobranza === 'todos' ? leerRespaldoOffline('backup_cobranza_diaria') : null);
+            const datosCacheados = forzarRecarga
+                ? null
+                : leerRespaldoOffline(claveCacheCobranza)
+                    || (filtroDiasCobranza === 'todos' ? leerRespaldoOffline('backup_cobranza_diaria') : null);
             const tieneCache = datosCacheados && typeof datosCacheados === 'object';
             if (tieneCache) {
                 renderizar(datosCacheados);
@@ -11203,7 +11208,11 @@ Fecha de firma: {{FECHA}}`;
                 if (search) params.set('search', search);
                 if (aseguradora) params.set('aseguradora', aseguradora);
                 if (asesorId) params.set('asesorId', asesorId);
-                const datos = await fetchAPI(`/api/polizas/cobranza-diaria?${params.toString()}`, { silent: tieneCache });
+                if (forzarRecarga) params.set('_', String(Date.now()));
+                const datos = await fetchAPI(`/api/polizas/cobranza-diaria?${params.toString()}`, {
+                    silent: tieneCache,
+                    ...(forzarRecarga ? { cache: 'no-store' } : {})
+                });
                 if (datos?.offline) {
                     tabla.removeAttribute('aria-busy');
                     tabla.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos locales disponibles.</td></tr>';
@@ -11246,7 +11255,6 @@ Fecha de firma: {{FECHA}}`;
         const asesorSeleccionado = document.getElementById('filtro-asesor-cobranza')?.value || '';
         const aseguradoraSeleccionada = document.getElementById('filtro-aseguradora-cobranza')?.value || '';
         const textoBusqueda = (document.getElementById('buscadorCobranzaDiaria')?.value || '').trim().toLowerCase();
-        const ordenAscendente = document.getElementById('ordenVencimientoCobranza')?.value !== 'desc';
         const filtradas = (Array.isArray(polizas) ? polizas : []).filter(poliza =>
             (!asesorSeleccionado || String(poliza.asesorId || '') === asesorSeleccionado)
             && (!aseguradoraSeleccionada || poliza.aseguradora === aseguradoraSeleccionada)
@@ -11254,11 +11262,7 @@ Fecha de firma: {{FECHA}}`;
                 || String(poliza.cliente || '').toLowerCase().includes(textoBusqueda)
                 || String(poliza.numeroPoliza || '').toLowerCase().includes(textoBusqueda))
         );
-        cobranzaGlobales = ordenarPorFecha(filtradas, poliza =>
-            poliza.tipoGestion === 'vencimiento_poliza'
-                ? poliza.vencimiento
-                : obtenerFechaFinGraciaCobranza(poliza) || poliza.proximoPago || poliza.vencimiento,
-        ordenAscendente);
+        cobranzaGlobales = filtradas;
         if (!cobranzaPaginacionServidor) paginaActualCobranza = 1;
         renderizarPaginaCobranza();
     }
@@ -11291,7 +11295,7 @@ Fecha de firma: {{FECHA}}`;
         const contadorCobranza = document.getElementById('contadorCobranza');
         if (contadorCobranza) {
             const totalRegistros = paginacionRegistros?.total ?? cobranzaGlobales.length;
-            contadorCobranza.textContent = `${totalRegistros} ${totalRegistros === 1 ? 'póliza' : 'pólizas'}`;
+            contadorCobranza.textContent = `${totalRegistros} ${totalRegistros === 1 ? 'registro' : 'registros'}`;
         }
 
         if (polizasPagina.length > 0) {
@@ -11302,7 +11306,11 @@ Fecha de firma: {{FECHA}}`;
                 const fechaVencimiento = p.vencimiento ? new Date(p.vencimiento).toLocaleDateString('es-MX') : 'N/A';
                 const fechaProximoPagoValor = fechaFinGracia || p.proximoPago;
                 const fechaProximoPago = fechaProximoPagoValor ? new Date(fechaProximoPagoValor).toLocaleDateString('es-MX') : 'N/A';
-                const fechaMostrar = p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago;
+                const fechaRecibo = reciboPendiente?.fechaVencimientoRecibo
+                    ? new Date(reciboPendiente.fechaVencimientoRecibo).toLocaleDateString('es-MX')
+                    : null;
+                const fechaMostrar = fechaRecibo
+                    || (p.tipoGestion === 'vencimiento_poliza' ? fechaVencimiento : fechaProximoPago);
                 const diasRestantesGracia = p.diasRestantesGracia !== null
                     && p.diasRestantesGracia !== undefined
                     && Number.isFinite(Number(p.diasRestantesGracia))
@@ -11364,7 +11372,14 @@ Fecha de firma: {{FECHA}}`;
 
                 const comentarioPrevioCodificado = encodeURIComponent(reciboPendiente?.comentarioCobranza || '');
                 const reciboIndex = Number(p.reciboPendienteIndex ?? p.indiceRecibo);
-                const atributosHistorial = reciboPendiente && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+                const reciboTipo = p.reciboPendienteTipo || 'recibo';
+                const reciboId = reciboPendiente?._id ? escapeHTML(String(reciboPendiente._id)) : '';
+                const permiteHistorialRecibo = reciboTipo !== 'endoso';
+                const reciboIndexAccion = permiteHistorialRecibo
+                    && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+                    ? reciboIndex
+                    : '';
+                const atributosHistorial = reciboPendiente && reciboIndexAccion !== ''
                     ? ' data-cobranza-log-channel="whatsapp" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndex + '" data-comentario="' + comentarioPrevioCodificado + '"'
                     : '';
                 const whatsappButton = telefonoValido
@@ -11382,14 +11397,14 @@ Fecha de firma: {{FECHA}}`;
                 
                 let botonCorreo;
                 if (tieneCorreoReciente) {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" data-cobranza-action="correo-confirmado" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" data-comentario="' + comentarioPrevioCodificado + '" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" data-cobranza-action="correo-confirmado" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndexAccion + '" data-comentario="' + comentarioPrevioCodificado + '" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
                 } else {
-                    botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" data-cobranza-action="correo" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" data-comentario="' + comentarioPrevioCodificado + '" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" data-cobranza-action="correo" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndexAccion + '" data-comentario="' + comentarioPrevioCodificado + '" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
                 }
                 const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary cobranza-icon-button" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza" aria-label="Editar póliza"><i class="bi bi-pencil" aria-hidden="true"></i></button>';
                 const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info cobranza-icon-button" onclick="app.agregarEnlacePago(\'' + polizaIdAttr + '\')" title="Agregar Enlace de Pago" aria-label="Agregar enlace de pago"><i class="bi bi-link-45deg" aria-hidden="true"></i></button>';
-                const botonResolver = '<button type="button" class="btn btn-sm btn-warning btn-pagar-cobranza cobranza-icon-button ms-1" data-id="' + polizaIdAttr + '" data-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ')" title="Pagar" aria-label="Pagar"><i class="bi bi-currency-dollar text-dark" aria-hidden="true"></i></button>';
-                const botonNotas = reciboPendiente && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
+                const botonResolver = '<button type="button" class="btn btn-sm btn-warning btn-pagar-cobranza cobranza-icon-button ms-1" data-id="' + polizaIdAttr + '" data-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ', ' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : 'null') + ', \'' + escapeHTML(reciboTipo) + '\', \'' + reciboId + '\')" title="Pagar" aria-label="Pagar"><i class="bi bi-currency-dollar text-dark" aria-hidden="true"></i></button>';
+                const botonNotas = reciboPendiente && permiteHistorialRecibo && Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
                     ? '<button type="button" class="btn btn-sm btn-info btn-notas-cobranza cobranza-icon-button ms-1" data-cobranza-action="nota" data-id="' + polizaIdAttr + '" data-index="' + reciboIndex + '" data-notas="' + comentarioPrevioCodificado + '" title="Historial y Notas" aria-label="Historial y Notas"><i class="bi bi-chat-dots-fill text-white" aria-hidden="true"></i></button>'
                     : '';
                 const botonesPago = '<div class="d-flex align-items-center justify-content-center flex-wrap gap-2">' + botonResolver + botonNotas + '</div>';
@@ -11400,9 +11415,12 @@ Fecha de firma: {{FECHA}}`;
                 const comentarioCobranza = ultimaNota
                     ? '<div class="text-muted mt-1 text-truncate" style="max-width: 250px; font-size: 0.75rem;" title="Clic en Notas para ver historial"><i class="fas fa-history text-info"></i> <em>' + escapeHTML(ultimaNota) + '</em></div>'
                     : '';
+                const detalleRecibo = reciboPendiente
+                    ? '<small class="d-block text-info">' + escapeHTML([reciboPendiente.numeroRecibo, reciboPendiente.periodoCobertura].filter(Boolean).join(' · ')) + '</small>'
+                    : '';
 
                 const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver pagos e historial de la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver pagos e historial de la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + detalleRecibo + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';
@@ -12602,14 +12620,25 @@ Fecha de firma: {{FECHA}}`;
             if (!poliza || poliza.offline) throw new Error('No se pudieron cargar los datos de la póliza.');
             const plantillas = await obtenerPlantillasCorreo('recordatorio');
             const fechaInicial = obtenerFechaHoraLocalInput(new Date(Date.now() + 60 * 60 * 1000));
+            let seSeleccionaronDosFechas = false;
             const { value: recordatorio } = await Swal.fire({
                 title: `Programar recordatorio · Póliza ${escapeHTML(poliza.numeroPoliza || '')}`,
                 width: 'min(90vw, 700px)',
                 html: `
                     <div style="width: 100%; box-sizing: border-box;">
-                        <div style="text-align: left; margin-bottom: 15px;">
+                        <div id="recordatorioFechaUnica" style="text-align: left; margin-bottom: 15px;">
                             <label for="recordatorio-fecha" style="display: block; font-weight: bold; margin-bottom: 5px;">Fecha y hora</label>
                             <input id="recordatorio-fecha" type="datetime-local" value="${fechaInicial}" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div id="recordatorioFechasPersonalizadas" style="display: none; gap: 10px; margin-bottom: 15px;">
+                            <div style="flex: 1; text-align: left;">
+                                <label for="recordatorio-fecha-1" style="display: block; font-weight: bold; margin-bottom: 5px;">Día 1</label>
+                                <input id="recordatorio-fecha-1" type="datetime-local" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                            </div>
+                            <div style="flex: 1; text-align: left;">
+                                <label for="recordatorio-fecha-2" style="display: block; font-weight: bold; margin-bottom: 5px;">Día 2</label>
+                                <input id="recordatorio-fecha-2" type="datetime-local" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                            </div>
                         </div>
                         <div style="text-align: left; margin-bottom: 15px;">
                             <label for="recurrencia" style="display: block; font-weight: bold; margin-bottom: 5px;">Repetir</label>
@@ -12618,10 +12647,6 @@ Fecha de firma: {{FECHA}}`;
                                 <option value="mensual">Mensual (Cada mes en este día)</option>
                                 <option value="mensual_personalizado">Mensual (Elegir 2 días)</option>
                             </select>
-                        </div>
-                        <div id="diasPersonalizadosDiv" style="display: none; gap: 10px; margin-bottom: 15px;">
-                            <input type="number" id="diaRecurrencia1" min="1" max="31" placeholder="Día 1" aria-label="Primer día del mes" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-                            <input type="number" id="diaRecurrencia2" min="1" max="31" placeholder="Día 2" aria-label="Segundo día del mes" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
                         </div>
                         <div style="text-align: left; margin-bottom: 15px;">
                             <label for="recordatorio-destinatario" style="display: block; font-weight: bold; margin-bottom: 5px;">Correo destinatario</label>
@@ -12653,8 +12678,15 @@ Fecha de firma: {{FECHA}}`;
                 cancelButtonText: 'Cancelar',
                 didOpen: popup => {
                     popup.querySelector('#recurrencia')?.addEventListener('change', event => {
-                        const diasDiv = popup.querySelector('#diasPersonalizadosDiv');
-                        if (diasDiv) diasDiv.style.display = event.target.value === 'mensual_personalizado' ? 'flex' : 'none';
+                        const esPersonalizado = event.target.value === 'mensual_personalizado';
+                        const fechaUnica = popup.querySelector('#recordatorioFechaUnica');
+                        const fechasPersonalizadas = popup.querySelector('#recordatorioFechasPersonalizadas');
+                        const fecha1 = popup.querySelector('#recordatorio-fecha-1');
+                        const fecha2 = popup.querySelector('#recordatorio-fecha-2');
+                        if (fechaUnica) fechaUnica.style.display = esPersonalizado ? 'none' : 'block';
+                        if (fechasPersonalizadas) fechasPersonalizadas.style.display = esPersonalizado ? 'flex' : 'none';
+                        if (fecha1) fecha1.required = esPersonalizado;
+                        if (fecha2) fecha2.required = esPersonalizado;
                     });
                     popup.querySelector('#selectPlantilla')?.addEventListener('change', event => {
                         const plantilla = plantillas.find(item => String(item._id) === event.target.value);
@@ -12673,21 +12705,27 @@ Fecha de firma: {{FECHA}}`;
                     });
                 },
                 preConfirm: async () => {
-                    const fecha = document.getElementById('recordatorio-fecha')?.value || '';
                     const destinatario = document.getElementById('recordatorio-destinatario')?.value.trim() || '';
                     const asunto = document.getElementById('recordatorio-asunto')?.value.trim() || '';
                     const mensaje = document.getElementById('recordatorio-mensaje')?.value.trim() || '';
                     const plantillaId = document.getElementById('selectPlantilla')?.value || '';
                     const recurrencia = document.getElementById('recurrencia')?.value || 'ninguna';
-                    const diasRecurrencia = recurrencia === 'mensual_personalizado'
-                        ? [
-                            Number.parseInt(document.getElementById('diaRecurrencia1')?.value, 10),
-                            Number.parseInt(document.getElementById('diaRecurrencia2')?.value, 10)
-                        ]
-                        : [];
-                    const fechaProgramada = new Date(fecha);
-                    if (!fecha || Number.isNaN(fechaProgramada.getTime()) || fechaProgramada <= new Date()) {
-                        Swal.showValidationMessage('Selecciona una fecha y hora futuras.');
+                    const fechaHora1 = document.getElementById('recordatorio-fecha-1')?.value || '';
+                    const fechaHora2 = document.getElementById('recordatorio-fecha-2')?.value || '';
+                    const fecha = document.getElementById('recordatorio-fecha')?.value || '';
+                    seSeleccionaronDosFechas = recurrencia === 'mensual_personalizado';
+                    const fechasProgramadas = recurrencia === 'mensual_personalizado'
+                        ? [fechaHora1, fechaHora2].map(valor => new Date(valor))
+                        : [new Date(fecha)];
+                    if (fechasProgramadas.some(fechaProgramada =>
+                        !fechaProgramada || Number.isNaN(fechaProgramada.getTime()) || fechaProgramada <= new Date()
+                    )) {
+                        Swal.showValidationMessage('Selecciona una o dos fechas y horas futuras, según la recurrencia.');
+                        return false;
+                    }
+                    if (recurrencia === 'mensual_personalizado'
+                        && Number(fechaHora1.slice(8, 10)) === Number(fechaHora2.slice(8, 10))) {
+                        Swal.showValidationMessage('Selecciona dos días del mes distintos.');
                         return false;
                     }
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
@@ -12698,23 +12736,22 @@ Fecha de firma: {{FECHA}}`;
                         Swal.showValidationMessage('Completa el asunto y el mensaje.');
                         return false;
                     }
-                    if (recurrencia === 'mensual_personalizado'
-                        && (diasRecurrencia.some(dia => !Number.isInteger(dia) || dia < 1 || dia > 31)
-                            || diasRecurrencia[0] === diasRecurrencia[1])) {
-                        Swal.showValidationMessage('Selecciona dos días distintos entre 1 y 31.');
-                        return false;
-                    }
                     try {
                         const respuesta = await ejecutarOEncolar(`/api/polizas/${encodeURIComponent(polizaId)}/recordatorios`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                fechaProgramada: fechaProgramada.toISOString(),
+                                ...(recurrencia === 'mensual_personalizado'
+                                    ? {
+                                        fechaHora1: fechasProgramadas[0].toISOString(),
+                                        fechaHora2: fechasProgramadas[1].toISOString(),
+                                        diasRecurrencia: [Number(fechaHora1.slice(8, 10)), Number(fechaHora2.slice(8, 10))]
+                                    }
+                                    : { fechaProgramada: fechasProgramadas[0].toISOString() }),
                                 destinatario,
                                 asunto,
                                 mensaje,
                                 recurrencia,
-                                ...(recurrencia === 'mensual_personalizado' ? { diasRecurrencia } : {}),
                                 ...(plantillaId ? { plantillaId } : {})
                             })
                         });
@@ -12729,7 +12766,14 @@ Fecha de firma: {{FECHA}}`;
                 }
             });
             if (recordatorio) {
-                await Swal.fire('Programado', 'El recordatorio se enviará en la fecha y hora indicadas.', 'success');
+                const seProgramaronDos = seSeleccionaronDosFechas;
+                await Swal.fire(
+                    seProgramaronDos ? 'Programados' : 'Programado',
+                    seProgramaronDos
+                        ? 'Los dos recordatorios se guardaron y se repetirán mensualmente en los días seleccionados.'
+                        : 'El recordatorio se enviará en la fecha y hora indicadas.',
+                    'success'
+                );
             }
         } catch (error) {
             console.error('[abrirModalProgramarRecordatorio] Error:', error);
@@ -12737,14 +12781,45 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
-    async function verHistorialComentariosPoliza(polizaId) {
+    async function agregarNotaPoliza(polizaId) {
+        const { value: comentario } = await Swal.fire({
+            title: 'Agregar nota / seguimiento',
+            input: 'textarea',
+            inputLabel: 'Nota',
+            inputPlaceholder: 'Ej. Avisé al asesor de la renovación',
+            inputAttributes: { maxlength: 5000, 'aria-label': 'Nota de seguimiento' },
+            showCancelButton: true,
+            confirmButtonText: 'Guardar nota',
+            cancelButtonText: 'Cancelar',
+            preConfirm: async valor => {
+                const texto = String(valor || '').trim();
+                if (!texto) {
+                    Swal.showValidationMessage('Escribe una nota antes de guardarla.');
+                    return false;
+                }
+                try {
+                    const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}/notas`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ comentario: texto })
+                    });
+                    if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo guardar la nota.');
+                    return respuesta;
+                } catch (error) {
+                    Swal.showValidationMessage(error.message || 'No se pudo guardar la nota.');
+                    return false;
+                }
+            }
+        });
+        if (comentario) await Swal.fire('Guardada', 'La nota se agregó al historial de la póliza.', 'success');
+    }
+
+    async function verHistorialPoliza(polizaId) {
         try {
-            const respuestaPoliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
-                ? polizaActualPagos
-                : await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const respuestaPoliza = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
             const poliza = respuestaPoliza?.poliza || respuestaPoliza?.data || respuestaPoliza;
             if (!poliza || poliza.offline) throw new Error('No se pudo cargar el historial de la póliza.');
-            const comentarios = [
+            const comentariosCombinados = [
                 ...(poliza.historialComentarios || []).map(item => ({ ...item, recibo: null })),
                 ...(poliza.recibos || []).flatMap(recibo =>
                     (recibo.historialComentarios || []).map(item => ({
@@ -12752,29 +12827,53 @@ Fecha de firma: {{FECHA}}`;
                         recibo: recibo.numeroRecibo || 'Sin número'
                     }))
                 )
-            ].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+            ];
+            const comentariosPorClave = new Map();
+            comentariosCombinados.forEach(item => {
+                const clave = [
+                    item.tipo || 'nota',
+                    item.texto || '',
+                    new Date(item.fecha || 0).getTime(),
+                    item.gestor?._id || item.gestor || ''
+                ].join('|');
+                const comentarioExistente = comentariosPorClave.get(clave);
+                if (!comentarioExistente) comentariosPorClave.set(clave, item);
+                else if (item.recibo && !comentarioExistente.recibo) comentarioExistente.recibo = item.recibo;
+            });
+            const comentarios = [...comentariosPorClave.values()]
+                .sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
             const html = comentarios.length
-                ? `<div class="list-group text-start" style="max-height: 55vh; overflow-y: auto;">${comentarios.map(item => `
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between gap-2">
-                            <strong>${escapeHTML(item.tipo || 'nota')}</strong>
-                            <small class="text-muted">${item.fecha ? new Date(item.fecha).toLocaleString('es-MX') : 'Sin fecha'}</small>
-                        </div>
-                        ${item.recibo ? `<small class="text-muted">Recibo ${escapeHTML(item.recibo)}</small>` : ''}
-                        <div>${escapeHTML(item.texto || '')}</div>
-                    </div>
-                `).join('')}</div>`
-                : '<p class="text-muted mb-0">Esta póliza todavía no tiene comentarios registrados.</p>';
+                ? `<div style="max-height: 55vh; overflow: auto; color: #e5e7eb;">
+                    <table style="width: 100%; border-collapse: collapse; color: #e5e7eb; text-align: left;">
+                        <thead><tr>
+                            <th style="padding: 10px; border-bottom: 1px solid #495057; color: #fff;">Fecha</th>
+                            <th style="padding: 10px; border-bottom: 1px solid #495057; color: #fff;">Tipo</th>
+                            <th style="padding: 10px; border-bottom: 1px solid #495057; color: #fff;">Comentario</th>
+                        </tr></thead>
+                        <tbody>${comentarios.map(item => `
+                            <tr>
+                                <td style="padding: 10px; border-bottom: 1px solid #343a40; white-space: nowrap; color: #ced4da;">${item.fecha ? escapeHTML(new Date(item.fecha).toLocaleString('es-MX')) : 'Sin fecha'}</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #343a40; color: #ced4da;">${escapeHTML(item.tipo || 'nota')}${item.recibo ? `<div style="font-size: 12px; color: #adb5bd;">Recibo ${escapeHTML(item.recibo)}</div>` : ''}</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #343a40; white-space: pre-wrap; color: #e5e7eb;">${escapeHTML(item.texto || '')}</td>
+                            </tr>
+                        `).join('')}</tbody>
+                    </table>
+                </div>`
+                : '<p style="color: #ced4da; margin: 0;">Esta póliza todavía no tiene comentarios registrados.</p>';
             await Swal.fire({
-                title: `Historial de comentarios · ${escapeHTML(poliza.numeroPoliza || 'Póliza')}`,
+                title: `Historial · ${escapeHTML(poliza.numeroPoliza || 'Póliza')}`,
                 html,
                 width: 'min(90vw, 760px)',
                 confirmButtonText: 'Cerrar'
             });
         } catch (error) {
-            console.error('[verHistorialComentariosPoliza] Error:', error);
+            console.error('[verHistorialPoliza] Error:', error);
             await Swal.fire('Error', error.message || 'No se pudo mostrar el historial.', 'error');
         }
+    }
+
+    async function verHistorialComentariosPoliza(polizaId) {
+        return verHistorialPoliza(polizaId);
     }
 
     async function cancelarRecordatorioPendiente(polizaId, recordatorioId) {
@@ -12814,11 +12913,11 @@ Fecha de firma: {{FECHA}}`;
                 .filter(recordatorio => recordatorio.enviado === false);
             const html = pendientes.length
                 ? `<div class="table-responsive">
-                    <table class="table table-sm table-striped align-middle text-start" style="color: #fff;">
+                    <table class="table table-sm table-striped align-middle text-start" style="width: 100%; border-collapse: collapse; color: #fff;">
                         <thead>
                             <tr>
                                 <th style="color: #fff;">Fecha programada</th>
-                                <th style="color: #fff;">Asunto</th>
+                                <th style="width: 40%; color: #fff;">Asunto</th>
                                 <th style="color: #fff;">Destinatario</th>
                                 <th style="width: 60px; text-align: center; color: #fff;">Acción</th>
                             </tr>
@@ -12830,7 +12929,7 @@ Fecha de firma: {{FECHA}}`;
                                     <td style="color: #fff;">${escapeHTML(recordatorio.asunto || '')}</td>
                                     <td style="color: #fff;">${escapeHTML(recordatorio.destinatario || '')}</td>
                                     <td style="width: 60px; text-align: center;">
-                                        <button type="button" class="btn btn-sm btn-danger" data-cancelar-recordatorio="${escapeHTML(recordatorio._id)}" title="Cancelar recordatorio" aria-label="Cancelar recordatorio" style="padding: 2px 8px;">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="cancelarRecordatorio('${escapeHTML(polizaId)}', '${escapeHTML(recordatorio._id)}')" title="Cancelar recordatorio" aria-label="Cancelar recordatorio" style="padding: 2px 8px;">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -12845,17 +12944,7 @@ Fecha de firma: {{FECHA}}`;
                 title: `Recordatorios pendientes · ${escapeHTML(poliza.numeroPoliza || 'Póliza')}`,
                 html,
                 width: 'min(95vw, 900px)',
-                confirmButtonText: 'Cerrar',
-                didOpen: popup => {
-                    popup.addEventListener('click', event => {
-                        const boton = event.target.closest('[data-cancelar-recordatorio]');
-                        if (!boton) return;
-                        event.preventDefault();
-                        const recordatorioId = boton.dataset.cancelarRecordatorio;
-                        Swal.close();
-                        cancelarRecordatorioPendiente(polizaId, recordatorioId);
-                    });
-                }
+                confirmButtonText: 'Cerrar'
             });
         } catch (error) {
             console.error('[verRecordatoriosPendientes] Error:', error);
@@ -12864,10 +12953,25 @@ Fecha de firma: {{FECHA}}`;
     }
 
     async function abrirModalPagos(poliza) {
+        if (typeof poliza === 'string') {
+            try {
+                const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(poliza)}`);
+                poliza = respuesta?.poliza || respuesta?.data || respuesta;
+            } catch (error) {
+                console.error('[abrirModalPagos] Error al cargar póliza:', error);
+                await Swal.fire('Error', error.message || 'No se pudieron cargar los recibos de la póliza.', 'error');
+                return;
+            }
+        }
+        if (!poliza || poliza.offline) {
+            throw new Error('No se pudo cargar la póliza para mostrar sus recibos.');
+        }
         polizaActualPagos = poliza;
         
         // FASE 3: Usar recibos[] en lugar de pagos[]
-        const recibos = poliza.recibos || [];
+        const recibos = (poliza.recibos || []).filter(recibo =>
+            !/^END(?:-|$)/i.test(String(recibo.numeroRecibo || ''))
+        );
         const recibosOrdenados = recibos
             .map((recibo, indiceOriginal) => ({ recibo, indiceOriginal }))
             .sort((a, b) => {
@@ -12905,9 +13009,9 @@ Fecha de firma: {{FECHA}}`;
                 return `
                     <tr>
                         <td class="numeric-value"><strong>${escapeHTML(r.numeroRecibo || 'N/A')}</strong></td>
-                        <td class="numeric-value">${indiceVista + 1}/${recibosOrdenados.length}</td>
+                        <td class="numeric-value">${escapeHTML(r.periodoCobertura || `${indiceVista + 1}/${recibosOrdenados.length}`)}</td>
                         <td class="currency-value">${formatCurrency(r.montoRecibo, poliza.moneda || 'MXN')}</td>
-                        <td class="currency-value">${formatCurrency(calcularPagoNeto(r.montoRecibo, indiceVista), poliza.moneda || 'MXN')}</td>
+                        <td class="currency-value">${formatCurrency(r.montoPagoNeto ?? calcularPagoNeto(r.montoRecibo, indiceVista), poliza.moneda || 'MXN')}</td>
                         <td class="date-value">${fechaVencimiento}</td>
                         <td class="date-value">${fechaPago}</td>
                         <td><span class="badge bg-${estadoClass}">${escapeHTML(r.estadoRecibo || 'N/A')}</span></td>
@@ -12942,6 +13046,10 @@ Fecha de firma: {{FECHA}}`;
                     ${proximoPagoHTML}
                     <div class="mb-3">
                         <label class="form-label fw-bold">Calendario de Recibos</label>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button class="btn btn-sm btn-success" onclick="agregarEndosoPoliza('${escapeHTML(poliza._id)}')"><i class="fas fa-plus"></i> Agregar Endoso / Ajuste</button>
+                            <button class="btn btn-sm btn-info" onclick="abrirModalVerEndosos('${escapeHTML(poliza._id)}')"><i class="fas fa-id-card"></i> Ver Endosos</button>
+                        </div>
                         <div class="table-responsive"><table class="table table-sm table-bordered" style="width: 100%;">
                             <thead>
                                 <tr>
@@ -12960,19 +13068,6 @@ Fecha de firma: {{FECHA}}`;
                             </tbody>
                         </table></div>
                     </div>
-                    <hr>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Recordatorios</label>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-success" onclick="app.enviarRecordatorioWhatsApp('${escapeHTML(poliza._id)}')"><i class="bi bi-whatsapp"></i> WhatsApp</button>
-                            <button class="btn btn-sm btn-primary" onclick="app.enviarRecordatorioCorreo('${escapeHTML(poliza._id)}')"><i class="bi bi-envelope"></i> Correo</button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="app.abrirModalProgramarRecordatorio('${escapeHTML(poliza._id)}')"><i class="bi bi-clock"></i> Programar</button>
-                            <button class="btn btn-sm btn-warning" onclick="app.verRecordatoriosPendientes('${escapeHTML(poliza._id)}')"><i class="fas fa-clock"></i> Pendientes</button>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="app.verHistorialComentariosPoliza('${escapeHTML(poliza._id)}')"><i class="bi bi-chat-left-text"></i> Historial de comentarios</button>
-                    </div>
                 </div>
             `,
             focusConfirm: false,
@@ -12981,7 +13076,237 @@ Fecha de firma: {{FECHA}}`;
         });
     }
 
+    async function cargarPolizaFrescaEndosos(polizaId) {
+        const respuesta = await fetchAPI(
+            `/api/polizas/${encodeURIComponent(polizaId)}?_=${Date.now()}`,
+            { cache: 'no-store', silent: true }
+        );
+        const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
+        if (!poliza || poliza.offline || String(poliza._id) !== String(polizaId)) {
+            throw new Error('No se pudo cargar la póliza actualizada.');
+        }
+        polizaActualPagos = poliza;
+        const indicePoliza = polizasGlobales.findIndex(item =>
+            String(item._id) === String(polizaId)
+        );
+        if (indicePoliza !== -1) {
+            polizasGlobales[indicePoliza] = poliza;
+            renderizarPaginaPolizas();
+        }
+        polizasCacheCargada = false;
+        polizasCacheScope = null;
+        paginaActualCobranza = 1;
+        await cargarCobranzaDiaria(true);
+        return poliza;
+    }
+
+    async function abrirModalVerEndosos(polizaId) {
+        try {
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}?_=${Date.now()}`,
+                { cache: 'no-store', silent: true }
+            );
+            const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
+            if (!poliza || poliza.offline || String(poliza._id) !== String(polizaId)) {
+                throw new Error('No se pudo cargar la póliza para consultar sus endosos.');
+            }
+            polizaActualPagos = poliza;
+            const indiceCache = polizasGlobales.findIndex(item =>
+                String(item._id) === String(polizaId)
+            );
+            if (indiceCache !== -1) polizasGlobales[indiceCache] = poliza;
+            const endosos = [
+                ...(poliza.endosos || []).map(endoso => ({ endoso, origen: 'endoso' })),
+                ...(poliza.recibos || [])
+                    .filter(recibo => /^END(?:-|$)/i.test(String(recibo.numeroRecibo || '')))
+                    .map(endoso => ({ endoso, origen: 'endosoLegacy' }))
+            ];
+            const filas = endosos.length
+                ? endosos.map(({ endoso, origen }) => {
+                    const endosoId = escapeHTML(String(endoso._id || ''));
+                    const pendiente = ['pendiente', 'atrasado'].includes(String(endoso.estadoRecibo || '').toLowerCase());
+                    const estadoClass = pendiente ? 'warning text-dark' : 'success';
+                    const vencimiento = endoso.fechaVencimientoRecibo
+                        ? new Date(endoso.fechaVencimientoRecibo).toLocaleDateString('es-MX')
+                        : 'N/A';
+                    return `<tr>
+                        <td>${escapeHTML(endoso.periodoCobertura || endoso.numeroRecibo || 'Endoso')}</td>
+                        <td>${formatCurrency(endoso.montoRecibo, poliza.moneda || 'MXN')}</td>
+                        <td>${formatCurrency(endoso.montoPagoNeto ?? 0, poliza.moneda || 'MXN')}</td>
+                        <td>${escapeHTML(vencimiento)}</td>
+                        <td><span class="badge bg-${estadoClass}">${escapeHTML(endoso.estadoRecibo || 'N/A')}</span></td>
+                        <td class="text-nowrap">
+                            ${pendiente
+                                ? `<button class="btn btn-sm btn-success me-1" title="Registrar como pagado" onclick="marcarEndosoPagado('${escapeHTML(polizaId)}', '${endosoId}', '${origen}')"><i class="fas fa-check"></i></button>`
+                                : '<span class="text-muted me-1"><i class="fas fa-check-circle"></i></span>'}
+                            ${pendiente
+                                ? `<button class="btn btn-sm btn-danger" title="Eliminar endoso" onclick="eliminarEndosoPoliza('${escapeHTML(polizaId)}', '${endosoId}')"><i class="fas fa-trash"></i></button>`
+                                : ''}
+                        </td>
+                    </tr>`;
+                }).join('')
+                : '<tr><td colspan="6" class="text-center text-muted py-3">No hay endosos registrados.</td></tr>';
+
+            const { isConfirmed, isDenied } = await Swal.fire({
+                title: `Endosos - Póliza ${escapeHTML(poliza.numeroPoliza || '')}`,
+                width: 'min(95vw, 1000px)',
+                background: '#212529',
+                color: '#f8f9fa',
+                html: `<div class="table-responsive text-start">
+                    <table class="table table-sm table-dark table-bordered align-middle mb-0">
+                        <thead><tr><th>Concepto</th><th>Prima Total</th><th>Prima Neta</th><th>Vencimiento</th><th>Estado</th><th>Acciones</th></tr></thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>`,
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonText: 'Agregar Endoso',
+                denyButtonText: 'Volver a Recibos',
+                cancelButtonText: 'Cerrar',
+                confirmButtonColor: '#198754',
+                denyButtonColor: '#0d6efd'
+            });
+            if (isConfirmed) await agregarEndosoPoliza(polizaId);
+            else if (isDenied) await abrirModalPagos(poliza);
+        } catch (error) {
+            console.error('[abrirModalVerEndosos] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudieron cargar los endosos.', 'error');
+        }
+    }
+
+    async function marcarEndosoPagado(polizaId, endosoId, origen) {
+        const { isConfirmed } = await Swal.fire({
+            title: '¿Registrar endoso como pagado?',
+            text: 'El endoso se marcará como pagado por su prima total.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Registrar pago',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!isConfirmed) {
+            await abrirModalVerEndosos(polizaId);
+            return;
+        }
+        try {
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}/endosos/${encodeURIComponent(endosoId)}/estatus`,
+                { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origen }) }
+            );
+            if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo registrar el pago del endoso.');
+            await cargarPolizaFrescaEndosos(polizaId);
+            await Swal.fire('Guardado', 'El endoso se marcó como pagado.', 'success');
+            await abrirModalVerEndosos(polizaId);
+        } catch (error) {
+            console.error('[marcarEndosoPagado] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo registrar el pago del endoso.', 'error');
+        }
+    }
+
+    async function eliminarEndosoPoliza(polizaId, endosoId) {
+        const { isConfirmed } = await Swal.fire({
+            title: '¿Eliminar este endoso?',
+            text: 'Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        });
+        if (!isConfirmed) {
+            await abrirModalVerEndosos(polizaId);
+            return;
+        }
+        try {
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}/endosos/${encodeURIComponent(endosoId)}`,
+                { method: 'DELETE' }
+            );
+            if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo eliminar el endoso.');
+            await cargarPolizaFrescaEndosos(polizaId);
+            await Swal.fire('Eliminado', 'El endoso se eliminó correctamente.', 'success');
+            await abrirModalVerEndosos(polizaId);
+        } catch (error) {
+            console.error('[eliminarEndosoPoliza] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo eliminar el endoso.', 'error');
+        }
+    }
+
+    async function agregarEndosoPoliza(polizaId) {
+        const { value: endoso } = await Swal.fire({
+            title: 'Agregar Endoso',
+            html: `
+                <div style="text-align: left; color: #e9ecef;">
+                    <label for="swal-periodo" style="color: #fff; font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block;">Concepto / Periodo</label>
+                    <input id="swal-periodo" class="swal2-input" maxlength="200" placeholder="Ej. Endoso Alta Vehículos Noviembre" style="width: 100%; box-sizing: border-box; margin: 0 0 15px 0; background: #2b3035; color: #fff; border-color: #6c757d;">
+
+                    <label for="swal-prima-total" style="color: #fff; font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block;">Prima Total (A pagar)</label>
+                    <input id="swal-prima-total" type="number" min="0.01" step="0.01" class="swal2-input" placeholder="0.00" style="width: 100%; box-sizing: border-box; margin: 0 0 15px 0; background: #2b3035; color: #fff; border-color: #6c757d;">
+
+                    <label for="swal-prima-neta" style="color: #fff; font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block;">Prima Neta (Base comisión)</label>
+                    <input id="swal-prima-neta" type="number" min="0" step="0.01" class="swal2-input" placeholder="0.00" style="width: 100%; box-sizing: border-box; margin: 0 0 15px 0; background: #2b3035; color: #fff; border-color: #6c757d;">
+
+                    <label for="swal-vencimiento" style="color: #fff; font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block;">Fecha de Vencimiento</label>
+                    <input id="swal-vencimiento" type="date" class="swal2-input" style="width: 100%; box-sizing: border-box; margin: 0; background: #2b3035; color: #fff; border-color: #6c757d;">
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar Endoso',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const periodo = document.getElementById('swal-periodo')?.value.trim() || '';
+                const primaTotalEntrada = document.getElementById('swal-prima-total')?.value || '';
+                const primaNetaEntrada = document.getElementById('swal-prima-neta')?.value || '';
+                const primaTotal = Number(primaTotalEntrada);
+                const primaNeta = Number(primaNetaEntrada);
+                const vencimiento = document.getElementById('swal-vencimiento')?.value || '';
+                if (!periodo || !primaTotalEntrada || !primaNetaEntrada
+                    || !Number.isFinite(primaTotal) || primaTotal <= 0
+                    || !Number.isFinite(primaNeta) || primaNeta < 0 || !vencimiento) {
+                    Swal.showValidationMessage('Completa el concepto, ambas primas válidas y la fecha de vencimiento.');
+                    return false;
+                }
+                return { periodo, primaTotal, primaNeta, vencimiento };
+            }
+        });
+
+        if (!endoso) return;
+        try {
+            const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}/endosos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(endoso)
+            });
+            if (!respuesta?.success || !respuesta.poliza) {
+                throw new Error(respuesta?.error || 'No se pudo agregar el endoso.');
+            }
+            await cargarPolizaFrescaEndosos(polizaId);
+            await Swal.fire('Guardado', 'El endoso se agregó correctamente.', 'success');
+            await abrirModalVerEndosos(polizaId);
+        } catch (error) {
+            console.error('[agregarEndosoPoliza] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo agregar el endoso.', 'error');
+        }
+    }
+
     async function abrirModalPagoUnificado(polizaId, reciboId, aseguradoraNombre, opciones = {}) {
+        let poliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
+            ? polizaActualPagos
+            : polizasGlobales.find(item => String(item._id) === String(polizaId)) || null;
+        if (!poliza) {
+            try {
+                const respuestaPoliza = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+                poliza = respuestaPoliza?.poliza || respuestaPoliza?.data || respuestaPoliza;
+            } catch (error) {
+                console.error('[abrirModalPagoUnificado] No se pudo cargar la póliza:', error);
+                await Swal.fire('Error', error.message || 'No se pudo cargar la póliza para registrar el pago.', 'error');
+                return;
+            }
+        }
+        if (!poliza || poliza.offline) {
+            await Swal.fire('Error', 'No se pudo cargar la póliza para registrar el pago.', 'error');
+            return;
+        }
         let plantillasPago = [];
         try {
             plantillasPago = await obtenerPlantillasCorreo('pago');
@@ -13005,9 +13330,6 @@ Fecha de firma: {{FECHA}}`;
         const enviarCorreoInicial = !['chubb', 'afirme'].some(nombre =>
             aseguradoraNormalizada.includes(nombre)
         );
-        const poliza = polizaActualPagos && String(polizaActualPagos._id) === String(polizaId)
-            ? polizaActualPagos
-            : null;
         const correoDefault = correoGuardado
             || (aseguradoraNormalizada.includes('chubb')
                 ? 'pagos@chubb.com'
@@ -13017,9 +13339,13 @@ Fecha de firma: {{FECHA}}`;
                         || poliza?.clienteEmail
                         || poliza?.clienteId?.email
                         || '');
-        const recibo = poliza?.recibos?.find((item, index) =>
+        const recibosParaPago = opciones.reciboTipo === 'endoso'
+            ? poliza?.endosos || []
+            : poliza?.recibos || [];
+        const recibo = recibosParaPago.find((item, index) =>
             String(item._id) === String(reciboId) || String(index) === String(reciboId)
         );
+        const montoInicial = opciones.monto ?? recibo?.montoRecibo ?? poliza?.saldoRestante ?? poliza?.primaTotal ?? '';
 
         let correoPagoParaRevisar = null;
         const { value: resultado } = await Swal.fire({
@@ -13030,6 +13356,8 @@ Fecha de firma: {{FECHA}}`;
                 <div style="text-align: left; overflow-x: hidden; width: 100%; box-sizing: border-box;">
                     ${recibo ? `<p><strong>Periodo:</strong> ${escapeHTML(recibo.periodoCobertura || '')}</p>
                     <p><strong>Monto a pagar:</strong> <span class="currency-value">${formatCurrency(recibo.montoRecibo, poliza?.moneda || 'MXN')}</span></p>` : ''}
+                    <label for="pago-monto-unificado" style="display: block; font-weight: bold; margin-bottom: 5px;">Monto a registrar</label>
+                    <input id="pago-monto-unificado" type="number" min="0.01" step="0.01" value="${escapeHTML(montoInicial)}" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
                     <label for="pago-metodo-unificado" style="display: block; font-weight: bold; margin-bottom: 5px;">Método de Pago</label>
                     <select id="pago-metodo-unificado" class="swal2-input" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
                         <option value="transferencia">Transferencia</option>
@@ -13096,7 +13424,7 @@ Fecha de firma: {{FECHA}}`;
                     const contenido = renderizarValoresPlantillaCorreo(
                         plantilla,
                         poliza,
-                        opciones.monto ?? recibo?.montoRecibo
+                        Number(popup.querySelector('#pago-monto-unificado')?.value) || opciones.monto || recibo?.montoRecibo
                     );
                     popup.querySelector('#pago-correo-asunto').value = contenido.asunto;
                     popup.querySelector('#pago-correo-cuerpo').value = contenido.cuerpo;
@@ -13128,6 +13456,7 @@ Fecha de firma: {{FECHA}}`;
                 const popup = Swal.getPopup();
                 const metodoPago = popup.querySelector('#pago-metodo-unificado')?.value;
                 const gestor = popup.querySelector('#pago-gestor-unificado')?.value;
+                const montoFinal = Number(popup.querySelector('#pago-monto-unificado')?.value);
                 const correoDestino = popup.querySelector('#correoDestino')?.value.trim() || '';
                 const comentario = popup.querySelector('#pago-comentario-unificado')?.value.trim() || '';
                 const enviarCorreo = popup.querySelector('#enviarCorreo')?.checked === true;
@@ -13137,6 +13466,10 @@ Fecha de firma: {{FECHA}}`;
                 const archivoSeleccionado = popup.querySelector('#archivoComprobante')?.files?.[0] || null;
                 if (!metodoPago || !gestor) {
                     Swal.showValidationMessage('Selecciona el método de pago y el gestor.');
+                    return false;
+                }
+                if (!Number.isFinite(montoFinal) || montoFinal <= 0) {
+                    Swal.showValidationMessage('Ingresa un monto de pago válido mayor que cero.');
                     return false;
                 }
                 if (enviarCorreo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoDestino)) {
@@ -13163,12 +13496,15 @@ Fecha de firma: {{FECHA}}`;
                     gestor,
                     tipoGestor: gestor,
                     comentario,
-                    comentarioCobranza: comentario
+                    comentarioCobranza: comentario,
+                    montoPagado: montoFinal
                 };
+                if (['recibo', 'endoso', 'endosoLegacy'].includes(opciones.reciboTipo)) {
+                    body.reciboTipo = opciones.reciboTipo;
+                }
                 if (reciboId !== undefined && reciboId !== null && String(reciboId) !== '') {
                     body.reciboId = String(reciboId);
                 }
-                if (Number.isFinite(Number(opciones.monto))) body.monto = Number(opciones.monto);
                 let archivoComprobante = null;
                 if (enviarCorreo && archivoSeleccionado) {
                     try {
@@ -13318,7 +13654,16 @@ Fecha de firma: {{FECHA}}`;
         cargarPolizas(true);
     }
 
+    window.abrirModalPagos = abrirModalPagos;
+    window.agregarEndosoPoliza = agregarEndosoPoliza;
+    window.abrirModalVerEndosos = abrirModalVerEndosos;
+    window.marcarEndosoPagado = marcarEndosoPagado;
+    window.eliminarEndosoPoliza = eliminarEndosoPoliza;
     window.abrirModalPagoUnificado = abrirModalPagoUnificado;
+    window.abrirModalProgramarRecordatorio = abrirModalProgramarRecordatorio;
+    window.agregarNotaPoliza = agregarNotaPoliza;
+    window.verHistorialPoliza = verHistorialPoliza;
+    window.cancelarRecordatorio = cancelarRecordatorioPendiente;
     window.abrirGestionPlantillasCorreo = abrirGestionPlantillasCorreo;
     window.verRecordatoriosPendientes = verRecordatoriosPendientes;
     window.pagarRecibo = async function(polizaId, reciboIndex) {
@@ -13355,38 +13700,11 @@ Fecha de firma: {{FECHA}}`;
         });
         if (!isConfirmed) return;
 
-        const pagosPagados = (poliza.pagos || []).map((pago, index) => ({ pago, index }))
-            .filter(({ pago }) => String(pago.estado || '').toLowerCase() === 'pagado');
-        const recibosPagados = (poliza.recibos || []).map((pagoRecibo, index) => ({ pagoRecibo, index }))
-            .filter(({ pagoRecibo }) => String(pagoRecibo.estadoRecibo || '').toLowerCase() === 'pagado');
-        const montoRecibo = Number(recibo.montoRecibo) || 0;
-        const coincideMonto = pago => Math.abs((Number(pago.monto) || 0) - montoRecibo) <= 0.01;
-        const fechaRecibo = Date.parse(recibo.fechaPago);
-        let pagoSeleccionado = Number.isNaN(fechaRecibo)
-            ? null
-            : pagosPagados.find(({ pago }) => coincideMonto(pago) && Date.parse(pago.fechaPago) === fechaRecibo);
-
-        if (!pagoSeleccionado) {
-            const posicionRecibo = recibosPagados.findIndex(({ index }) => index === Number(reciboIndex));
-            const pagoEnPosicion = pagosPagados[posicionRecibo];
-            if (pagosPagados.length === recibosPagados.length && pagoEnPosicion && coincideMonto(pagoEnPosicion.pago)) {
-                pagoSeleccionado = pagoEnPosicion;
-            } else {
-                const pagosCoincidentes = pagosPagados.filter(({ pago }) => coincideMonto(pago));
-                if (pagosCoincidentes.length === 1) pagoSeleccionado = pagosCoincidentes[0];
-            }
-        }
-
-        if (!pagoSeleccionado) {
-            await Swal.fire('Error', 'No se pudo asociar este recibo con un pago único. No se realizaron cambios.', 'error');
-            return;
-        }
-
         try {
-            const response = await fetchAPI(`/api/polizas/${polizaId}/pagos/${pagoSeleccionado.index}`, {
-                method: 'DELETE',
-                body: JSON.stringify({ reciboIndex: Number(reciboIndex) })
-            });
+            const response = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}/recibos/${encodeURIComponent(reciboIndex)}/pago`,
+                { method: 'DELETE' }
+            );
             if (!response?.success) throw new Error(response?.error || 'No se pudo revertir el pago');
 
             await cargarPolizas(true);
@@ -15448,7 +15766,7 @@ Fecha de firma: {{FECHA}}`;
         recargarKanbanReactivo,
         mostrarOverlayKanban,
         toggleFiltroNoLeidos,
-        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, agregarEndosoPoliza, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, agregarNotaPoliza, verHistorialPoliza, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         actualizarVistaReporteCobranza, cambiarMesReporteCobranza, filtrarReporteCobranza,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
@@ -16070,16 +16388,31 @@ Fecha de firma: {{FECHA}}`;
         );
     }
 
-    async function marcarCobranzaResuelta(polizaId, montoPagar) {
+    async function marcarCobranzaResuelta(
+        polizaId,
+        montoPagar,
+        reciboIndexSeleccionado = null,
+        reciboTipoSeleccionado = 'recibo',
+        reciboIdSeleccionado = null
+    ) {
+        const reciboIndexIndicado = reciboIndexSeleccionado === null
+            ? null
+            : Number(reciboIndexSeleccionado);
         const registro = estadoCobranza.registros.find(item =>
             String(item.polizaId) === String(polizaId)
+            && (item.reciboPendienteTipo || 'recibo') === reciboTipoSeleccionado
+            && (reciboIndexIndicado === null || Number(item.reciboPendienteIndex) === reciboIndexIndicado)
         );
-        const reciboIndex = Number(registro?.reciboPendienteIndex);
-        const reciboId = Number.isSafeInteger(reciboIndex) && reciboIndex >= 0
-            ? String(reciboIndex)
-            : null;
+        const reciboIndex = Number.isSafeInteger(reciboIndexIndicado)
+            ? reciboIndexIndicado
+            : Number(registro?.reciboPendienteIndex);
+        const reciboId = reciboIdSeleccionado
+            || (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? String(reciboIndex) : null);
         try {
-            const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}?_=${Date.now()}`,
+                { cache: 'no-store', silent: true }
+            );
             const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
             if (!poliza || poliza.offline || String(poliza._id) !== String(polizaId)) {
                 throw new Error('No se pudo cargar la póliza completa desde Cobranza Diaria.');
@@ -16091,7 +16424,8 @@ Fecha de firma: {{FECHA}}`;
             const monto = montoPagar ?? registro?.montoPagar;
             return abrirModalPagoUnificado(polizaId, reciboId, aseguradoraNombre, {
                 monto,
-                correoDestino: registro?.email || ''
+                correoDestino: registro?.email || '',
+                reciboTipo: reciboTipoSeleccionado
             });
         } catch (error) {
             console.error('[marcarCobranzaResuelta] No se pudo cargar la póliza completa:', error);

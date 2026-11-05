@@ -20,15 +20,19 @@ const {
 const DIAS_GRACIA_RECIBO_MS = 30 * 24 * 60 * 60 * 1000;
 
 function obtenerFechaFinGraciaRecibo(recibo, fechaVencimientoFallback = null) {
+    const fechaVencimiento = recibo?.fechaVencimientoRecibo
+        || recibo?.fechaVencimiento
+        || fechaVencimientoFallback;
+    const fechaBase = fechaVencimiento ? new Date(fechaVencimiento) : null;
+    if (/^END(?:-|$)/i.test(String(recibo?.numeroRecibo || ''))) {
+        return fechaBase && !Number.isNaN(fechaBase.getTime()) ? fechaBase : null;
+    }
+
     const fechaFinExistente = recibo?.fechaFinGraciaRecibo
         ? new Date(recibo.fechaFinGraciaRecibo)
         : null;
     if (fechaFinExistente && !Number.isNaN(fechaFinExistente.getTime())) return fechaFinExistente;
 
-    const fechaVencimiento = recibo?.fechaVencimientoRecibo
-        || recibo?.fechaVencimiento
-        || fechaVencimientoFallback;
-    const fechaBase = fechaVencimiento ? new Date(fechaVencimiento) : null;
     return fechaBase && !Number.isNaN(fechaBase.getTime())
         ? new Date(fechaBase.getTime() + DIAS_GRACIA_RECIBO_MS)
         : null;
@@ -2390,7 +2394,8 @@ const obtenerMetricasSeguros = async (req, res) => {
         polizas.forEach(poliza => {
             if (poliza.estado === 'Cancelada') return;
 
-            const recibos = poliza.recibos || [];
+            if (!Array.isArray(poliza.recibos)) poliza.recibos = [];
+            const recibos = poliza.recibos;
             if (recibos.length > 0) {
                 recibos.forEach((recibo, index) => {
                     const estadoRecibo = String(recibo.estadoRecibo || recibo.estado || '').toLowerCase();
@@ -2987,50 +2992,84 @@ const eliminarPago = async (req, res) => {
             return res.status(404).json({ error: 'Póliza no encontrada' });
         }
         
-        const indicePago = Number(pagoIndex);
-        if (!poliza.pagos || !Number.isInteger(indicePago) || indicePago < 0 || indicePago >= poliza.pagos.length) {
-            return res.status(404).json({ error: 'Pago no encontrado' });
-        }
-        
-        const pagoABorrar = poliza.pagos[indicePago];
-        const montoRevertir = Number(pagoABorrar?.monto) || 0;
-        poliza.saldoRestante = (Number(poliza.saldoRestante) || 0) + montoRevertir;
-        const indiceRecibo = req.body?.reciboIndex === undefined ? null : Number(req.body.reciboIndex);
-
-        if (indiceRecibo !== null) {
-            const reciboSolicitado = poliza.recibos?.[indiceRecibo];
-            if (!Number.isInteger(indiceRecibo) || !reciboSolicitado) {
+        const indiceReciboSolicitado = req.params.reciboIndex ?? req.body?.reciboIndex;
+        if (indiceReciboSolicitado !== undefined && indiceReciboSolicitado !== null) {
+            const indiceRecibo = Number(indiceReciboSolicitado);
+            const reciboRevertido = poliza.recibos?.[indiceRecibo];
+            if (!Number.isInteger(indiceRecibo) || !reciboRevertido) {
                 return res.status(404).json({ error: 'Recibo no encontrado' });
             }
-            if (String(reciboSolicitado.estadoRecibo || reciboSolicitado.estado || '').toLowerCase() !== 'pagado') {
+            if (String(reciboRevertido.estadoRecibo || reciboRevertido.estado || '').toLowerCase() !== 'pagado') {
                 return res.status(409).json({ error: 'El recibo ya no está pagado' });
             }
-            if (Math.abs((Number(reciboSolicitado.montoRecibo) || 0) - montoRevertir) > 0.01) {
-                return res.status(409).json({ error: 'El pago no corresponde al recibo seleccionado' });
-            }
-        }
 
-        if (poliza.recibos?.length) {
-            const recibosPagados = poliza.recibos.filter(recibo =>
-                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'
+            const reciboId = String(reciboRevertido._id);
+            const pagosVinculados = (poliza.pagos || []).filter(pago =>
+                pago.reciboId && String(pago.reciboId) === reciboId
             );
-            const reciboRevertido = indiceRecibo === null
-                ? recibosPagados[recibosPagados.length - 1]
-                : poliza.recibos[indiceRecibo];
-            if (reciboRevertido) {
-                reciboRevertido.estadoRecibo = 'pendiente';
-                if (reciboRevertido.estado) reciboRevertido.estado = 'pendiente';
-                reciboRevertido.fechaPago = null;
-                reciboRevertido.metodoPago = null;
+            let pagosAsociados = pagosVinculados;
+            if (pagosAsociados.length === 0) {
+                const montoReciboPagado = Number(reciboRevertido.montoPagado)
+                    || Number(reciboRevertido.montoRecibo)
+                    || 0;
+                const pagosSinVinculo = (poliza.pagos || []).filter(pago =>
+                    !pago.reciboId
+                    && String(pago.estado || '').toLowerCase() === 'pagado'
+                    && Math.abs((Number(pago.monto) || 0) - montoReciboPagado) <= 0.01
+                );
+                const fechaPagoRecibo = Date.parse(reciboRevertido.fechaPago);
+                const pagosPorFecha = Number.isNaN(fechaPagoRecibo)
+                    ? []
+                    : pagosSinVinculo.filter(pago => Date.parse(pago.fechaPago) === fechaPagoRecibo);
+                pagosAsociados = pagosPorFecha.length > 0
+                    ? pagosPorFecha
+                    : pagosSinVinculo.length === 1 ? pagosSinVinculo : [];
             }
-            const recibosPendientes = poliza.recibos
-                .filter(recibo => String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pendiente')
-                .sort((a, b) => new Date(a.fechaVencimientoRecibo || a.fechaVencimiento) - new Date(b.fechaVencimientoRecibo || b.fechaVencimiento));
-            poliza.proximoPago = recibosPendientes[0]?.fechaVencimientoRecibo || recibosPendientes[0]?.fechaVencimiento || null;
+            const montoRevertir = pagosAsociados.length
+                ? pagosAsociados.reduce((total, pago) => total + (Number(pago.monto) || 0), 0)
+                : Number(reciboRevertido.montoPagado) || Number(reciboRevertido.montoRecibo) || 0;
+            const idsPagosAsociados = new Set(pagosAsociados.map(pago => String(pago._id)));
+            poliza.pagos = (poliza.pagos || []).filter(pago =>
+                (pago.reciboId && String(pago.reciboId) !== reciboId)
+                || (!pago.reciboId && !idsPagosAsociados.has(String(pago._id)))
+            );
+
+            reciboRevertido.estadoRecibo = 'pendiente';
+            reciboRevertido.fechaPago = null;
+            reciboRevertido.metodoPago = null;
+            reciboRevertido.montoPagado = 0;
+            reciboRevertido.registradoPor = null;
+            reciboRevertido.gestorCobranza = null;
+            reciboRevertido.comentarioCobranza = null;
+
+            const recibosPendientes = (poliza.recibos || []).filter(recibo =>
+                ['pendiente', 'atrasado'].includes(
+                    String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+                )
+            );
+            poliza.saldoRestante = recibosPendientes.reduce(
+                (total, recibo) => total + (Number(recibo.montoRecibo) || 0),
+                0
+            );
+            poliza.proximoPago = recibosPendientes
+                .map(recibo => recibo.fechaVencimientoRecibo || recibo.fechaVencimiento)
+                .filter(Boolean)
+                .sort((a, b) => new Date(a) - new Date(b))[0] || null;
             poliza.estadoPago = poliza.recibos.some(recibo =>
                 String(recibo.estadoRecibo || recibo.estado || '').toLowerCase() === 'pagado'
             ) ? 'al_corriente' : 'pendiente';
+            if (montoRevertir <= 0) {
+                console.warn(`[eliminarPago] Recibo ${reciboId} se revirtió sin pagos asociados.`);
+            }
         } else {
+            const indicePago = Number(pagoIndex);
+            if (!poliza.pagos || !Number.isInteger(indicePago) || indicePago < 0 || indicePago >= poliza.pagos.length) {
+                return res.status(404).json({ error: 'Pago no encontrado' });
+            }
+            const pagoABorrar = poliza.pagos[indicePago];
+            const montoRevertir = Number(pagoABorrar?.monto) || 0;
+            poliza.saldoRestante = (Number(poliza.saldoRestante) || 0) + montoRevertir;
+            poliza.pagos.splice(indicePago, 1);
             if (poliza.proximoPago) {
                 const proximoPago = new Date(poliza.proximoPago);
                 proximoPago.setMonth(proximoPago.getMonth() - 1);
@@ -3039,8 +3078,6 @@ const eliminarPago = async (req, res) => {
             poliza.estado = 'PendienteRenovacion';
             poliza.estadoPago = 'pendiente';
         }
-
-        poliza.pagos.splice(indicePago, 1);
         await poliza.save();
         
         res.json({ success: true, message: 'Pago eliminado correctamente', poliza });
@@ -3237,40 +3274,17 @@ const obtenerCobranzaDiaria = async (req, res) => {
         const hoyInicio = { $dateFromString: { dateString: hoyString, timezone: COBRANZA_TZ } };
         const estadoPendienteRenovacionRegex =
             /^(?:pendiente(?:[\s_-]*de)?[\s_-]*renovaci[oó]n|en[\s_-]*renovaci[oó]n|renovaci[oó]n)$/i;
+        const estadosPolizaSinRecibos = [
+            /^activa/i,
+            /^pendiente.*renovaci[oó]n/i,
+            /^pendienterenovacion/i,
+            /^renovaci[oó]n/i
+        ];
 
         const matchInicial = {
             empresaId: new mongoose.Types.ObjectId(empresaId),
-            estado: {
-                $in: [
-                    /^activa/i,
-                    /^pendiente.*renovaci[oó]n/i,
-                    /^pendienterenovacion/i,
-                    /^renovaci[oó]n/i
-                ]
-            },
+            estado: { $nin: [/^renovada$/i, /^vencida$/i, /^cancelada$/i] },
             $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
-        };
-        matchInicial.$expr = {
-            $and: [
-                { $ne: [{ $ifNull: ['$fechas.vencimiento', null] }, null] },
-                {
-                    $gte: [
-                        {
-                            $ifNull: [
-                                '$fechaLimiteRenovacion',
-                                {
-                                    $dateAdd: {
-                                        startDate: '$fechas.vencimiento',
-                                        unit: 'day',
-                                        amount: { $ifNull: ['$diasGracia', 30] }
-                                    }
-                                }
-                            ]
-                        },
-                        hoyInicio
-                    ]
-                }
-            ]
         };
         if (userRole !== 'admin') {
             matchInicial.asesorId = new mongoose.Types.ObjectId(userId);
@@ -3312,23 +3326,127 @@ const obtenerCobranzaDiaria = async (req, res) => {
                             then: { $toDate: '$proximoPago' },
                             else: null
                         }
-                    },
-                    _reciboPendiente: {
-                        $arrayElemAt: [{
-                            $filter: {
-                                input: { $ifNull: ['$recibos', []] },
-                                as: 'recibo',
-                                cond: {
-                                    $not: [{
-                                        $in: [
-                                            { $toLower: { $ifNull: ['$$recibo.estadoRecibo', '$$recibo.estado'] } },
-                                            ['pagado', 'cancelado']
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    _cobranzaItems: {
+                        $concatArrays: [
+                            {
+                                $map: {
+                                    input: {
+                                        $filter: {
+                                            input: { $ifNull: ['$recibos', []] },
+                                            as: 'recibo',
+                                            cond: {
+                                                $eq: [
+                                                    { $toLower: { $ifNull: ['$$recibo.estadoRecibo', ''] } },
+                                                    'pendiente'
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    as: 'recibo',
+                                    in: {
+                                        $mergeObjects: [
+                                            '$$recibo',
+                                            {
+                                                _tipoCobranza: {
+                                                    $cond: [
+                                                        {
+                                                            $regexMatch: {
+                                                                input: { $ifNull: ['$$recibo.numeroRecibo', ''] },
+                                                                regex: /^END(?:-|$)/i
+                                                            }
+                                                        },
+                                                        'endosoLegacy',
+                                                        'recibo'
+                                                    ]
+                                                },
+                                                _indiceCobranza: {
+                                                    $indexOfArray: [
+                                                        {
+                                                            $map: {
+                                                                input: { $ifNull: ['$recibos', []] },
+                                                                as: 'item',
+                                                                in: '$$item._id'
+                                                            }
+                                                        },
+                                                        '$$recibo._id'
+                                                    ]
+                                                }
+                                            }
                                         ]
-                                    }]
+                                    }
+                                }
+                            },
+                            {
+                                $map: {
+                                    input: {
+                                        $filter: {
+                                            input: { $ifNull: ['$endosos', []] },
+                                            as: 'endoso',
+                                            cond: {
+                                                $eq: [
+                                                    { $toLower: { $ifNull: ['$$endoso.estadoRecibo', ''] } },
+                                                    'pendiente'
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    as: 'endoso',
+                                    in: {
+                                        $mergeObjects: [
+                                            '$$endoso',
+                                            {
+                                                _tipoCobranza: 'endoso',
+                                                _indiceCobranza: {
+                                                    $indexOfArray: [
+                                                        {
+                                                            $map: {
+                                                                input: { $ifNull: ['$endosos', []] },
+                                                                as: 'item',
+                                                                in: '$$item._id'
+                                                            }
+                                                        },
+                                                        '$$endoso._id'
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
                                 }
                             }
-                        }, 0]
+                        ]
                     }
+                }
+            },
+            { $unwind: { path: '$_cobranzaItems', preserveNullAndEmptyArrays: true } },
+            {
+                $match: {
+                    estado: { $not: /^cancelada/i },
+                    $or: [
+                        {
+                            $expr: {
+                                $ne: [
+                                    { $ifNull: ['$_cobranzaItems', null] },
+                                    null
+                                ]
+                            }
+                        },
+                        {
+                            recibos: null,
+                            estado: { $in: estadosPolizaSinRecibos }
+                        }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    _reciboPendiente: { $ifNull: ['$_cobranzaItems', null] },
+                    reciboPendienteTipo: '$_cobranzaItems._tipoCobranza',
+                    reciboPendienteIndex: '$_cobranzaItems._indiceCobranza'
                 }
             },
             {
@@ -3346,18 +3464,6 @@ const obtenerCobranzaDiaria = async (req, res) => {
                             onNull: null
                         }
                     },
-                    reciboPendienteIndex: {
-                        $indexOfArray: [
-                            {
-                                $map: {
-                                    input: { $ifNull: ['$recibos', []] },
-                                    as: 'recibo',
-                                    in: '$$recibo._id'
-                                }
-                            },
-                            '$_reciboPendiente._id'
-                        ]
-                    },
                     _fechaFinGraciaPersistida: {
                         $convert: {
                             input: '$_reciboPendiente.fechaFinGraciaRecibo',
@@ -3371,16 +3477,46 @@ const obtenerCobranzaDiaria = async (req, res) => {
             {
                 $addFields: {
                     _fechaFinGraciaRecibo: {
-                        $ifNull: [
-                            '$_fechaFinGraciaPersistida',
+                        $cond: [
+                            { $in: ['$_reciboPendiente._tipoCobranza', ['endoso', 'endosoLegacy']] },
                             {
-                                $cond: [
-                                    { $ne: ['$_fechaVencimientoReciboPendiente', null] },
-                                    { $add: ['$_fechaVencimientoReciboPendiente', DIAS_GRACIA_RECIBO_MS] },
-                                    null
+                                $ifNull: [
+                                    {
+                                        $convert: {
+                                            input: '$_reciboPendiente.fechaVencimientoRecibo',
+                                            to: 'date',
+                                            onError: null,
+                                            onNull: null
+                                        }
+                                    },
+                                    '$_fechaVencimientoReciboPendiente'
+                                ]
+                            },
+                            {
+                                $ifNull: [
+                                    '$_fechaFinGraciaPersistida',
+                                    {
+                                        $cond: [
+                                            { $ne: ['$_fechaVencimientoReciboPendiente', null] },
+                                            { $add: ['$_fechaVencimientoReciboPendiente', DIAS_GRACIA_RECIBO_MS] },
+                                            null
+                                        ]
+                                    }
                                 ]
                             }
                         ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    fechaFinGraciaRecibo: {
+                        $convert: {
+                            input: '$_fechaFinGraciaRecibo',
+                            to: 'date',
+                            onError: null,
+                            onNull: null
+                        }
                     }
                 }
             },
@@ -3407,11 +3543,11 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     },
                     diasRestantesPago: {
                         $cond: {
-                            if: { $ne: ['$_fechaProximoPago', null] },
+                            if: { $ne: [{ $ifNull: ['$fechaFinGraciaRecibo', '$_fechaProximoPago'] }, null] },
                             then: {
                                 $dateDiff: {
                                     startDate: hoyInicio,
-                                    endDate: '$_fechaProximoPago',
+                                    endDate: { $ifNull: ['$fechaFinGraciaRecibo', '$_fechaProximoPago'] },
                                     unit: 'day',
                                     timezone: COBRANZA_TZ
                                 }
@@ -3438,44 +3574,76 @@ const obtenerCobranzaDiaria = async (req, res) => {
             {
                 $addFields: {
                     diasRestantes: {
-                        $switch: {
-                            branches: [
-                                {
-                                    case: {
-                                        $and: [
-                                            { $ne: ['$diasRestantesVencimiento', null] },
-                                            { $ne: ['$diasRestantesPago', null] }
+                        $convert: {
+                            input: {
+                                $cond: [
+                                    { $ne: ['$_reciboPendiente', null] },
+                                    {
+                                        $cond: [
+                                            { $ne: ['$fechaFinGraciaRecibo', null] },
+                                            {
+                                                $dateDiff: {
+                                                    startDate: hoyInicio,
+                                                    endDate: '$fechaFinGraciaRecibo',
+                                                    unit: 'day',
+                                                    timezone: COBRANZA_TZ
+                                                }
+                                            },
+                                            null
                                         ]
                                     },
-                                    then: { $min: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
-                                },
-                                {
-                                    case: { $ne: ['$diasRestantesVencimiento', null] },
-                                    then: '$diasRestantesVencimiento'
-                                },
-                                {
-                                    case: { $ne: ['$diasRestantesPago', null] },
-                                    then: '$diasRestantesPago'
-                                }
-                            ],
-                            default: null
+                                    {
+                                        $switch: {
+                                            branches: [
+                                                {
+                                                    case: {
+                                                        $and: [
+                                                            { $ne: ['$diasRestantesVencimiento', null] },
+                                                            { $ne: ['$diasRestantesPago', null] }
+                                                        ]
+                                                    },
+                                                    then: { $min: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
+                                                },
+                                                {
+                                                    case: { $ne: ['$diasRestantesVencimiento', null] },
+                                                    then: '$diasRestantesVencimiento'
+                                                },
+                                                {
+                                                    case: { $ne: ['$diasRestantesPago', null] },
+                                                    then: '$diasRestantesPago'
+                                                }
+                                            ],
+                                            default: null
+                                        }
+                                    }
+                                ]
+                            },
+                            to: 'int',
+                            onError: null,
+                            onNull: null
                         }
                     },
                     tipoGestion: {
                         $cond: {
-                            if: {
-                                $and: [
-                                    { $ne: ['$diasRestantesVencimiento', null] },
+                            if: { $ne: ['$_reciboPendiente', null] },
+                            then: 'pago_pendiente',
+                            else: {
+                                $cond: [
                                     {
-                                        $or: [
-                                            { $eq: ['$diasRestantesPago', null] },
-                                            { $lte: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
+                                        $and: [
+                                            { $ne: ['$diasRestantesVencimiento', null] },
+                                            {
+                                                $or: [
+                                                    { $eq: ['$diasRestantesPago', null] },
+                                                    { $lte: ['$diasRestantesVencimiento', '$diasRestantesPago'] }
+                                                ]
+                                            }
                                         ]
-                                    }
+                                    },
+                                    'vencimiento_poliza',
+                                    'pago_pendiente'
                                 ]
-                            },
-                            then: 'vencimiento_poliza',
-                            else: 'pago_pendiente'
+                            }
                         }
                     },
                     montoCalculado: {
@@ -3525,7 +3693,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
             {
                 $match: {
                     $or: [
-                        { diasRestantes: { $ne: null, $lte: 45 } },
+                        { diasRestantes: { $ne: null } },
                         { estado: { $regex: estadoPendienteRenovacionRegex } }
                     ]
                 }
@@ -3541,14 +3709,14 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                             ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
                                             ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
                                             ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
-                                            ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                            ...(filtroDias === 'todos' ? { $ne: null } : {})
                                         }
                                     },
                                     { estado: { $regex: estadoPendienteRenovacionRegex } }
                                 ]
                             }
                         },
-                        { $sort: { diasRestantes: 1 } },
+                        { $sort: { diasRestantes: 1, fechaFinGraciaRecibo: 1 } },
                         { $skip: skipCount },
                         { $limit: limit },
                         {
@@ -3576,6 +3744,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                     ]
                                 },
                                 reciboPendienteIndex: 1,
+                                reciboPendienteTipo: 1,
                                 fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
                                 diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
@@ -3599,7 +3768,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                             ...(filtroDias === 'urgentes' ? { $lte: 7 } : {}),
                                             ...(filtroDias === 'atencion' ? { $gte: 8, $lte: 15 } : {}),
                                             ...(filtroDias === 'gracia' ? { $gte: 16, $lte: 45 } : {}),
-                                            ...(filtroDias === 'todos' ? { $lte: 45 } : {})
+                                            ...(filtroDias === 'todos' ? { $ne: null } : {})
                                         }
                                     },
                                     { estado: { $regex: estadoPendienteRenovacionRegex } }
@@ -3610,7 +3779,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     ],
                     vencidas: [
                         { $match: { diasRestantes: { $lt: 0 } } },
-                        { $sort: { diasRestantes: 1 } },
+                        { $sort: { diasRestantes: 1, _fechaVencimientoReciboPendiente: 1, reciboPendienteIndex: 1 } },
                         { $skip: skipCount },
                         { $limit: limit },
                         {
@@ -3637,6 +3806,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                         null
                                     ]
                                 },
+                                reciboPendienteIndex: 1,
+                                reciboPendienteTipo: 1,
                                 fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
                                 diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
@@ -3653,7 +3824,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     ],
                     cobrosHoy: [
                         { $match: { diasRestantes: 0 } },
-                        { $sort: { diasRestantes: 1 } },
+                        { $sort: { diasRestantes: 1, _fechaVencimientoReciboPendiente: 1, reciboPendienteIndex: 1 } },
                         { $skip: skipCount },
                         { $limit: limit },
                         {
@@ -3680,6 +3851,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                         null
                                     ]
                                 },
+                                reciboPendienteIndex: 1,
+                                reciboPendienteTipo: 1,
                                 fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
                                 diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
@@ -3696,7 +3869,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                     ],
                     porVencer: [
                         { $match: { diasRestantes: { $gt: 0, $lte: 45 } } },
-                        { $sort: { diasRestantes: 1 } },
+                        { $sort: { diasRestantes: 1, _fechaVencimientoReciboPendiente: 1, reciboPendienteIndex: 1 } },
                         { $skip: skipCount },
                         { $limit: limit },
                         {
@@ -3723,6 +3896,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                         null
                                     ]
                                 },
+                                reciboPendienteIndex: 1,
+                                reciboPendienteTipo: 1,
                                 fechaFinGraciaRecibo: '$_fechaFinGraciaRecibo',
                                 diasRestantesGracia: 1,
                                 vencimiento: '$_fechaVencimiento',
@@ -3786,14 +3961,18 @@ const obtenerCobranzaDiaria = async (req, res) => {
                 moneda: poliza.moneda || 'MXN',
                 montoPagar: reciboPendiente?.montoRecibo ?? poliza.montoCalculado ?? 0,
                 reciboPendiente: reciboPendiente ? {
-                    montoRecibo: reciboPendiente.montoRecibo,
+                    _id: reciboPendiente._id,
+                    tipoCobranza: reciboPendiente._tipoCobranza,
+                    numeroRecibo: reciboPendiente.numeroRecibo,
                     periodoCobertura: reciboPendiente.periodoCobertura,
+                    montoRecibo: reciboPendiente.montoRecibo,
                     fechaVencimientoRecibo: reciboPendiente.fechaVencimientoRecibo
                         || reciboPendiente.fechaVencimiento,
                     fechaFinGraciaRecibo: reciboPendiente.fechaFinGraciaRecibo,
                     comentarioCobranza: reciboPendiente.comentarioCobranza || ''
                 } : null,
                 reciboPendienteIndex: poliza.reciboPendienteIndex,
+                reciboPendienteTipo: poliza.reciboPendienteTipo,
                 fechaFinGraciaRecibo: poliza.fechaFinGraciaRecibo,
                 diasRestantesGracia: poliza.diasRestantesGracia,
                 vencimiento: poliza.vencimiento,
@@ -5857,8 +6036,13 @@ const resolverCobranzaConPago = async (req, res) => {
         const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
         const tipoGestor = String(req.body?.gestor || req.body?.tipoGestor || 'asesor').trim();
         const comentarioSolicitado = req.body?.comentario ?? req.body?.comentarioCobranza;
+        const montoSolicitado = req.body?.montoPagado ?? req.body?.monto;
+        const montoPagoSolicitado = montoSolicitado === undefined ? null : Number(montoSolicitado);
         if (comentarioSolicitado !== undefined && typeof comentarioSolicitado !== 'string') {
             return res.status(400).json({ success: false, error: 'El comentario de cobranza debe ser texto.' });
+        }
+        if (montoSolicitado !== undefined && (!Number.isFinite(montoPagoSolicitado) || montoPagoSolicitado <= 0)) {
+            return res.status(400).json({ success: false, error: 'El monto de pago debe ser un número mayor que cero.' });
         }
         const comentarioCobranza = comentarioSolicitado?.trim() || '';
         const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
@@ -5878,15 +6062,22 @@ const resolverCobranzaConPago = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Póliza no encontrada' });
         }
         const reciboSolicitado = req.body?.reciboId ?? req.body?.reciboIndex;
+        const reciboTipoSolicitado = String(req.body?.reciboTipo || 'recibo');
+        if (!['recibo', 'endoso', 'endosoLegacy'].includes(reciboTipoSolicitado)) {
+            return res.status(400).json({ success: false, error: 'El tipo de recibo seleccionado no es válido.' });
+        }
+        const endosoSeleccionado = reciboTipoSolicitado === 'endoso';
+        const endosoLegacySeleccionado = reciboTipoSolicitado === 'endosoLegacy';
+        const arregloRecibosSeleccionado = endosoSeleccionado ? poliza.endosos : poliza.recibos;
         let reciboPendiente;
         if (reciboSolicitado !== undefined && reciboSolicitado !== null && String(reciboSolicitado).trim() !== '') {
             const reciboSolicitadoString = String(reciboSolicitado).trim();
             if (mongoose.Types.ObjectId.isValid(reciboSolicitadoString)) {
-                reciboPendiente = poliza.recibos?.find(
+                reciboPendiente = arregloRecibosSeleccionado?.find(
                     recibo => String(recibo._id) === reciboSolicitadoString
                 );
             } else if (/^\d+$/.test(reciboSolicitadoString)) {
-                reciboPendiente = poliza.recibos?.[Number(reciboSolicitadoString)];
+                reciboPendiente = arregloRecibosSeleccionado?.[Number(reciboSolicitadoString)];
             } else {
                 return res.status(400).json({ success: false, error: 'El recibo seleccionado no es válido.' });
             }
@@ -5897,16 +6088,17 @@ const resolverCobranzaConPago = async (req, res) => {
                 return res.status(409).json({ success: false, error: 'El recibo seleccionado ya no está pendiente.' });
             }
         } else {
-            reciboPendiente = poliza.recibos?.find(
+            reciboPendiente = arregloRecibosSeleccionado?.find(
                 recibo => ['pendiente', 'atrasado'].includes(recibo.estadoRecibo?.toLowerCase())
             );
         }
         const saldoPendiente = Number(poliza.saldoRestante || poliza.primaTotal) || 0;
-        if ((!poliza.recibos || poliza.recibos.length === 0 || !reciboPendiente) && saldoPendiente > 0) {
+        if ((!poliza.recibos || poliza.recibos.length === 0 || !reciboPendiente)
+            && !endosoSeleccionado && !endosoLegacySeleccionado && saldoPendiente > 0) {
             const yaTienePagos = poliza.pagos && poliza.pagos.length > 0;
-            const montoCobrado = Number(yaTienePagos
+            const montoCobrado = montoPagoSolicitado ?? (Number(yaTienePagos
                 ? (poliza.montoAbono || poliza.primaTotal)
-                : (poliza.primerPago || poliza.montoAbono || poliza.primaTotal)) || 0;
+                : (poliza.primerPago || poliza.montoAbono || poliza.primaTotal)) || 0);
             const gestorLegacy = tipoGestor === 'asesor' ? poliza.asesorId : userId;
 
             poliza.pagos.push({
@@ -5937,7 +6129,26 @@ const resolverCobranzaConPago = async (req, res) => {
         }
 
         const gestorCobranza = tipoGestor === 'asesor' ? poliza.asesorId : userId;
-        const montoPagado = Number(recibo.montoRecibo) || 0;
+        const montoPagado = montoPagoSolicitado ?? (Number(recibo.montoRecibo) || 0);
+        if (montoPagoSolicitado !== null && !endosoSeleccionado && !endosoLegacySeleccionado) {
+            recibo.montoRecibo = montoPagado;
+            const indiceRecibo = poliza.recibos.findIndex(
+                reciboPoliza => String(reciboPoliza._id) === String(recibo._id)
+            );
+            recibo.montoPagoNeto = calcularPagoNeto(
+                poliza.primaNeta,
+                poliza.recibos.length,
+                Math.max(0, indiceRecibo),
+                {
+                    otrosServiciosContratados: poliza.otrosServiciosContratados,
+                    primaTotal: poliza.primaTotal,
+                    gastosExpedicion: poliza.gastosExpedicion,
+                    montoAbono: poliza.montoAbono,
+                    primerPago: poliza.primerPago,
+                    emisionEnPrimerPago: poliza.emisionEnPrimerPago
+                }
+            );
+        }
         const fechaSolicitada = req.body?.fechaPago ? new Date(req.body.fechaPago) : null;
         const fechaPago = fechaSolicitada && !Number.isNaN(fechaSolicitada.getTime()) ? fechaSolicitada : new Date();
         const metodoPago = req.body?.metodoPago || 'efectivo';
@@ -5954,17 +6165,29 @@ const resolverCobranzaConPago = async (req, res) => {
             gestor: gestorCobranza,
             tipo: 'pago'
         });
-        poliza.pagos.push({ fechaPago, monto: montoPagado, estado: 'pagado', metodoPago });
+        poliza.pagos.push({
+            reciboId: recibo._id,
+            fechaPago,
+            monto: montoPagado,
+            estado: 'pagado',
+            metodoPago
+        });
 
-        const saldoActual = Number(poliza.saldoRestante) || 0;
-        const saldoBase = saldoActual > 0 ? saldoActual : poliza.recibos
-            .filter(r => r.estadoRecibo?.toLowerCase() === 'pendiente')
-            .reduce((total, r) => total + (Number(r.montoRecibo) || 0), 0) + montoPagado;
-        poliza.saldoRestante = Math.max(0, saldoBase - montoPagado);
+        const recibosPendientesActualizados = [
+            ...(poliza.recibos || []),
+            ...(poliza.endosos || [])
+        ].filter(item => ['pendiente', 'atrasado'].includes(String(item.estadoRecibo || '').toLowerCase()));
+        poliza.saldoRestante = recibosPendientesActualizados.reduce(
+            (total, item) => total + (Number(item.montoRecibo) || 0),
+            0
+        );
         poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
 
-        const proxRecibo = poliza.recibos.find(r => r.estadoRecibo?.toLowerCase() === 'pendiente');
-        poliza.proximoPago = proxRecibo?.fechaVencimientoRecibo || null;
+        poliza.proximoPago = recibosPendientesActualizados
+            .map(item => item.fechaVencimientoRecibo)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+        if (endosoSeleccionado) poliza.markModified('endosos');
 
         await poliza.save();
         res.json({ success: true, message: 'Pago registrado correctamente', poliza });
@@ -6106,6 +6329,272 @@ const enviarAvisoPago = async (req, res) => {
     }
 };
 
+const agregarEndoso = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+
+        const periodo = typeof req.body?.periodo === 'string' ? req.body.periodo.trim() : '';
+        const primaTotalEntrada = req.body?.primaTotal ?? req.body?.monto;
+        const primaNetaEntrada = req.body?.primaNeta;
+        const monto = Number(primaTotalEntrada);
+        const primaNeta = Number(primaNetaEntrada);
+        const vencimientoEntrada = req.body?.vencimiento;
+        if (!periodo || periodo.length > 200) {
+            return res.status(400).json({ success: false, error: 'El concepto o periodo es obligatorio y no debe exceder 200 caracteres.' });
+        }
+        if (!Number.isFinite(monto) || monto <= 0) {
+            return res.status(400).json({ success: false, error: 'La prima total debe ser un número mayor que cero.' });
+        }
+        if (primaNetaEntrada === undefined || primaNetaEntrada === null || primaNetaEntrada === ''
+            || !Number.isFinite(primaNeta) || primaNeta < 0) {
+            return res.status(400).json({ success: false, error: 'La prima neta debe ser un número mayor o igual a cero.' });
+        }
+        if (primaNeta > monto) {
+            return res.status(400).json({ success: false, error: 'La prima neta no puede ser mayor que la prima total.' });
+        }
+        if (typeof vencimientoEntrada !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(vencimientoEntrada)) {
+            return res.status(400).json({ success: false, error: 'La fecha de vencimiento no es válida.' });
+        }
+        const [anio, mes, dia] = vencimientoEntrada.split('-').map(Number);
+        const vencimiento = new Date(anio, mes - 1, dia, 12);
+        if (vencimiento.getFullYear() !== anio || vencimiento.getMonth() !== mes - 1 || vencimiento.getDate() !== dia) {
+            return res.status(400).json({ success: false, error: 'La fecha de vencimiento no es válida.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        const recibosBase = poliza.recibos || [];
+        const endososLegados = recibosBase
+            .filter(recibo => /^END(?:-|$)/i.test(String(recibo.numeroRecibo || '')))
+            .map(recibo => recibo.toObject());
+        const recibosRegulares = recibosBase.filter(
+            recibo => !/^END(?:-|$)/i.test(String(recibo.numeroRecibo || ''))
+        );
+        const endosos = [...(poliza.endosos || []), ...endososLegados];
+        if (endososLegados.length > 0) {
+            poliza.set('recibos', recibosRegulares);
+            poliza.markModified('recibos');
+        }
+        const numeroEndoso = endosos.reduce((maximo, recibo) => {
+            const numero = Number(String(recibo.numeroRecibo || '').match(/^END-(\d+)$/i)?.[1]);
+            return Number.isInteger(numero) ? Math.max(maximo, numero) : maximo;
+        }, 0) + 1;
+
+        const reciboEndoso = {
+            numeroRecibo: `END-${numeroEndoso}`,
+            periodoCobertura: periodo,
+            montoRecibo: monto,
+            montoPagoNeto: primaNeta,
+            fechaEmision: new Date(),
+            fechaVencimientoRecibo: vencimiento,
+            fechaFinGraciaRecibo: vencimiento,
+            estadoRecibo: 'pendiente'
+        };
+        const indiceInsercion = endosos.findIndex(recibo => {
+            if (!recibo.fechaVencimientoRecibo) return false;
+            const fechaRecibo = new Date(recibo.fechaVencimientoRecibo);
+            return !Number.isNaN(fechaRecibo.getTime()) && fechaRecibo > vencimiento;
+        });
+        if (indiceInsercion === -1) endosos.push(reciboEndoso);
+        else endosos.splice(indiceInsercion, 0, reciboEndoso);
+        poliza.set('endosos', endosos);
+        poliza.markModified('endosos');
+
+        const recibosPendientes = [...poliza.recibos, ...poliza.endosos].filter(recibo =>
+            ['pendiente', 'atrasado'].includes(String(recibo.estadoRecibo || '').toLowerCase())
+        );
+        poliza.saldoRestante = recibosPendientes.reduce(
+            (total, recibo) => total + (Number(recibo.montoRecibo) || 0),
+            0
+        );
+        poliza.proximoPago = recibosPendientes
+            .map(recibo => recibo.fechaVencimientoRecibo)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+        poliza.estadoPago = [...poliza.recibos, ...poliza.endosos].some(recibo =>
+            String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
+        ) ? 'al_corriente' : 'pendiente';
+
+        await poliza.save();
+        return res.status(201).json({
+            success: true,
+            message: 'Endoso agregado correctamente.',
+            poliza
+        });
+    } catch (error) {
+        console.error('[agregarEndoso] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo agregar el endoso.' });
+    }
+};
+
+const actualizarEndosoPagado = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)
+            || !mongoose.Types.ObjectId.isValid(req.params.endosoId)) {
+            return res.status(400).json({ success: false, error: 'El identificador del endoso no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        const endoso = poliza.endosos.id(req.params.endosoId)
+            || poliza.recibos.id(req.params.endosoId);
+        if (!endoso) return res.status(404).json({ success: false, error: 'Endoso no encontrado.' });
+        if (!['pendiente', 'atrasado'].includes(String(endoso.estadoRecibo).toLowerCase())) {
+            return res.status(409).json({ success: false, error: 'Solo se pueden registrar como pagados los endosos pendientes.' });
+        }
+
+        const fechaPago = new Date();
+        endoso.estadoRecibo = 'pagado';
+        endoso.montoPagado = Number(endoso.montoRecibo) || 0;
+        endoso.fechaPago = fechaPago;
+        endoso.metodoPago = 'manual';
+        endoso.registradoPor = userId;
+        endoso.gestorCobranza = userId;
+        poliza.pagos.push({
+            reciboId: endoso._id,
+            fechaPago,
+            monto: Number(endoso.montoRecibo) || 0,
+            estado: 'pagado',
+            metodoPago: 'manual'
+        });
+
+        const pendientes = [...poliza.recibos, ...poliza.endosos].filter(item =>
+            ['pendiente', 'atrasado'].includes(String(item.estadoRecibo || '').toLowerCase())
+        );
+        poliza.saldoRestante = pendientes.reduce(
+            (total, item) => total + (Number(item.montoRecibo) || 0),
+            0
+        );
+        poliza.proximoPago = pendientes
+            .map(item => item.fechaVencimientoRecibo)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+        poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+        if (poliza.endosos.id(req.params.endosoId)) poliza.markModified('endosos');
+        else poliza.markModified('recibos');
+        await poliza.save();
+        return res.json({ success: true, message: 'Endoso marcado como pagado.', poliza });
+    } catch (error) {
+        console.error('[actualizarEndosoPagado] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo actualizar el endoso.' });
+    }
+};
+
+const eliminarEndoso = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)
+            || !mongoose.Types.ObjectId.isValid(req.params.endosoId)) {
+            return res.status(400).json({ success: false, error: 'El identificador del endoso no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        const endosoEnEndosos = poliza.endosos.id(req.params.endosoId);
+        const endoso = endosoEnEndosos || poliza.recibos.id(req.params.endosoId);
+        if (!endoso) return res.status(404).json({ success: false, error: 'Endoso no encontrado.' });
+        if (String(endoso.estadoRecibo).toLowerCase() === 'pagado') {
+            return res.status(409).json({ success: false, error: 'No se puede eliminar un endoso pagado.' });
+        }
+
+        if (endosoEnEndosos) poliza.endosos.pull(req.params.endosoId);
+        else poliza.recibos.pull(req.params.endosoId);
+        const pendientes = [...poliza.recibos, ...poliza.endosos].filter(item =>
+            ['pendiente', 'atrasado'].includes(String(item.estadoRecibo || '').toLowerCase())
+        );
+        poliza.saldoRestante = pendientes.reduce(
+            (total, item) => total + (Number(item.montoRecibo) || 0),
+            0
+        );
+        poliza.proximoPago = pendientes
+            .map(item => item.fechaVencimientoRecibo)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+        poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+        poliza.markModified(endosoEnEndosos ? 'endosos' : 'recibos');
+        await poliza.save();
+        return res.json({ success: true, message: 'Endoso eliminado.', poliza });
+    } catch (error) {
+        console.error('[eliminarEndoso] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo eliminar el endoso.' });
+    }
+};
+
+const agregarNotaPoliza = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        const comentario = typeof req.body?.comentario === 'string' ? req.body.comentario.trim() : '';
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!comentario || comentario.length > 5000) {
+            return res.status(400).json({ success: false, error: 'La nota es obligatoria y no puede exceder 5000 caracteres.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        if (!Array.isArray(poliza.historialComentarios)) poliza.historialComentarios = [];
+        poliza.historialComentarios.push({
+            texto: comentario,
+            fecha: new Date(),
+            ...(userId ? { gestor: userId } : {}),
+            tipo: 'nota'
+        });
+        await poliza.save();
+
+        return res.status(201).json({
+            success: true,
+            message: 'Nota agregada correctamente.',
+            data: poliza.historialComentarios[poliza.historialComentarios.length - 1]
+        });
+    } catch (error) {
+        console.error('[agregarNotaPoliza] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo agregar la nota a la póliza.' });
+    }
+};
+
 const programarRecordatorioPersonalizado = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
@@ -6115,15 +6604,24 @@ const programarRecordatorioPersonalizado = async (req, res) => {
             return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
         }
 
-        const { fechaProgramada, destinatario, asunto, mensaje, plantillaId } = req.body || {};
+        const { fechaProgramada, fechaHora1, fechaHora2, destinatario, asunto, mensaje, plantillaId } = req.body || {};
         const recurrencia = req.body?.recurrencia || 'ninguna';
         const diasRecurrenciaEntrada = req.body?.diasRecurrencia;
-        const fecha = new Date(fechaProgramada);
+        const fechasDoblesPresentes = fechaHora1 !== undefined || fechaHora2 !== undefined;
+        const fechasProgramadas = fechasDoblesPresentes
+            ? [new Date(fechaHora1), new Date(fechaHora2)]
+            : [new Date(fechaProgramada)];
         const correo = typeof destinatario === 'string' ? destinatario.trim() : '';
         const asuntoNormalizado = typeof asunto === 'string' ? asunto.trim() : '';
         const mensajeNormalizado = typeof mensaje === 'string' ? mensaje.trim() : '';
-        if (!fechaProgramada || Number.isNaN(fecha.getTime()) || fecha <= new Date()) {
+        if (fechasDoblesPresentes && recurrencia !== 'mensual_personalizado') {
+            return res.status(400).json({ success: false, error: 'Las dos fechas solo se permiten para la recurrencia mensual personalizada.' });
+        }
+        if (fechasProgramadas.some(fecha => Number.isNaN(fecha.getTime()) || fecha <= new Date())) {
             return res.status(400).json({ success: false, error: 'La fecha del recordatorio debe ser futura y válida.' });
+        }
+        if (fechasDoblesPresentes && (!fechaHora1 || !fechaHora2)) {
+            return res.status(400).json({ success: false, error: 'Selecciona dos fechas válidas en días distintos.' });
         }
         if (correo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
             return res.status(400).json({ success: false, error: 'El correo destinatario no es válido.' });
@@ -6138,7 +6636,16 @@ const programarRecordatorioPersonalizado = async (req, res) => {
             return res.status(400).json({ success: false, error: 'La recurrencia seleccionada no es válida.' });
         }
         let diasRecurrencia = [];
-        if (recurrencia === 'mensual_personalizado') {
+        if (fechasDoblesPresentes) {
+            if (!Array.isArray(diasRecurrenciaEntrada) || diasRecurrenciaEntrada.length !== 2) {
+                return res.status(400).json({ success: false, error: 'Selecciona los dos días de recurrencia mensual.' });
+            }
+            diasRecurrencia = diasRecurrenciaEntrada.map(Number);
+            if (diasRecurrencia.some(dia => !Number.isInteger(dia) || dia < 1 || dia > 31)
+                || diasRecurrencia[0] === diasRecurrencia[1]) {
+                return res.status(400).json({ success: false, error: 'Los dos días de recurrencia deben ser distintos y estar entre 1 y 31.' });
+            }
+        } else if (recurrencia === 'mensual_personalizado') {
             if (!Array.isArray(diasRecurrenciaEntrada) || diasRecurrenciaEntrada.length !== 2) {
                 return res.status(400).json({ success: false, error: 'Selecciona exactamente dos días para la recurrencia mensual.' });
             }
@@ -6169,24 +6676,28 @@ const programarRecordatorioPersonalizado = async (req, res) => {
             if (!plantilla) return res.status(404).json({ success: false, error: 'La plantilla no pertenece a esta empresa.' });
         }
 
-        poliza.recordatoriosPersonalizados.push({
+        const nuevosRecordatorios = fechasProgramadas.map((fecha, indice) => ({
             fechaProgramada: fecha,
             destinatario: correo,
             asunto: asuntoNormalizado,
             mensaje: sanitizarCuerpoCorreo(mensajeNormalizado),
-            recurrencia,
-            diaRecurrencia: recurrencia === 'mensual' ? fecha.getUTCDate() : null,
-            diasRecurrencia,
+            recurrencia: fechasDoblesPresentes ? 'mensual' : recurrencia,
+            diaRecurrencia: fechasDoblesPresentes
+                ? diasRecurrencia[indice]
+                : recurrencia === 'mensual' ? fecha.getUTCDate() : null,
+            diasRecurrencia: fechasDoblesPresentes ? [] : diasRecurrencia,
             creadoPor: userId,
             plantillaId: plantilla?._id || null
-        });
+        }));
+        poliza.recordatoriosPersonalizados.push(...nuevosRecordatorios);
         await poliza.save();
 
-        const recordatorio = poliza.recordatoriosPersonalizados[poliza.recordatoriosPersonalizados.length - 1];
         return res.status(201).json({
             success: true,
-            message: 'Recordatorio programado correctamente.',
-            data: recordatorio
+            message: fechasDoblesPresentes ? 'Dos recordatorios programados correctamente.' : 'Recordatorio programado correctamente.',
+            data: fechasDoblesPresentes
+                ? poliza.recordatoriosPersonalizados.slice(-nuevosRecordatorios.length)
+                : poliza.recordatoriosPersonalizados[poliza.recordatoriosPersonalizados.length - 1]
         });
     } catch (error) {
         console.error('[programarRecordatorioPersonalizado] Error:', error);
@@ -6501,6 +7012,10 @@ module.exports = {
     generarCalendarioRecibos,
     resolverCobranzaConPago,
     enviarAvisoPago,
+    agregarEndoso,
+    actualizarEndosoPagado,
+    eliminarEndoso,
+    agregarNotaPoliza,
     programarRecordatorioPersonalizado,
     cancelarRecordatorioPersonalizado,
     actualizarPolizasVencidas,

@@ -490,6 +490,11 @@ const polizaSchema = new mongoose.Schema({
         default: [],
         comment: 'Array de recibos estructurados (FASE 1 - nuevo, coexiste con pagos[])'
     },
+    endosos: {
+        type: [reciboSchema],
+        default: [],
+        comment: 'Recibos adicionales creados por endosos, separados del calendario base'
+    },
     renovaciones: {
         type: [renovacionSchema],
         default: [],
