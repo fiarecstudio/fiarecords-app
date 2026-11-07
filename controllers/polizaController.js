@@ -6503,6 +6503,85 @@ const actualizarEndosoPagado = async (req, res) => {
     }
 };
 
+const enviarAvisoPagoEndoso = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant || !userId) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)
+            || !mongoose.Types.ObjectId.isValid(req.params.endosoId)) {
+            return res.status(400).json({ success: false, error: 'El identificador del endoso no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        const endoso = poliza.endosos.id(req.params.endosoId)
+            || poliza.recibos.id(req.params.endosoId);
+        if (!endoso) return res.status(404).json({ success: false, error: 'Endoso no encontrado.' });
+        if (String(endoso.estadoRecibo || '').toLowerCase() !== 'pagado') {
+            return res.status(409).json({ success: false, error: 'Solo se puede enviar aviso de un endoso pagado.' });
+        }
+
+        const clienteId = poliza.clienteId?._id || poliza.clienteId;
+        const cliente = clienteId
+            ? await Cliente.findOne({
+                _id: clienteId,
+                empresaId: poliza.empresaId || empresaId,
+                deletedAt: null
+            }).lean()
+            : null;
+        const destinatario = String(cliente?.email || poliza.clienteEmail || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+            return res.status(422).json({ success: false, error: 'El cliente no tiene un correo válido registrado.' });
+        }
+        const nombreCliente = String(cliente?.nombre
+            || (typeof poliza.cliente === 'string' ? poliza.cliente : '')
+            || 'Cliente');
+        const escaparHtml = value => String(value).replace(/[&<>"']/g, caracter => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[caracter]);
+        const numeroPoliza = String(poliza.numeroPoliza || 'S/N');
+        const numeroEndoso = String(endoso.numeroRecibo || endoso.periodoCobertura || 'Endoso');
+        const monto = Number(endoso.montoRecibo) || 0;
+        const moneda = String(poliza.moneda || 'MXN');
+        const montoTexto = new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: /^[A-Z]{3}$/.test(moneda) ? moneda : 'MXN'
+        }).format(monto);
+        const asunto = `Pago confirmado: endoso ${numeroEndoso} · Póliza ${numeroPoliza}`;
+        const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333;font-size:14px;">
+            <p>Hola ${escaparHtml(nombreCliente)},</p>
+            <p>Te confirmamos que registramos el pago del endoso <strong>${escaparHtml(numeroEndoso)}</strong>
+            de tu póliza <strong>${escaparHtml(numeroPoliza)}</strong>.</p>
+            <p><strong>Monto registrado:</strong> ${escaparHtml(montoTexto)}<br>
+            <strong>Fecha de pago:</strong> ${escaparHtml(new Date(endoso.fechaPago || Date.now()).toLocaleDateString('es-MX'))}</p>
+            <p>Gracias.</p>
+        </div>`;
+        await notificationService.enviarEmail({
+            empresaId: poliza.empresaId || empresaId,
+            destinatario,
+            asunto,
+            cuerpo
+        });
+        return res.json({ success: true, message: 'Aviso de pago enviado correctamente.' });
+    } catch (error) {
+        console.error('[enviarAvisoPagoEndoso] Error:', error);
+        return res.status(502).json({ success: false, error: 'No se pudo enviar el aviso de pago del endoso.' });
+    }
+};
+
 const eliminarEndoso = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
@@ -7014,6 +7093,7 @@ module.exports = {
     enviarAvisoPago,
     agregarEndoso,
     actualizarEndosoPagado,
+    enviarAvisoPagoEndoso,
     eliminarEndoso,
     agregarNotaPoliza,
     programarRecordatorioPersonalizado,

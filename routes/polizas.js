@@ -66,6 +66,7 @@ router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.
 router.post('/:id/enviar-aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPago);
 router.post('/:id/endosos', auth, applyTenantFilter, polizaController.agregarEndoso);
 router.put('/:id/endosos/:endosoId/estatus', auth, applyTenantFilter, polizaController.actualizarEndosoPagado);
+router.post('/:id/endosos/:endosoId/aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPagoEndoso);
 router.delete('/:id/endosos/:endosoId', auth, applyTenantFilter, polizaController.eliminarEndoso);
 router.post('/:id/notas', auth, applyTenantFilter, polizaController.agregarNotaPoliza);
 router.post('/:id/recordatorios', auth, applyTenantFilter, polizaController.programarRecordatorioPersonalizado);

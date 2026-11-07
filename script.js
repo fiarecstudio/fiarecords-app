@@ -3707,6 +3707,9 @@ let proyectoIdEnEdicion = null;
     let secuenciaConsultaBandeja = 0;
     let correoContextualSeleccionado = null;
     let carpetasBandejaCache = null;
+    let ultimaActualizacionConteoCarpetas = 0;
+    let plantillasRedactorCorreo = [];
+    let contextoRedactorCorreo = {};
     let importanciaCorreo = 'normal';
     let seguimientoCorreo = false;
     const detallesCorreoCache = new Map();
@@ -3785,7 +3788,9 @@ let proyectoIdEnEdicion = null;
             if (query) params.set('q', query);
             const response = await fetchAPI(`/api/bandeja-entrada?${params.toString()}`);
             if (requestId !== secuenciaConsultaBandeja) return;
-            if (!Array.isArray(carpetasBandejaCache)) {
+            if (!Array.isArray(carpetasBandejaCache)
+                || folderChanged
+                || Date.now() - ultimaActualizacionConteoCarpetas > 60000) {
                 refrescarCarpetasBandeja().catch(error => console.error('[BandejaEntrada] No se pudieron cargar las carpetas:', error));
             }
             const fetchedEmails = Array.isArray(response.emails) ? response.emails : [];
@@ -4139,7 +4144,20 @@ let proyectoIdEnEdicion = null;
 
     function renderizarCarpetasPersonalizadas() {
         const container = document.getElementById('bandeja-carpetas-personalizadas');
-        if (!container || !Array.isArray(carpetasBandejaCache)) return;
+        if (!Array.isArray(carpetasBandejaCache)) return;
+        const carpetasEspeciales = [
+            ['inbox', 'bandeja-tab-inbox-count'],
+            ['sent', 'bandeja-tab-sent-count'],
+            ['spam', 'bandeja-tab-spam-count']
+        ];
+        carpetasEspeciales.forEach(([role, badgeId]) => {
+            const badge = document.getElementById(badgeId);
+            if (!badge) return;
+            const unreadCount = Number(carpetasBandejaCache.find(folder => folder.role === role)?.unreadCount) || 0;
+            badge.textContent = String(unreadCount);
+            badge.hidden = unreadCount <= 0;
+        });
+        if (!container) return;
         const customFolders = carpetasBandejaCache.filter(folder => folder.role === 'folder');
         const spamButton = document.getElementById('bandeja-tab-spam');
         if (spamButton) spamButton.hidden = !carpetasBandejaCache.some(folder => folder.role === 'spam');
@@ -4150,6 +4168,13 @@ let proyectoIdEnEdicion = null;
             button.className = `btn btn-sm text-start w-100 ${carpetaBandejaActual === folder.name ? 'is-active' : ''}`;
             button.innerHTML = '<i class="bi bi-folder me-2"></i>';
             button.appendChild(document.createTextNode(limpiarNombreCarpetaVisual(folder.name)));
+            const unreadCount = Number(folder.unreadCount) || 0;
+            if (unreadCount > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'bandeja-folder-count bandeja-unread-count ms-auto';
+                badge.textContent = String(unreadCount);
+                button.appendChild(badge);
+            }
             button.addEventListener('click', () => mostrarCarpetaBandeja(folder.name));
             container.appendChild(button);
         });
@@ -4158,6 +4183,7 @@ let proyectoIdEnEdicion = null;
     async function refrescarCarpetasBandeja() {
         const response = await fetchAPI('/api/bandeja-entrada/folders');
         carpetasBandejaCache = Array.isArray(response.folders) ? response.folders : [];
+        ultimaActualizacionConteoCarpetas = Date.now();
         renderizarCarpetasPersonalizadas();
         return carpetasBandejaCache;
     }
@@ -4924,8 +4950,53 @@ let proyectoIdEnEdicion = null;
         renderizarAdjuntosCorreo();
     }
 
-    function abrirRespuestaCorreo(mode = 'reply') {
+    function renderizarPlantillaRedactorCorreo(texto, escaparValores = false) {
+        const contexto = contextoRedactorCorreo || {};
+        const cliente = contexto.nombreCliente || contexto.cliente || '';
+        const numeroPoliza = contexto.numeroPoliza || contexto.poliza || '';
+        const vehiculo = contexto.vehiculo || contexto.descripcionVehiculo || '';
+        const valores = {
+            cliente,
+            nombre_cliente: cliente,
+            poliza: numeroPoliza,
+            numero_poliza: numeroPoliza,
+            vehiculo,
+            descripcion_vehiculo: vehiculo,
+            aseguradora: contexto.aseguradora || contexto.ASEGURADORA || '',
+            monto: contexto.monto || ''
+        };
+        return String(texto || '').replace(/{{\s*([a-z0-9_]+)\s*}}/gi, (token, variable) => {
+            const key = variable.toLowerCase();
+            if (!Object.prototype.hasOwnProperty.call(valores, key)) return token;
+            const valor = String(valores[key] ?? '');
+            return escaparValores ? escapeHTML(valor) : valor;
+        });
+    }
+
+    function aplicarPlantillaRedactorCorreo() {
+        const plantillaId = document.getElementById('respuesta-plantilla')?.value || '';
+        const plantilla = plantillasRedactorCorreo.find(item => String(item._id) === plantillaId);
+        if (!plantilla) return;
+        document.getElementById('respuesta-asunto').value =
+            renderizarPlantillaRedactorCorreo(plantilla.asunto);
+        const editor = document.getElementById('respuesta-mensaje');
+        editor.innerHTML = renderizarPlantillaRedactorCorreo(plantilla.cuerpo, true);
+        insertarFirmaEnEditorCorreo();
+    }
+
+    async function abrirRespuestaCorreo(mode = 'reply', contexto = {}) {
         if (mode !== 'new' && !correoBandejaSeleccionado) return;
+        const isNew = mode === 'new';
+        contextoRedactorCorreo = isNew && contexto && typeof contexto === 'object' ? contexto : {};
+        plantillasRedactorCorreo = [];
+        if (isNew) {
+            try {
+                plantillasRedactorCorreo = await obtenerPlantillasCorreo('');
+            } catch (error) {
+                console.error('[abrirRespuestaCorreo] No se pudieron cargar las plantillas:', error);
+                showToast('No se pudieron cargar las plantillas; puedes redactar el correo manualmente.', 'warning');
+            }
+        }
         if (!obtenerFirmaCorreo()) {
             loadInitialConfig(null, true).then(() => {
                 insertarFirmaEnEditorCorreo();
@@ -4946,20 +5017,36 @@ let proyectoIdEnEdicion = null;
         document.getElementById('compose-read-receipt').checked = false;
         document.getElementById('compose-read-receipt-options').checked = false;
         seleccionarPestanaRedaccion('message');
+        const templateField = document.getElementById('compose-template-field');
+        const templateSelect = document.getElementById('respuesta-plantilla');
+        if (templateField) templateField.classList.toggle('d-none', !isNew);
+        if (templateSelect) {
+            templateSelect.innerHTML = `<option value="">Selecciona una plantilla...</option>${plantillasRedactorCorreo.map(plantilla =>
+                `<option value="${escapeHTML(String(plantilla._id))}">${escapeHTML(String(plantilla.nombre || 'Plantilla'))}</option>`
+            ).join('')}`;
+            templateSelect.value = '';
+            if (templateSelect.dataset.changeHandlerBound !== 'true') {
+                templateSelect.addEventListener('change', aplicarPlantillaRedactorCorreo);
+                templateSelect.dataset.changeHandlerBound = 'true';
+            }
+        }
         const destinatarios = mode === 'replyAll'
             ? (correo.replyAllEmails || [correo.fromEmail]).filter(Boolean)
             : mode === 'reply' ? [correo.fromEmail].filter(Boolean) : [];
         const asunto = correo.subject || '(Sin asunto)';
-        const isNew = mode === 'new';
         const forward = mode === 'forward';
         document.getElementById('modalResponderCorreoLabel').textContent = isNew
             ? 'Nuevo correo'
             : forward ? 'Reenviar correo' : mode === 'replyAll' ? 'Responder a todos' : 'Responder correo';
-        document.getElementById('respuesta-destinatario').value = destinatarios.join(', ');
+        document.getElementById('respuesta-destinatario').value = isNew
+            ? String(contextoRedactorCorreo.email || '')
+            : destinatarios.join(', ');
         document.getElementById('respuesta-cc').value = '';
         document.getElementById('respuesta-de').value =
             configCache?.notificacionesEmail?.smtpUser || configCache?.email || '';
-        document.getElementById('respuesta-asunto').value = isNew ? '' : forward
+        document.getElementById('respuesta-asunto').value = isNew
+            ? String(contextoRedactorCorreo.asuntoInicial || '')
+            : forward
             ? (/^fwd?:/i.test(asunto) ? asunto : `Fwd: ${asunto}`)
             : (/^re:/i.test(asunto) ? asunto : `Re: ${asunto}`);
         const editor = document.getElementById('respuesta-mensaje');
@@ -4968,7 +5055,9 @@ let proyectoIdEnEdicion = null;
         const quotedMessage = mode === 'reply' || mode === 'replyAll' || forward
             ? `<br><br><div data-original-quote="true" style="border-left:2px solid #3b82f6;padding-left:12px;margin-top:15px;color:#9ca3af;"><p style="font-weight:bold;margin-bottom:5px;">----- ${forward ? 'Mensaje reenviado' : 'Mensaje original'} -----</p><p style="margin:2px 0;"><b>De:</b> ${escapeHTML(String(correo.fromName || ''))} &lt;${escapeHTML(String(correo.fromEmail || ''))}&gt;</p><p style="margin:2px 0;"><b>Enviado:</b> ${escapeHTML(fechaOriginal)}</p><p style="margin:2px 0;"><b>Asunto:</b> ${escapeHTML(asunto)}</p><br><div>${cuerpoOriginal}</div></div>`
             : '';
-        editor.innerHTML = `<div><br></div>${quotedMessage}`;
+        editor.innerHTML = isNew && contextoRedactorCorreo.mensajeInicial
+            ? `<p>${escapeHTML(String(contextoRedactorCorreo.mensajeInicial)).replace(/\r?\n/g, '<br>')}</p>`
+            : `<div><br></div>${quotedMessage}`;
         insertarFirmaEnEditorCorreo();
         document.getElementById('respuesta-destinatario-ayuda').classList.toggle('d-none', isNew || forward || mode === 'reply');
         document.getElementById('respuesta-enviar').querySelector('span').textContent = 'Enviar';
@@ -4977,8 +5066,8 @@ let proyectoIdEnEdicion = null;
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalResponderCorreo')).show();
     }
 
-    function abrirNuevoCorreo() {
-        abrirRespuestaCorreo('new');
+    function abrirNuevoCorreo(contexto = {}) {
+        return abrirRespuestaCorreo('new', contexto);
     }
 
     function formatoFechaLocalInput(date) {
@@ -5154,6 +5243,9 @@ let proyectoIdEnEdicion = null;
             });
             actualizarCorreoEnLista(correo.id, true);
             actualizarIndicadorCorreos();
+            refrescarCarpetasBandeja().catch(error => {
+                console.error('[BandejaEntrada] No se pudieron actualizar los conteos de carpetas:', error);
+            });
         } catch (error) {
             actualizarCorreoEnLista(correo.id, false);
             showToast(error.message || 'No fue posible marcar el correo como leído.', 'error');
@@ -5184,6 +5276,9 @@ let proyectoIdEnEdicion = null;
                 renderizarListaBandeja();
             }
             actualizarIndicadorCorreos();
+            refrescarCarpetasBandeja().catch(error => {
+                console.error('[BandejaEntrada] No se pudieron actualizar los conteos de carpetas:', error);
+            });
             showToast('El correo se marcó como no leído.', 'success');
         } catch (error) {
             button.disabled = !correoBandejaSeleccionado?.seen;
@@ -10534,6 +10629,9 @@ Fecha de firma: {{FECHA}}`;
                         case 'email':
                             enviarRecordatorioCorreo(polizaId);
                             break;
+                        case 'email-free':
+                            abrirCorreoLibrePolizaDesdeTabla(polizaId);
+                            break;
                         case 'reminder':
                             enviarNotificacionManual(polizaId);
                             break;
@@ -10653,6 +10751,7 @@ Fecha de firma: {{FECHA}}`;
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li><button type="button" class="dropdown-item" data-poliza-action="email" data-poliza-id="${polizaId}">✉️ Enviar Notificación por Correo</button></li>
+                                    <li><button type="button" class="dropdown-item" data-poliza-action="email-free" data-poliza-id="${polizaId}">✉️ Enviar Correo Libre</button></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>
                                     <li><a class="dropdown-item" href="#" onclick="abrirModalPagos('${polizaId}'); return false;">💳 Ver / Registrar Pagos</a></li>
                                     <li><a class="dropdown-item" href="#" onclick="agregarNotaPoliza('${polizaId}'); return false;">📝 Agregar Nota / Seguimiento</a></li>
@@ -10681,6 +10780,38 @@ Fecha de firma: {{FECHA}}`;
         } catch (error) {
             console.error('[abrirPagosPolizaDesdeTabla] Error al cargar póliza:', error);
             await Swal.fire('Error', error.message || 'No se pudieron cargar los pagos de la póliza.', 'error');
+        }
+    }
+
+    async function abrirCorreoLibrePolizaDesdeTabla(polizaId) {
+        try {
+            const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}`);
+            const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
+            if (!poliza || poliza.offline) {
+                throw new Error('No se pudieron cargar los datos del cliente y la póliza.');
+            }
+
+            const cliente = poliza.clienteId && typeof poliza.clienteId === 'object'
+                ? poliza.clienteId
+                : null;
+            const nombre = String(cliente?.nombre
+                || (typeof poliza.cliente === 'object' ? poliza.cliente?.nombre : poliza.cliente)
+                || 'Cliente');
+            const numeroPoliza = String(poliza.numeroPoliza || '');
+            const vehiculo = String(poliza.descripcionVehiculo || poliza.vehiculo || poliza.placas || '');
+
+            await abrirNuevoCorreo({
+                email: poliza.clienteEmail || cliente?.email || '',
+                nombreCliente: nombre,
+                numeroPoliza,
+                vehiculo,
+                aseguradora: poliza.aseguradora || '',
+                asuntoInicial: `Información de su póliza ${numeroPoliza}`.trim(),
+                mensajeInicial: `Hola ${nombre},\n\nNos comunicamos con usted respecto a su póliza No. ${numeroPoliza}${vehiculo ? `, correspondiente al vehículo ${vehiculo}` : ''}.`
+            });
+        } catch (error) {
+            console.error('[abrirCorreoLibrePolizaDesdeTabla] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo abrir el redactor con los datos de la póliza.', 'error');
         }
     }
 
@@ -13194,7 +13325,31 @@ Fecha de firma: {{FECHA}}`;
             );
             if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo registrar el pago del endoso.');
             await cargarPolizaFrescaEndosos(polizaId);
-            await Swal.fire('Guardado', 'El endoso se marcó como pagado.', 'success');
+            const { isConfirmed: enviarAviso } = await Swal.fire({
+                title: 'Pago registrado',
+                text: 'El endoso se marcó como pagado. ¿Deseas enviar un aviso al cliente?',
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonText: 'Enviar aviso',
+                cancelButtonText: 'Ahora no'
+            });
+            if (enviarAviso) {
+                try {
+                    const aviso = await fetchAPI(
+                        `/api/polizas/${encodeURIComponent(polizaId)}/endosos/${encodeURIComponent(endosoId)}/aviso-pago`,
+                        { method: 'POST' }
+                    );
+                    if (!aviso?.success) throw new Error(aviso?.error || 'No se pudo enviar el aviso al cliente.');
+                    await Swal.fire('Correo enviado', aviso.message || 'El aviso de pago se envió al cliente.', 'success');
+                } catch (error) {
+                    console.error('[marcarEndosoPagado] No se pudo enviar el aviso de pago:', error);
+                    await Swal.fire(
+                        'Pago registrado',
+                        error.message || 'El pago se guardó, pero no se pudo enviar el aviso.',
+                        'warning'
+                    );
+                }
+            }
             await abrirModalVerEndosos(polizaId);
         } catch (error) {
             console.error('[marcarEndosoPagado] Error:', error);

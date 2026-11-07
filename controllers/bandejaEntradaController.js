@@ -185,6 +185,18 @@ function getMailboxRole(name, attributes = []) {
     return 'folder';
 }
 
+function contarCorreosNoLeidos(connection, mailbox) {
+    return new Promise((resolve, reject) => {
+        connection.openBox(mailbox, error => {
+            if (error) return reject(error);
+            connection.imap.search(['UNSEEN'], (searchError, results) => {
+                if (searchError) return reject(searchError);
+                resolve((results || []).length);
+            });
+        });
+    });
+}
+
 async function getFolders(req, res) {
     let connection;
     try {
@@ -192,6 +204,9 @@ async function getFolders(req, res) {
         connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
         const folders = flattenBoxes(await connection.getBoxes())
             .map(({ name, attributes }) => ({ name, role: getMailboxRole(name, attributes) }));
+        for (const folder of folders) {
+            folder.unreadCount = await contarCorreosNoLeidos(connection, folder.name);
+        }
         return res.json({ success: true, folders });
     } catch (error) {
         console.error('[BandejaEntrada] Error al consultar carpetas IMAP:', error);
@@ -587,14 +602,8 @@ async function getUnreadCount(req, res) {
     try {
         connection = await imaps.connect(getImapConfig());
         connection.on('error', error => console.error('[BandejaEntrada] Error de conexión IMAP:', error));
-        await connection.openBox('INBOX');
-        const uids = await new Promise((resolve, reject) => {
-            connection.imap.search(['UNSEEN'], (error, results) => {
-                if (error) return reject(error);
-                resolve(results || []);
-            });
-        });
-        return res.json({ success: true, unreadCount: uids.length });
+        const unreadCount = await contarCorreosNoLeidos(connection, 'INBOX');
+        return res.json({ success: true, unreadCount });
     } catch (error) {
         console.error('[BandejaEntrada] Error al consultar correos no leídos:', error);
         const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503 : 502;

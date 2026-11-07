@@ -1560,16 +1560,16 @@
                                 </div>
                                 <nav class="bandeja-folder-tree" role="tablist" aria-label="Carpetas">
                                     <button id="bandeja-tab-inbox" type="button" class="bandeja-folder-link is-active" onclick="app.mostrarCarpetaBandeja('INBOX')" role="tab" aria-selected="true">
-                                        <i class="bi bi-inbox"></i><span>Entrada</span>
+                                        <i class="bi bi-inbox"></i><span>Entrada</span><span id="bandeja-tab-inbox-count" class="bandeja-folder-count bandeja-unread-count" hidden></span>
                                     </button>
                                     <button id="bandeja-tab-sent" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaBandeja('Sent')" role="tab" aria-selected="false">
-                                        <i class="bi bi-send"></i><span>Enviados</span>
+                                        <i class="bi bi-send"></i><span>Enviados</span><span id="bandeja-tab-sent-count" class="bandeja-folder-count bandeja-unread-count" hidden></span>
                                     </button>
                                     <button id="bandeja-tab-scheduled" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaBandeja('PROGRAMADOS')" role="tab" aria-selected="false">
                                         <i class="bi bi-clock"></i><span>Programados</span><span id="bandeja-programados-count" class="bandeja-folder-count">0</span>
                                     </button>
                                     <button id="bandeja-tab-spam" type="button" class="bandeja-folder-link" onclick="app.mostrarCarpetaEspecial('spam')" role="tab" aria-selected="false">
-                                        <i class="bi bi-slash-circle"></i><span>Spam</span>
+                                        <i class="bi bi-slash-circle"></i><span>Spam</span><span id="bandeja-tab-spam-count" class="bandeja-folder-count bandeja-unread-count" hidden></span>
                                     </button>
                                 </nav>
                                 <div class="bandeja-folder-heading bandeja-custom-heading">
@@ -1755,6 +1755,12 @@
                                     <div class="compose-field-row"><label for="respuesta-cc">CC</label><input id="respuesta-cc" type="text" class="form-control" autocomplete="email"></div>
                                     <div id="respuesta-destinatario-ayuda" class="form-text compose-recipient-help">Puedes separar varios destinatarios con comas.</div>
                                     <div class="compose-field-row"><label for="respuesta-asunto">Asunto</label><input id="respuesta-asunto" type="text" class="form-control" required></div>
+                                    <div id="compose-template-field" class="compose-field-row d-none">
+                                        <label for="respuesta-plantilla">Plantilla</label>
+                                        <select id="respuesta-plantilla" class="form-select">
+                                            <option value="">Selecciona una plantilla...</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             <div class="compose-attachments">
