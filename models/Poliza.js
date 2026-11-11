@@ -246,6 +246,17 @@ const polizaSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
+    esCargoAutomatico: {
+        type: Boolean,
+        default: false
+    },
+    datosTarjeta: {
+        type: String,
+        trim: true,
+        maxlength: 1024,
+        default: '',
+        select: false
+    },
     duracionMeses: {
         type: Number,
         default: 12,
@@ -501,7 +512,16 @@ const polizaSchema = new mongoose.Schema({
         comment: 'Array de historial de renovaciones anuales (FASE 1 - nuevo)'
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: {
+        transform(_documento, resultado) {
+            if (Object.prototype.hasOwnProperty.call(resultado, 'datosTarjeta')) {
+                resultado.tieneDatosTarjeta = Boolean(resultado.datosTarjeta);
+                delete resultado.datosTarjeta;
+            }
+            return resultado;
+        }
+    }
 });
 
 // Índice compuesto para búsquedas multi-tenant

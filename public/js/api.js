@@ -176,6 +176,7 @@
         if (!url.startsWith('/') && !url.startsWith('http')) { url = '/' + url; }
         let token = localStorage.getItem('token');
         const isPublic = url.includes('/auth/') || url.includes('/configuracion/public');
+        const isSensitiveRequest = options.sensitive === true;
 
         // PASO 7: Si estamos haciendo refresh, no redirigir inmediatamente
         if (!token && !isPublic && !isRefreshing) {
@@ -204,6 +205,11 @@
         // --- MODO OFFLINE (LECTURA DE CACHÉ) ---
         if ((!options.method || options.method === 'GET')) {
             if (!navigator.onLine) {
+                if (isSensitiveRequest) {
+                    const offlineError = new Error('Esta consulta requiere conexión segura al servidor.');
+                    offlineError.offline = true;
+                    throw offlineError;
+                }
                 const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
                 if (fallback.found) return fallback.data;
                 const neutral = createEmptyOfflineResponse(url);
@@ -241,6 +247,7 @@
         const requestOptions = { ...options };
         delete requestOptions.skipOfflineQueue;
         delete requestOptions.silent;
+        delete requestOptions.sensitive;
         const fetchOptions = { ...requestOptions, headers };
 
         // DEBUG FASE 5: Verificar headers antes de enviar
@@ -333,6 +340,11 @@
 
             const data = await res.json();
             if (!res.ok && data?.offline === true) {
+                if (isSensitiveRequest) {
+                    const offlineError = new Error('Esta consulta requiere conexión segura al servidor.');
+                    offlineError.offline = true;
+                    throw offlineError;
+                }
                 const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
                 if (fallback.found) return fallback.data;
                 const neutral = createEmptyOfflineResponse(url);
@@ -372,6 +384,11 @@
             const esFalloRed = e instanceof TypeError
                 || /failed to fetch|networkerror|load failed|fetch failed/i.test(e.message || '');
             if ((!options.method || options.method === 'GET') && (e.offline || esFalloRed || !navigator.onLine)) {
+                if (isSensitiveRequest) {
+                    const offlineError = new Error('Esta consulta requiere conexión segura al servidor.');
+                    offlineError.offline = true;
+                    throw offlineError;
+                }
                 const fallback = readOfflineApiFallback(url, localCache, options.headers?.['X-Empresa-Id']);
                 if (fallback.found) return fallback.data;
                 const neutral = createEmptyOfflineResponse(url);

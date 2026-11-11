@@ -140,6 +140,7 @@ router.put('/:id/enlace-pago', auth, applyTenantFilter, polizaController.actuali
 
 router.put('/:id/recalcular', auth, applyTenantFilter, polizaController.recalcularRecibos);
 router.put('/:id/cancelar', auth, applyTenantFilter, polizaController.cancelarPoliza);
+router.get('/:id/tarjeta-desencriptada', auth, applyTenantFilter, polizaController.obtenerDatosTarjetaDesencriptados);
 router.get('/:id', auth, applyTenantFilter, polizaController.obtenerPolizaPorId);
 router.put('/:id', auth, applyTenantFilter, polizaController.actualizarPoliza);
 router.delete('/:id', auth, applyTenantFilter, polizaController.eliminarPoliza);

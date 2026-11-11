@@ -259,6 +259,11 @@ async function generarYEnviarNotificacion({
     numeroRecibo,
     periodoCobertura
 }) {
+    if (poliza?.esCargoAutomatico === true) {
+        console.warn(`[Cron Notificaciones] Se omitió el recordatorio de póliza ${poliza._id} por cargo automático.`);
+        return false;
+    }
+
     const canal = 'email';
 
     // PRIORIDAD: Usar email del modelo Cliente, fallback a poliza.clienteEmail
@@ -453,6 +458,7 @@ async function procesarRecordatoriosPersonalizados() {
     const limiteLease = new Date(ahora.getTime() + 10 * 60 * 1000);
     const polizas = await Poliza.find({
         $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+        esCargoAutomatico: { $ne: true },
         recordatoriosPersonalizados: {
             $elemMatch: {
                 $or: [
@@ -465,9 +471,11 @@ async function procesarRecordatoriosPersonalizados() {
                 ]
             }
         }
-    }).select('_id empresaId recordatoriosPersonalizados').lean();
+    }).select('_id empresaId esCargoAutomatico recordatoriosPersonalizados').lean();
 
     for (const poliza of polizas) {
+        if (poliza.esCargoAutomatico === true) continue;
+
         const recurrenciasPendientesDeCrear = (poliza.recordatoriosPersonalizados || [])
             .filter(recordatorio => recordatorio.enviado
                 && ['mensual', 'mensual_personalizado'].includes(recordatorio.recurrencia)
@@ -499,12 +507,24 @@ async function procesarRecordatoriosPersonalizados() {
                 {
                     _id: poliza._id,
                     empresaId: poliza.empresaId,
+                    esCargoAutomatico: { $ne: true },
                     recordatoriosPersonalizados: { $elemMatch: filtroRecordatorio }
                 },
                 { $set: { 'recordatoriosPersonalizados.$.procesandoHasta': limiteLease } },
                 { new: true }
             );
             if (!polizaBloqueada) continue;
+            if (polizaBloqueada.esCargoAutomatico === true) {
+                await Poliza.updateOne(
+                    {
+                        _id: polizaBloqueada._id,
+                        empresaId: polizaBloqueada.empresaId,
+                        recordatoriosPersonalizados: { $elemMatch: { _id: recordatorio._id, enviado: false } }
+                    },
+                    { $set: { 'recordatoriosPersonalizados.$.procesandoHasta': null } }
+                );
+                continue;
+            }
 
             const recordatorioBloqueado = polizaBloqueada.recordatoriosPersonalizados
                 .find(item => String(item._id) === String(recordatorio._id));

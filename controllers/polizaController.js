@@ -14,10 +14,12 @@ const PDFDocument = require('pdfkit');
 const financialCalculator = require('../services/financialCalculator');
 const notificationService = require('../services/notificationService');
 const { saveSentCopy } = require('./bandejaEntradaController');
+const cryptoHelper = require('../utils/cryptoHelper');
 const {
     sanitizarCuerpoCorreo
 } = require('../services/plantillaCorreoService');
 const DIAS_GRACIA_RECIBO_MS = 30 * 24 * 60 * 60 * 1000;
+const REFERENCIA_TARJETA_MASCARADA = '••••••••';
 
 function obtenerFechaFinGraciaRecibo(recibo, fechaVencimientoFallback = null) {
     const fechaVencimiento = recibo?.fechaVencimientoRecibo
@@ -46,6 +48,43 @@ const ESTADOS_POLIZA_VALIDOS = [
     'Renovada',
     'PendienteRenovacion'
 ];
+
+function validarCamposCargoAutomatico(body = {}) {
+    const campos = {};
+    const tieneFlag = Object.prototype.hasOwnProperty.call(body, 'esCargoAutomatico');
+    const tieneDatosTarjeta = Object.prototype.hasOwnProperty.call(body, 'datosTarjeta');
+    if (tieneFlag && typeof body.esCargoAutomatico !== 'boolean') {
+        return { error: 'El indicador de cargo automático debe ser booleano.' };
+    }
+    if (tieneDatosTarjeta && typeof body.datosTarjeta !== 'string') {
+        return { error: 'Los datos de tarjeta deben ser texto.' };
+    }
+    if (tieneDatosTarjeta) {
+        const datosTarjeta = body.datosTarjeta.trim();
+        const contieneCodigoSeguridad = /(?:\b(?:cvv|cvc|código de seguridad|codigo de seguridad)\b\s*[:#-]?\s*\d{3,4}\b|\b\d{3,4}\s*(?:cvv|cvc)\b)/i
+            .test(datosTarjeta);
+        if (datosTarjeta.length > 120 || contieneCodigoSeguridad) {
+            return { error: 'No guardes el CVV/CVC ni excedas 120 caracteres en los datos de tarjeta.' };
+        }
+        if (datosTarjeta !== REFERENCIA_TARJETA_MASCARADA) campos.datosTarjeta = datosTarjeta;
+    }
+    if (tieneFlag) campos.esCargoAutomatico = body.esCargoAutomatico;
+    return { campos };
+}
+
+function cifrarReferenciaTarjeta(valor) {
+    if (!valor) return '';
+    return cryptoHelper.isEncrypted(valor) ? valor : cryptoHelper.encrypt(valor);
+}
+
+function bloquearRecordatorioCargoAutomatico(res, poliza) {
+    if (poliza?.esCargoAutomatico !== true) return false;
+    res.status(409).json({
+        success: false,
+        error: 'Esta póliza tiene cargo automático y no puede recibir recordatorios de pago.'
+    });
+    return true;
+}
 
 function escaparHtmlCorreo(valor) {
     return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
@@ -604,6 +643,10 @@ async function vincularOCrearCliente({
 const crearPoliza = async (req, res) => {
     try {
         const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, otrosServiciosContratados: otrosServiciosSolicitados, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const cargoAutomatico = validarCamposCargoAutomatico(req.body);
+        if (cargoAutomatico.error) {
+            return res.status(400).json({ error: cargoAutomatico.error });
+        }
         if (estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
@@ -662,6 +705,10 @@ const crearPoliza = async (req, res) => {
             motor: motor || '',
             tipoPago: tipoPagoFinal,
             conductoPago: conductoPago || '',
+            esCargoAutomatico: cargoAutomatico.campos.esCargoAutomatico === true,
+            datosTarjeta: cargoAutomatico.campos.esCargoAutomatico === true
+                ? cryptoHelper.encrypt(cargoAutomatico.campos.datosTarjeta || '')
+                : '',
             duracionMeses,
             tipoSeguro,
             aseguradora,
@@ -1523,15 +1570,29 @@ const actualizarPoliza = async (req, res) => {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
 
-        const polizaExistente = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        const polizaExistente = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
+            .select('+datosTarjeta');
         if (!polizaExistente) {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
         }
 
+        const cargoAutomatico = validarCamposCargoAutomatico(req.body);
+        if (cargoAutomatico.error) {
+            return res.status(400).json({ error: cargoAutomatico.error });
+        }
         const forzarRecalculo = req.body.forzarRecalculo === true;
         const datosActualizacion = { ...req.body };
+        Object.assign(datosActualizacion, cargoAutomatico.campos);
+        if (Object.prototype.hasOwnProperty.call(cargoAutomatico.campos, 'datosTarjeta')) {
+            datosActualizacion.datosTarjeta = cryptoHelper.encrypt(cargoAutomatico.campos.datosTarjeta);
+        } else if (req.body.datosTarjeta === REFERENCIA_TARJETA_MASCARADA) {
+            delete datosActualizacion.datosTarjeta;
+        }
         delete datosActualizacion.forzarRecalculo;
         delete datosActualizacion.recalcularRecibos;
+        const esCargoAutomaticoFinal = datosActualizacion.esCargoAutomatico
+            ?? (polizaExistente.esCargoAutomatico === true);
+        if (!esCargoAutomaticoFinal) datosActualizacion.datosTarjeta = '';
         if (datosActualizacion.estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(datosActualizacion.estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
@@ -1678,7 +1739,6 @@ const actualizarPoliza = async (req, res) => {
 
         polizaExistente.set(datosActualizacion);
         const poliza = await polizaExistente.save();
-
         res.json(poliza);
     } catch (error) {
         console.error('Error al actualizar póliza:', error);
@@ -1844,6 +1904,7 @@ const obtenerPolizaPorId = async (req, res) => {
         
         // Buscar por id, empresaId y que no esté eliminada, con populate de clienteId
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
+            .select('+datosTarjeta')
             .populate('clienteId', 'nombre telefono email')
             .populate('asesorId', 'username nombre email')
             .lean();
@@ -1852,10 +1913,78 @@ const obtenerPolizaPorId = async (req, res) => {
             return res.status(404).json({ error: 'Póliza no encontrada o no pertenece a tu empresa' });
         }
         
-        res.json(poliza);
+        const tieneDatosTarjeta = Boolean(poliza.datosTarjeta);
+        res.json({
+            ...poliza,
+            datosTarjeta: tieneDatosTarjeta ? REFERENCIA_TARJETA_MASCARADA : '',
+            tieneDatosTarjeta
+        });
     } catch (error) {
         console.error('Error al obtener póliza:', error);
         res.status(500).json({ error: 'Error al obtener la póliza', details: error.message });
+    }
+};
+
+const obtenerDatosTarjetaDesencriptados = async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza no es válido.' });
+        }
+
+        const filtroTenant = req.tenantFilter
+            ?? (req.user.isSuperAdmin ? {} : { empresaId: req.user.empresaId });
+        const poliza = await Poliza.findOne({
+            _id: id,
+            deletedAt: null,
+            ...filtroTenant
+        }).select('+datosTarjeta').lean();
+        if (!poliza) {
+            return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        }
+
+        const userId = req.user._id || req.user.id;
+        if (req.user.role !== 'admin'
+            && req.user.isSuperAdmin !== true
+            && String(poliza.asesorId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'No tienes permiso para consultar esta referencia.' });
+        }
+        if (poliza.esCargoAutomatico !== true) {
+            return res.status(409).json({ success: false, error: 'La póliza no está configurada para cargo automático.' });
+        }
+        if (!poliza.datosTarjeta) {
+            return res.status(404).json({ success: false, error: 'La póliza no tiene una referencia de tarjeta guardada.' });
+        }
+
+        const valorCifrado = cryptoHelper.isEncrypted(poliza.datosTarjeta)
+            ? poliza.datosTarjeta
+            : cifrarReferenciaTarjeta(poliza.datosTarjeta);
+        const datosTarjeta = cryptoHelper.isEncrypted(poliza.datosTarjeta)
+            ? cryptoHelper.decrypt(poliza.datosTarjeta)
+            : poliza.datosTarjeta;
+        if (valorCifrado !== poliza.datosTarjeta) {
+            const migracion = await Poliza.updateOne(
+                { _id: poliza._id, empresaId: poliza.empresaId, datosTarjeta: poliza.datosTarjeta },
+                { $set: { datosTarjeta: valorCifrado } }
+            );
+            if (migracion.matchedCount !== 1) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'La referencia cambió mientras se consultaba. Inténtalo de nuevo.'
+                });
+            }
+        }
+
+        console.info(`[Tarjeta] Referencia consultada por usuario ${userId} en póliza ${poliza._id}.`);
+        return res.json({ success: true, datosTarjeta });
+    } catch (error) {
+        console.error('[obtenerDatosTarjetaDesencriptados] Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'No se pudo consultar la referencia de la tarjeta.'
+        });
     }
 };
 
@@ -2015,6 +2144,7 @@ const enviarRecordatorioManual = async (req, res) => {
 
         const poliza = await Poliza.findOne({ _id: id, empresaId, deletedAt: null }).lean();
         if (!poliza) return res.status(404).json({ error: 'Póliza no encontrada' });
+        if (bloquearRecordatorioCargoAutomatico(res, poliza)) return;
 
         // PRIORIDAD: Usar datos del modelo Cliente si existe clienteId, fallback a campos de póliza
         let destinatario;
@@ -3121,6 +3251,7 @@ const enviarRecordatorioCorreo = async (req, res) => {
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada' });
         }
+        if (bloquearRecordatorioCargoAutomatico(res, poliza)) return;
         
         // Calcular destinatario automáticamente si está vacío (para Cobranza Diaria)
         let destinatarioFinal = destinatario;
@@ -3313,6 +3444,10 @@ const obtenerCobranzaDiaria = async (req, res) => {
             { $match: matchInicial },
             {
                 $addFields: {
+                    esCargoAutomatico: { $eq: [{ $ifNull: ['$esCargoAutomatico', false] }, true] },
+                    tieneDatosTarjeta: {
+                        $ne: [{ $ifNull: ['$datosTarjeta', ''] }, '']
+                    },
                     _fechaVencimiento: {
                         $cond: {
                             if: { $ne: [{ $ifNull: ['$fechas.vencimiento', null] }, null] },
@@ -3727,6 +3862,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 cliente: 1,
                                 clienteTelefono: 1,
                                 clienteEmail: 1,
+                                esCargoAutomatico: 1,
+                                tieneDatosTarjeta: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 moneda: 1,
@@ -3790,6 +3927,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 cliente: 1,
                                 clienteTelefono: 1,
                                 clienteEmail: 1,
+                                esCargoAutomatico: 1,
+                                tieneDatosTarjeta: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 moneda: 1,
@@ -3835,6 +3974,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 cliente: 1,
                                 clienteTelefono: 1,
                                 clienteEmail: 1,
+                                esCargoAutomatico: 1,
+                                tieneDatosTarjeta: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 moneda: 1,
@@ -3880,6 +4021,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 cliente: 1,
                                 clienteTelefono: 1,
                                 clienteEmail: 1,
+                                esCargoAutomatico: 1,
+                                tieneDatosTarjeta: 1,
                                 tipoSeguro: 1,
                                 tipoPago: 1,
                                 moneda: 1,
@@ -3956,6 +4099,8 @@ const obtenerCobranzaDiaria = async (req, res) => {
                 cliente: poliza.cliente || 'Sin nombre',
                 telefono: poliza.clienteTelefono || '',
                 email: poliza.clienteEmail || '',
+                esCargoAutomatico: poliza.esCargoAutomatico === true,
+                tieneDatosTarjeta: poliza.tieneDatosTarjeta === true,
                 tipoSeguro: poliza.tipoSeguro,
                 tipoPago: poliza.tipoPago,
                 moneda: poliza.moneda || 'MXN',
@@ -4078,6 +4223,7 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
         if (!poliza) {
             return res.status(404).json({ error: 'Póliza no encontrada' });
         }
+        if (bloquearRecordatorioCargoAutomatico(res, poliza)) return;
 
         const { enviarEmail } = require('../services/notificationService');
         const Notificacion = require('../models/Notificacion');
@@ -4385,7 +4531,8 @@ const renovarPolizaManual = async (req, res) => {
             return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
         }
 
-        polizaAnterior = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        polizaAnterior = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
+            .select('+datosTarjeta');
 
         if (!polizaAnterior) {
             return res.status(404).json({ error: 'Póliza no encontrada' });
@@ -4437,6 +4584,10 @@ const renovarPolizaManual = async (req, res) => {
             motor: polizaAnterior.motor,
             tipoPago: polizaAnterior.tipoPago,
             conductoPago: polizaAnterior.conductoPago,
+            esCargoAutomatico: polizaAnterior.esCargoAutomatico === true,
+            datosTarjeta: polizaAnterior.esCargoAutomatico === true
+                ? cifrarReferenciaTarjeta(polizaAnterior.datosTarjeta || '')
+                : '',
             duracionMeses: polizaAnterior.duracionMeses,
             tipoSeguro: polizaAnterior.tipoSeguro,
             aseguradora: polizaAnterior.aseguradora,
@@ -4526,7 +4677,7 @@ const renovarPoliza = async (req, res) => {
     let nuevaPolizaGuardada = false;
     try {
         console.log('[RENOVAR] Iniciando proceso de renovación...');
-        console.log('[RENOVAR] Body recibido:', req.body);
+        console.log('[RENOVAR] Campos recibidos:', Object.keys(req.body || {}));
         console.log('[RENOVAR] Archivo recibido:', req.file);
 
         const { id } = req.params;
@@ -4554,11 +4705,16 @@ const renovarPoliza = async (req, res) => {
 
         console.log('[RENOVAR] Buscando póliza antigua...');
         // Buscar póliza antigua
-        const polizaAntigua = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+        const polizaAntigua = await Poliza.findOne({ _id: id, empresaId, deletedAt: null })
+            .select('+datosTarjeta');
 
         if (!polizaAntigua) {
             console.log('[RENOVAR] Error: Póliza no encontrada');
             return res.status(404).json({ error: 'Póliza no encontrada' });
+        }
+        const cargoAutomatico = validarCamposCargoAutomatico(req.body);
+        if (cargoAutomatico.error) {
+            return res.status(400).json({ error: cargoAutomatico.error });
         }
         const asesorOriginal = polizaAntigua.asesorId
             ? await Usuario.findOne({ _id: polizaAntigua.asesorId, empresaId }).select('username nombre email').lean()
@@ -4788,6 +4944,19 @@ const renovarPoliza = async (req, res) => {
             primerPago: montoRenovacion('primerPago', req.body.primerPago ?? polizaAntigua.primerPago),
             montoAbono: montoRenovacion('montoAbono', req.body.montoAbono ?? polizaAntigua.montoAbono)
         };
+        const esCargoAutomatico = cargoAutomatico.campos.esCargoAutomatico
+            ?? (polizaAntigua.esCargoAutomatico === true);
+        datosNuevaPoliza.esCargoAutomatico = esCargoAutomatico;
+        if (esCargoAutomatico) {
+            datosNuevaPoliza.datosTarjeta = Object.prototype.hasOwnProperty.call(
+                cargoAutomatico.campos,
+                'datosTarjeta'
+            )
+                ? cryptoHelper.encrypt(cargoAutomatico.campos.datosTarjeta)
+                : cifrarReferenciaTarjeta(polizaAntigua.datosTarjeta || '');
+        } else {
+            datosNuevaPoliza.datosTarjeta = '';
+        }
 
         const duracionMesesNueva = normalizarDuracionMeses(
             req.body.duracionMeses ?? datosNuevaPoliza.duracionMeses ?? polizaAntigua.duracionMeses
@@ -6893,6 +7062,7 @@ const programarRecordatorioPersonalizado = async (req, res) => {
             deletedAt: null
         });
         if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        if (bloquearRecordatorioCargoAutomatico(res, poliza)) return;
 
         let plantilla = null;
         if (plantillaId) {
@@ -7209,6 +7379,7 @@ module.exports = {
     importarPolizasExcel,
     obtenerPolizas,
     obtenerPolizaPorId,
+    obtenerDatosTarjetaDesencriptados,
     actualizarPoliza,
     recalcularRecibos,
     regenerarRecibosPendientes,

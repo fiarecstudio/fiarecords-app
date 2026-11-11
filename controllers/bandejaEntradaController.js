@@ -138,6 +138,16 @@ function headerToRaw(headers) {
         .join('\r\n');
 }
 
+function compareEmailDateDescending(a, b) {
+    const dateA = Date.parse(a.date || a.fecha || '');
+    const dateB = Date.parse(b.date || b.fecha || '');
+    const validA = Number.isFinite(dateA);
+    const validB = Number.isFinite(dateB);
+    if (validA && validB && dateA !== dateB) return dateB - dateA;
+    if (validA !== validB) return validA ? -1 : 1;
+    return Number(b.id) - Number(a.id);
+}
+
 function flattenBoxes(boxes, parent = '', result = []) {
     for (const [name, box] of Object.entries(boxes || {})) {
         const delimiter = box.delimiter || '.';
@@ -594,7 +604,7 @@ async function getInbox(req, res) {
             emails,
             resolveScheduledCompanyId(req)
         );
-        emails.reverse();
+        emails.sort(compareEmailDateDescending);
         return res.json({ success: true, emails, folder: mailbox, query });
     } catch (error) {
         console.error('[BandejaEntrada] Error al consultar INBOX:', error);

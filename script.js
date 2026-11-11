@@ -3810,6 +3810,7 @@ let proyectoIdEnEdicion = null;
                     if (selectedPrevious) correosBandejaEntrada.push(selectedPrevious);
                 }
             }
+            correosBandejaEntrada.sort(compararFechaCorreoDescendente);
             if (selectedId) {
                 correoBandejaSeleccionado = correosBandejaEntrada.find(email => email.id === selectedId)
                     || correoBandejaSeleccionado;
@@ -3924,6 +3925,16 @@ let proyectoIdEnEdicion = null;
         return String(value || '').toLocaleLowerCase();
     }
 
+    function compararFechaCorreoDescendente(a, b) {
+        const dateA = Date.parse(a.date || a.fecha || '');
+        const dateB = Date.parse(b.date || b.fecha || '');
+        const validA = Number.isFinite(dateA);
+        const validB = Number.isFinite(dateB);
+        if (validA && validB && dateA !== dateB) return dateB - dateA;
+        if (validA !== validB) return validA ? -1 : 1;
+        return Number(b.id) - Number(a.id);
+    }
+
     function correoCoincideBusqueda(correo, query) {
         if (!query) return true;
         const searchable = [
@@ -3995,7 +4006,7 @@ let proyectoIdEnEdicion = null;
         const query = document.getElementById('buscarCorreo')?.value || '';
         const matchingEmails = correosBandejaEntrada.filter(correo =>
             (!filtroBandejaNoLeidos || !correo.seen) && correoCoincideBusqueda(correo, query)
-        );
+        ).sort(compararFechaCorreoDescendente);
         const folderLabel = esCarpetaEnviados() ? 'enviados' : 'recibidos';
         document.getElementById('bandeja-contador').textContent = `${matchingEmails.length} correos ${folderLabel}`;
         if (!matchingEmails.length) {
@@ -9968,6 +9979,19 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label" for="poliza-conducto-pago">Forma / Conducto de Pago</label>
                         <input id="poliza-conducto-pago" class="swal2-input" value="${escapeHTML(datosPrellenados.conductoPago || '')}" placeholder="Ej. transferencia, cargo automático">
                     </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="poliza-es-cargo-automatico"
+                            ${datosPrellenados.esCargoAutomatico === true ? 'checked' : ''}>
+                        <label class="form-check-label fw-semibold" for="poliza-es-cargo-automatico">Cargo Automático</label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="poliza-datos-tarjeta">Referencia de tarjeta</label>
+                        <input id="poliza-datos-tarjeta" type="text" class="swal2-input"
+                            value="" maxlength="120"
+                            placeholder="${datosPrellenados.tieneDatosTarjeta ? 'Referencia guardada: •••••••• — escribe para reemplazar' : 'Ej. Banamex - termina en 4567'}"
+                            ${datosPrellenados.esCargoAutomatico === true ? '' : 'disabled'}>
+                        <small class="form-text text-muted">Deja vacío para conservar los datos actuales. No ingreses el CVV/CVC; los datos se cifran al guardarse.</small>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label" for="duracionMeses">Duración (Meses)</label>
                         <input type="number" id="duracionMeses" class="form-control" value="${escapeHTML(datosPrellenados.duracionMeses || 12)}" min="1" step="1" required>
@@ -10112,6 +10136,14 @@ Fecha de firma: {{FECHA}}`;
                 if (asesorPrecargado) document.getElementById('poliza-asesor').value = asesorPrecargado;
                 configurarAutoCalculoPrima();
                 configurarVisibilidadCamposPago();
+                const cargoAutomaticoCheckbox = document.getElementById('poliza-es-cargo-automatico');
+                const datosTarjetaInput = document.getElementById('poliza-datos-tarjeta');
+                cargoAutomaticoCheckbox?.addEventListener('change', () => {
+                    if (datosTarjetaInput) {
+                        datosTarjetaInput.disabled = !cargoAutomaticoCheckbox.checked;
+                        if (!cargoAutomaticoCheckbox.checked) datosTarjetaInput.value = '';
+                    }
+                });
 
                 document.getElementById('btnCancelarPoliza')?.addEventListener('click', event => {
                     event.preventDefault();
@@ -10219,6 +10251,10 @@ Fecha de firma: {{FECHA}}`;
                 const motor = document.getElementById('poliza-motor').value.trim();
                 const tipoPago = document.getElementById('poliza-tipo-pago').value;
                 const conductoPago = document.getElementById('poliza-conducto-pago').value.trim();
+                const esCargoAutomatico = document.getElementById('poliza-es-cargo-automatico').checked;
+                const datosTarjeta = esCargoAutomatico
+                    ? document.getElementById('poliza-datos-tarjeta').value.trim()
+                    : '';
                 const duracionMeses = Number(document.getElementById('duracionMeses').value);
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
                 const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
@@ -10261,6 +10297,12 @@ Fecha de firma: {{FECHA}}`;
                     Swal.showValidationMessage('Otros servicios debe ser un monto válido mayor o igual a 0.');
                     return;
                 }
+                const contieneCodigoSeguridad = /(?:\b(?:cvv|cvc|código de seguridad|codigo de seguridad)\b\s*[:#-]?\s*\d{3,4}\b|\b\d{3,4}\s*(?:cvv|cvc)\b)/i
+                    .test(datosTarjeta);
+                if (datosTarjeta.length > 120 || contieneCodigoSeguridad) {
+                    Swal.showValidationMessage('No ingreses el CVV/CVC y limita los datos de tarjeta a 120 caracteres.');
+                    return;
+                }
 
                 if (editando && asesorId) {
                     try {
@@ -10294,6 +10336,8 @@ Fecha de firma: {{FECHA}}`;
                     motor,
                     tipoPago,
                     conductoPago,
+                    esCargoAutomatico,
+                    ...(datosTarjeta ? { datosTarjeta } : {}),
                     duracionMeses,
                     aseguradora,
                     inciso,
@@ -10728,6 +10772,10 @@ Fecha de firma: {{FECHA}}`;
                 : estado;
 
             const esPendienteRenovacion = estado === 'PendienteRenovacion';
+            const esCargoAutomatico = p.esCargoAutomatico === true;
+            const badgeCargoAutomatico = esCargoAutomatico
+                ? '<span class="badge bg-warning text-dark ms-1">💳 CARGO AUTOMÁTICO</span>'
+                : '';
             const btnRenovar = esPendienteRenovacion
                 ? `<button type="button" class="btn btn-sm btn-warning py-0 px-2 poliza-renew-button" style="font-size: 0.75rem;" data-poliza-action="renew" data-poliza-id="${escapeHTML(p._id)}" title="Renovar póliza">↻ Renovar</button>`
                 : '';
@@ -10735,7 +10783,7 @@ Fecha de firma: {{FECHA}}`;
             return `
                 <tr data-policy-id="${polizaId}" class="poliza-row-clickable">
                     <td data-label="Cliente" class="col-cliente">
-                        <div class="poliza-cliente-nombre fw-bold">${escapeHTML(p.cliente || 'N/A')}</div>
+                        <div class="poliza-cliente-nombre fw-bold">${escapeHTML(p.cliente || 'N/A')} ${badgeCargoAutomatico}</div>
                         <div class="poliza-cliente-detalles text-muted">Póliza: ${escapeHTML(p.numeroPoliza || 'N/A')}${p.descripcionVehiculo ? ` • ${escapeHTML(p.descripcionVehiculo)}` : ''}</div>
                         ${p.numeroSerie ? `<div class="poliza-cliente-serie small text-muted">Serie: ${escapeHTML(p.numeroSerie)}${p.tieneSerieDuplicada ? ' <span class="badge bg-danger ms-1">⚠️ Serie Duplicada</span>' : ''}</div>` : ''}
                     </td>
@@ -10752,13 +10800,13 @@ Fecha de firma: {{FECHA}}`;
                                     <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><button type="button" class="dropdown-item" data-poliza-action="email" data-poliza-id="${polizaId}">✉️ Enviar Notificación por Correo</button></li>
+                                    ${esCargoAutomatico ? '' : `<li><button type="button" class="dropdown-item" data-poliza-action="email" data-poliza-id="${polizaId}">✉️ Enviar Notificación por Correo</button></li>`}
                                     <li><button type="button" class="dropdown-item" data-poliza-action="email-free" data-poliza-id="${polizaId}">✉️ Enviar Correo Libre</button></li>
-                                    <li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>
+                                    ${esCargoAutomatico ? '' : `<li><button type="button" class="dropdown-item" data-poliza-action="reminder" data-poliza-id="${polizaId}">🔔 Enviar Recordatorio</button></li>`}
                                     <li><a class="dropdown-item" href="#" onclick="abrirModalPagos('${polizaId}'); return false;">💳 Ver / Registrar Pagos</a></li>
                                     <li><a class="dropdown-item" href="#" onclick="agregarNotaPoliza('${polizaId}'); return false;">📝 Agregar Nota / Seguimiento</a></li>
                                     <li><a class="dropdown-item" href="#" onclick="verHistorialPoliza('${polizaId}'); return false;">🕒 Ver Historial</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="abrirModalProgramarRecordatorio('${polizaId}'); return false;">🔔 Programar Recordatorios</a></li>
+                                    ${esCargoAutomatico ? '' : `<li><a class="dropdown-item" href="#" onclick="abrirModalProgramarRecordatorio('${polizaId}'); return false;">🔔 Programar Recordatorios</a></li>`}
                                     <li><a class="dropdown-item" href="#" onclick="verRecordatoriosPendientes('${polizaId}'); return false;">⏳ Recordatorios Pendientes</a></li>
                                     <li><button type="button" class="dropdown-item" data-poliza-action="edit" data-poliza-id="${polizaId}">✏️ Editar Póliza</button></li>
                                     ${getUserRoleAndId().role === 'admin' ? '<li><a class="dropdown-item" href="#" onclick="abrirGestionPlantillasCorreo(); return false;"><i class="fas fa-envelope-open-text"></i> Gestionar Plantillas</a></li>' : ''}
@@ -11147,7 +11195,7 @@ Fecha de firma: {{FECHA}}`;
             return;
         }
 
-        seccion.addEventListener('click', (e) => {
+        seccion.addEventListener('click', async (e) => {
             if (e.target.closest('#btn-actualizar-cobranza')) {
                 e.preventDefault();
                 cargarCobranzaDiaria();
@@ -11217,6 +11265,31 @@ Fecha de firma: {{FECHA}}`;
                 comentarioPrevio = decodeURIComponent(actionBtn.getAttribute('data-comentario') || '');
             } catch (error) {
                 console.error('[Cobranza] No se pudo leer el historial previo del recibo:', error);
+            }
+            if (action === 'datos-tarjeta') {
+                let datosTarjeta = '';
+                try {
+                    const respuesta = await fetchAPI(
+                        `/api/polizas/${encodeURIComponent(polizaId)}/tarjeta-desencriptada`,
+                        { cache: 'no-store', sensitive: true, silent: true }
+                    );
+                    datosTarjeta = String(respuesta?.datosTarjeta || '');
+                    if (!datosTarjeta) throw new Error('No se encontró una referencia guardada para esta póliza.');
+                    await Swal.fire({
+                        title: 'Referencia de cargo automático',
+                        text: 'La referencia se muestra solo mientras este diálogo esté abierto.',
+                        input: 'text',
+                        inputValue: datosTarjeta,
+                        inputAttributes: { readonly: 'readonly', 'aria-label': 'Referencia de tarjeta' },
+                        icon: 'info',
+                        didOpen: () => Swal.getInput()?.select()
+                    });
+                } catch (error) {
+                    await Swal.fire('Error', error.message || 'No se pudo consultar la referencia.', 'error');
+                } finally {
+                    datosTarjeta = '';
+                }
+                return;
             }
             if (action === 'correo') {
                 enviarCorreoCobranza(polizaId, reciboIndex, comentarioPrevio);
@@ -11482,10 +11555,15 @@ Fecha de firma: {{FECHA}}`;
                 }
 
                 // Alerta pre-envío: mostrar ⚠️ si faltan 4-5 días y no hay enlace
+                const esCargoAutomatico = p.esCargoAutomatico === true;
                 const mostrarAlertaEnlace = (p.diasRestantes >= 4 && p.diasRestantes <= 5) && !p.enlacePago;
-                const nombreClienteConAlerta = mostrarAlertaEnlace 
-                    ? '<span class="me-1" title="Falta enlace de pago para envío automático">⚠️</span>' + escapeHTML(p.cliente)
-                    : escapeHTML(p.cliente);
+                const alertaEnlace = mostrarAlertaEnlace
+                    ? '<span class="me-1" title="Falta enlace de pago para envío automático">⚠️</span>'
+                    : '';
+                const badgeCargoAutomatico = esCargoAutomatico
+                    ? '<span class="badge bg-warning text-dark ms-2">💳 CARGO AUTOMÁTICO</span>'
+                    : '';
+                const nombreClienteConAlerta = `${alertaEnlace}${escapeHTML(p.cliente || '')}${badgeCargoAutomatico}`;
 
                 const telefonoLimpio = p.telefono ? p.telefono.replace(/[^0-9]/g, '') : '';
                 const telefonoValido = telefonoLimpio.length === 10 && /^\d+$/.test(telefonoLimpio);
@@ -11515,9 +11593,11 @@ Fecha de firma: {{FECHA}}`;
                 const atributosHistorial = reciboPendiente && reciboIndexAccion !== ''
                     ? ' data-cobranza-log-channel="whatsapp" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndex + '" data-comentario="' + comentarioPrevioCodificado + '"'
                     : '';
-                const whatsappButton = telefonoValido
-                    ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success cobranza-icon-button" title="WhatsApp" aria-label="WhatsApp"' + atributosHistorial + '><i class="bi bi-whatsapp" aria-hidden="true"></i></a>'
-                    : '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="' + escapeHTML(telefonoLimpio ? 'WhatsApp: formato de teléfono inválido (requiere 10 dígitos)' : 'WhatsApp: sin teléfono registrado') + '" aria-label="WhatsApp no disponible"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>';
+                const whatsappButton = esCargoAutomatico
+                    ? '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="Cargo automático: no se envían recordatorios" aria-label="Recordatorio no disponible para cargo automático"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>'
+                    : telefonoValido
+                        ? '<a href="' + whatsappUrl + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success cobranza-icon-button" title="WhatsApp" aria-label="WhatsApp"' + atributosHistorial + '><i class="bi bi-whatsapp" aria-hidden="true"></i></a>'
+                        : '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="' + escapeHTML(telefonoLimpio ? 'WhatsApp: formato de teléfono inválido (requiere 10 dígitos)' : 'WhatsApp: sin teléfono registrado') + '" aria-label="WhatsApp no disponible"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>';
 
                 // Verificar si ya se envió un correo recientemente (últimos 7 días)
                 const fechaLimite = new Date();
@@ -11529,11 +11609,18 @@ Fecha de firma: {{FECHA}}`;
                 );
                 
                 let botonCorreo;
-                if (tieneCorreoReciente) {
+                if (esCargoAutomatico) {
+                    botonCorreo = '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="Cargo automático: no se envían recordatorios" aria-label="Recordatorio no disponible para cargo automático"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
+                } else if (tieneCorreoReciente) {
                     botonCorreo = '<button type="button" class="btn btn-sm btn-secondary cobranza-icon-button" data-cobranza-action="correo-confirmado" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndexAccion + '" data-comentario="' + comentarioPrevioCodificado + '" title="Correo enviado recientemente; clic para reenviar" aria-label="Reenviar correo"><i class="bi bi-check-circle" aria-hidden="true"></i></button>';
                 } else {
                     botonCorreo = '<button type="button" class="btn btn-sm btn-info cobranza-icon-button" data-cobranza-action="correo" data-poliza-id="' + polizaIdAttr + '" data-recibo-index="' + reciboIndexAccion + '" data-comentario="' + comentarioPrevioCodificado + '" title="Enviar Correo" aria-label="Enviar correo"><i class="bi bi-envelope" aria-hidden="true"></i></button>';
                 }
+                const botonDatosTarjeta = esCargoAutomatico
+                    ? p.tieneDatosTarjeta === true
+                        ? '<button type="button" class="btn btn-sm btn-outline-warning cobranza-icon-button" data-cobranza-action="datos-tarjeta" data-poliza-id="' + polizaIdAttr + '" title="Ver referencia de cargo automático" aria-label="Ver referencia de cargo automático"><i class="bi bi-credit-card" aria-hidden="true"></i></button>'
+                        : '<button type="button" class="btn btn-sm btn-outline-secondary cobranza-icon-button" disabled title="Sin referencia de tarjeta registrada" aria-label="Sin referencia de tarjeta registrada"><i class="bi bi-credit-card" aria-hidden="true"></i></button>'
+                    : '';
                 const botonEditar = '<button type="button" class="btn btn-sm btn-outline-primary cobranza-icon-button" data-cobranza-action="editar" data-poliza-id="' + polizaIdAttr + '" title="Editar Póliza" aria-label="Editar póliza"><i class="bi bi-pencil" aria-hidden="true"></i></button>';
                 const botonEnlace = '<button type="button" class="btn btn-sm btn-outline-info cobranza-icon-button" onclick="app.agregarEnlacePago(\'' + polizaIdAttr + '\')" title="Agregar Enlace de Pago" aria-label="Agregar enlace de pago"><i class="bi bi-link-45deg" aria-hidden="true"></i></button>';
                 const botonResolver = '<button type="button" class="btn btn-sm btn-warning btn-pagar-cobranza cobranza-icon-button ms-1" data-id="' + polizaIdAttr + '" data-index="' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : '') + '" onclick="app.marcarCobranzaResuelta(\'' + polizaIdAttr + '\', ' + Number(p.montoPagar || 0) + ', ' + (Number.isSafeInteger(reciboIndex) && reciboIndex >= 0 ? reciboIndex : 'null') + ', \'' + escapeHTML(reciboTipo) + '\', \'' + reciboId + '\')" title="Pagar" aria-label="Pagar"><i class="bi bi-currency-dollar text-dark" aria-hidden="true"></i></button>';
@@ -11553,7 +11640,7 @@ Fecha de firma: {{FECHA}}`;
                     : '';
 
                 const estadoTextoClase = estadoClase === 'bg-warning' ? ' text-dark' : '';
-                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver pagos e historial de la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + detalleRecibo + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
+                return '<tr><td data-label="Cliente y póliza" class="cobranza-client-cell" data-cobranza-poliza-id="' + polizaIdAttr + '" title="Doble clic para ver pagos e historial de la póliza" style="cursor: pointer;"><div class="fw-bold">' + nombreClienteConAlerta + '</div><small class="text-muted">' + escapeHTML(p.numeroPoliza) + '</small>' + detalleRecibo + comentarioCobranza + '</td><td data-label="Tipo de póliza" class="cobranza-type-cell">' + escapeHTML(p.tipoSeguro) + '</td><td data-label="Monto a pagar" class="fw-bold text-success currency-value">' + escapeHTML(montoFormateado) + '</td><td data-label="Vencimiento" class="date-value"><div>' + escapeHTML(fechaMostrar) + '</div>' + indicadorGracia + '</td><td data-label="Estado"><span class="badge cobranza-status-badge ' + estadoClase + estadoTextoClase + '">' + escapeHTML(p.estado) + '</span></td><td data-label="Días restantes" class="' + diasClase + '">' + escapeHTML(diasTexto) + '</td><td data-label="Acciones" class="table-actions cobranza-actions-cell"><div class="cobranza-actions-group" role="group" aria-label="Acciones de cobranza">' + whatsappButton + botonCorreo + botonDatosTarjeta + botonEnlace + botonesPago + botonEditar + '</div></td></tr>';
             }).join('');
 
             if (sinCobranza) sinCobranza.style.display = 'none';
