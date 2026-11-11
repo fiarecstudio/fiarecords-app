@@ -4124,7 +4124,9 @@ let proyectoIdEnEdicion = null;
         if (!submenu) return;
         submenu.replaceChildren();
         const currentFolder = correoContextualSeleccionado?.folder;
-        const destinations = carpetasBandejaCache.filter(folder => folder.name !== currentFolder);
+        const destinations = carpetasBandejaCache.filter(folder =>
+            folder.name !== currentFolder && folder.role !== 'sent'
+        );
         if (!destinations.length) {
             const empty = document.createElement('span');
             empty.className = 'bandeja-context-empty';
@@ -4302,7 +4304,7 @@ let proyectoIdEnEdicion = null;
             });
             const folderSelect = document.getElementById('regla-correo-carpeta');
             folderSelect.replaceChildren(new Option('No mover', ''));
-            folders.filter(folder => !['spam', 'trash'].includes(folder.role)).forEach(folder => {
+            folders.filter(folder => !['spam', 'trash', 'sent'].includes(folder.role)).forEach(folder => {
                 folderSelect.add(new Option(limpiarNombreCarpetaVisual(folder.name), folder.name));
             });
             if (remitente) {
@@ -14656,11 +14658,31 @@ Fecha de firma: {{FECHA}}`;
         window.polizaARenovar = polizaId;
 
         const form = document.getElementById('formRenovarPoliza');
+        const formManual = document.getElementById('formRenovarPolizaManual');
         const pdfInput = document.getElementById('pdfRenovacion');
         const pdfName = document.getElementById('nombrePdfRenovacion');
         form?.reset();
+        formManual?.reset();
         document.getElementById('renovarPolizaId').value = polizaId;
         if (pdfName) pdfName.textContent = '';
+        const original = window.polizaRenovacionDatos || {};
+        const clienteNombre = original.clienteId?.nombre || original.cliente;
+        const resumenHeredado = [
+            original.numeroPoliza && `Póliza anterior: ${original.numeroPoliza}`,
+            clienteNombre && `Cliente: ${clienteNombre}`,
+            original.aseguradora && `Aseguradora: ${original.aseguradora}`,
+            (original.descripcionVehiculo || original.vehiculo) && `Vehículo: ${original.descripcionVehiculo || original.vehiculo}`,
+            original.numeroSerie && `Serie: ${original.numeroSerie}`,
+            original.placas && `Placas: ${original.placas}`
+        ].filter(Boolean);
+        document.getElementById('datosHeredadosRenovacion').textContent =
+            resumenHeredado.join(' · ') || 'No hay datos de cliente o vehículo disponibles.';
+        document.getElementById('renovacionVigenciaInicio').value = '';
+        document.getElementById('renovacionVigenciaFin').value = '';
+        document.getElementById('renovacionNumeroPoliza').value = '';
+        document.getElementById('renovacionPrimaNeta').value = original.primaNeta ?? '';
+        document.getElementById('renovacionPrimaTotal').value = original.primaTotal ?? '';
+        bootstrap.Tab.getOrCreateInstance(document.getElementById('tabRenovarArchivo')).show();
         if (pdfInput) {
             pdfInput.onchange = event => {
                 if (pdfName) pdfName.textContent = pdfInput.files?.[0]?.name || '';
@@ -14697,6 +14719,51 @@ Fecha de firma: {{FECHA}}`;
             modalElement.dataset.renewalCleanupBound = 'true';
         }
         modal.show();
+    }
+
+    async function procesarRenovacionManual(event) {
+        event?.preventDefault();
+        if (window.procesandoRenovacion) return;
+
+        const polizaId = document.getElementById('renovarPolizaId').value;
+        const submitButton = document.querySelector('#formRenovarPolizaManual button[type="submit"]');
+        const fechaInicio = document.getElementById('renovacionVigenciaInicio').value;
+        const fechaFin = document.getElementById('renovacionVigenciaFin').value;
+        if (fechaFin <= fechaInicio) {
+            await Swal.fire('Fechas inválidas', 'La vigencia final debe ser posterior a la vigencia inicial.', 'warning');
+            return;
+        }
+
+        window.procesandoRenovacion = true;
+        if (submitButton) submitButton.disabled = true;
+        try {
+            const resultado = await fetchAPI(`/api/polizas/${polizaId}/renovar-manual`, {
+                method: 'POST',
+                skipOfflineQueue: true,
+                body: JSON.stringify({
+                    numeroPoliza: document.getElementById('renovacionNumeroPoliza').value.trim(),
+                    vigenciaInicio: fechaInicio,
+                    vigenciaFin: fechaFin,
+                    primaNeta: Number(document.getElementById('renovacionPrimaNeta').value),
+                    primaTotal: Number(document.getElementById('renovacionPrimaTotal').value)
+                })
+            });
+            if (!resultado?.success) {
+                throw new Error(resultado?.error || 'No se pudo completar la renovación manual.');
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('modalRenovarPoliza'))?.hide();
+            window.polizaARenovar = null;
+            window.polizaRenovacionDatos = null;
+            await cargarPolizas(true);
+            await Swal.fire('Renovación completada', 'La póliza se renovó correctamente.', 'success');
+        } catch (error) {
+            console.error('[procesarRenovacionManual] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo completar la renovación manual.', 'error');
+        } finally {
+            window.procesandoRenovacion = false;
+            if (submitButton) submitButton.disabled = false;
+        }
     }
 
     function verPolizaDesdeCRM(poliza) {
@@ -15927,6 +15994,7 @@ Fecha de firma: {{FECHA}}`;
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
         toggleMinimizarCorreo,
         abrirModalNuevoCliente, guardarNuevoCliente, abrirPerfilCliente, cambiarPaginaClientes, cambiarPaginaCobranza, renovarPoliza,
+        procesarRenovacionManual,
         abrirModalEditarCliente, guardarEdicionCliente, eliminarCliente, procesarRenovacion,
         prepararNuevaPolizaDesdeCliente, verPolizaDesdeCRM,
         enviarNotificacionManual,

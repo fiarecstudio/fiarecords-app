@@ -186,6 +186,7 @@ router.put('/:id/proximo-pago', auth, applyTenantFilter, polizaController.actual
 router.put('/:id/renovar-pago', auth, applyTenantFilter, polizaController.renovarPago);
 
 // FASE 8: RENOVACIÓN DE PÓLIZA (CRM)
+router.post('/:id/renovar-manual', auth, applyTenantFilter, polizaController.renovarPolizaManual);
 router.post('/:id/renovar', auth, applyTenantFilter, upload.single('pdf'), polizaController.renovarPoliza);
 
 // FASE 5: NOTIFICACIONES MANUALES

@@ -267,6 +267,9 @@ function validateRulePayload(body = {}) {
     const folder = typeof body.acciones?.moverACarpeta === 'string'
         ? body.acciones.moverACarpeta.trim()
         : '';
+    if (folder && getMailboxRole(folder) === 'sent') {
+        return { error: 'Una regla de entrada no puede mover correos a Enviados.' };
+    }
     if (!name || name.length > 120
         || !['remitente', 'asunto', 'cuerpo'].includes(field)
         || !['contiene', 'es_igual', 'empieza_con'].includes(operator)
@@ -507,7 +510,8 @@ async function aplicarPoliticasEntrantes(connection, mailbox, emails, empresaId)
         ListaNegraCorreo.find({ empresaId }).select('emailODominio').lean()
     ]);
     if (!rules.length && !blacklist.length) return emails;
-    const spamFolder = flattenBoxes(await connection.getBoxes())
+    const folders = flattenBoxes(await connection.getBoxes());
+    const spamFolder = folders
         .find(({ name, attributes }) => getMailboxRole(name, attributes) === 'spam')?.name;
     const bodyRules = rules.some(rule => rule.condicion.campo === 'cuerpo');
     const visibleEmails = [];
@@ -535,7 +539,15 @@ async function aplicarPoliticasEntrantes(connection, mailbox, emails, empresaId)
             if (flagged) await connection.addFlags(uid, '\\Flagged');
             if (destinationName) {
                 const destination = await resolveMailbox(connection, destinationName);
-                if (destination !== mailbox) {
+                const destinationFolder = folders.find(folder =>
+                    folder.name.toLowerCase() === destination.toLowerCase()
+                );
+                const destinationRole = getMailboxRole(destination, destinationFolder?.attributes || []);
+                if (destinationRole === 'sent') {
+                    console.warn(
+                        `[BandejaEntrada] Se ignoró la regla que intentó mover el correo ${uid} a Enviados.`
+                    );
+                } else if (destination !== mailbox) {
                     await connection.moveMessage(uid, destination);
                     continue;
                 }
@@ -792,7 +804,7 @@ async function moveEmailTo(req, res, destinationResolver, beforeMove = async () 
         console.error('[BandejaEntrada] Error al mover correo:', error);
         const status = /Configura IMAP_|IMAP_PORT/.test(error.message) ? 503
             : /no existe en el servidor IMAP|No se encontró/.test(error.message) ? 404
-                : /Selecciona una empresa|remitente|dirección de correo válida/.test(error.message) ? 400 : 502;
+                : /Selecciona una empresa|remitente|dirección de correo válida|No se pueden mover correos a Enviados/.test(error.message) ? 400 : 502;
         return res.status(status).json({
             success: false,
             error: status === 503 || status === 404 || status === 400 ? error.message : 'No fue posible mover el correo.'
@@ -807,7 +819,15 @@ async function moveEmail(req, res) {
     if (!destinationName) {
         return res.status(400).json({ success: false, error: 'Selecciona una carpeta de destino.' });
     }
-    return moveEmailTo(req, res, async connection => resolveMailbox(connection, destinationName));
+    return moveEmailTo(req, res, async connection => {
+        const destination = await resolveMailbox(connection, destinationName);
+        const destinationFolder = flattenBoxes(await connection.getBoxes())
+            .find(folder => folder.name.toLowerCase() === destination.toLowerCase());
+        if (getMailboxRole(destination, destinationFolder?.attributes || []) === 'sent') {
+            throw new Error('No se pueden mover correos a Enviados; esa carpeta es solo para copias salientes.');
+        }
+        return destination;
+    });
 }
 
 async function moveEmailToRole(req, res, role, label) {

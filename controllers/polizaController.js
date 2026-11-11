@@ -4369,6 +4369,157 @@ const enviarCorreoCobranzaDiaria = async (req, res) => {
     }
 };
 
+const renovarPolizaManual = async (req, res) => {
+    let nuevaPoliza;
+    let polizaAnterior;
+    let estadoAnterior;
+    try {
+        const { id } = req.params;
+        const empresaId = req.user.empresaId;
+        const asesorId = req.user._id || req.user.id;
+        const empresa = await Empresa.findById(empresaId);
+        if (!empresa) {
+            return res.status(404).json({ error: 'Empresa no encontrada' });
+        }
+        if (!empresa.moduloSeguros) {
+            return res.status(403).json({ error: 'El módulo de seguros no está activado para esta empresa' });
+        }
+
+        polizaAnterior = await Poliza.findOne({ _id: id, empresaId, deletedAt: null });
+
+        if (!polizaAnterior) {
+            return res.status(404).json({ error: 'Póliza no encontrada' });
+        }
+
+        if (
+            req.user.role !== 'admin'
+            && String(polizaAnterior.asesorId) !== String(asesorId)
+        ) {
+            return res.status(403).json({ error: 'No tienes permiso para renovar esta póliza' });
+        }
+
+        const numeroPoliza = String(req.body.numeroPoliza || '').trim();
+        const fechaInicio = normalizarFechaLocal(req.body.vigenciaInicio || req.body.fechaInicio);
+        const fechaVencimiento = normalizarFechaLocal(req.body.vigenciaFin || req.body.fechaVencimiento);
+        const primaNeta = Number(req.body.primaNeta);
+        const primaTotal = Number(req.body.primaTotal);
+
+        if (!numeroPoliza) {
+            return res.status(400).json({ error: 'El nuevo número de póliza es obligatorio' });
+        }
+        if (!fechaInicio || !fechaVencimiento || fechaVencimiento <= fechaInicio) {
+            return res.status(400).json({ error: 'Las fechas de vigencia no son válidas' });
+        }
+        if (
+            req.body.primaNeta === '' || req.body.primaNeta == null
+            || req.body.primaTotal === '' || req.body.primaTotal == null
+            || !Number.isFinite(primaNeta) || primaNeta < 0
+            || !Number.isFinite(primaTotal) || primaTotal < 0
+        ) {
+            return res.status(400).json({ error: 'Prima neta y prima total deben ser montos válidos mayores o iguales a cero' });
+        }
+
+        estadoAnterior = polizaAnterior.estado;
+        nuevaPoliza = new Poliza({
+            empresaId,
+            asesorId: polizaAnterior.asesorId || asesorId,
+            asesorNombre: polizaAnterior.asesorNombre || 'General',
+            clienteId: polizaAnterior.clienteId,
+            polizaAnteriorId: polizaAnterior._id,
+            numeroPoliza,
+            cliente: polizaAnterior.cliente,
+            clienteEmail: polizaAnterior.clienteEmail,
+            clienteTelefono: polizaAnterior.clienteTelefono,
+            numeroSerie: polizaAnterior.numeroSerie,
+            descripcionVehiculo: polizaAnterior.descripcionVehiculo,
+            vehiculo: polizaAnterior.vehiculo,
+            placas: polizaAnterior.placas,
+            motor: polizaAnterior.motor,
+            tipoPago: polizaAnterior.tipoPago,
+            conductoPago: polizaAnterior.conductoPago,
+            duracionMeses: polizaAnterior.duracionMeses,
+            tipoSeguro: polizaAnterior.tipoSeguro,
+            aseguradora: polizaAnterior.aseguradora,
+            inciso: polizaAnterior.inciso,
+            paquete: polizaAnterior.paquete,
+            fechas: { inicio: fechaInicio, vencimiento: fechaVencimiento },
+            primaNeta,
+            primaTotal,
+            moneda: polizaAnterior.moneda,
+            otrosServiciosContratados: polizaAnterior.otrosServiciosContratados,
+            gastosExpedicion: polizaAnterior.gastosExpedicion,
+            recargoPagoFraccionado: polizaAnterior.recargoPagoFraccionado,
+            iva: polizaAnterior.iva,
+            emisionEnPrimerPago: polizaAnterior.emisionEnPrimerPago,
+            estado: 'Activa',
+            estadoPago: 'pendiente',
+            pagos: [],
+            recibos: [],
+            proximoPago: fechaInicio
+        });
+
+        nuevaPoliza.recibos = generarCalendarioRecibos(
+            nuevaPoliza.primaTotal,
+            fechaInicio,
+            nuevaPoliza.tipoPago,
+            nuevaPoliza.primerPago,
+            nuevaPoliza.montoAbono,
+            {
+                duracionMeses: nuevaPoliza.duracionMeses,
+                primaNeta: nuevaPoliza.primaNeta,
+                otrosServiciosContratados: nuevaPoliza.otrosServiciosContratados,
+                gastosExpedicion: nuevaPoliza.gastosExpedicion,
+                emisionEnPrimerPago: nuevaPoliza.emisionEnPrimerPago
+            }
+        );
+        const errorImportes = validarImportesRecibos(nuevaPoliza.recibos, nuevaPoliza.primaTotal);
+        if (errorImportes) {
+            return res.status(400).json({ error: errorImportes });
+        }
+        const primerReciboPendiente = nuevaPoliza.recibos.find(
+            recibo => recibo.estadoRecibo === 'pendiente'
+        );
+        if (primerReciboPendiente) {
+            nuevaPoliza.proximoPago = primerReciboPendiente.fechaVencimientoRecibo;
+        }
+
+        await nuevaPoliza.save();
+        polizaAnterior.estado = 'Renovada';
+        await polizaAnterior.save();
+
+        return res.status(201).json({
+            success: true,
+            message: 'Renovación manual realizada exitosamente',
+            poliza: nuevaPoliza,
+            polizaAntigua: { id: polizaAnterior._id, estado: polizaAnterior.estado }
+        });
+    } catch (error) {
+        if (polizaAnterior && estadoAnterior !== undefined && polizaAnterior.estado !== estadoAnterior) {
+            try {
+                polizaAnterior.estado = estadoAnterior;
+                await polizaAnterior.save();
+            } catch (restoreError) {
+                console.error('[renovarPolizaManual] No se pudo restaurar el estado anterior:', restoreError);
+            }
+        }
+        if (nuevaPoliza?._id) {
+            try {
+                await Poliza.deleteOne({ _id: nuevaPoliza._id, empresaId: req.user.empresaId });
+            } catch (cleanupError) {
+                console.error('[renovarPolizaManual] No se pudo revertir la nueva póliza:', cleanupError);
+            }
+        }
+        console.error('[renovarPolizaManual] Error:', error);
+        if (error.code === 11000) {
+            return res.status(409).json({ error: 'Ya existe una póliza con ese número en esta empresa' });
+        }
+        return res.status(error.statusCode || 500).json({
+            error: error.statusCode ? error.message : 'Error al renovar póliza manualmente',
+            details: error.statusCode ? undefined : error.message
+        });
+    }
+};
+
 const renovarPoliza = async (req, res) => {
     let polizaViejaParaRestaurar = null;
     let estadoAnteriorPoliza = null;
@@ -7088,6 +7239,7 @@ module.exports = {
     marcarCobranzaResuelta,
     enviarCorreoCobranzaDiaria,
     actualizarEnlacePago,
+    renovarPolizaManual,
     generarCalendarioRecibos,
     resolverCobranzaConPago,
     enviarAvisoPago,
