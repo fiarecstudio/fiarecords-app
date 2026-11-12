@@ -3,6 +3,28 @@ const Empresa = require('../models/Empresa');
 const BREVO_TIMEOUT_MS = 10000;
 const BREVO_MAX_RETRIES = 2;
 
+const FIRMA_HTML = `<br><br>
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.4; color: #333333; margin-top: 20px;">
+  <strong>ERICK RESENDIZ</strong><br>
+  <span style="color: #d4af37;"><strong>Agente de Seguros | EME ASESORES</strong></span><br>
+  📱 <strong>Tel / WhatsApp:</strong> <a href="tel:+528115851732" style="color: #0056b3; text-decoration: none;">+52 81 1585 1732</a><br>
+  ✉️ <strong>Correo:</strong> <a href="mailto:cobranza@masesores.mx" style="color: #0056b3; text-decoration: none;">cobranza@masesores.mx</a><br>
+  🛡️ <strong>Ramos:</strong> Auto | Vida | Gastos Médicos | Flotillas<br><br>
+  
+  <div style="font-size: 10px; color: #777777; line-height: 1.2; text-align: justify;">
+    <strong>AVISO DE CONFIDENCIALIDAD:</strong> Este mensaje y sus archivos adjuntos contienen información confidencial dirigida exclusivamente a su destinatario. Si no es el destinatario legítimo, queda prohibido su uso, copia o distribución. Si lo recibió por error, notifique al remitente y elimínelo.<br><br>
+    <strong>PROTECCIÓN DE DATOS PERSONALES:</strong> En cumplimiento con la LFPDPPP, <strong>EME ASESORES</strong> trata sus datos únicamente para cotización, emisión, cobro y atención de pólizas de seguros. Solicite el Aviso de Privacidad Integral respondiendo a este correo o escribiendo a <a href="mailto:cobranza@masesores.mx" style="color: #0056b3; text-decoration: none;">cobranza@masesores.mx</a>.
+  </div>
+</div>`;
+
+function agregarFirmaCorreo(cuerpo) {
+    const html = String(cuerpo || '');
+    if (html.includes('<strong>ERICK RESENDIZ</strong>')) return html;
+    return /<\/body\s*>/i.test(html)
+        ? html.replace(/<\/body\s*>/i, `${FIRMA_HTML}</body>`)
+        : `${html}${FIRMA_HTML}`;
+}
+
 function normalizarAdjuntos(attachments) {
     if (!Array.isArray(attachments) || !attachments.length) return [];
     return attachments.map(attachment => {
@@ -44,7 +66,7 @@ async function enviarEmail({ empresaId, destinatario, cc, asunto, cuerpo, replyT
         to: (Array.isArray(destinatario) ? destinatario : [destinatario])
             .map(email => ({ email })),
         subject: asunto,
-        htmlContent: cuerpo
+        htmlContent: agregarFirmaCorreo(cuerpo)
     };
     if (Array.isArray(cc) && cc.length) {
         payload.cc = cc.map(email => ({ email }));
@@ -137,4 +159,4 @@ async function enviarWhatsApp({ empresaId, destinatario, mensaje }) {
     };
 }
 
-module.exports = { enviarEmail, enviarWhatsApp };
+module.exports = { enviarEmail, enviarWhatsApp, agregarFirmaCorreo };

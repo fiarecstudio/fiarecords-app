@@ -322,12 +322,6 @@ async function generarYEnviarNotificacion({
                 numeroRecibo,
                 periodoCobertura
             });
-            const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
-                || empresa?.notificaciones?.email?.signatureHtml
-                || '';
-            const cuerpo = firmaHTML
-                ? cuerpoBase.replace('</body>', `<div style="max-width:620px;margin:16px auto 0;">${firmaHTML}</div></body>`)
-                : cuerpoBase;
             const replyTo = empresa?.notificaciones?.email?.smtpUser
                 || empresa?.email
                 || process.env.IMAP_USER;
@@ -336,7 +330,7 @@ async function generarYEnviarNotificacion({
                 empresaId,
                 destinatario,
                 asunto: tipo === 'vencimiento_poliza' ? 'Recordatorio de Póliza' : 'Pago Pendiente',
-                cuerpo,
+                cuerpo: cuerpoBase,
                 replyTo
             });
         }
@@ -532,20 +526,8 @@ async function procesarRecordatoriosPersonalizados() {
 
             try {
                 const empresa = await Empresa.findById(polizaBloqueada.empresaId)
-                    .select('nombre notificaciones.email.firmaHTML notificaciones.email.signatureHtml notificaciones.email.smtpUser')
+                    .select('nombre notificaciones.email.smtpUser')
                     .lean();
-                const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
-                    || empresa?.notificaciones?.email?.signatureHtml
-                    || process.env.EMAIL_SIGNATURE_HTML
-                    || `
-                        <br><br>
-                        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                        <div style="font-family: Arial, sans-serif; color: #333; font-size: 12px;">
-                          <strong>Gestión de Cobranza</strong><br>
-                          EME Asesores<br>
-                          <a href="mailto:cobranza@masesores.mx">cobranza@masesores.mx</a> | +52 81 1585 1732<br>
-                        </div>
-                    `;
                 const correoRecordatorio = renderizarPlantillaCorreo({
                     asunto: recordatorioBloqueado.asunto,
                     cuerpo: recordatorioBloqueado.mensaje
@@ -555,17 +537,17 @@ async function procesarRecordatoriosPersonalizados() {
                     MONTO: '',
                     ASEGURADORA: polizaBloqueada.aseguradora || 'N/D'
                 });
-                const cuerpoConFirma = sanitizarCuerpoCorreo(`${correoRecordatorio.cuerpo}${firmaHTML}`);
+                const cuerpoSanitizado = sanitizarCuerpoCorreo(correoRecordatorio.cuerpo);
                 await enviarEmail({
                     empresaId: polizaBloqueada.empresaId,
                     destinatario: recordatorioBloqueado.destinatario,
                     asunto: correoRecordatorio.asunto,
-                    cuerpo: cuerpoConFirma
+                    cuerpo: cuerpoSanitizado
                 });
                 const sentCopySaved = await saveSentCopy({
                     destinatarios: [recordatorioBloqueado.destinatario],
                     asunto: correoRecordatorio.asunto,
-                    cuerpo: cuerpoConFirma,
+                    cuerpo: cuerpoSanitizado,
                     attachments: [],
                     headers: {},
                     empresa,

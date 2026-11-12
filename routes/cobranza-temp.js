@@ -50,11 +50,15 @@ router.post('/enviar-correo-manual/:polizaId', auth, applyTenantFilter, async (r
         }
 
         try {
+            const mensajeSinFirmaAnterior = mensaje.replace(
+                /<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">[\s\S]*?<\/div>/g,
+                ''
+            );
             await enviarEmail({
                 empresaId,
                 destinatario,
                 asunto: asunto,
-                cuerpo: mensaje
+                cuerpo: mensajeSinFirmaAnterior
             });
             
             poliza.ultimaNotificacionPago = new Date();

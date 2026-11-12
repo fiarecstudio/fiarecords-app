@@ -6,7 +6,7 @@ const Empresa = require('../models/Empresa');
 const CorreoProgramado = require('../models/CorreoProgramado');
 const ReglaCorreo = require('../models/ReglaCorreo');
 const ListaNegraCorreo = require('../models/ListaNegraCorreo');
-const { enviarEmail } = require('../services/notificationService');
+const { agregarFirmaCorreo, enviarEmail } = require('../services/notificationService');
 
 const MAX_INBOX_MESSAGES = 50;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -656,6 +656,11 @@ async function getEmailDetail(req, res) {
             if (!sourcePart) return res.status(404).json({ success: false, error: 'El correo ya no existe en esa carpeta.' });
 
             const parsed = await simpleParser(sourcePart.body);
+            const adjuntosReales = parsed.attachments ? parsed.attachments.filter(att => {
+                const disposition = (att.contentDisposition || '').toLowerCase();
+                const isInline = disposition === 'inline' || !!att.cid;
+                return !isInline;
+            }) : [];
             const attachmentBytes = (parsed.attachments || []).reduce(
                 (total, attachment) => total + (Number(attachment.size) || 0),
                 0
@@ -691,7 +696,7 @@ async function getEmailDetail(req, res) {
                 toEmails: recipients(parsed.to),
                 ccEmails: recipients(parsed.cc),
                 replyAllEmails,
-                attachments: (parsed.attachments || []).map(attachment => ({
+                attachments: adjuntosReales.map(attachment => ({
                     name: attachment.filename || 'archivo',
                     contentType: attachment.contentType,
                     size: attachment.size,
@@ -945,7 +950,15 @@ async function saveSentCopy({ destinatarios, cc = [], asunto, cuerpo, attachment
         const mailbox = await resolveMailbox(connection, 'Sent');
         const senderEmail = empresa?.notificaciones?.email?.smtpUser || process.env.SMTP_USER || process.env.IMAP_USER;
         const sender = senderEmail ? `${empresa?.nombre || 'M Asesores'} <${senderEmail}>` : process.env.IMAP_USER;
-        const raw = createRawSentMessage({ sender, destinatarios, cc, asunto, cuerpo, attachments, headers });
+        const raw = createRawSentMessage({
+            sender,
+            destinatarios,
+            cc,
+            asunto,
+            cuerpo: agregarFirmaCorreo(cuerpo),
+            attachments,
+            headers
+        });
         await connection.append(raw, { mailbox, flags: ['\\Seen', ...(followUp ? ['\\Flagged'] : [])] });
         return true;
     } catch (error) {
@@ -988,10 +1001,6 @@ function validateScheduledAttachments(attachments) {
 }
 
 function prepararSalidaCorreo({ empresa, mensaje, importance, requestReadReceipt, followUp }) {
-    const signatureHtml = sanitizeHtml(
-        empresa?.notificaciones?.email?.firmaHTML || empresa?.notificaciones?.email?.signatureHtml || '',
-        EMAIL_HTML_OPTIONS
-    );
     const sanitizedMessage = sanitizeHtml(mensaje, EMAIL_HTML_OPTIONS);
     const messageText = sanitizeHtml(sanitizedMessage, {
         ...EMAIL_HTML_OPTIONS,
@@ -1003,7 +1012,7 @@ function prepararSalidaCorreo({ empresa, mensaje, importance, requestReadReceipt
         ...EMAIL_HTML_OPTIONS,
         exclusiveFilter: frame => frame.tag === 'div' && frame.attribs['data-email-signature'] === 'true'
     });
-    const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333333;font-size:14px;">${messageWithoutSignature}</div>${signatureHtml ? `<br>${signatureHtml}` : ''}`;
+    const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333333;font-size:14px;">${messageWithoutSignature}</div>`;
     const senderEmail = String(empresa?.notificaciones?.email?.smtpUser
         || process.env.SMTP_USER
         || 'cobranza@masesores.mx').replace(/[\r\n]/g, '');
@@ -1308,10 +1317,6 @@ async function replyEmail(req, res) {
         const asunto = tipo === 'new' || /^(?:re|fwd?):/i.test(asuntoOriginal)
             ? asuntoOriginal
             : `${tipo === 'forward' ? 'Fwd' : 'Re'}: ${asuntoOriginal}`;
-        const signatureHtml = sanitizeHtml(
-            empresa?.notificaciones?.email?.firmaHTML || empresa?.notificaciones?.email?.signatureHtml || '',
-            EMAIL_HTML_OPTIONS
-        );
         const mensajeHtml = req.body?.mensajeHtml === true
             ? sanitizeHtml(mensaje, EMAIL_HTML_OPTIONS)
             : `<div>${escapeHtml(mensaje).replace(/\r?\n/g, '<br>')}</div>`;
@@ -1329,7 +1334,7 @@ async function replyEmail(req, res) {
                 exclusiveFilter: frame => frame.tag === 'div' && frame.attribs['data-email-signature'] === 'true'
             })
             : mensajeHtml;
-        const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333333;font-size:14px;">${mensajeSinFirma}</div>${signatureHtml ? `<br>${signatureHtml}` : ''}`;
+        const cuerpo = `<div style="font-family:Arial,sans-serif;color:#333333;font-size:14px;">${mensajeSinFirma}</div>`;
         const headers = tipo === 'reply' || tipo === 'replyAll'
             ? originalMessageId
                 ? { 'In-Reply-To': originalMessageId, References: originalMessageId }

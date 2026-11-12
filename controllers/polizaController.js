@@ -167,10 +167,6 @@ function construirCorreoCobranza({
                         <div style="margin-top:6px;font-size:13px;line-height:1.6;color:#657587;">Puede realizar su pago mediante transferencia bancaria. Solicite a su asesor los datos bancarios y métodos de pago disponibles.</div>
                     </div>
                 </td></tr>
-                <tr><td style="padding:18px 30px;background:#f7f9fb;border-top:1px solid #e8edf2;text-align:center;">
-                    <div style="font-size:13px;font-weight:700;color:#435366;">${nombreEscapado}</div>
-                    <div style="margin-top:7px;font-size:11px;line-height:1.5;color:#8793a1;">Este mensaje contiene información relacionada con su póliza y está dirigido únicamente a su destinatario. Si lo recibió por error, elimínelo y avísenos. Protegemos sus datos conforme a nuestro aviso de privacidad.</div>
-                </td></tr>
             </table>
         </td></tr>
     </table>
@@ -6596,22 +6592,10 @@ const enviarAvisoPago = async (req, res) => {
         }
 
         const empresa = await Empresa.findById(poliza.empresaId)
-            .select('nombre notificaciones.email.firmaHTML notificaciones.email.signatureHtml notificaciones.email.smtpUser')
+            .select('nombre notificaciones.email.smtpUser')
             .lean();
-        const firmaHTML = empresa?.notificaciones?.email?.firmaHTML
-            || empresa?.notificaciones?.email?.signatureHtml
-            || process.env.EMAIL_SIGNATURE_HTML
-            || `
-                <br><br>
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                <div style="font-family: Arial, sans-serif; color: #333; font-size: 12px;">
-                  <strong>Gestión de Cobranza</strong><br>
-                  EME Asesores<br>
-                  <a href="mailto:cobranza@masesores.mx">cobranza@masesores.mx</a> | +52 81 1585 1732<br>
-                </div>
-            `;
         const cuerpoSeguro = sanitizarCuerpoCorreo(
-            `${cuerpo.replace(/\r?\n/g, '<br>')}${firmaHTML}`
+            cuerpo.replace(/\r?\n/g, '<br>')
         );
         await notificationService.enviarEmail({
             empresaId: poliza.empresaId,
