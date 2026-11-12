@@ -10251,9 +10251,11 @@ Fecha de firma: {{FECHA}}`;
                 const motor = document.getElementById('poliza-motor').value.trim();
                 const tipoPago = document.getElementById('poliza-tipo-pago').value;
                 const conductoPago = document.getElementById('poliza-conducto-pago').value.trim();
-                const esCargoAutomatico = document.getElementById('poliza-es-cargo-automatico').checked;
-                const datosTarjeta = esCargoAutomatico
-                    ? document.getElementById('poliza-datos-tarjeta').value.trim()
+                const cargoAutomaticoInput = document.getElementById('poliza-es-cargo-automatico');
+                const datosTarjetaInput = document.getElementById('poliza-datos-tarjeta');
+                const esCargoAutomatico = cargoAutomaticoInput ? cargoAutomaticoInput.checked : false;
+                const datosTarjeta = esCargoAutomatico && datosTarjetaInput
+                    ? datosTarjetaInput.value.trim()
                     : '';
                 const duracionMeses = Number(document.getElementById('duracionMeses').value);
                 const aseguradora = document.getElementById('poliza-aseguradora').value.trim();
@@ -10337,7 +10339,7 @@ Fecha de firma: {{FECHA}}`;
                     tipoPago,
                     conductoPago,
                     esCargoAutomatico,
-                    ...(datosTarjeta ? { datosTarjeta } : {}),
+                    datosTarjeta,
                     duracionMeses,
                     aseguradora,
                     inciso,

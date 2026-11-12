@@ -516,6 +516,7 @@ const polizaSchema = new mongoose.Schema({
     toJSON: {
         transform(_documento, resultado) {
             if (Object.prototype.hasOwnProperty.call(resultado, 'datosTarjeta')) {
+                // La serialización JSON ordinaria oculta la referencia cifrada; su consulta requiere el endpoint autorizado.
                 resultado.tieneDatosTarjeta = Boolean(resultado.datosTarjeta);
                 delete resultado.datosTarjeta;
             }

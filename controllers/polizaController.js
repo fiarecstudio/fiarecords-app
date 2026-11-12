@@ -1583,16 +1583,21 @@ const actualizarPoliza = async (req, res) => {
         const forzarRecalculo = req.body.forzarRecalculo === true;
         const datosActualizacion = { ...req.body };
         Object.assign(datosActualizacion, cargoAutomatico.campos);
-        if (Object.prototype.hasOwnProperty.call(cargoAutomatico.campos, 'datosTarjeta')) {
-            datosActualizacion.datosTarjeta = cryptoHelper.encrypt(cargoAutomatico.campos.datosTarjeta);
-        } else if (req.body.datosTarjeta === REFERENCIA_TARJETA_MASCARADA) {
-            delete datosActualizacion.datosTarjeta;
+        const { esCargoAutomatico, datosTarjeta } = req.body;
+        const tieneFlagCargoAutomatico = Object.prototype.hasOwnProperty.call(req.body, 'esCargoAutomatico');
+        const esCargoAutomaticoFinal = tieneFlagCargoAutomatico
+            ? esCargoAutomatico
+            : polizaExistente.esCargoAutomatico === true;
+        let tarjetaFinal = polizaExistente.datosTarjeta;
+        if (!esCargoAutomaticoFinal) {
+            tarjetaFinal = '';
+        } else if (typeof datosTarjeta === 'string' && datosTarjeta.trim() && !datosTarjeta.includes('••••')) {
+            tarjetaFinal = cryptoHelper.encrypt(cargoAutomatico.campos.datosTarjeta);
         }
+        datosActualizacion.esCargoAutomatico = esCargoAutomaticoFinal;
+        datosActualizacion.datosTarjeta = tarjetaFinal;
         delete datosActualizacion.forzarRecalculo;
         delete datosActualizacion.recalcularRecibos;
-        const esCargoAutomaticoFinal = datosActualizacion.esCargoAutomatico
-            ?? (polizaExistente.esCargoAutomatico === true);
-        if (!esCargoAutomaticoFinal) datosActualizacion.datosTarjeta = '';
         if (datosActualizacion.estado !== undefined && !ESTADOS_POLIZA_VALIDOS.includes(datosActualizacion.estado)) {
             return res.status(400).json({ error: 'El estado de póliza no es válido.' });
         }
