@@ -9892,6 +9892,10 @@ Fecha de firma: {{FECHA}}`;
         } : datosIniciales;
         const clienteId = datosPrellenados.clienteId || null;
         const estadoFormulario = datosPrellenados.estado || 'Activa';
+        const tipoPolizaFormulario = datosPrellenados.tipoPoliza === 'Flotilla' ? 'Flotilla' : 'Individual';
+        const cantidadUnidadesFlotilla = Array.isArray(datosPrellenados.unidadesFlotilla)
+            ? datosPrellenados.unidadesFlotilla.length
+            : 0;
         const emisionEnPrimerPago = datosPrellenados.emisionEnPrimerPago === true;
 
         // Cargar lista de asesores para el select
@@ -9914,14 +9918,26 @@ Fecha de firma: {{FECHA}}`;
             customClass: { popup: 'poliza-swal-popup' },
             html: `
                 <div class="text-start poliza-form-grid">
-                    <div class="mb-3 poliza-status-field">
-                        <label class="form-label" for="poliza-estado">Estado</label>
-                        <select id="poliza-estado" name="estado" class="swal2-input">
-                            <option value="Activa" ${estadoFormulario === 'Activa' ? 'selected' : ''}>Activa</option>
-                            <option value="PendienteRenovacion" ${estadoFormulario === 'PendienteRenovacion' ? 'selected' : ''}>Pendiente Renovación</option>
-                            <option value="Vencida" ${estadoFormulario === 'Vencida' ? 'selected' : ''}>Vencida</option>
-                            <option value="Cancelada" ${estadoFormulario === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
-                        </select>
+                    <div class="row g-2 align-items-start mb-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="poliza-estado">Estado</label>
+                            <select id="poliza-estado" name="estado" class="swal2-input">
+                                <option value="Activa" ${estadoFormulario === 'Activa' ? 'selected' : ''}>Activa</option>
+                                <option value="PendienteRenovacion" ${estadoFormulario === 'PendienteRenovacion' ? 'selected' : ''}>Pendiente Renovación</option>
+                                <option value="Vencida" ${estadoFormulario === 'Vencida' ? 'selected' : ''}>Vencida</option>
+                                <option value="Cancelada" ${estadoFormulario === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="tipoPoliza">Modalidad de póliza</label>
+                            <select id="tipoPoliza" class="swal2-input">
+                                <option value="Individual" ${tipoPolizaFormulario === 'Individual' ? 'selected' : ''}>Individual</option>
+                                <option value="Flotilla" ${tipoPolizaFormulario === 'Flotilla' ? 'selected' : ''}>Flotilla</option>
+                            </select>
+                            ${editando && tipoPolizaFormulario === 'Flotilla'
+                                ? `<button type="button" class="btn btn-primary btn-sm mt-2" id="btnGestionarFlotilla">🚛 Ver Unidades (${cantidadUnidadesFlotilla})</button>`
+                                : ''}
+                        </div>
                     </div>
                     <input type="hidden" id="poliza-cliente-id" value="${escapeHTML(clienteId || '')}">
                     <div class="mb-3">
@@ -9932,27 +9948,27 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label" for="poliza-cliente">Cliente *</label>
                         <input id="poliza-cliente" class="swal2-input" value="${escapeHTML(datosPrellenados.cliente || '')}" placeholder="Nombre del cliente" ${clienteId ? 'readonly' : ''}>
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
+                    <div class="row poliza-vehicle-fields">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label" for="poliza-numero-serie">Número de Serie</label>
                             <input id="poliza-numero-serie" class="swal2-input" value="${escapeHTML(datosPrellenados.numeroSerie || '')}" placeholder="Serie o VIN">
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label" for="poliza-descripcion-vehiculo">Descripción del Vehículo</label>
                             <input id="poliza-descripcion-vehiculo" class="swal2-input" value="${escapeHTML(datosPrellenados.descripcionVehiculo || '')}" placeholder="Marca, modelo, año">
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
+                    <div class="row poliza-vehicle-fields">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label" for="poliza-vehiculo">Vehículo (marca/submarca/modelo)</label>
                             <input id="poliza-vehiculo" class="swal2-input" value="${escapeHTML(datosPrellenados.vehiculo || '')}">
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label" for="poliza-placas">Placas</label>
                             <input id="poliza-placas" class="swal2-input" value="${escapeHTML(datosPrellenados.placas || '')}">
                         </div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3 poliza-vehicle-fields">
                         <label class="form-label" for="poliza-motor">Número de Motor</label>
                         <input id="poliza-motor" class="swal2-input" value="${escapeHTML(datosPrellenados.motor || '')}">
                     </div>
@@ -10000,7 +10016,7 @@ Fecha de firma: {{FECHA}}`;
                         <label class="form-label" for="poliza-aseguradora">Aseguradora *</label>
                         <input id="poliza-aseguradora" class="swal2-input" value="${escapeHTML(datosPrellenados.aseguradora || '')}" placeholder="Ej: GNP, AXA, Qualitas">
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3 poliza-vehicle-fields">
                         <label class="form-label" for="poliza-inciso">Inciso</label>
                         <input id="poliza-inciso" class="swal2-input" value="${escapeHTML(datosPrellenados.inciso || '1')}" placeholder="1">
                     </div>
@@ -10132,6 +10148,19 @@ Fecha de firma: {{FECHA}}`;
                 if (datosPrellenados && Object.keys(datosPrellenados).length > 0) {
                     mapearDatosAFormulario(datosPrellenados);
                 }
+                const selectorTipoPoliza = document.getElementById('tipoPoliza');
+                const actualizarCamposVehiculo = () => {
+                    const esFlotilla = selectorTipoPoliza?.value === 'Flotilla';
+                    document.querySelectorAll('.poliza-vehicle-fields').forEach(contenedor => {
+                        contenedor.classList.toggle('d-none', esFlotilla);
+                    });
+                };
+                selectorTipoPoliza?.addEventListener('change', actualizarCamposVehiculo);
+                actualizarCamposVehiculo();
+                document.getElementById('btnGestionarFlotilla')?.addEventListener('click', async () => {
+                    Swal.close();
+                    await abrirModalFlotilla(poliza._id);
+                });
                 const asesorPrecargado = datosPrellenados.asesorId?._id || datosPrellenados.asesorId || '';
                 if (asesorPrecargado) document.getElementById('poliza-asesor').value = asesorPrecargado;
                 configurarAutoCalculoPrima();
@@ -10262,6 +10291,7 @@ Fecha de firma: {{FECHA}}`;
                 const inciso = document.getElementById('poliza-inciso').value.trim() || '1';
                 const paquete = document.getElementById('poliza-paquete').value.trim();
                 const tipoSeguro = document.getElementById('poliza-tipo').value;
+                const tipoPoliza = document.getElementById('tipoPoliza').value;
                 const fechaInicio = document.getElementById('poliza-inicio').value;
                 const fechaVencimiento = document.getElementById('poliza-vencimiento').value;
                 const estado = document.getElementById('poliza-estado').value;
@@ -10345,6 +10375,7 @@ Fecha de firma: {{FECHA}}`;
                     inciso,
                     paquete,
                     tipoSeguro,
+                    tipoPoliza,
                     fechas: {
                         inicio: parseInputDate(fechaInicio),
                         vencimiento: parseInputDate(fechaVencimiento)
@@ -10388,6 +10419,7 @@ Fecha de firma: {{FECHA}}`;
                 return;
             }
 
+            const esRenovacion = Boolean(window.polizaARenovar);
             let url = '/api/polizas';
             let method = 'POST';
 
@@ -10403,7 +10435,23 @@ Fecha de firma: {{FECHA}}`;
             });
 
             await Swal.fire('Éxito', window.polizaARenovar ? 'Póliza renovada correctamente' : 'Póliza registrada correctamente', 'success');
-            cargarPolizas(true);
+            const polizaCreada = responseBody?.poliza
+                || responseBody?.data?.poliza
+                || responseBody?.data
+                || responseBody;
+            const polizaCreadaId = polizaCreada?._id;
+            if (!esRenovacion && formValues.tipoPoliza === 'Flotilla' && !responseBody?.offline) {
+                if (polizaCreadaId) {
+                    await abrirModalFlotilla(polizaCreadaId);
+                } else {
+                    await Swal.fire(
+                        'Póliza registrada',
+                        'No se pudo identificar la póliza para abrir su panel de flotilla.',
+                        'warning'
+                    );
+                }
+            }
+            await cargarPolizas(true);
         } catch (error) {
             console.error('[mostrarFormularioPoliza] Error al guardar póliza:', error);
             Swal.fire('Error', error.message || 'No se pudo guardar la póliza', 'error');
@@ -10686,6 +10734,9 @@ Fecha de firma: {{FECHA}}`;
                         case 'payments':
                             abrirPagosPolizaDesdeTabla(polizaId);
                             break;
+                        case 'fleet':
+                            abrirModalFlotilla(polizaId);
+                            break;
                         case 'edit':
                             editarPoliza(polizaId);
                             break;
@@ -10810,6 +10861,7 @@ Fecha de firma: {{FECHA}}`;
                                     <li><a class="dropdown-item" href="#" onclick="verHistorialPoliza('${polizaId}'); return false;">🕒 Ver Historial</a></li>
                                     ${esCargoAutomatico ? '' : `<li><a class="dropdown-item" href="#" onclick="abrirModalProgramarRecordatorio('${polizaId}'); return false;">🔔 Programar Recordatorios</a></li>`}
                                     <li><a class="dropdown-item" href="#" onclick="verRecordatoriosPendientes('${polizaId}'); return false;">⏳ Recordatorios Pendientes</a></li>
+                                    ${p.tipoPoliza === 'Flotilla' ? `<li><button type="button" class="dropdown-item" data-poliza-action="fleet" data-poliza-id="${polizaId}">🚛 Gestionar Flotilla</button></li>` : ''}
                                     <li><button type="button" class="dropdown-item" data-poliza-action="edit" data-poliza-id="${polizaId}">✏️ Editar Póliza</button></li>
                                     ${getUserRoleAndId().role === 'admin' ? '<li><a class="dropdown-item" href="#" onclick="abrirGestionPlantillasCorreo(); return false;"><i class="fas fa-envelope-open-text"></i> Gestionar Plantillas</a></li>' : ''}
                                     <li><hr class="dropdown-divider"></li>
@@ -13320,6 +13372,493 @@ Fecha de firma: {{FECHA}}`;
         paginaActualCobranza = 1;
         await cargarCobranzaDiaria(true);
         return poliza;
+    }
+
+    function obtenerTotalesUnidadesActivas(unidades) {
+        const totalesCentavos = unidades.reduce((totales, unidad) => {
+            if (unidad.estado !== 'activa') return totales;
+            const primaNeta = Number(unidad.primaNeta);
+            const primaTotal = Number(unidad.primaTotal);
+            totales.primaNeta += Number.isFinite(primaNeta) ? Math.round(primaNeta * 100) : 0;
+            totales.primaTotal += Number.isFinite(primaTotal) ? Math.round(primaTotal * 100) : 0;
+            return totales;
+        }, { primaNeta: 0, primaTotal: 0 });
+        return {
+            primaNeta: totalesCentavos.primaNeta / 100,
+            primaTotal: totalesCentavos.primaTotal / 100
+        };
+    }
+
+    function exportarUnidadesFlotillaExcel(poliza, unidades) {
+        if (!window.XLSX) {
+            Swal.fire('Error', 'No se pudo cargar la librería para exportar a Excel.', 'error');
+            return;
+        }
+        const monedaFormato = poliza.moneda === 'USD' ? '"USD "#,##0.00' : '"MXN "#,##0.00';
+        const totales = obtenerTotalesUnidadesActivas(unidades);
+        const filas = unidades.map(unidad => ({
+            Inciso: unidad.inciso || '',
+            Vehiculo: unidad.vehiculo || '',
+            Serie: unidad.serie || '',
+            Motor: unidad.motor || '',
+            Placas: unidad.placas || '',
+            'Prima Neta': Number(unidad.primaNeta) || 0,
+            'Prima Total': Number(unidad.primaTotal) || 0,
+            Estado: unidad.estado === 'activa' ? 'Activa' : 'Baja',
+            'Fecha Alta': unidad.fechaAlta ? new Date(unidad.fechaAlta).toLocaleDateString('es-MX') : '',
+            'Fecha Baja': unidad.fechaBaja ? new Date(unidad.fechaBaja).toLocaleDateString('es-MX') : ''
+        }));
+        filas.push({
+            Inciso: '',
+            Vehiculo: '',
+            Serie: '',
+            Motor: '',
+            Placas: 'TOTAL (Activas):',
+            'Prima Neta': totales.primaNeta,
+            'Prima Total': totales.primaTotal,
+            Estado: '',
+            'Fecha Alta': '',
+            'Fecha Baja': ''
+        });
+        const worksheet = XLSX.utils.json_to_sheet(filas);
+        for (let fila = 2; fila <= filas.length + 1; fila++) {
+            ['F', 'G'].forEach(columna => {
+                const celda = worksheet[`${columna}${fila}`];
+                if (celda) celda.z = monedaFormato;
+            });
+        }
+        worksheet['!cols'] = [
+            { wch: 10 }, { wch: 28 }, { wch: 22 }, { wch: 20 }, { wch: 14 },
+            { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 }
+        ];
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Unidades');
+        const nombrePoliza = String(poliza.numeroPoliza || 'poliza').replace(/[^\w-]/g, '_');
+        XLSX.writeFile(workbook, `${nombrePoliza}_flotilla.xlsx`);
+    }
+
+    async function exportarUnidadesFlotillaPDF(poliza, unidades) {
+        const jsPDFConstructor = window.jspdf?.jsPDF || window.jsPDF;
+        if (typeof jsPDFConstructor !== 'function') {
+            Swal.fire('Error', 'No se pudo cargar la librería para generar PDF.', 'error');
+            return;
+        }
+        const logoActual = document.getElementById('app-logo');
+        const rutaLogo = logoActual?.currentSrc
+            || logoActual?.src
+            || window.FIA_LOGO_DEFAULT
+            || '/uploads/logo.png';
+        const logoData = await new Promise(resolve => {
+            const imagen = new Image();
+            let resuelto = false;
+            const resolver = resultado => {
+                if (resuelto) return;
+                resuelto = true;
+                resolve(resultado);
+            };
+            const convertirLogo = () => {
+                if (resuelto) return;
+                try {
+                    if (!imagen.naturalWidth || !imagen.naturalHeight) {
+                        resolver(null);
+                        return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imagen.naturalWidth;
+                    canvas.height = imagen.naturalHeight;
+                    const contexto = canvas.getContext('2d');
+                    if (!contexto) {
+                        console.warn('No se pudo cargar el logo para el PDF, generando sin logo.');
+                        resolver(null);
+                        return;
+                    }
+                    contexto.drawImage(imagen, 0, 0);
+                    resolver(canvas.toDataURL('image/png'));
+                } catch (error) {
+                    console.warn('No se pudo cargar el logo para el PDF, generando sin logo.', error);
+                    resolver(null);
+                }
+            };
+            imagen.onload = convertirLogo;
+            imagen.onerror = () => {
+                if (resuelto) return;
+                console.warn('No se pudo cargar el logo para el PDF, generando sin logo.');
+                resolver(null);
+            };
+            imagen.src = rutaLogo;
+            if (imagen.complete) {
+                if (imagen.naturalWidth) convertirLogo();
+                else {
+                    console.warn('No se pudo cargar el logo para el PDF, generando sin logo.');
+                    resolver(null);
+                }
+            }
+        });
+        const documento = new jsPDFConstructor({ orientation: 'landscape' });
+        const moneda = poliza.moneda || 'MXN';
+        const monedaFormatter = new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: moneda,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        const unidadesActivas = unidades.filter(unidad => unidad.estado === 'activa');
+        const totales = obtenerTotalesUnidadesActivas(unidades);
+        if (logoData) dibujarLogoEnPDF(documento, logoData);
+        const posicionTitulo = logoData ? 47 : 16;
+        const posicionSubtitulo = posicionTitulo + 7;
+        documento.setFontSize(16);
+        documento.text(`Unidades de flotilla - Póliza ${poliza.numeroPoliza || ''}`, 14, posicionTitulo);
+        documento.setFontSize(10);
+        documento.text(`Cliente: ${poliza.cliente || 'N/A'}    Aseguradora: ${poliza.aseguradora || 'N/A'}`, 14, posicionSubtitulo);
+        documento.autoTable({
+            startY: posicionSubtitulo + 6,
+            head: [['Inciso', 'Vehículo', 'Serie', 'Motor', 'Placas', 'Prima Neta', 'Prima Total']],
+            body: unidadesActivas.length
+                ? unidadesActivas.map(unidad => [
+                    unidad.inciso || '',
+                    unidad.vehiculo || '',
+                    unidad.serie || '',
+                    unidad.motor || '',
+                    unidad.placas || '',
+                    monedaFormatter.format(Number(unidad.primaNeta) || 0),
+                    monedaFormatter.format(Number(unidad.primaTotal) || 0)
+                ])
+                : [['—', 'Sin unidades activas', '', '', '', '', '']],
+            foot: [[
+                {
+                    content: 'TOTAL (Activas):',
+                    colSpan: 5,
+                    styles: { halign: 'right', fillColor: [33, 37, 41], textColor: 255, fontStyle: 'bold' }
+                },
+                monedaFormatter.format(totales.primaNeta),
+                monedaFormatter.format(totales.primaTotal)
+            ]],
+            theme: 'striped',
+            headStyles: { fillColor: [13, 110, 253] },
+            footStyles: { fillColor: [33, 37, 41], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2.5 },
+            columnStyles: { 0: { cellWidth: 18 }, 5: { halign: 'right' }, 6: { halign: 'right' } }
+        });
+        const nombrePoliza = String(poliza.numeroPoliza || 'poliza').replace(/[^\w-]/g, '_');
+        documento.save(`${nombrePoliza}_flotilla.pdf`);
+    }
+
+    async function abrirModalFlotilla(polizaId) {
+        try {
+            const respuesta = await fetchAPI(
+                `/api/polizas/${encodeURIComponent(polizaId)}?_=${Date.now()}`,
+                { cache: 'no-store', silent: true }
+            );
+            const poliza = respuesta?.poliza || respuesta?.data?.poliza || respuesta?.data || respuesta;
+            if (!poliza || poliza.offline || String(poliza._id) !== String(polizaId)) {
+                throw new Error('No se pudo cargar la póliza para consultar sus unidades.');
+            }
+            if (poliza.tipoPoliza !== 'Flotilla') {
+                throw new Error('Esta póliza no está configurada como flotilla.');
+            }
+
+            const unidades = Array.isArray(poliza.unidadesFlotilla) ? poliza.unidadesFlotilla : [];
+            const primaBase = Number(poliza.primaTotal) || 0;
+            const totalesUnidadesActivas = obtenerTotalesUnidadesActivas(unidades);
+            const primaUnidadesActivas = totalesUnidadesActivas.primaTotal;
+            const diferenciaPrimas = primaBase - primaUnidadesActivas;
+            const dashboardFinanciero = `<div class="d-flex flex-wrap justify-content-between gap-3 p-3 mb-3 rounded text-start"
+                    style="background:linear-gradient(135deg,#0f5132,#0d6efd);color:#fff;">
+                <div><small class="d-block opacity-75">Prima Base (Carátula)</small><strong>${formatCurrency(primaBase, poliza.moneda || 'MXN')}</strong></div>
+                <div><small class="d-block opacity-75">Suma Unidades Activas</small><strong>${formatCurrency(primaUnidadesActivas, poliza.moneda || 'MXN')}</strong></div>
+                <div><small class="d-block opacity-75">Diferencia (Base − Unidades)</small><strong>${formatCurrency(diferenciaPrimas, poliza.moneda || 'MXN')}</strong></div>
+            </div>`;
+            const filasDetalle = unidades.length
+                ? unidades.map(unidad => {
+                    const unidadId = escapeHTML(String(unidad._id || ''));
+                    const activa = unidad.estado === 'activa';
+                    const estado = activa ? 'Activa' : 'Baja';
+                    return `<tr>
+                        <td>${escapeHTML(unidad.inciso || '')}</td>
+                        <td>${escapeHTML(unidad.vehiculo || '')}</td>
+                        <td>${escapeHTML(unidad.serie || '')}</td>
+                        <td>${escapeHTML(unidad.motor || '')}</td>
+                        <td>${escapeHTML(unidad.placas || '')}</td>
+                        <td>${formatCurrency(unidad.primaNeta || 0, poliza.moneda || 'MXN')}</td>
+                        <td>${formatCurrency(unidad.primaTotal || 0, poliza.moneda || 'MXN')}</td>
+                        <td><span class="badge bg-${activa ? 'success' : 'secondary'}">${estado}</span></td>
+                        <td>${activa
+                            ? `<button type="button" class="btn btn-sm btn-outline-danger" data-flotilla-baja="${unidadId}">Dar de baja</button>`
+                            : (unidad.fechaBaja ? new Date(unidad.fechaBaja).toLocaleDateString('es-MX') : '')}</td>
+                    </tr>`;
+                }).join('')
+                : '<tr><td colspan="9" class="text-center text-muted py-3">No hay unidades registradas.</td></tr>';
+            const filaTotales = `<tr class="table-active" style="font-weight:700;font-size:1.05em;">
+                <td colspan="5" class="text-end">TOTAL (Activas):</td>
+                <td>${formatCurrency(totalesUnidadesActivas.primaNeta, poliza.moneda || 'MXN')}</td>
+                <td>${formatCurrency(totalesUnidadesActivas.primaTotal, poliza.moneda || 'MXN')}</td>
+                <td colspan="2"></td>
+            </tr>`;
+            const filas = `${filasDetalle}${filaTotales}`;
+
+            await Swal.fire({
+                title: `Gestionar Flotilla - ${escapeHTML(poliza.numeroPoliza || '')}`,
+                width: 'min(95vw, 1100px)',
+                background: '#212529',
+                color: '#f8f9fa',
+                html: `${dashboardFinanciero}<div class="table-responsive text-start">
+                        <table class="table table-sm table-dark table-bordered align-middle mb-0">
+                            <thead><tr><th>Inciso</th><th>Vehículo</th><th>Serie</th><th>Motor</th><th>Placas</th><th>Prima Neta</th><th>Prima Total</th><th>Estado</th><th>Acción / Fecha Baja</th></tr></thead>
+                            <tbody>${filas}</tbody>
+                        </table>
+                </div>`,
+                showConfirmButton: false,
+                showCancelButton: true,
+                cancelButtonText: 'Cerrar',
+                footer: `<div class="d-flex flex-wrap justify-content-center gap-2">
+                    <button type="button" class="btn btn-sm btn-success" data-flotilla-add>[+] Agregar Unidad</button>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-flotilla-import>📥 Importar desde Excel</button>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-flotilla-export-pdf>📄 Exportar PDF</button>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-flotilla-export-excel>📊 Exportar Excel</button>
+                </div>`,
+                didOpen: () => {
+                    Swal.getPopup()?.addEventListener('click', async event => {
+                        const target = event.target instanceof Element ? event.target : null;
+                        if (!target) return;
+                        if (target.closest('[data-flotilla-add]')) {
+                            await abrirModalAgregarUnidadFlotilla(polizaId);
+                            return;
+                        }
+                        if (target.closest('[data-flotilla-import]')) {
+                            importarUnidadesFlotillaExcel(polizaId);
+                            return;
+                        }
+                        if (target.closest('[data-flotilla-export-pdf]')) {
+                            await exportarUnidadesFlotillaPDF(poliza, unidades);
+                            return;
+                        }
+                        if (target.closest('[data-flotilla-export-excel]')) {
+                            exportarUnidadesFlotillaExcel(poliza, unidades);
+                            return;
+                        }
+                        const boton = target.closest('[data-flotilla-baja]');
+                        if (!boton) return;
+                        const unidadId = boton.getAttribute('data-flotilla-baja');
+                        const { isConfirmed } = await Swal.fire({
+                            title: '¿Dar de baja esta unidad?',
+                            text: 'La baja no eliminará la unidad ni modificará recibos existentes.',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Dar de baja',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#dc3545'
+                        });
+                        if (!isConfirmed) {
+                            await abrirModalFlotilla(polizaId);
+                            return;
+                        }
+                        try {
+                            const baja = await fetchAPI(
+                                `/api/polizas/${encodeURIComponent(polizaId)}/unidades/${encodeURIComponent(unidadId)}/baja`,
+                                { method: 'PATCH' }
+                            );
+                            if (!baja?.success) throw new Error(baja?.error || 'No se pudo dar de baja la unidad.');
+                            await Swal.fire('Unidad dada de baja', baja.message || 'La unidad quedó dada de baja.', 'success');
+                            await abrirModalFlotilla(polizaId);
+                        } catch (error) {
+                            await Swal.fire('Error', error.message || 'No se pudo dar de baja la unidad.', 'error');
+                            await abrirModalFlotilla(polizaId);
+                        }
+                    });
+                }
+            });
+        } catch (error) {
+            console.error('[abrirModalFlotilla] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo cargar la flotilla.', 'error');
+        }
+    }
+
+    async function abrirModalAgregarUnidadFlotilla(polizaId) {
+        const { value: unidad } = await Swal.fire({
+            title: 'Agregar Unidad a la Flotilla',
+            width: 'min(95vw, 700px)',
+            html: `
+                <div class="text-start">
+                    <label class="form-label" for="flotilla-inciso">Inciso *</label>
+                    <input id="flotilla-inciso" class="swal2-input" maxlength="50" placeholder="Ej. 2">
+                    <label class="form-label" for="flotilla-vehiculo">Vehículo *</label>
+                    <input id="flotilla-vehiculo" class="swal2-input" maxlength="200" placeholder="Marca, modelo y año">
+                    <label class="form-label" for="flotilla-serie">Serie</label>
+                    <input id="flotilla-serie" class="swal2-input" maxlength="100">
+                    <label class="form-label" for="flotilla-motor">Motor</label>
+                    <input id="flotilla-motor" class="swal2-input" maxlength="100">
+                    <label class="form-label" for="flotilla-placas">Placas</label>
+                    <input id="flotilla-placas" class="swal2-input" maxlength="30">
+                    <label class="form-label" for="flotilla-prima-neta">Prima Neta</label>
+                    <input id="flotilla-prima-neta" type="number" min="0" step="0.01" class="swal2-input" value="0">
+                    <label class="form-label" for="flotilla-prima-total">Prima Total</label>
+                    <input id="flotilla-prima-total" type="number" min="0" step="0.01" class="swal2-input" value="0">
+                    <div class="form-check text-start mt-3 p-3 border border-warning rounded bg-warning bg-opacity-10">
+                        <input id="flotilla-generar-endoso" type="checkbox" class="form-check-input" checked>
+                        <label class="form-check-label fw-bold text-warning" for="flotilla-generar-endoso">
+                            Generar Recibo de Cobro
+                            <span class="d-block fw-normal">Desmarca esta opción para una migración o alta silenciosa.</span>
+                        </label>
+                    </div>
+                </div>`,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar Unidad',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const inciso = document.getElementById('flotilla-inciso')?.value.trim() || '';
+                const vehiculo = document.getElementById('flotilla-vehiculo')?.value.trim() || '';
+                const primaNeta = Number(document.getElementById('flotilla-prima-neta')?.value);
+                const primaTotal = Number(document.getElementById('flotilla-prima-total')?.value);
+                const generarEndosoCobro = document.getElementById('flotilla-generar-endoso')?.checked === true;
+                if (!inciso || !vehiculo) {
+                    Swal.showValidationMessage('El inciso y el vehículo son obligatorios.');
+                    return false;
+                }
+                if (!Number.isFinite(primaNeta) || primaNeta < 0
+                    || !Number.isFinite(primaTotal) || primaTotal < 0
+                    || primaNeta > primaTotal) {
+                    Swal.showValidationMessage('Captura primas válidas; la prima neta no puede exceder la prima total.');
+                    return false;
+                }
+                if (generarEndosoCobro && primaTotal <= 0) {
+                    Swal.showValidationMessage('La prima total debe ser mayor que cero para generar un cobro.');
+                    return false;
+                }
+                return {
+                    inciso,
+                    vehiculo,
+                    serie: document.getElementById('flotilla-serie')?.value.trim() || '',
+                    motor: document.getElementById('flotilla-motor')?.value.trim() || '',
+                    placas: document.getElementById('flotilla-placas')?.value.trim() || '',
+                    primaNeta,
+                    primaTotal,
+                    generarEndosoCobro
+                };
+            }
+        });
+        if (!unidad) return;
+
+        try {
+            const respuesta = await fetchAPI(`/api/polizas/${encodeURIComponent(polizaId)}/unidades`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(unidad)
+            });
+            if (!respuesta?.success) throw new Error(respuesta?.error || 'No se pudo guardar la unidad.');
+            await Swal.fire(
+                'Unidad agregada',
+                respuesta.message || 'La unidad se agregó correctamente.',
+                'success'
+            );
+            await abrirModalFlotilla(polizaId);
+        } catch (error) {
+            console.error('[abrirModalAgregarUnidadFlotilla] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo agregar la unidad.', 'error');
+        }
+    }
+
+    function importarUnidadesFlotillaExcel(polizaId) {
+        if (!window.XLSX) {
+            Swal.fire('Error', 'No se pudo cargar la librería para leer archivos Excel.', 'error');
+            return;
+        }
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.xlsx,.xls';
+        input.hidden = true;
+        document.body.appendChild(input);
+        window.addEventListener('focus', () => {
+            window.setTimeout(() => input.remove(), 1000);
+        }, { once: true });
+
+        input.addEventListener('change', async () => {
+            const file = input.files?.[0];
+            input.remove();
+            if (!file) return;
+
+            try {
+                const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                if (!firstSheetName) throw new Error('El archivo no contiene hojas de cálculo.');
+                const worksheet = workbook.Sheets[firstSheetName];
+                const filas = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: true })
+                    .filter(fila => Object.values(fila).some(valor => String(valor ?? '').trim() !== ''));
+                if (!filas.length) throw new Error('La primera hoja no contiene unidades para importar.');
+
+                const normalizarEncabezado = valor => String(valor ?? '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]/g, '');
+                const obtenerValor = (fila, encabezados) => {
+                    const entrada = Object.entries(fila).find(([encabezado]) =>
+                        encabezados.includes(normalizarEncabezado(encabezado))
+                    );
+                    return entrada ? entrada[1] : '';
+                };
+                const convertirMonto = valor => {
+                    if (typeof valor === 'number') return valor;
+                    const texto = String(valor ?? '')
+                        .replace(/\b(?:MXN|USD)\b/gi, '')
+                        .replace(/[$,\s]/g, '')
+                        .trim();
+                    return texto ? Number(texto) : NaN;
+                };
+
+                const unidades = filas.map((fila, indice) => ({
+                    filaExcel: indice + 2,
+                    inciso: String(obtenerValor(fila, ['inciso'])).trim(),
+                    vehiculo: String(obtenerValor(fila, ['vehiculo', 'descripcionvehiculo'])).trim(),
+                    serie: String(obtenerValor(fila, ['serie', 'numeroserie', 'vin'])).trim(),
+                    motor: String(obtenerValor(fila, ['motor', 'numeromotor'])).trim(),
+                    placas: String(obtenerValor(fila, ['placas', 'placa'])).trim(),
+                    primaNeta: convertirMonto(obtenerValor(fila, ['primaneta'])),
+                    primaTotal: convertirMonto(obtenerValor(fila, ['primatotal']))
+                }));
+                const filaInvalida = unidades.find(unidad =>
+                    !unidad.inciso
+                    || !unidad.vehiculo
+                    || !Number.isFinite(unidad.primaNeta)
+                    || unidad.primaNeta < 0
+                    || !Number.isFinite(unidad.primaTotal)
+                    || unidad.primaTotal < 0
+                    || unidad.primaNeta > unidad.primaTotal
+                );
+                if (filaInvalida) {
+                    throw new Error(
+                        `Revisa la fila ${filaInvalida.filaExcel}: se requieren Inciso, Vehículo y primas válidas.`
+                    );
+                }
+
+                const respuesta = await fetchAPI(
+                    `/api/polizas/${encodeURIComponent(polizaId)}/unidades/bulk`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            unidades: unidades.map(({ filaExcel, ...unidad }) => unidad)
+                        })
+                    }
+                );
+                if (!respuesta?.success) {
+                    throw new Error(respuesta?.error || 'No se pudieron importar las unidades.');
+                }
+                await Swal.fire(
+                    'Importación completa',
+                    respuesta.message || `Se importaron ${respuesta.importedCount} unidades en alta silenciosa.`,
+                    'success'
+                );
+                await abrirModalFlotilla(polizaId);
+            } catch (error) {
+                console.error('[importarUnidadesFlotillaExcel] Error:', error);
+                await Swal.fire('Error de importación', error.message || 'No se pudo procesar el archivo Excel.', 'error');
+                await abrirModalFlotilla(polizaId);
+            }
+        }, { once: true });
+        input.click();
     }
 
     async function abrirModalVerEndosos(polizaId) {
@@ -16077,7 +16616,7 @@ Fecha de firma: {{FECHA}}`;
         recargarKanbanReactivo,
         mostrarOverlayKanban,
         toggleFiltroNoLeidos,
-        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, agregarEndosoPoliza, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, agregarNotaPoliza, verHistorialPoliza, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, agregarEndosoPoliza, abrirModalFlotilla, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, agregarNotaPoliza, verHistorialPoliza, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         actualizarVistaReporteCobranza, cambiarMesReporteCobranza, filtrarReporteCobranza,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,

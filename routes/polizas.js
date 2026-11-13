@@ -64,6 +64,9 @@ router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtene
 router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
 router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
 router.post('/:id/enviar-aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPago);
+router.post('/:id/unidades/bulk', auth, applyTenantFilter, polizaController.importarUnidadesFlotillaMasivo);
+router.post('/:id/unidades', auth, applyTenantFilter, polizaController.agregarUnidadFlotilla);
+router.patch('/:id/unidades/:unidadId/baja', auth, applyTenantFilter, polizaController.darDeBajaUnidadFlotilla);
 router.post('/:id/endosos', auth, applyTenantFilter, polizaController.agregarEndoso);
 router.put('/:id/endosos/:endosoId/estatus', auth, applyTenantFilter, polizaController.actualizarEndosoPagado);
 router.post('/:id/endosos/:endosoId/aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPagoEndoso);

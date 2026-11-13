@@ -638,7 +638,7 @@ async function vincularOCrearCliente({
 
 const crearPoliza = async (req, res) => {
     try {
-        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, aseguradora, fechas, primaTotal, moneda, primaNeta, otrosServiciosContratados: otrosServiciosSolicitados, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
+        const { numeroPoliza, cliente, clienteEmail, clienteTelefono, numeroSerie, descripcionVehiculo, vehiculo, placas, motor, tipoPago, conductoPago, duracionMeses: duracionMesesSolicitada, tipoSeguro, tipoPoliza, aseguradora, fechas, primaTotal, moneda, primaNeta, otrosServiciosContratados: otrosServiciosSolicitados, gastosExpedicion, recargoPagoFraccionado, iva, emisionEnPrimerPago, documentoDriveId, inciso, paquete, montoAbono, primerPago, diasAnticipacionAviso, clienteId, asesorId, estado } = req.body;
         const cargoAutomatico = validarCamposCargoAutomatico(req.body);
         if (cargoAutomatico.error) {
             return res.status(400).json({ error: cargoAutomatico.error });
@@ -648,6 +648,9 @@ const crearPoliza = async (req, res) => {
         }
         if (moneda !== undefined && !['MXN', 'USD'].includes(moneda)) {
             return res.status(400).json({ error: 'La moneda debe ser MXN o USD.' });
+        }
+        if (tipoPoliza !== undefined && !['Individual', 'Flotilla'].includes(tipoPoliza)) {
+            return res.status(400).json({ error: 'El tipo de póliza no es válido.' });
         }
         const otrosServiciosContratados = otrosServiciosSolicitados === undefined
             || otrosServiciosSolicitados === null
@@ -707,6 +710,7 @@ const crearPoliza = async (req, res) => {
                 : '',
             duracionMeses,
             tipoSeguro,
+            tipoPoliza: tipoPoliza || 'Individual',
             aseguradora,
             fechas: fechasNormalizadas,
             primaTotal,
@@ -1599,6 +1603,16 @@ const actualizarPoliza = async (req, res) => {
         }
         if (datosActualizacion.moneda !== undefined && !['MXN', 'USD'].includes(datosActualizacion.moneda)) {
             return res.status(400).json({ error: 'La moneda debe ser MXN o USD.' });
+        }
+        if (datosActualizacion.tipoPoliza !== undefined
+            && !['Individual', 'Flotilla'].includes(datosActualizacion.tipoPoliza)) {
+            return res.status(400).json({ error: 'El tipo de póliza no es válido.' });
+        }
+        if (datosActualizacion.tipoPoliza === 'Individual'
+            && (polizaExistente.unidadesFlotilla || []).length > 0) {
+            return res.status(409).json({
+                error: 'No se puede cambiar a Individual mientras la póliza conserve unidades de flotilla.'
+            });
         }
 
         if (datosActualizacion.duracionMeses !== undefined) {
@@ -6748,6 +6762,319 @@ const agregarEndoso = async (req, res) => {
     }
 };
 
+const agregarUnidadFlotilla = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza no es válido.' });
+        }
+
+        const {
+            inciso,
+            vehiculo,
+            serie = '',
+            motor = '',
+            placas = '',
+            primaNeta = 0,
+            primaTotal = 0,
+            generarEndosoCobro
+        } = req.body || {};
+        const incisoNormalizado = typeof inciso === 'string' ? inciso.trim() : '';
+        const vehiculoNormalizado = typeof vehiculo === 'string' ? vehiculo.trim() : '';
+        const primaNetaNumero = Number(primaNeta);
+        const primaTotalNumero = Number(primaTotal);
+        if (!incisoNormalizado || !vehiculoNormalizado) {
+            return res.status(400).json({ success: false, error: 'El inciso y el vehículo son obligatorios.' });
+        }
+        if ([serie, motor, placas].some(valor => typeof valor !== 'string')) {
+            return res.status(400).json({ success: false, error: 'Serie, motor y placas deben ser texto.' });
+        }
+        if (!Number.isFinite(primaNetaNumero) || primaNetaNumero < 0
+            || !Number.isFinite(primaTotalNumero) || primaTotalNumero < 0
+            || primaNetaNumero > primaTotalNumero) {
+            return res.status(400).json({
+                success: false,
+                error: 'Las primas deben ser montos válidos y la prima neta no puede exceder la prima total.'
+            });
+        }
+        if (typeof generarEndosoCobro !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'Indica si se debe generar el recibo de cobro.' });
+        }
+        if (generarEndosoCobro && primaTotalNumero <= 0) {
+            return res.status(400).json({ success: false, error: 'La prima total debe ser mayor que cero para generar un cobro.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        if (poliza.tipoPoliza !== 'Flotilla') {
+            return res.status(409).json({ success: false, error: 'La póliza debe estar marcada como Flotilla.' });
+        }
+        const incisoDuplicado = (poliza.unidadesFlotilla || []).some(unidad =>
+            unidad.estado === 'activa'
+            && String(unidad.inciso).trim().toLowerCase() === incisoNormalizado.toLowerCase()
+        );
+        if (incisoDuplicado) {
+            return res.status(409).json({ success: false, error: 'Ya existe una unidad activa con ese inciso.' });
+        }
+
+        const unidad = {
+            inciso: incisoNormalizado,
+            vehiculo: vehiculoNormalizado,
+            serie: serie.trim(),
+            motor: motor.trim(),
+            placas: placas.trim(),
+            primaNeta: primaNetaNumero,
+            primaTotal: primaTotalNumero,
+            estado: 'activa',
+            fechaAlta: new Date(),
+            fechaBaja: null
+        };
+        poliza.unidadesFlotilla.push(unidad);
+
+        if (generarEndosoCobro) {
+            const endososPrevios = [
+                ...(poliza.endosos || []),
+                ...(poliza.recibos || []).filter(recibo => /^END(?:-|$)/i.test(String(recibo.numeroRecibo || '')))
+            ];
+            const numeroEndoso = endososPrevios.reduce((maximo, endoso) => {
+                const numero = Number(String(endoso.numeroRecibo || '').match(/^END-(\d+)$/i)?.[1]);
+                return Number.isInteger(numero) ? Math.max(maximo, numero) : maximo;
+            }, 0) + 1;
+            const fechaVencimientoRecibo = new Date();
+            fechaVencimientoRecibo.setHours(12, 0, 0, 0);
+            poliza.endosos.push({
+                numeroRecibo: `END-${numeroEndoso}`,
+                periodoCobertura: `Alta unidad inciso ${incisoNormalizado}`,
+                montoRecibo: primaTotalNumero,
+                montoPagoNeto: primaNetaNumero,
+                fechaEmision: new Date(),
+                fechaVencimientoRecibo,
+                fechaFinGraciaRecibo: fechaVencimientoRecibo,
+                estadoRecibo: 'pendiente'
+            });
+
+            const recibosPendientes = [...(poliza.recibos || []), ...poliza.endosos].filter(recibo =>
+                ['pendiente', 'atrasado'].includes(String(recibo.estadoRecibo || '').toLowerCase())
+            );
+            poliza.saldoRestante = Number(recibosPendientes.reduce(
+                (total, recibo) => total + (Number(recibo.montoRecibo) || 0),
+                0
+            ).toFixed(2));
+            poliza.proximoPago = recibosPendientes
+                .map(recibo => recibo.fechaVencimientoRecibo)
+                .filter(Boolean)
+                .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+            poliza.estadoPago = [...(poliza.recibos || []), ...poliza.endosos].some(recibo =>
+                String(recibo.estadoRecibo || '').toLowerCase() === 'pagado'
+            ) ? 'al_corriente' : (poliza.saldoRestante > 0 ? 'pendiente' : 'pagado_completo');
+        }
+
+        try {
+            await poliza.save();
+        } catch (error) {
+            if (error.name === 'VersionError') {
+                return res.status(409).json({
+                    success: false,
+                    error: 'La póliza cambió mientras se registraba la unidad. Actualiza la información e inténtalo de nuevo.'
+                });
+            }
+            throw error;
+        }
+
+        const unidadGuardada = poliza.unidadesFlotilla[poliza.unidadesFlotilla.length - 1];
+        return res.status(generarEndosoCobro ? 201 : 200).json({
+            success: true,
+            message: generarEndosoCobro
+                ? 'Unidad agregada y recibo de endoso generado.'
+                : 'Unidad agregada en alta silenciosa.',
+            unidad: unidadGuardada,
+            poliza
+        });
+    } catch (error) {
+        console.error('[agregarUnidadFlotilla] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo agregar la unidad a la flotilla.' });
+    }
+};
+
+const importarUnidadesFlotillaMasivo = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza no es válido.' });
+        }
+
+        const unidadesEntrada = Array.isArray(req.body) ? req.body : req.body?.unidades;
+        if (!Array.isArray(unidadesEntrada) || unidadesEntrada.length === 0) {
+            return res.status(400).json({ success: false, error: 'El archivo no contiene unidades para importar.' });
+        }
+        if (unidadesEntrada.length > 500) {
+            return res.status(413).json({ success: false, error: 'La importación no puede exceder 500 unidades por lote.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        if (poliza.tipoPoliza !== 'Flotilla') {
+            return res.status(409).json({ success: false, error: 'La póliza debe estar marcada como Flotilla.' });
+        }
+
+        const incisosActivos = new Set((poliza.unidadesFlotilla || [])
+            .filter(unidad => unidad.estado === 'activa')
+            .map(unidad => String(unidad.inciso).trim().toLowerCase()));
+        const unidadesNormalizadas = [];
+        for (let indice = 0; indice < unidadesEntrada.length; indice++) {
+            const entrada = unidadesEntrada[indice] || {};
+            const fila = indice + 2;
+            const inciso = typeof entrada.inciso === 'string' ? entrada.inciso.trim() : '';
+            const vehiculo = typeof entrada.vehiculo === 'string' ? entrada.vehiculo.trim() : '';
+            const serie = entrada.serie ?? '';
+            const motor = entrada.motor ?? '';
+            const placas = entrada.placas ?? '';
+            const primaNeta = entrada.primaNeta === '' || entrada.primaNeta === undefined
+                ? 0
+                : Number(entrada.primaNeta);
+            const primaTotal = entrada.primaTotal === '' || entrada.primaTotal === undefined
+                ? 0
+                : Number(entrada.primaTotal);
+            if (!inciso || !vehiculo) {
+                return res.status(400).json({
+                    success: false,
+                    error: `La fila ${fila} requiere inciso y vehículo.`
+                });
+            }
+            if ([serie, motor, placas].some(valor => typeof valor !== 'string')) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Serie, motor y placas deben ser texto (fila ${fila}).`
+                });
+            }
+            if (inciso.length > 50 || vehiculo.length > 200
+                || serie.length > 100 || motor.length > 100 || placas.length > 30) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Uno o más campos exceden su longitud permitida (fila ${fila}).`
+                });
+            }
+            if (!Number.isFinite(primaNeta) || primaNeta < 0
+                || !Number.isFinite(primaTotal) || primaTotal < 0
+                || primaNeta > primaTotal) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Las primas de la fila ${fila} no son válidas.`
+                });
+            }
+            const incisoClave = inciso.toLowerCase();
+            if (incisosActivos.has(incisoClave)) {
+                return res.status(409).json({
+                    success: false,
+                    error: `El inciso "${inciso}" ya existe como unidad activa (fila ${fila}).`
+                });
+            }
+            incisosActivos.add(incisoClave);
+            unidadesNormalizadas.push({
+                inciso,
+                vehiculo,
+                serie: serie.trim(),
+                motor: motor.trim(),
+                placas: placas.trim(),
+                primaNeta,
+                primaTotal,
+                estado: 'activa',
+                fechaAlta: new Date(),
+                fechaBaja: null
+            });
+        }
+
+        poliza.unidadesFlotilla.push(...unidadesNormalizadas);
+        try {
+            await poliza.save();
+        } catch (error) {
+            if (error.name === 'VersionError') {
+                return res.status(409).json({
+                    success: false,
+                    error: 'La póliza cambió durante la importación. Actualiza la información e inténtalo de nuevo.'
+                });
+            }
+            throw error;
+        }
+        return res.json({
+            success: true,
+            message: `Se importaron ${unidadesNormalizadas.length} unidades en alta silenciosa.`,
+            importedCount: unidadesNormalizadas.length
+        });
+    } catch (error) {
+        console.error('[importarUnidadesFlotillaMasivo] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudieron importar las unidades de flotilla.' });
+    }
+};
+
+const darDeBajaUnidadFlotilla = async (req, res) => {
+    try {
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ success: false, error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)
+            || !mongoose.Types.ObjectId.isValid(req.params.unidadId)) {
+            return res.status(400).json({ success: false, error: 'El identificador de póliza o unidad no es válido.' });
+        }
+
+        const poliza = await Poliza.findOne({
+            _id: req.params.id,
+            ...filtroTenant,
+            deletedAt: null
+        });
+        if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+        if (poliza.tipoPoliza !== 'Flotilla') {
+            return res.status(409).json({ success: false, error: 'La póliza debe estar marcada como Flotilla.' });
+        }
+        const unidad = poliza.unidadesFlotilla.id(req.params.unidadId);
+        if (!unidad) return res.status(404).json({ success: false, error: 'Unidad de flotilla no encontrada.' });
+        if (unidad.estado === 'baja') {
+            return res.status(409).json({ success: false, error: 'La unidad ya está dada de baja.' });
+        }
+
+        unidad.estado = 'baja';
+        unidad.fechaBaja = new Date();
+        try {
+            await poliza.save();
+        } catch (error) {
+            if (error.name === 'VersionError') {
+                return res.status(409).json({
+                    success: false,
+                    error: 'La póliza cambió mientras se daba de baja la unidad. Actualiza la información e inténtalo de nuevo.'
+                });
+            }
+            throw error;
+        }
+        return res.json({
+            success: true,
+            message: 'Unidad dada de baja correctamente.',
+            unidad,
+            poliza
+        });
+    } catch (error) {
+        console.error('[darDeBajaUnidadFlotilla] Error:', error);
+        return res.status(500).json({ success: false, error: 'No se pudo dar de baja la unidad.' });
+    }
+};
+
 const actualizarEndosoPagado = async (req, res) => {
     try {
         const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
@@ -7404,6 +7731,9 @@ module.exports = {
     resolverCobranzaConPago,
     enviarAvisoPago,
     agregarEndoso,
+    agregarUnidadFlotilla,
+    importarUnidadesFlotillaMasivo,
+    darDeBajaUnidadFlotilla,
     actualizarEndosoPagado,
     enviarAvisoPagoEndoso,
     eliminarEndoso,

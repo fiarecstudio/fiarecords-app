@@ -159,6 +159,19 @@ const renovacionSchema = new mongoose.Schema({
     }
 }, { _id: true });
 
+const unidadFlotillaSchema = new mongoose.Schema({
+    inciso: { type: String, required: true },
+    vehiculo: { type: String, required: true },
+    serie: { type: String, default: '' },
+    motor: { type: String, default: '' },
+    placas: { type: String, default: '' },
+    primaNeta: { type: Number, default: 0 },
+    primaTotal: { type: Number, default: 0 },
+    estado: { type: String, enum: ['activa', 'baja'], default: 'activa' },
+    fechaAlta: { type: Date, default: Date.now },
+    fechaBaja: { type: Date, default: null }
+});
+
 // ==========================================
 // ESQUEMA PRINCIPAL: POLIZA
 // ==========================================
@@ -273,6 +286,11 @@ const polizaSchema = new mongoose.Schema({
             values: ['Vehicular', 'Vida', 'Gastos Médicos', 'Daños'],
             message: '{VALUE} no es un tipo de seguro válido'
         }
+    },
+    tipoPoliza: {
+        type: String,
+        enum: ['Individual', 'Flotilla'],
+        default: 'Individual'
     },
     aseguradora: {
         type: String,
@@ -500,6 +518,10 @@ const polizaSchema = new mongoose.Schema({
         type: [reciboSchema],
         default: [],
         comment: 'Array de recibos estructurados (FASE 1 - nuevo, coexiste con pagos[])'
+    },
+    unidadesFlotilla: {
+        type: [unidadFlotillaSchema],
+        default: []
     },
     endosos: {
         type: [reciboSchema],
