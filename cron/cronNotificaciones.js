@@ -111,12 +111,23 @@ function obtenerRangoRenovacionMexico(fecha = new Date()) {
 
 async function procesarEstatusRenovacionDiario() {
     const { inicioHoy, inicioMasDe45Dias } = obtenerRangoRenovacionMexico();
+    const resultadoRelevo = await Poliza.updateMany(
+        {
+            deletedAt: null,
+            yaRenovada: true,
+            estado: { $in: ['Activa', 'PendienteRenovacion', 'Vencida'] },
+            'fechas.vencimiento': { $lt: inicioHoy }
+        },
+        { $set: { estado: 'Renovada' } }
+    );
     const filtroPolizasActivas = {
         deletedAt: null,
+        yaRenovada: { $ne: true },
         'fechas.vencimiento': { $gte: inicioHoy, $lt: inicioMasDe45Dias }
     };
     const filtroPendientesLejanas = {
         deletedAt: null,
+        yaRenovada: { $ne: true },
         'fechas.vencimiento': { $gte: inicioMasDe45Dias }
     };
 
@@ -131,6 +142,7 @@ async function procesarEstatusRenovacionDiario() {
 
     console.log(
         `[Cron Estatus Pólizas] Actualización completada: `
+        + `${resultadoRelevo.modifiedCount} relevadas a Renovada, `
         + `${resultadoPendientes.modifiedCount} pendientes de renovación, `
         + `${resultadoActivas.modifiedCount} reactivadas.`
     );
@@ -191,7 +203,7 @@ async function procesarNotificacionesDiarias() {
                 }
 
                 // NOTIFICACIONES DE VENCIMIENTO DE PÓLIZA
-                if (poliza.fechas && poliza.fechas.vencimiento) {
+                if (poliza.yaRenovada !== true && poliza.fechas && poliza.fechas.vencimiento) {
                     const diasRestantes = obtenerDiasRestantesMexico(
                         poliza.fechas.vencimiento,
                         hoyMexico
@@ -225,7 +237,9 @@ async function procesarNotificacionesDiarias() {
                 }
 
                 // Marcar vencida cuando termina el periodo de gracia para renovar.
-                if (poliza.fechas?.vencimiento && !['Cancelada', 'Renovada'].includes(poliza.estado)) {
+                if (poliza.yaRenovada !== true
+                    && poliza.fechas?.vencimiento
+                    && !['Cancelada', 'Renovada'].includes(poliza.estado)) {
                     const diasGracia = obtenerDiasGraciaPoliza(poliza);
                     const fechaLimiteRenovacion = poliza.fechaLimiteRenovacion
                         || new Date(

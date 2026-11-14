@@ -2392,7 +2392,9 @@ const obtenerMetricasSeguros = async (req, res) => {
                 ? new Date(poliza.fechaLimiteRenovacion)
                 : vencimiento && new Date(vencimiento.getTime() + diasGracia * 86400000);
 
-            if (vencimiento && poliza.estado !== 'Cancelada' && poliza.estado !== 'Renovada') {
+            if (poliza.yaRenovada === true && poliza.estado !== 'Cancelada') {
+                poliza.estado = vencimiento && hoy > vencimiento ? 'Renovada' : 'Activa';
+            } else if (vencimiento && poliza.estado !== 'Cancelada' && poliza.estado !== 'Renovada') {
                 if (hoy > vencimiento && fechaLimite && hoy <= fechaLimite) {
                     poliza.estado = 'PendienteRenovacion';
                 } else if (fechaLimite && hoy > fechaLimite) {
@@ -2401,7 +2403,7 @@ const obtenerMetricasSeguros = async (req, res) => {
             }
 
             const fechaPago = fechaFinGraciaRecibo;
-            if (estadoOriginal === 'Activa' && fechaPago && !Number.isNaN(fechaPago.getTime())
+            if (poliza.yaRenovada !== true && estadoOriginal === 'Activa' && fechaPago && !Number.isNaN(fechaPago.getTime())
                 && fechaPago < hoy && poliza.estadoPago !== 'pagado_completo') {
                 poliza.estado = 'Vencida';
                 poliza.tipoUrgencia = 'pago_vencido';
@@ -2425,7 +2427,8 @@ const obtenerMetricasSeguros = async (req, res) => {
             .slice(0, 10);
         const porVencer = polizasFormateadas.filter(p => {
             const vencimiento = p.fechas?.vencimiento ? new Date(p.fechas.vencimiento) : null;
-            return p.estado !== 'Cancelada' && vencimiento && vencimiento >= hoy && vencimiento <= limiteVencimientos;
+            return p.yaRenovada !== true && p.estado !== 'Cancelada'
+                && vencimiento && vencimiento >= hoy && vencimiento <= limiteVencimientos;
         }).length;
         const pagosPendientes = polizasFormateadas.filter(p =>
             p.estado !== 'Cancelada' && p.estadoPago !== 'pagado_completo'
@@ -3220,7 +3223,14 @@ const eliminarPago = async (req, res) => {
                 proximoPago.setMonth(proximoPago.getMonth() - 1);
                 poliza.proximoPago = proximoPago;
             }
-            poliza.estado = 'PendienteRenovacion';
+            const vencimientoPoliza = poliza.fechas?.vencimiento
+                ? new Date(poliza.fechas.vencimiento)
+                : null;
+            poliza.estado = poliza.yaRenovada === true
+                ? (poliza.estado === 'Cancelada'
+                    ? 'Cancelada'
+                    : vencimientoPoliza && vencimientoPoliza > new Date() ? 'Activa' : 'Renovada')
+                : 'PendienteRenovacion';
             poliza.estadoPago = 'pendiente';
         }
         await poliza.save();
@@ -3587,6 +3597,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                         },
                         {
                             recibos: null,
+                            yaRenovada: { $ne: true },
                             estado: { $in: estadosPolizaSinRecibos }
                         }
                     ]
@@ -3781,6 +3792,7 @@ const obtenerCobranzaDiaria = async (req, res) => {
                                 $cond: [
                                     {
                                         $and: [
+                                            { $ne: [{ $ifNull: ['$yaRenovada', false] }, true] },
                                             { $ne: ['$diasRestantesVencimiento', null] },
                                             {
                                                 $or: [
@@ -4534,6 +4546,7 @@ const renovarPolizaManual = async (req, res) => {
     let nuevaPoliza;
     let polizaAnterior;
     let estadoAnterior;
+    let yaRenovadaAnterior;
     try {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
@@ -4582,12 +4595,17 @@ const renovarPolizaManual = async (req, res) => {
         }
 
         estadoAnterior = polizaAnterior.estado;
+        yaRenovadaAnterior = polizaAnterior.yaRenovada;
         nuevaPoliza = new Poliza({
             empresaId,
             asesorId: polizaAnterior.asesorId || asesorId,
             asesorNombre: polizaAnterior.asesorNombre || 'General',
             clienteId: polizaAnterior.clienteId,
             polizaAnteriorId: polizaAnterior._id,
+            tipoPoliza: polizaAnterior.tipoPoliza || 'Individual',
+            unidadesFlotilla: (polizaAnterior.unidadesFlotilla || []).map(unidad =>
+                unidad.toObject ? unidad.toObject() : { ...unidad }
+            ),
             numeroPoliza,
             cliente: polizaAnterior.cliente,
             clienteEmail: polizaAnterior.clienteEmail,
@@ -4650,19 +4668,32 @@ const renovarPolizaManual = async (req, res) => {
         }
 
         await nuevaPoliza.save();
-        polizaAnterior.estado = 'Renovada';
+        const vencimientoAnterior = polizaAnterior.fechas?.vencimiento
+            ? new Date(polizaAnterior.fechas.vencimiento)
+            : null;
+        polizaAnterior.yaRenovada = true;
+        polizaAnterior.estado = vencimientoAnterior
+            && !Number.isNaN(vencimientoAnterior.getTime())
+            && vencimientoAnterior > new Date()
+            ? 'Activa'
+            : 'Renovada';
         await polizaAnterior.save();
 
         return res.status(201).json({
             success: true,
             message: 'Renovación manual realizada exitosamente',
             poliza: nuevaPoliza,
-            polizaAntigua: { id: polizaAnterior._id, estado: polizaAnterior.estado }
+            polizaAntigua: {
+                id: polizaAnterior._id,
+                estado: polizaAnterior.estado,
+                yaRenovada: polizaAnterior.yaRenovada
+            }
         });
     } catch (error) {
-        if (polizaAnterior && estadoAnterior !== undefined && polizaAnterior.estado !== estadoAnterior) {
+        if (polizaAnterior && estadoAnterior !== undefined) {
             try {
                 polizaAnterior.estado = estadoAnterior;
+                polizaAnterior.yaRenovada = yaRenovadaAnterior;
                 await polizaAnterior.save();
             } catch (restoreError) {
                 console.error('[renovarPolizaManual] No se pudo restaurar el estado anterior:', restoreError);
@@ -4689,6 +4720,7 @@ const renovarPolizaManual = async (req, res) => {
 const renovarPoliza = async (req, res) => {
     let polizaViejaParaRestaurar = null;
     let estadoAnteriorPoliza = null;
+    let yaRenovadaAnterior = null;
     let nuevaPolizaGuardada = false;
     try {
         console.log('[RENOVAR] Iniciando proceso de renovación...');
@@ -4745,7 +4777,16 @@ const renovarPoliza = async (req, res) => {
 
         polizaViejaParaRestaurar = polizaAntigua;
         estadoAnteriorPoliza = polizaAntigua.estado;
-        polizaAntigua.estado = 'Renovada';
+        yaRenovadaAnterior = polizaAntigua.yaRenovada;
+        const vencimientoAnterior = polizaAntigua.fechas?.vencimiento
+            ? new Date(polizaAntigua.fechas.vencimiento)
+            : null;
+        polizaAntigua.yaRenovada = true;
+        polizaAntigua.estado = vencimientoAnterior
+            && !Number.isNaN(vencimientoAnterior.getTime())
+            && vencimientoAnterior > new Date()
+            ? 'Activa'
+            : 'Renovada';
         await polizaAntigua.save();
 
         // PREPARACIÓN DE DATOS
@@ -4937,6 +4978,10 @@ const renovarPoliza = async (req, res) => {
             cliente: polizaAntigua.cliente,
             clienteEmail: polizaAntigua.clienteEmail,
             clienteTelefono: polizaAntigua.clienteTelefono,
+            tipoPoliza: polizaAntigua.tipoPoliza || 'Individual',
+            unidadesFlotilla: (polizaAntigua.unidadesFlotilla || []).map(unidad =>
+                unidad.toObject ? unidad.toObject() : { ...unidad }
+            ),
             numeroSerie: req.body.numeroSerie ?? polizaAntigua.numeroSerie ?? '',
             descripcionVehiculo: req.body.descripcionVehiculo ?? polizaAntigua.descripcionVehiculo ?? '',
             vehiculo: req.body.vehiculo ?? polizaAntigua.vehiculo ?? polizaAntigua.descripcionVehiculo ?? '',
@@ -5048,7 +5093,8 @@ const renovarPoliza = async (req, res) => {
             poliza: nuevaPoliza,
             polizaAntigua: {
                 id: polizaAntigua._id,
-                estado: polizaAntigua.estado
+                estado: polizaAntigua.estado,
+                yaRenovada: polizaAntigua.yaRenovada
             },
             nuevaPoliza
         });
@@ -5058,6 +5104,7 @@ const renovarPoliza = async (req, res) => {
         if (polizaViejaParaRestaurar && !nuevaPolizaGuardada) {
             try {
                 polizaViejaParaRestaurar.estado = estadoAnteriorPoliza;
+                polizaViejaParaRestaurar.yaRenovada = yaRenovadaAnterior;
                 await polizaViejaParaRestaurar.save();
             } catch (restoreError) {
                 console.error('[renovarPoliza] No se pudo restaurar el estado anterior:', restoreError);

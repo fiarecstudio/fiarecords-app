@@ -10803,6 +10803,8 @@ Fecha de firma: {{FECHA}}`;
         const polizasPagina = polizasPaginacionServidor
             ? polizasFiltradas
             : polizasFiltradas.slice(inicio, fin);
+        const hoyTabla = new Date();
+        hoyTabla.setHours(0, 0, 0, 0);
 
         tabla.innerHTML = polizasPagina.map(p => {
             const fechaVencimiento = p.fechas?.vencimiento
@@ -10811,6 +10813,11 @@ Fecha de firma: {{FECHA}}`;
             const fechaProximoPago = p.proximoPago
                 ? new Date(p.proximoPago).toLocaleDateString('es-MX')
                 : 'N/A';
+            const fechaInicio = p.fechas?.inicio ? new Date(p.fechas.inicio) : null;
+            const fechaInicioDia = fechaInicio && !Number.isNaN(fechaInicio.getTime())
+                ? new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate())
+                : null;
+            const iniciaPronto = fechaInicioDia && fechaInicioDia > hoyTabla;
             const estado = p.estado || 'Activa';
             const clasesEstado = {
                 Activa: 'success',
@@ -10829,6 +10836,12 @@ Fecha de firma: {{FECHA}}`;
             const badgeCargoAutomatico = esCargoAutomatico
                 ? '<span class="badge bg-warning text-dark ms-1">💳 CARGO AUTOMÁTICO</span>'
                 : '';
+            const badgeYaRenovada = estado === 'Activa' && p.yaRenovada === true
+                ? '<span class="badge bg-info text-dark">Ya renovada</span>'
+                : '';
+            const badgeIniciaPronto = iniciaPronto
+                ? `<span class="badge bg-primary">Inicia pronto · ${fechaInicio.toLocaleDateString('es-MX')}</span>`
+                : '';
             const btnRenovar = esPendienteRenovacion
                 ? `<button type="button" class="btn btn-sm btn-warning py-0 px-2 poliza-renew-button" style="font-size: 0.75rem;" data-poliza-action="renew" data-poliza-id="${escapeHTML(p._id)}" title="Renovar póliza">↻ Renovar</button>`
                 : '';
@@ -10844,7 +10857,7 @@ Fecha de firma: {{FECHA}}`;
                     <td data-label="Aseguradora" class="col-aseguradora">${escapeHTML(p.aseguradora || 'N/A')}</td>
                     <td data-label="Venc." class="date-value col-vencimiento">${fechaVencimiento}</td>
                     <td data-label="Próx. Pago" class="date-value col-proximo-pago">${fechaProximoPago}</td>
-                    <td data-label="Estado" class="polizas-col-estado col-estado"><span class="badge bg-${clasesEstado[estado] || 'secondary'}${clasesEstado[estado] === 'warning' ? ' text-dark' : ''}">${escapeHTML(etiquetaEstado)}</span></td>
+                    <td data-label="Estado" class="polizas-col-estado col-estado"><div class="d-flex flex-wrap gap-1 align-items-center"><span class="badge bg-${clasesEstado[estado] || 'secondary'}${clasesEstado[estado] === 'warning' ? ' text-dark' : ''}">${escapeHTML(etiquetaEstado)}</span>${badgeYaRenovada}${badgeIniciaPronto}</div></td>
                     <td data-label="Acciones" class="table-actions col-acciones">
                         <div class="polizas-action-buttons">
                             ${btnRenovar}

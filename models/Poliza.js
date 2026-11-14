@@ -203,6 +203,10 @@ const polizaSchema = new mongoose.Schema({
         ref: 'Poliza',
         default: null
     },
+    yaRenovada: {
+        type: Boolean,
+        default: false
+    },
     numeroPoliza: {
         type: String,
         required: [true, 'El número de póliza es obligatorio'],
