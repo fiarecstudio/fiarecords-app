@@ -60,6 +60,8 @@ router.get('/', auth, applyTenantFilter, polizaController.obtenerPolizas);
 // ==========================================
 // RUTAS ESPECÍFICAS - DEBEN IR ANTES DE /:id
 // ==========================================
+router.post('/pagos/masivo', auth, applyTenantFilter, upload.single('comprobante'), polizaController.registrarPagosMasivos);
+router.get('/comprobantes/:filename', auth, applyTenantFilter, polizaController.obtenerComprobantePago);
 router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
 router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
 router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);

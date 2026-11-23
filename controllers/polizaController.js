@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const Poliza = require('../models/Poliza');
 const Usuario = require('../models/Usuario');
 const Cliente = require('../models/Cliente');
@@ -6579,6 +6581,228 @@ const resolverCobranzaConPago = async (req, res) => {
     }
 };
 
+const registrarPagosMasivos = async (req, res) => {
+    let archivoComprobantePath = null;
+    let archivoReferenciado = false;
+    try {
+        const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant || !userId) {
+            return res.status(403).json({ ok: false, error: 'No se pudo determinar la empresa o el usuario.' });
+        }
+
+        let items = req.body?.items;
+        if (typeof items === 'string') {
+            try {
+                items = JSON.parse(items);
+            } catch (_error) {
+                return res.status(400).json({ ok: false, error: 'La lista de recibos no contiene JSON válido.' });
+            }
+        }
+        if (!Array.isArray(items) || items.length === 0 || items.length > 500) {
+            return res.status(400).json({ ok: false, error: 'Selecciona entre 1 y 500 recibos para registrar el pago.' });
+        }
+
+        const fechaPago = new Date(req.body?.fechaPago);
+        if (!req.body?.fechaPago || Number.isNaN(fechaPago.getTime())) {
+            return res.status(400).json({ ok: false, error: 'La fecha de pago no es válida.' });
+        }
+        const metodoPago = typeof req.body?.metodoPago === 'string' ? req.body.metodoPago.trim() : '';
+        const notas = typeof req.body?.notas === 'string' ? req.body.notas.trim() : '';
+        if (!metodoPago || metodoPago.length > 100) {
+            return res.status(400).json({ ok: false, error: 'El método de pago es obligatorio y no debe exceder 100 caracteres.' });
+        }
+        if (notas.length > 500) {
+            return res.status(400).json({ ok: false, error: 'Las notas no deben exceder 500 caracteres.' });
+        }
+
+        const grupos = new Map();
+        const combinaciones = new Set();
+        for (const item of items) {
+            const polizaId = String(item?.polizaId || '').trim();
+            const reciboId = String(item?.reciboId || '').trim();
+            const montoPagado = Number(item?.montoPagado);
+            if (!mongoose.Types.ObjectId.isValid(polizaId)
+                || !mongoose.Types.ObjectId.isValid(reciboId)
+                || !Number.isFinite(montoPagado)
+                || montoPagado <= 0) {
+                return res.status(400).json({ ok: false, error: 'Cada recibo debe incluir póliza, recibo y monto válido.' });
+            }
+            const clave = `${polizaId}:${reciboId}`;
+            if (combinaciones.has(clave)) {
+                return res.status(400).json({ ok: false, error: 'La selección contiene recibos duplicados.' });
+            }
+            combinaciones.add(clave);
+            if (!grupos.has(polizaId)) grupos.set(polizaId, []);
+            grupos.get(polizaId).push({ reciboId, montoPagado });
+        }
+
+        const polizasPreparadas = [];
+        for (const [polizaId, recibosSolicitados] of grupos) {
+            const poliza = await Poliza.findOne({
+                _id: polizaId,
+                ...filtroTenant,
+                deletedAt: null
+            });
+            if (!poliza) {
+                return res.status(404).json({ ok: false, error: 'Una de las pólizas seleccionadas no existe o no pertenece a tu empresa.' });
+            }
+
+            const recibosPreparados = [];
+            for (const solicitado of recibosSolicitados) {
+                const recibo = poliza.recibos?.id(solicitado.reciboId);
+                if (!recibo) {
+                    return res.status(404).json({ ok: false, error: 'Uno de los recibos seleccionados no existe.' });
+                }
+                const estadoRecibo = String(recibo.estadoRecibo || recibo.estado || 'pendiente').toLowerCase();
+                if (!['pendiente', 'atrasado'].includes(estadoRecibo)) {
+                    return res.status(409).json({ ok: false, error: `El recibo ${recibo.numeroRecibo || ''} ya no está pendiente.` });
+                }
+                recibosPreparados.push({ recibo, montoPagado: solicitado.montoPagado });
+            }
+            polizasPreparadas.push({ poliza, recibos: recibosPreparados });
+        }
+
+        let comprobanteUrl = '';
+        if (req.file) {
+            const tiposPermitidos = {
+                'application/pdf': { extension: 'pdf', valido: buffer => buffer.subarray(0, 5).toString('ascii') === '%PDF-' },
+                'image/jpeg': { extension: 'jpg', valido: buffer => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff },
+                'image/png': { extension: 'png', valido: buffer => buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) }
+            };
+            const tipo = tiposPermitidos[req.file.mimetype];
+            if (!tipo || req.file.size > 5 * 1024 * 1024 || !tipo.valido(req.file.buffer)) {
+                return res.status(400).json({ ok: false, error: 'El comprobante debe ser PDF, JPG o PNG válido y no exceder 5 MB.' });
+            }
+            const nombreArchivo = `${crypto.randomBytes(18).toString('hex')}.${tipo.extension}`;
+            const directorioComprobantes = path.join(__dirname, '..', 'uploads', 'comprobantes-pago');
+            archivoComprobantePath = path.join(directorioComprobantes, nombreArchivo);
+            await fs.promises.mkdir(directorioComprobantes, { recursive: true });
+            await fs.promises.writeFile(archivoComprobantePath, req.file.buffer, { flag: 'wx' });
+            comprobanteUrl = `/api/polizas/comprobantes/${nombreArchivo}`;
+        }
+
+        for (const { poliza, recibos } of polizasPreparadas) {
+            for (const { recibo, montoPagado } of recibos) {
+                const indiceRecibo = poliza.recibos.findIndex(
+                    reciboPoliza => String(reciboPoliza._id) === String(recibo._id)
+                );
+                recibo.montoRecibo = montoPagado;
+                recibo.montoPagoNeto = calcularPagoNeto(
+                    poliza.primaNeta,
+                    poliza.recibos.length,
+                    Math.max(0, indiceRecibo),
+                    {
+                        otrosServiciosContratados: poliza.otrosServiciosContratados,
+                        primaTotal: poliza.primaTotal,
+                        gastosExpedicion: poliza.gastosExpedicion,
+                        montoAbono: poliza.montoAbono,
+                        primerPago: poliza.primerPago,
+                        emisionEnPrimerPago: poliza.emisionEnPrimerPago
+                    }
+                );
+                recibo.estadoRecibo = 'pagado';
+                recibo.montoPagado = (Number(recibo.montoPagado) || 0) + montoPagado;
+                recibo.fechaPago = fechaPago;
+                recibo.metodoPago = metodoPago;
+                recibo.notas = notas;
+                recibo.comentarioCobranza = notas;
+                recibo.registradoPor = userId;
+                recibo.gestorCobranza = poliza.asesorId || userId;
+                if (comprobanteUrl) {
+                    recibo.comprobante = comprobanteUrl;
+                    recibo.reciboUrl = comprobanteUrl;
+                }
+                if (!Array.isArray(recibo.historialComentarios)) recibo.historialComentarios = [];
+                recibo.historialComentarios.push({
+                    texto: notas || 'Pago aplicado',
+                    gestor: recibo.gestorCobranza,
+                    tipo: 'pago'
+                });
+                poliza.pagos.push({
+                    reciboId: recibo._id,
+                    fechaPago,
+                    monto: montoPagado,
+                    estado: 'pagado',
+                    metodoPago,
+                    ...(comprobanteUrl ? { reciboUrl: comprobanteUrl, comprobante: comprobanteUrl } : {})
+                });
+            }
+
+            const recibosPendientes = [
+                ...(poliza.recibos || []),
+                ...(poliza.endosos || [])
+            ].filter(recibo => ['pendiente', 'atrasado'].includes(
+                String(recibo.estadoRecibo || recibo.estado || '').toLowerCase()
+            ));
+            poliza.saldoRestante = recibosPendientes.reduce(
+                (total, recibo) => total + (Number(recibo.montoRecibo) || 0),
+                0
+            );
+            poliza.estadoPago = poliza.saldoRestante === 0 ? 'pagado_completo' : 'al_corriente';
+            poliza.proximoPago = recibosPendientes
+                .map(recibo => recibo.fechaVencimientoRecibo)
+                .filter(Boolean)
+                .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+
+            await poliza.save();
+            if (comprobanteUrl) archivoReferenciado = true;
+        }
+
+        return res.json({
+            ok: true,
+            polizasActualizadas: polizasPreparadas.length,
+            recibosPagados: items.length
+        });
+    } catch (error) {
+        if (archivoComprobantePath && !archivoReferenciado) {
+            try {
+                await fs.promises.unlink(archivoComprobantePath);
+            } catch (cleanupError) {
+                if (cleanupError.code !== 'ENOENT') {
+                    console.error('[registrarPagosMasivos] No se pudo limpiar el comprobante:', cleanupError);
+                }
+            }
+        }
+        console.error('[registrarPagosMasivos] Error:', error);
+        return res.status(500).json({ ok: false, error: 'Error al registrar los pagos masivos.' });
+    }
+};
+
+const obtenerComprobantePago = async (req, res) => {
+    try {
+        const nombreArchivo = String(req.params.filename || '');
+        if (!/^[a-f0-9]{36}\.(?:pdf|jpg|png)$/.test(nombreArchivo)) {
+            return res.status(404).json({ error: 'Comprobante no encontrado.' });
+        }
+        const empresaId = req.user?.empresaId || req.usuario?.empresaId;
+        const filtroTenant = req.tenantFilter ?? (empresaId ? { empresaId } : null);
+        if (!filtroTenant) {
+            return res.status(403).json({ error: 'No se pudo determinar la empresa del usuario.' });
+        }
+        const urlComprobante = `/api/polizas/comprobantes/${nombreArchivo}`;
+        const poliza = await Poliza.findOne({
+            ...filtroTenant,
+            deletedAt: null,
+            'recibos.reciboUrl': urlComprobante
+        }).select('_id');
+        if (!poliza) {
+            return res.status(404).json({ error: 'Comprobante no encontrado.' });
+        }
+        const archivo = path.join(__dirname, '..', 'uploads', 'comprobantes-pago', nombreArchivo);
+        return res.sendFile(archivo, error => {
+            if (error) {
+                console.error('[obtenerComprobantePago] Error al leer el archivo:', error);
+                if (!res.headersSent) res.status(error.statusCode || 404).json({ error: 'No se pudo obtener el comprobante.' });
+            }
+        });
+    } catch (error) {
+        console.error('[obtenerComprobantePago] Error:', error);
+        return res.status(500).json({ error: 'Error al obtener el comprobante.' });
+    }
+};
+
 const enviarAvisoPago = async (req, res) => {
     try {
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
@@ -7752,6 +7976,8 @@ module.exports = {
     restaurarPoliza,
     eliminarDefinitivamente,
     registrarPago,
+    registrarPagosMasivos,
+    obtenerComprobantePago,
     asignarAsesor,
     exportarReporteExcel,
     exportarReportePDF,

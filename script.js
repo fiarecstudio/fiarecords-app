@@ -14452,6 +14452,391 @@ Fecha de firma: {{FECHA}}`;
         cargarPolizas(true);
     }
 
+    async function abrirModalPagoMasivo() {
+        let polizas;
+        try {
+            polizas = await obtenerTodasLasPolizas({ silent: false });
+            if (polizas?.offline) throw new Error('El pago masivo requiere conexión para consultar las pólizas.');
+        } catch (error) {
+            await Swal.fire('Error', error.message || 'No se pudieron cargar las pólizas.', 'error');
+            return;
+        }
+
+        const gruposCliente = new Map();
+        const normalizarNombreCliente = nombre => String(nombre || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLocaleLowerCase('es');
+        for (const poliza of polizas) {
+            const clienteId = poliza.clienteId && typeof poliza.clienteId === 'object'
+                ? poliza.clienteId._id
+                : poliza.clienteId;
+            const nombre = typeof poliza.cliente === 'string'
+                ? poliza.cliente
+                : poliza.cliente?.nombre || poliza.clienteId?.nombre || 'Cliente sin nombre';
+            const clave = clienteId
+                ? `id:${clienteId}`
+                : `nombre:${normalizarNombreCliente(nombre)}`;
+            if (!gruposCliente.has(clave)) {
+                gruposCliente.set(clave, { clave, nombre, polizas: [] });
+            }
+            gruposCliente.get(clave).polizas.push(poliza);
+        }
+
+        const conteoNombres = new Map();
+        for (const grupo of gruposCliente.values()) {
+            const nombreNormalizado = normalizarNombreCliente(grupo.nombre);
+            conteoNombres.set(nombreNormalizado, (conteoNombres.get(nombreNormalizado) || 0) + 1);
+        }
+        const gruposPorEtiqueta = new Map();
+        const opcionesCliente = [...gruposCliente.values()]
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+            .map(grupo => {
+                const nombreDuplicado = conteoNombres.get(normalizarNombreCliente(grupo.nombre)) > 1;
+                const etiqueta = nombreDuplicado
+                    ? `${grupo.nombre} · ${grupo.clave.slice(-6)}`
+                    : grupo.nombre;
+                gruposPorEtiqueta.set(etiqueta, grupo);
+                return `<option value="${escapeHTML(etiqueta)}"></option>`;
+            });
+        const fechaHoy = (() => {
+            const hoy = new Date();
+            return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+        })();
+        const seleccionados = new Set();
+        let filasActuales = [];
+        let filasVisibles = [];
+        let grupoActualClave = '';
+        let vistaActiva = 'primero';
+        let busquedaRecibos = '';
+
+        const resultado = await Swal.fire({
+            title: '💳 Pago Masivo por Cliente',
+            width: '1050px',
+            heightAuto: false,
+            html: `
+                <div class="text-start">
+                    <label class="form-label fw-semibold" for="pago-masivo-cliente">Cliente</label>
+                    <input id="pago-masivo-cliente" class="form-control mb-2" list="pago-masivo-clientes" placeholder="Busca y selecciona un cliente..." autocomplete="off">
+                    <datalist id="pago-masivo-clientes">${opcionesCliente.join('')}</datalist>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-3 mb-2">
+                        <div id="pago-masivo-filtros" class="d-flex flex-wrap gap-2" role="group" aria-label="Filtrar recibos visibles">
+                            <button type="button" class="btn btn-sm btn-outline-primary active" data-pago-masivo-vista="primero" aria-pressed="true">Solo 1er pago pendiente (por póliza)</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-pago-masivo-vista="mes" aria-pressed="false">Vencidos y del mes actual</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-pago-masivo-vista="todos" aria-pressed="false">Todos los recibos</button>
+                        </div>
+                        <input id="pago-masivo-busqueda" type="search" class="form-control form-control-sm ms-auto" style="width: 220px;" placeholder="Buscar póliza, vehículo o recibo..." aria-label="Buscar póliza, vehículo o recibo">
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="pago-masivo-seleccionar-todos">Seleccionar todos</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="pago-masivo-deseleccionar">Deseleccionar</button>
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="pago-masivo-seleccionar-vencidos">Seleccionar vencidos</button>
+                        <span id="pago-masivo-contador" class="small text-muted ms-auto" aria-live="polite">0 recibos seleccionados — Total: $0.00</span>
+                    </div>
+                    <div class="table-responsive border rounded" style="overflow-x: auto; max-height: 360px; overflow-y: auto;">
+                        <table id="pago-masivo-tabla" class="table table-sm table-hover align-middle mb-0" style="min-width: 1000px;">
+                            <thead class="table-light position-sticky top-0">
+                                <tr>
+                                    <th>✓</th><th>No. Póliza</th><th>Aseguradora</th><th>Vehículo / Concepto</th>
+                                    <th>No. Recibo</th><th>Vencimiento</th><th>Estatus</th><th class="text-end">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pago-masivo-recibos">
+                                <tr><td colspan="8" class="text-center text-muted py-4">Selecciona un cliente para ver sus recibos pendientes.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="row g-2 mt-3 text-start">
+                        <div class="col-12 col-sm-4">
+                            <label class="form-label small mb-1" for="pago-masivo-fecha">Fecha de Pago</label>
+                            <input id="pago-masivo-fecha" type="date" class="form-control" value="${fechaHoy}" required>
+                        </div>
+                        <div class="col-12 col-sm-4">
+                            <label class="form-label small mb-1" for="pago-masivo-metodo">Método de Pago</label>
+                            <select id="pago-masivo-metodo" class="form-select" required>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Tarjeta">Tarjeta</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-4">
+                            <label class="form-label small mb-1" for="pago-masivo-notas">Referencia / Notas</label>
+                            <input id="pago-masivo-notas" type="text" class="form-control" maxlength="500" placeholder="Pago masivo / Transferencia única">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1" for="pago-masivo-comprobante">Comprobante único (PDF/JPG/PNG opcional)</label>
+                            <input id="pago-masivo-comprobante" type="file" class="form-control" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                            <div class="form-text">Máximo 5 MB. Se asociará a todos los recibos del lote.</div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Registrar pagos',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#198754',
+            didOpen: () => {
+                const popup = Swal.getPopup();
+                if (popup) {
+                    popup.style.maxWidth = '96vw';
+                    const estilosTabla = document.createElement('style');
+                    estilosTabla.textContent = `
+                        #pago-masivo-tabla th,
+                        #pago-masivo-tabla td {
+                            color: #f1f5f9 !important;
+                            border-bottom: 1px solid #334155 !important;
+                            background-color: #0f172a !important;
+                        }
+                        #pago-masivo-tabla thead th {
+                            background-color: #1e293b !important;
+                        }
+                        #pago-masivo-tabla tbody tr.is-selected td {
+                            background-color: #1e3a5f !important;
+                        }
+                        #pago-masivo-tabla th:not(:nth-child(4)),
+                        #pago-masivo-tabla td:not(:nth-child(4)) {
+                            white-space: nowrap;
+                        }
+                        #pago-masivo-tabla th:nth-child(4),
+                        #pago-masivo-tabla td:nth-child(4) {
+                            min-width: 190px;
+                            white-space: normal;
+                        }
+                    `;
+                    popup.appendChild(estilosTabla);
+                }
+                const entradaCliente = document.getElementById('pago-masivo-cliente');
+                const cuerpoTabla = document.getElementById('pago-masivo-recibos');
+                const contador = document.getElementById('pago-masivo-contador');
+                const filtrosVista = document.getElementById('pago-masivo-filtros');
+                const actualizarContador = () => {
+                    const seleccionadosActuales = filasActuales.filter(fila => seleccionados.has(fila.clave));
+                    const totalesPorMoneda = new Map();
+                    seleccionadosActuales.forEach(fila => {
+                        const moneda = fila.poliza.moneda || 'MXN';
+                        totalesPorMoneda.set(moneda, (totalesPorMoneda.get(moneda) || 0) + fila.monto);
+                    });
+                    const totalTexto = totalesPorMoneda.size
+                        ? [...totalesPorMoneda.entries()]
+                            .map(([moneda, total]) => formatCurrency(total, moneda))
+                            .join(' + ')
+                        : formatCurrency(0);
+                    contador.textContent = `${seleccionadosActuales.length} recibos seleccionados — Total: ${totalTexto}`;
+                };
+                const pintarVista = () => {
+                    let candidatas = filasActuales;
+                    if (vistaActiva === 'primero') {
+                        const primerasPorPoliza = new Map();
+                        filasActuales.filter(fila => fila.habilitado).forEach(fila => {
+                            const clavePoliza = String(fila.poliza._id);
+                            const vencimiento = fila.recibo.fechaVencimientoRecibo
+                                ? new Date(fila.recibo.fechaVencimientoRecibo).getTime()
+                                : Number.POSITIVE_INFINITY;
+                            const existente = primerasPorPoliza.get(clavePoliza);
+                            if (!existente || vencimiento < existente.vencimiento) {
+                                primerasPorPoliza.set(clavePoliza, { fila, vencimiento });
+                            }
+                        });
+                        candidatas = [...primerasPorPoliza.values()].map(item => item.fila);
+                    } else if (vistaActiva === 'mes') {
+                        const hoy = new Date();
+                        const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+                        const finMes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(ultimoDiaMes).padStart(2, '0')}`;
+                        candidatas = filasActuales.filter(fila => fila.habilitado
+                            && fila.recibo.fechaVencimientoRecibo
+                            && String(fila.recibo.fechaVencimientoRecibo).slice(0, 10) <= finMes);
+                    } else if (vistaActiva !== 'todos') {
+                        candidatas = [];
+                    }
+
+                    const termino = normalizarNombreCliente(busquedaRecibos);
+                    filasVisibles = termino
+                        ? candidatas.filter(fila => [
+                            fila.poliza.numeroPoliza,
+                            fila.poliza.vehiculo,
+                            fila.poliza.descripcionVehiculo,
+                            fila.poliza.tipoSeguro,
+                            fila.recibo.numeroRecibo
+                        ].some(valor => normalizarNombreCliente(valor).includes(termino)))
+                        : candidatas;
+
+                    if (!filasVisibles.length) {
+                        const mensaje = filasActuales.length
+                            ? 'No hay recibos que coincidan con esta vista o búsqueda.'
+                            : 'Este cliente no tiene recibos pendientes.';
+                        cuerpoTabla.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">${mensaje}</td></tr>`;
+                        actualizarContador();
+                        return;
+                    }
+
+                    cuerpoTabla.innerHTML = filasVisibles.map(fila => {
+                        const { poliza, recibo, estado } = fila;
+                        const concepto = poliza.descripcionVehiculo || poliza.vehiculo || poliza.tipoSeguro || '—';
+                        const vencimiento = recibo.fechaVencimientoRecibo
+                            ? new Date(recibo.fechaVencimientoRecibo).toLocaleDateString('es-MX')
+                            : '—';
+                        const estaSeleccionado = seleccionados.has(fila.clave);
+                        return `
+                            <tr class="${estaSeleccionado ? 'is-selected' : ''}">
+                                <td><input type="checkbox" class="form-check-input" data-pago-masivo-recibo="${escapeHTML(fila.clave)}" aria-label="Seleccionar recibo" ${fila.habilitado ? '' : 'disabled'} ${estaSeleccionado ? 'checked' : ''}></td>
+                                <td>${escapeHTML(poliza.numeroPoliza || 'S/N')}</td>
+                                <td>${escapeHTML(poliza.aseguradora || '—')}</td>
+                                <td>${escapeHTML(concepto)}</td>
+                                <td>${escapeHTML(recibo.numeroRecibo || '—')}</td>
+                                <td>${escapeHTML(vencimiento)}</td>
+                                <td><span class="badge ${estado === 'atrasado' ? 'bg-danger' : 'bg-warning text-dark'}">${escapeHTML(estado)}</span></td>
+                                <td class="text-end">${formatCurrency(fila.monto, poliza.moneda || 'MXN')}</td>
+                            </tr>`;
+                    }).join('');
+                    actualizarContador();
+                };
+                const renderizarRecibos = grupo => {
+                    const claveGrupo = grupo?.clave || '';
+                    if (claveGrupo !== grupoActualClave) {
+                        grupoActualClave = claveGrupo;
+                        seleccionados.clear();
+                        filasActuales = [];
+                        busquedaRecibos = '';
+                        document.getElementById('pago-masivo-busqueda').value = '';
+                        if (grupo) {
+                            for (const poliza of grupo.polizas) {
+                                for (const recibo of (poliza.recibos || [])) {
+                                    const estado = String(recibo.estadoRecibo || recibo.estado || 'pendiente').toLowerCase();
+                                    if (estado === 'pagado' || !recibo._id) continue;
+                                    filasActuales.push({
+                                        clave: `${poliza._id}:${recibo._id}`,
+                                        poliza,
+                                        recibo,
+                                        estado,
+                                        habilitado: ['pendiente', 'atrasado'].includes(estado),
+                                        monto: Number(recibo.montoRecibo) || 0
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    pintarVista();
+                };
+
+                entradaCliente.addEventListener('input', () => {
+                    const grupo = gruposPorEtiqueta.get(entradaCliente.value.trim());
+                    renderizarRecibos(grupo || null);
+                });
+                filtrosVista.addEventListener('click', event => {
+                    const botonVista = event.target.closest('[data-pago-masivo-vista]');
+                    if (!botonVista) return;
+                    vistaActiva = botonVista.dataset.pagoMasivoVista;
+                    filtrosVista.querySelectorAll('[data-pago-masivo-vista]').forEach(boton => {
+                        const activo = boton === botonVista;
+                        boton.classList.toggle('active', activo);
+                        boton.setAttribute('aria-pressed', String(activo));
+                    });
+                    pintarVista();
+                });
+                document.getElementById('pago-masivo-busqueda').addEventListener('input', event => {
+                    busquedaRecibos = event.target.value;
+                    pintarVista();
+                });
+                cuerpoTabla.addEventListener('change', event => {
+                    const checkbox = event.target.closest('[data-pago-masivo-recibo]');
+                    if (!checkbox) return;
+                    if (checkbox.checked) seleccionados.add(checkbox.dataset.pagoMasivoRecibo);
+                    else seleccionados.delete(checkbox.dataset.pagoMasivoRecibo);
+                    checkbox.closest('tr')?.classList.toggle('is-selected', checkbox.checked);
+                    actualizarContador();
+                });
+                document.getElementById('pago-masivo-seleccionar-todos').addEventListener('click', () => {
+                    filasVisibles.filter(fila => fila.habilitado).forEach(fila => seleccionados.add(fila.clave));
+                    pintarVista();
+                });
+                document.getElementById('pago-masivo-deseleccionar').addEventListener('click', () => {
+                    filasVisibles.forEach(fila => seleccionados.delete(fila.clave));
+                    pintarVista();
+                });
+                document.getElementById('pago-masivo-seleccionar-vencidos').addEventListener('click', () => {
+                    const hoy = fechaHoy;
+                    filasVisibles.forEach(fila => {
+                        if (!fila.habilitado) return;
+                        if (fila.recibo.fechaVencimientoRecibo
+                            && String(fila.recibo.fechaVencimientoRecibo).slice(0, 10) < hoy) {
+                            seleccionados.add(fila.clave);
+                        } else {
+                            seleccionados.delete(fila.clave);
+                        }
+                    });
+                    pintarVista();
+                });
+                actualizarContador();
+            },
+            preConfirm: async () => {
+                const etiquetaCliente = document.getElementById('pago-masivo-cliente')?.value.trim() || '';
+                const grupo = gruposPorEtiqueta.get(etiquetaCliente);
+                if (!grupo || grupo.clave !== grupoActualClave) {
+                    Swal.showValidationMessage('Selecciona un cliente de la lista.');
+                    return false;
+                }
+                const recibosSeleccionados = filasActuales.filter(fila => seleccionados.has(fila.clave));
+                if (!recibosSeleccionados.length) {
+                    Swal.showValidationMessage('Selecciona al menos un recibo.');
+                    return false;
+                }
+                if (recibosSeleccionados.some(fila => !Number.isFinite(fila.monto) || fila.monto <= 0)) {
+                    Swal.showValidationMessage('Todos los recibos seleccionados deben tener un monto mayor a cero.');
+                    return false;
+                }
+                const fechaPago = document.getElementById('pago-masivo-fecha')?.value || '';
+                const metodoPago = document.getElementById('pago-masivo-metodo')?.value || '';
+                const notas = document.getElementById('pago-masivo-notas')?.value.trim() || '';
+                const archivo = document.getElementById('pago-masivo-comprobante')?.files?.[0];
+                if (!fechaPago || !metodoPago) {
+                    Swal.showValidationMessage('Indica la fecha y el método de pago.');
+                    return false;
+                }
+                if (archivo && (archivo.size > 5 * 1024 * 1024
+                    || !['application/pdf', 'image/jpeg', 'image/png'].includes(archivo.type))) {
+                    Swal.showValidationMessage('Adjunta un comprobante PDF, JPG o PNG de máximo 5 MB.');
+                    return false;
+                }
+
+                const formData = new FormData();
+                formData.append('items', JSON.stringify(recibosSeleccionados.map(fila => ({
+                    polizaId: fila.poliza._id,
+                    reciboId: fila.recibo._id,
+                    montoPagado: fila.monto
+                }))));
+                formData.append('fechaPago', fechaPago);
+                formData.append('metodoPago', metodoPago);
+                formData.append('notas', notas);
+                if (archivo) formData.append('comprobante', archivo);
+                try {
+                    Swal.showLoading();
+                    const respuesta = await fetchAPI('/api/polizas/pagos/masivo', {
+                        method: 'POST',
+                        body: formData,
+                        isFormData: true
+                    });
+                    if (!respuesta?.ok) throw new Error(respuesta?.error || 'No se pudieron registrar los pagos.');
+                    return respuesta;
+                } catch (error) {
+                    Swal.showValidationMessage(error.message || 'No se pudieron registrar los pagos.');
+                    return false;
+                }
+            }
+        });
+
+        if (!resultado.isConfirmed || !resultado.value) return;
+        await Promise.all([cargarCobranzaDiaria(true), cargarPolizas(true)]);
+        await Swal.fire({
+            title: 'Pagos registrados',
+            text: `${resultado.value.recibosPagados} recibos liquidados en ${resultado.value.polizasActualizadas} pólizas.`,
+            icon: 'success',
+            confirmButtonColor: '#198754'
+        });
+    }
+
     window.abrirModalPagos = abrirModalPagos;
     window.agregarEndosoPoliza = agregarEndosoPoliza;
     window.abrirModalVerEndosos = abrirModalVerEndosos;
@@ -16629,7 +17014,7 @@ Fecha de firma: {{FECHA}}`;
         recargarKanbanReactivo,
         mostrarOverlayKanban,
         toggleFiltroNoLeidos,
-        abrirModalNuevaPoliza, importarPolizasExcel, cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, agregarEndosoPoliza, abrirModalFlotilla, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, agregarNotaPoliza, verHistorialPoliza, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
+        abrirModalNuevaPoliza, importarPolizasExcel,         cargarPolizas, cambiarPaginaPolizas, cambiarPaginaClientes, cambiarPaginaCobranza, cargarListaAsesores, filtrarPolizasPorAsesor, editarPoliza, eliminarPoliza, abrirModalPagos, abrirModalPagoMasivo, agregarEndosoPoliza, abrirModalFlotilla, abrirModalPagoUnificado, abrirModalProgramarRecordatorio, agregarNotaPoliza, verHistorialPoliza, abrirGestionPlantillasCorreo, verHistorialComentariosPoliza, verRecordatoriosPendientes, restaurarPoliza, borrarPermanente, registrarPagoRapido, cargarPagosSeguros, cambiarPaginaGestionPagos, renderizarPaginaGestionPagos, editarProximoPago, enviarRecordatorioWhatsApp, enviarRecordatorioCorreo,
         exportarReporteExcel, exportarReportePDF,
         actualizarVistaReporteCobranza, cambiarMesReporteCobranza, filtrarReporteCobranza,
         guardarYProbarSMTP, guardarFirmaCorreo, enviarCorreoPrueba,
