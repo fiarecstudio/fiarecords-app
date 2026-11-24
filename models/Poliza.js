@@ -57,6 +57,10 @@ const reciboSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    comprobantes: {
+        type: [{ type: String, trim: true }],
+        default: []
+    },
     notas: {
         type: String,
         trim: true
@@ -406,7 +410,8 @@ const polizaSchema = new mongoose.Schema({
         },
         metodoPago: { type: String },
         reciboUrl: { type: String },
-        comprobante: { type: String }
+        comprobante: { type: String },
+        comprobantes: { type: [{ type: String, trim: true }], default: [] }
     }],
     proximoPago: {
         type: Date

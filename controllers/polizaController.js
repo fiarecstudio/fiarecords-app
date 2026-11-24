@@ -6414,8 +6414,69 @@ const actualizarEnlacePago = async (req, res) => {
 };
 
 
-const resolverCobranzaConPago = async (req, res) => {
+const guardarComprobantesPago = async archivos => {
+    if (!archivos.length) return { urls: [], paths: [] };
+    if (archivos.length > 10) {
+        throw new Error('Se permiten hasta 10 comprobantes por pago.');
+    }
+
+    const tiposPermitidos = {
+        'application/pdf': { extension: 'pdf', valido: buffer => buffer.subarray(0, 5).toString('ascii') === '%PDF-' },
+        'image/jpeg': { extension: 'jpg', valido: buffer => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff },
+        'image/png': { extension: 'png', valido: buffer => buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) },
+        'application/xml': { extension: 'xml', valido: buffer => validarContenidoXml(buffer) },
+        'text/xml': { extension: 'xml', valido: buffer => validarContenidoXml(buffer) }
+    };
+    const archivosValidados = archivos.map(archivo => {
+        const tipo = tiposPermitidos[archivo.mimetype];
+        if (!tipo || archivo.size > 5 * 1024 * 1024 || !tipo.valido(archivo.buffer)) {
+            throw new Error('Cada comprobante debe ser PDF, JPG, PNG o XML válido y no exceder 5 MB.');
+        }
+        return { archivo, tipo };
+    });
+
+    const directorio = path.join(__dirname, '..', 'uploads', 'comprobantes-pago');
+    await fs.promises.mkdir(directorio, { recursive: true });
+    const paths = [];
+    const urls = [];
     try {
+        for (const { archivo, tipo } of archivosValidados) {
+            const nombreArchivo = `${crypto.randomBytes(18).toString('hex')}.${tipo.extension}`;
+            const archivoPath = path.join(directorio, nombreArchivo);
+            await fs.promises.writeFile(archivoPath, archivo.buffer, { flag: 'wx' });
+            paths.push(archivoPath);
+            urls.push(`/api/polizas/comprobantes/${nombreArchivo}`);
+        }
+        return { urls, paths };
+    } catch (error) {
+        await Promise.all(paths.map(archivoPath => fs.promises.unlink(archivoPath).catch(cleanupError => {
+            if (cleanupError.code !== 'ENOENT') {
+                console.error('[guardarComprobantesPago] No se pudo limpiar un archivo:', cleanupError);
+            }
+        })));
+        throw error;
+    }
+};
+
+function validarContenidoXml(buffer) {
+    const contenido = buffer.toString('utf8').replace(/^\uFEFF/, '').trim();
+    return buffer.length > 0
+        && !buffer.includes(0)
+        && !contenido.includes('\uFFFD')
+        && /^</.test(contenido);
+}
+
+const resolverCobranzaConPago = async (req, res) => {
+    let pathsComprobantes = [];
+    let archivosReferenciados = false;
+    try {
+        const archivosSubidos = [
+            ...(req.files?.comprobantes || []),
+            ...(req.files?.comprobante || [])
+        ];
+        if (archivosSubidos.length > 10) {
+            return res.status(400).json({ success: false, error: 'Se permiten hasta 10 comprobantes por pago.' });
+        }
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
         const userId = req.user?._id || req.user?.id || req.usuario?._id || req.usuario?.id;
         const tipoGestor = String(req.body?.gestor || req.body?.tipoGestor || 'asesor').trim();
@@ -6484,12 +6545,20 @@ const resolverCobranzaConPago = async (req, res) => {
                 ? (poliza.montoAbono || poliza.primaTotal)
                 : (poliza.primerPago || poliza.montoAbono || poliza.primaTotal)) || 0);
             const gestorLegacy = tipoGestor === 'asesor' ? poliza.asesorId : userId;
+            const comprobantesGuardados = await guardarComprobantesPago(archivosSubidos);
+            pathsComprobantes = comprobantesGuardados.paths;
+            const primerComprobante = comprobantesGuardados.urls[0];
 
             poliza.pagos.push({
                 monto: montoCobrado,
                 fechaPago: new Date(),
                 metodoPago: req.body.metodoPago || 'transferencia',
-                estado: 'pagado'
+                estado: 'pagado',
+                ...(comprobantesGuardados.urls.length ? {
+                    comprobantes: comprobantesGuardados.urls,
+                    comprobante: primerComprobante,
+                    reciboUrl: primerComprobante
+                } : {})
             });
             if (!Array.isArray(poliza.historialComentarios)) poliza.historialComentarios = [];
             poliza.historialComentarios.push({
@@ -6504,7 +6573,13 @@ const resolverCobranzaConPago = async (req, res) => {
                 poliza.proximoPago = calcularProximoPago(prox, poliza.tipoPago);
             }
             await poliza.save();
-            return res.json({ success: true, message: 'Cobranza legacy resuelta', poliza });
+            archivosReferenciados = true;
+            return res.json({
+                success: true,
+                message: 'Cobranza legacy resuelta',
+                poliza,
+                comprobantes: comprobantesGuardados.urls
+            });
         }
         
         const recibo = reciboPendiente;
@@ -6536,6 +6611,16 @@ const resolverCobranzaConPago = async (req, res) => {
         const fechaSolicitada = req.body?.fechaPago ? new Date(req.body.fechaPago) : null;
         const fechaPago = fechaSolicitada && !Number.isNaN(fechaSolicitada.getTime()) ? fechaSolicitada : new Date();
         const metodoPago = req.body?.metodoPago || 'efectivo';
+        const comprobantesGuardados = await guardarComprobantesPago(archivosSubidos);
+        pathsComprobantes = comprobantesGuardados.paths;
+        if (comprobantesGuardados.urls.length) {
+            const anteriores = Array.isArray(recibo.comprobantes) && recibo.comprobantes.length
+                ? recibo.comprobantes
+                : [recibo.comprobante || recibo.reciboUrl].filter(Boolean);
+            recibo.comprobantes = [...new Set([...anteriores, ...comprobantesGuardados.urls])];
+            recibo.comprobante = recibo.comprobantes[0];
+            recibo.reciboUrl = recibo.comprobantes[0];
+        }
         recibo.estadoRecibo = 'pagado';
         recibo.montoPagado = (Number(recibo.montoPagado) || 0) + montoPagado;
         recibo.fechaPago = fechaPago;
@@ -6554,7 +6639,12 @@ const resolverCobranzaConPago = async (req, res) => {
             fechaPago,
             monto: montoPagado,
             estado: 'pagado',
-            metodoPago
+            metodoPago,
+            ...(recibo.comprobantes?.length ? {
+                comprobantes: recibo.comprobantes,
+                comprobante: recibo.comprobantes[0],
+                reciboUrl: recibo.comprobantes[0]
+            } : {})
         });
 
         const recibosPendientesActualizados = [
@@ -6574,10 +6664,24 @@ const resolverCobranzaConPago = async (req, res) => {
         if (endosoSeleccionado) poliza.markModified('endosos');
 
         await poliza.save();
-        res.json({ success: true, message: 'Pago registrado correctamente', poliza });
+        archivosReferenciados = true;
+        res.json({
+            success: true,
+            message: 'Pago registrado correctamente',
+            poliza,
+            comprobantes: comprobantesGuardados.urls
+        });
     } catch (error) {
+        if (!archivosReferenciados && pathsComprobantes.length) {
+            await Promise.all(pathsComprobantes.map(archivoPath => fs.promises.unlink(archivoPath).catch(cleanupError => {
+                if (cleanupError.code !== 'ENOENT') {
+                    console.error('[resolverCobranzaConPago] No se pudo limpiar un comprobante:', cleanupError);
+                }
+            })));
+        }
         console.error('[RESCUE ERROR PAGO]:', error);
-        res.status(500).json({ success: false, error: error.message });
+        const esErrorValidacionArchivo = /comprobante|comprobantes/i.test(error.message || '');
+        res.status(esErrorValidacionArchivo ? 400 : 500).json({ success: false, error: error.message });
     }
 };
 
@@ -6773,7 +6877,7 @@ const registrarPagosMasivos = async (req, res) => {
 const obtenerComprobantePago = async (req, res) => {
     try {
         const nombreArchivo = String(req.params.filename || '');
-        if (!/^[a-f0-9]{36}\.(?:pdf|jpg|png)$/.test(nombreArchivo)) {
+        if (!/^[a-f0-9]{36}\.(?:pdf|jpg|png|xml)$/.test(nombreArchivo)) {
             return res.status(404).json({ error: 'Comprobante no encontrado.' });
         }
         const empresaId = req.user?.empresaId || req.usuario?.empresaId;
@@ -6785,18 +6889,31 @@ const obtenerComprobantePago = async (req, res) => {
         const poliza = await Poliza.findOne({
             ...filtroTenant,
             deletedAt: null,
-            'recibos.reciboUrl': urlComprobante
+            $or: [
+                { 'recibos.reciboUrl': urlComprobante },
+                { 'recibos.comprobante': urlComprobante },
+                { 'recibos.comprobantes': urlComprobante },
+                { 'endosos.reciboUrl': urlComprobante },
+                { 'endosos.comprobante': urlComprobante },
+                { 'endosos.comprobantes': urlComprobante },
+                { 'pagos.reciboUrl': urlComprobante },
+                { 'pagos.comprobante': urlComprobante },
+                { 'pagos.comprobantes': urlComprobante }
+            ]
         }).select('_id');
         if (!poliza) {
             return res.status(404).json({ error: 'Comprobante no encontrado.' });
         }
         const archivo = path.join(__dirname, '..', 'uploads', 'comprobantes-pago', nombreArchivo);
-        return res.sendFile(archivo, error => {
+        const callbackEnvio = error => {
             if (error) {
                 console.error('[obtenerComprobantePago] Error al leer el archivo:', error);
                 if (!res.headersSent) res.status(error.statusCode || 404).json({ error: 'No se pudo obtener el comprobante.' });
             }
-        });
+        };
+        return nombreArchivo.endsWith('.xml')
+            ? res.download(archivo, nombreArchivo, callbackEnvio)
+            : res.sendFile(archivo, callbackEnvio);
     } catch (error) {
         console.error('[obtenerComprobantePago] Error:', error);
         return res.status(500).json({ error: 'Error al obtener el comprobante.' });
@@ -6818,6 +6935,14 @@ const enviarAvisoPago = async (req, res) => {
         const asunto = typeof req.body?.asunto === 'string' ? req.body.asunto.trim() : '';
         const cuerpo = typeof req.body?.cuerpo === 'string' ? req.body.cuerpo.trim() : '';
         const archivoComprobante = req.body?.archivoComprobante;
+        const archivosComprobante = Array.isArray(req.body?.archivosComprobante)
+            ? req.body.archivosComprobante
+            : archivoComprobante !== undefined && archivoComprobante !== null
+                ? [archivoComprobante]
+                : [];
+        const comprobantesReferenciados = Array.isArray(req.body?.comprobantes)
+            ? req.body.comprobantes
+            : [];
         if (!destinatario || destinatario.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
             return res.status(400).json({ success: false, error: 'El destinatario debe ser un correo válido.' });
         }
@@ -6828,32 +6953,37 @@ const enviarAvisoPago = async (req, res) => {
             return res.status(400).json({ success: false, error: 'El cuerpo es obligatorio y no puede exceder 20000 caracteres.' });
         }
 
+        if (archivosComprobante.length + comprobantesReferenciados.length > 10) {
+            return res.status(400).json({ success: false, error: 'Se permiten hasta 10 archivos adjuntos.' });
+        }
         let attachments = [];
-        if (archivoComprobante !== undefined && archivoComprobante !== null) {
-            const tiposPermitidos = new Set(['application/pdf', 'image/jpeg', 'image/png']);
-            const nombre = typeof archivoComprobante.name === 'string'
-                ? archivoComprobante.name.trim().replace(/[\\/]/g, '_').replace(/[^\w.-]/g, '_').slice(0, 120)
-                : '';
-            const contenido = typeof archivoComprobante.content === 'string'
-                ? archivoComprobante.content.replace(/^data:[^;]+;base64,/i, '')
-                : '';
-            if (!nombre || !tiposPermitidos.has(archivoComprobante.type) || !contenido
-                || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contenido)) {
-                return res.status(400).json({ success: false, error: 'El comprobante adjunto no es válido.' });
+        if (archivosComprobante.length) {
+            const tiposPermitidos = new Set(['application/pdf', 'image/jpeg', 'image/png', 'application/xml', 'text/xml']);
+            for (const archivo of archivosComprobante) {
+                const nombre = typeof archivo?.name === 'string'
+                    ? archivo.name.trim().replace(/[\\/]/g, '_').replace(/[^\w.-]/g, '_').slice(0, 120)
+                    : '';
+                const contenido = typeof archivo?.content === 'string'
+                    ? archivo.content.replace(/^data:[^;]+;base64,/i, '')
+                    : '';
+                if (!nombre || !tiposPermitidos.has(archivo?.type) || !contenido
+                    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contenido)) {
+                    return res.status(400).json({ success: false, error: 'Uno de los comprobantes adjuntos no es válido.' });
+                }
+                const buffer = Buffer.from(contenido, 'base64');
+                if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
+                    return res.status(400).json({ success: false, error: 'Cada comprobante no debe exceder 5 MB.' });
+                }
+                const firmaValida = archivo.type === 'application/pdf'
+                    ? buffer.subarray(0, 5).toString('ascii') === '%PDF-'
+                    : archivo.type === 'image/png'
+                        ? buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+                        : buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+                if (!firmaValida) {
+                    return res.status(400).json({ success: false, error: 'El tipo de archivo no coincide con el contenido del comprobante.' });
+                }
+                attachments.push({ name: nombre, content: contenido });
             }
-            const buffer = Buffer.from(contenido, 'base64');
-            if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
-                return res.status(400).json({ success: false, error: 'El comprobante no debe exceder 5 MB.' });
-            }
-            const firmaValida = archivoComprobante.type === 'application/pdf'
-                ? buffer.subarray(0, 5).toString('ascii') === '%PDF-'
-                : archivoComprobante.type === 'image/png'
-                    ? buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-                    : buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-            if (!firmaValida) {
-                return res.status(400).json({ success: false, error: 'El tipo de archivo no coincide con el contenido del comprobante.' });
-            }
-            attachments = [{ name: nombre, content: contenido }];
         }
 
         const poliza = await Poliza.findOne({
@@ -6862,6 +6992,35 @@ const enviarAvisoPago = async (req, res) => {
             deletedAt: null
         });
         if (!poliza) return res.status(404).json({ success: false, error: 'Póliza no encontrada.' });
+
+        if (comprobantesReferenciados.length) {
+            const referenciasGuardadas = new Set();
+            for (const recibo of [...(poliza.recibos || []), ...(poliza.endosos || []), ...(poliza.pagos || [])]) {
+                for (const url of [
+                    ...(Array.isArray(recibo.comprobantes) ? recibo.comprobantes : []),
+                    recibo.comprobante,
+                    recibo.reciboUrl
+                ]) {
+                    if (typeof url === 'string') referenciasGuardadas.add(url);
+                }
+            }
+            for (const url of comprobantesReferenciados) {
+                const coincidencia = typeof url === 'string'
+                    ? url.match(/^\/api\/polizas\/comprobantes\/([a-f0-9]{36}\.(?:pdf|jpg|png|xml))$/)
+                    : null;
+                if (!coincidencia || !referenciasGuardadas.has(url)) {
+                    return res.status(400).json({ success: false, error: 'Uno de los comprobantes seleccionados no pertenece a esta póliza.' });
+                }
+                const nombre = coincidencia[1];
+                const contenido = await fs.promises.readFile(
+                    path.join(__dirname, '..', 'uploads', 'comprobantes-pago', nombre)
+                );
+                if (contenido.length > 5 * 1024 * 1024) {
+                    return res.status(400).json({ success: false, error: 'Cada comprobante no debe exceder 5 MB.' });
+                }
+                attachments.push({ name: nombre, content: contenido.toString('base64') });
+            }
+        }
 
         const reciboSolicitado = req.body?.reciboId;
         let recibo = null;

@@ -248,6 +248,7 @@
         delete requestOptions.skipOfflineQueue;
         delete requestOptions.silent;
         delete requestOptions.sensitive;
+        delete requestOptions.isFormData;
         const fetchOptions = { ...requestOptions, headers };
 
         // DEBUG FASE 5: Verificar headers antes de enviar

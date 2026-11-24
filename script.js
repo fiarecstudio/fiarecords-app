@@ -13239,6 +13239,34 @@ Fecha de firma: {{FECHA}}`;
         }
     }
 
+    async function descargarComprobantePago(url) {
+        const referencia = String(url || '');
+        if (!/^\/api\/polizas\/comprobantes\/[a-f0-9]{36}\.(?:pdf|jpg|png|xml)$/.test(referencia)) {
+            await Swal.fire('Error', 'El enlace del comprobante no es válido.', 'error');
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${window.API_URL || ''}${referencia}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (!response.ok) throw new Error('No se pudo descargar el comprobante.');
+            const blob = await response.blob();
+            const enlace = document.createElement('a');
+            enlace.href = URL.createObjectURL(blob);
+            enlace.download = referencia.split('/').pop();
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            setTimeout(() => URL.revokeObjectURL(enlace.href), 1000);
+        } catch (error) {
+            console.error('[descargarComprobantePago] Error:', error);
+            await Swal.fire('Error', error.message || 'No se pudo descargar el comprobante.', 'error');
+        }
+    }
+
+    window.descargarComprobantePago = descargarComprobantePago;
+
     async function abrirModalPagos(poliza) {
         if (typeof poliza === 'string') {
             try {
@@ -13292,6 +13320,12 @@ Fecha de firma: {{FECHA}}`;
                                    estadoRecibo === 'atrasado' ? 'danger' : 'warning';
                 const fechaVencimiento = r.fechaVencimientoRecibo ? new Date(r.fechaVencimientoRecibo).toLocaleDateString('es-MX') : 'N/A';
                 const fechaPago = r.fechaPago ? new Date(r.fechaPago).toLocaleDateString('es-MX') : '-';
+                const comprobantes = Array.isArray(r.comprobantes) && r.comprobantes.length
+                    ? r.comprobantes
+                    : [r.comprobante || r.reciboUrl].filter(Boolean);
+                const comprobantesHTML = comprobantes.map((url, indice) =>
+                    `<button type="button" class="btn btn-sm btn-outline-primary" onclick="window.descargarComprobantePago('${escapeHTML(url)}')">Doc ${indice + 1}</button>`
+                ).join('');
                 
                 return `
                     <tr>
@@ -13303,6 +13337,7 @@ Fecha de firma: {{FECHA}}`;
                         <td class="date-value">${fechaPago}</td>
                         <td><span class="badge bg-${estadoClass}">${escapeHTML(r.estadoRecibo || 'N/A')}</span></td>
                         <td>
+                            ${comprobantesHTML ? `<div class="d-flex flex-wrap gap-1 mb-1">${comprobantesHTML}</div>` : ''}
                             ${estadoRecibo === 'pendiente' ? 
                                 `<button class="btn btn-sm btn-success" onclick="window.pagarRecibo('${escapeHTML(poliza._id)}', ${index})" title="Pagar Recibo"><i class="bi bi-cash"></i></button>` :
                                 estadoRecibo === 'pagado' ?
@@ -14145,6 +14180,7 @@ Fecha de firma: {{FECHA}}`;
         );
         const montoInicial = opciones.monto ?? recibo?.montoRecibo ?? poliza?.saldoRestante ?? poliza?.primaTotal ?? '';
 
+        const archivosSeleccionados = [];
         let correoPagoParaRevisar = null;
         const { value: resultado } = await Swal.fire({
             title: recibo?.numeroRecibo
@@ -14175,7 +14211,8 @@ Fecha de firma: {{FECHA}}`;
                             <button type="button" id="guardarCorreoAseguradora" class="swal2-styled" style="margin: 0; padding: 8px 12px; white-space: nowrap; background: #6c757d;">Guardar dirección</button>
                         </div>
                         <label for="archivoComprobante" style="display: block; font-weight: bold; margin-bottom: 5px;">Adjuntar Comprobante (Opcional)</label>
-                        <input type="file" id="archivoComprobante" accept=".pdf,.png,.jpg,.jpeg" style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 15px; color: #fff;">
+                        <input type="file" id="archivoComprobante" multiple accept=".pdf,.png,.jpg,.jpeg,.xml,application/pdf,image/jpeg,image/png,application/xml,text/xml" style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; color: #fff;">
+                        <div id="archivosComprobanteSeleccionados" class="small mb-3" aria-live="polite"></div>
                         <label for="selectPlantilla" style="display: block; font-weight: bold; margin-bottom: 5px;">Plantilla de correo</label>
                         <select id="selectPlantilla" class="swal2-input" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
                             <option value="">Aviso predeterminado</option>
@@ -14204,6 +14241,36 @@ Fecha de firma: {{FECHA}}`;
             didOpen: popup => {
                 const checkbox = document.getElementById('enviarCorreo');
                 if (checkbox) checkbox.checked = enviarCorreoInicial;
+                const inputComprobantes = popup.querySelector('#archivoComprobante');
+                const listaComprobantes = popup.querySelector('#archivosComprobanteSeleccionados');
+                const renderizarComprobantesSeleccionados = () => {
+                    if (!listaComprobantes) return;
+                    listaComprobantes.innerHTML = archivosSeleccionados.length
+                        ? archivosSeleccionados.map((archivo, indice) => `
+                            <div class="d-flex align-items-center justify-content-between gap-2 border rounded px-2 py-1 mb-1">
+                                <span class="text-truncate">${escapeHTML(archivo.name)} <span class="text-muted">(${(archivo.size / 1024).toFixed(1)} KB)</span></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" data-quitar-comprobante="${indice}" aria-label="Quitar ${escapeHTML(archivo.name)}">✕</button>
+                            </div>
+                        `).join('')
+                        : '<span class="text-muted">No hay archivos seleccionados.</span>';
+                };
+                inputComprobantes?.addEventListener('change', () => {
+                    for (const archivo of Array.from(inputComprobantes.files || [])) {
+                        const duplicado = archivosSeleccionados.some(item =>
+                            item.name === archivo.name && item.size === archivo.size && item.lastModified === archivo.lastModified
+                        );
+                        if (!duplicado) archivosSeleccionados.push(archivo);
+                    }
+                    inputComprobantes.value = '';
+                    renderizarComprobantesSeleccionados();
+                });
+                listaComprobantes?.addEventListener('click', event => {
+                    const boton = event.target.closest('[data-quitar-comprobante]');
+                    if (!boton) return;
+                    archivosSeleccionados.splice(Number(boton.dataset.quitarComprobante), 1);
+                    renderizarComprobantesSeleccionados();
+                });
+                renderizarComprobantesSeleccionados();
                 const seccionCorreoDinamico = popup.querySelector('#seccionCorreoDinamico');
                 const actualizarVisibilidadCorreo = () => {
                     if (seccionCorreoDinamico) {
@@ -14261,7 +14328,6 @@ Fecha de firma: {{FECHA}}`;
                 const plantillaId = popup.querySelector('#selectPlantilla')?.value || '';
                 const correoAsunto = popup.querySelector('#pago-correo-asunto')?.value.trim() || '';
                 const correoCuerpo = popup.querySelector('#pago-correo-cuerpo')?.value.trim() || '';
-                const archivoSeleccionado = popup.querySelector('#archivoComprobante')?.files?.[0] || null;
                 if (!metodoPago || !gestor) {
                     Swal.showValidationMessage('Selecciona el método de pago y el gestor.');
                     return false;
@@ -14278,13 +14344,17 @@ Fecha de firma: {{FECHA}}`;
                     Swal.showValidationMessage('El asunto o el mensaje del correo excede el límite permitido.');
                     return false;
                 }
-                if (enviarCorreo && archivoSeleccionado) {
-                    if (archivoSeleccionado.size > 5 * 1024 * 1024) {
-                        Swal.showValidationMessage('El comprobante no debe exceder 5 MB.');
+                if (archivosSeleccionados.length > 10) {
+                    Swal.showValidationMessage('Se permiten hasta 10 archivos por pago.');
+                    return false;
+                }
+                for (const archivo of archivosSeleccionados) {
+                    if (archivo.size > 5 * 1024 * 1024) {
+                        Swal.showValidationMessage(`El archivo ${archivo.name} excede 5 MB.`);
                         return false;
                     }
-                    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(archivoSeleccionado.type)) {
-                        Swal.showValidationMessage('Adjunta un comprobante PDF, PNG o JPEG.');
+                    if (!['application/pdf', 'image/jpeg', 'image/png', 'application/xml', 'text/xml'].includes(archivo.type)) {
+                        Swal.showValidationMessage(`El archivo ${archivo.name} debe ser PDF, PNG, JPEG o XML.`);
                         return false;
                     }
                 }
@@ -14303,31 +14373,38 @@ Fecha de firma: {{FECHA}}`;
                 if (reciboId !== undefined && reciboId !== null && String(reciboId) !== '') {
                     body.reciboId = String(reciboId);
                 }
-                let archivoComprobante = null;
-                if (enviarCorreo && archivoSeleccionado) {
-                    try {
-                        const [adjunto] = await convertirAdjuntosABase64([archivoSeleccionado]);
-                        archivoComprobante = {
-                            ...adjunto,
-                            type: archivoSeleccionado.type
-                        };
-                    } catch (error) {
-                        Swal.showValidationMessage(error.message || 'No se pudo leer el comprobante.');
-                        return false;
-                    }
-                }
                 correoPagoParaRevisar = enviarCorreo
-                    ? { destinatario: correoDestino, asunto: correoAsunto, cuerpo: correoCuerpo, plantillaId, archivoComprobante }
+                    ? { destinatario: correoDestino, asunto: correoAsunto, cuerpo: correoCuerpo, plantillaId }
                     : null;
 
                 try {
-                    const response = await ejecutarOEncolar(`/api/polizas/${encodeURIComponent(polizaId)}/resolver-cobranza`, {
+                    const urlResolver = `/api/polizas/${encodeURIComponent(polizaId)}/resolver-cobranza`;
+                    const opcionesResolver = {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    });
+                        headers: { 'Content-Type': 'application/json' }
+                    };
+                    let response;
+                    if (archivosSeleccionados.length) {
+                        const formData = new FormData();
+                        for (const [clave, valor] of Object.entries(body)) {
+                            formData.append(clave, String(valor));
+                        }
+                        for (const archivo of archivosSeleccionados) {
+                            formData.append('comprobantes', archivo, archivo.name);
+                        }
+                        delete opcionesResolver.headers;
+                        opcionesResolver.body = formData;
+                        opcionesResolver.isFormData = true;
+                        response = await ejecutarOEncolar(urlResolver, opcionesResolver);
+                    } else {
+                        opcionesResolver.body = JSON.stringify(body);
+                        response = await ejecutarOEncolar(urlResolver, opcionesResolver);
+                    }
                     if (!response?.success && !response?.offline) {
                         throw new Error(response?.error || 'No se pudo registrar el pago.');
+                    }
+                    if (correoPagoParaRevisar) {
+                        correoPagoParaRevisar.comprobantes = response?.comprobantes || [];
                     }
                     return response;
                 } catch (error) {
@@ -14370,7 +14447,7 @@ Fecha de firma: {{FECHA}}`;
                             <input id="aviso-pago-asunto" maxlength="200" value="${escapeHTML(asuntoSugerido)}" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
                             <label for="aviso-pago-cuerpo" style="display: block; font-weight: bold; margin-bottom: 5px;">Cuerpo</label>
                             <textarea id="aviso-pago-cuerpo" rows="7" maxlength="20000" style="width: 100%; box-sizing: border-box; resize: vertical;">${escapeHTML(cuerpoSugerido)}</textarea>
-                            ${correoPagoParaRevisar.archivoComprobante ? `<div style="margin-top: 8px; color: #555;">Comprobante adjunto: ${escapeHTML(correoPagoParaRevisar.archivoComprobante.name)}</div>` : ''}
+                            ${correoPagoParaRevisar.comprobantes?.length ? `<div style="margin-top: 8px; color: #555;">Se adjuntarán ${correoPagoParaRevisar.comprobantes.length} comprobante(s) del pago.</div>` : ''}
                         </div>
                     `,
                     width: 'min(90vw, 700px)',
@@ -14405,8 +14482,8 @@ Fecha de firma: {{FECHA}}`;
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 ...correoConfirmado,
-                                ...(correoPagoParaRevisar.archivoComprobante
-                                    ? { archivoComprobante: correoPagoParaRevisar.archivoComprobante }
+                                ...(correoPagoParaRevisar.comprobantes?.length
+                                    ? { comprobantes: correoPagoParaRevisar.comprobantes }
                                     : {}),
                                 ...(reciboId !== undefined && reciboId !== null && String(reciboId) !== ''
                                     ? { reciboId: String(reciboId) }

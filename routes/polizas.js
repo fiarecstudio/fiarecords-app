@@ -48,6 +48,10 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
+const uploadComprobantesPago = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 10 }
+});
 
 // ==========================================
 // RUTAS DE PÓLIZAS
@@ -64,7 +68,10 @@ router.post('/pagos/masivo', auth, applyTenantFilter, upload.single('comprobante
 router.get('/comprobantes/:filename', auth, applyTenantFilter, polizaController.obtenerComprobantePago);
 router.get('/metricas-seguros', auth, applyTenantFilter, polizaController.obtenerMetricasSeguros);
 router.get('/dashboard-metrics', auth, applyTenantFilter, polizaController.obtenerMetricasDashboardPredictivo);
-router.post('/:id/resolver-cobranza', auth, applyTenantFilter, polizaController.resolverCobranzaConPago);
+router.post('/:id/resolver-cobranza', auth, applyTenantFilter, uploadComprobantesPago.fields([
+    { name: 'comprobantes', maxCount: 10 },
+    { name: 'comprobante', maxCount: 1 }
+]), polizaController.resolverCobranzaConPago);
 router.post('/:id/enviar-aviso-pago', auth, applyTenantFilter, polizaController.enviarAvisoPago);
 router.post('/:id/unidades/bulk', auth, applyTenantFilter, polizaController.importarUnidadesFlotillaMasivo);
 router.post('/:id/unidades', auth, applyTenantFilter, polizaController.agregarUnidadFlotilla);
