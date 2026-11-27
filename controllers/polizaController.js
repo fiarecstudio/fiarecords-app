@@ -667,8 +667,46 @@ const crearPoliza = async (req, res) => {
             return res.status(400).json({ error: 'La duración debe ser un número entero de meses igual o mayor a 1.' });
         }
 
-        // Inyectar empresaId del usuario autenticado
-        const empresaId = req.user.empresaId;
+        // Respetar la empresa seleccionada por el tenant filter, si existe.
+        const empresaId = req.tenantFilter?.empresaId || req.user.empresaId;
+
+        const filtroTenant = req.tenantFilter || {};
+        const numeroPolizaNormalizado = typeof numeroPoliza === 'string'
+            ? numeroPoliza.trim()
+            : numeroPoliza;
+        const polizaActivaExistente = await Poliza.findOne({
+            ...filtroTenant,
+            numeroPoliza: numeroPolizaNormalizado,
+            deletedAt: null
+        }).lean();
+        if (polizaActivaExistente) {
+            return res.status(409).json({
+                ok: false,
+                code: 'POLIZA_DUPLICADA',
+                message: 'El número de póliza ya está registrado en el sistema.'
+            });
+        }
+
+        const polizaEnPapelera = await Poliza.findOne({
+            ...filtroTenant,
+            numeroPoliza: numeroPolizaNormalizado,
+            deletedAt: { $ne: null }
+        }).select('_id numeroPoliza cliente aseguradora fechas estado').lean();
+        if (polizaEnPapelera) {
+            return res.status(409).json({
+                ok: false,
+                code: 'POLIZA_EN_PAPELERA',
+                message: 'La póliza ya existe en la papelería de reciclaje.',
+                polizaExistente: {
+                    _id: polizaEnPapelera._id,
+                    numeroPoliza: polizaEnPapelera.numeroPoliza,
+                    cliente: polizaEnPapelera.cliente,
+                    aseguradora: polizaEnPapelera.aseguradora,
+                    fechas: polizaEnPapelera.fechas,
+                    estado: polizaEnPapelera.estado
+                }
+            });
+        }
 
         // Si no se especifica asesorId, asignar automáticamente el del usuario que crea la póliza
         const asesorIdFinal = asesorId || (req.user._id || req.user.id);
@@ -2040,10 +2078,11 @@ const restaurarPoliza = async (req, res) => {
     try {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
+        const filtroTenant = req.tenantFilter || { empresaId };
         
         // Restaurar póliza (poner deletedAt en null)
         const poliza = await Poliza.findOneAndUpdate(
-            { _id: id, empresaId, deletedAt: { $ne: null } },
+            { _id: id, ...filtroTenant, deletedAt: { $ne: null } },
             { deletedAt: null },
             { new: true }
         );
@@ -2063,11 +2102,12 @@ const eliminarDefinitivamente = async (req, res) => {
     try {
         const { id } = req.params;
         const empresaId = req.user.empresaId;
+        const filtroTenant = req.tenantFilter || { empresaId };
         
         // Eliminar definitivamente (delete real)
         const poliza = await Poliza.findOneAndDelete({ 
             _id: id, 
-            empresaId, 
+            ...filtroTenant,
             deletedAt: { $ne: null } 
         });
         

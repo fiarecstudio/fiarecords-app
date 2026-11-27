@@ -354,7 +354,13 @@
                 offlineError.offline = true;
                 throw offlineError;
             }
-            if (!res.ok) throw new Error(data.error || 'Error del servidor');
+            if (!res.ok) {
+                const error = new Error(data.message || data.error || 'Error del servidor');
+                error.status = res.status;
+                error.code = data.code;
+                error.response = data;
+                throw error;
+            }
 
             // --- ACTUALIZAR CACHÉ INDEXED-DB SI HAY INTERNET ---
             if (!options.method || options.method === 'GET') {

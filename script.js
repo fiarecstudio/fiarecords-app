@@ -10429,10 +10429,79 @@ Fecha de firma: {{FECHA}}`;
                 console.log('[mostrarFormularioPoliza] Modo renovación, enviando a:', url);
             }
 
-            const responseBody = await ejecutarOEncolar(url, {
-                method: method,
-                body: JSON.stringify(formValues)
-            });
+            let responseBody;
+            try {
+                responseBody = await ejecutarOEncolar(url, {
+                    method: method,
+                    body: JSON.stringify(formValues)
+                });
+            } catch (error) {
+                if (!esRenovacion && error.code === 'POLIZA_DUPLICADA') {
+                    await Swal.fire(
+                        'Póliza ya registrada',
+                        'Ese número de póliza ya está registrado en el sistema y no está en la papelera.',
+                        'warning'
+                    );
+                    return;
+                }
+
+                if (!esRenovacion && error.code === 'POLIZA_EN_PAPELERA') {
+                    const polizaExistente = error.response?.polizaExistente;
+                    if (!polizaExistente?._id) throw error;
+
+                    const fechaLegible = fecha => {
+                        const fechaDate = fecha ? new Date(fecha) : null;
+                        return fechaDate && !Number.isNaN(fechaDate.getTime())
+                            ? fechaDate.toLocaleDateString('es-MX', { timeZone: 'UTC' })
+                            : 'No disponible';
+                    };
+                    const vigencia = polizaExistente.fechas || {};
+                    const decision = await Swal.fire({
+                        title: 'Póliza encontrada en papelera',
+                        html: `
+                            <p>Ya existe una póliza con este número en la papelería de reciclaje.</p>
+                            <p><strong>Cliente:</strong> ${escapeHTML(polizaExistente.cliente || 'No especificado')}</p>
+                            <p><strong>Vigencia:</strong> ${fechaLegible(vigencia.inicio)} - ${fechaLegible(vigencia.vencimiento)}</p>
+                            <p><strong>Aseguradora:</strong> ${escapeHTML(polizaExistente.aseguradora || 'No especificada')}</p>
+                        `,
+                        icon: 'warning',
+                        showDenyButton: true,
+                        showCancelButton: true,
+                        confirmButtonText: 'Restaurar de papelera',
+                        denyButtonText: 'Eliminar anterior y crear nueva',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#28a745',
+                        denyButtonColor: '#dc3545'
+                    });
+
+                    if (decision.isConfirmed) {
+                        const resultadoRestauracion = await ejecutarOEncolar(
+                            `/api/polizas/papelera/restaurar/${encodeURIComponent(polizaExistente._id)}`,
+                            { method: 'PUT' }
+                        );
+                        const polizaRestaurada = resultadoRestauracion?.poliza
+                            || await fetchAPI(`/api/polizas/${encodeURIComponent(polizaExistente._id)}`);
+                        await cargarPolizas(true);
+                        await abrirModalPoliza(polizaRestaurada);
+                        return;
+                    }
+
+                    if (decision.isDenied) {
+                        await ejecutarOEncolar(
+                            `/api/polizas/papelera/definitivo/${encodeURIComponent(polizaExistente._id)}`,
+                            { method: 'DELETE' }
+                        );
+                        responseBody = await ejecutarOEncolar(url, {
+                            method: method,
+                            body: JSON.stringify(formValues)
+                        });
+                    } else {
+                        return;
+                    }
+                } else {
+                    throw error;
+                }
+            }
 
             await Swal.fire('Éxito', window.polizaARenovar ? 'Póliza renovada correctamente' : 'Póliza registrada correctamente', 'success');
             const polizaCreada = responseBody?.poliza
